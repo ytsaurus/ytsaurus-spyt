@@ -1,0 +1,10 @@
+.bsp
+.DS_Store
+.idea
+target/
+build/
+dist/
+*.egg-info/
+*.iml
+*.pyc
+.tox

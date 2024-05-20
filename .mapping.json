@@ -465,7 +465,6 @@
   "spyt-package/src/main/spark-extra/conf/log4j.worker.properties":"yt/spark/spark-over-yt/spyt-package/src/main/spark-extra/conf/log4j.worker.properties",
   "spyt-package/src/main/spark-extra/conf/spark-defaults.conf":"yt/spark/spark-over-yt/spyt-package/src/main/spark-extra/conf/spark-defaults.conf",
   "spyt-package/src/main/spark-extra/conf/spark-env.sh":"yt/spark/spark-over-yt/spyt-package/src/main/spark-extra/conf/spark-env.sh",
-  "spyt-package/src/main/ya.make.autoupdate":"yt/spark/spark-over-yt/spyt-package/src/main/ya.make.autoupdate",
   "tools/release/publisher/__init__.py":"yt/spark/spark-over-yt/tools/release/publisher/__init__.py",
   "tools/release/publisher/build_downloader.py":"yt/spark/spark-over-yt/tools/release/publisher/build_downloader.py",
   "tools/release/publisher/config_generator.py":"yt/spark/spark-over-yt/tools/release/publisher/config_generator.py",

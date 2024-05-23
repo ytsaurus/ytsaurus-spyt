@@ -20,7 +20,8 @@ case class YtClientConfiguration(proxy: String,
                                  proxyRole: Option[String],
                                  byop: ByopConfiguration,
                                  masterWrapperUrl: Option[String],
-                                 extendedFileTimeout: Boolean) extends Serializable {
+                                 extendedFileTimeout: Boolean,
+                                 proxyNetworkName: Option[String]) extends Serializable {
 
   private def proxyUrl: Try[URL] = Try(new URL(proxy)).orElse {
     val normalizedProxy = if (proxy.contains(".") || proxy.contains(":")) {
@@ -73,7 +74,12 @@ object YtClientConfiguration {
         )
       ),
       getByName("masterWrapper.url"),
-      getByName("extendedFileTimeout").forall(_.toBoolean)
+      getByName("extendedFileTimeout").forall(_.toBoolean),
+      if (System.getenv().containsKey("YT_JOB_ID")) {
+        None
+      } else {
+        getByName("proxyNetworkName")
+      }
     )
   }
 
@@ -102,7 +108,8 @@ object YtClientConfiguration {
     proxyRole = None,
     byop = ByopConfiguration.DISABLED,
     masterWrapperUrl = None,
-    extendedFileTimeout = true
+    extendedFileTimeout = true,
+    None
   )
 
   def create(proxy: String,
@@ -114,7 +121,7 @@ object YtClientConfiguration {
              masterWrapperUrl: String,
              extendedFileTimeout: Boolean) = new YtClientConfiguration(
     proxy, user, token, toScalaDuration(timeout),
-    Option(proxyRole), byop, Option(masterWrapperUrl), extendedFileTimeout
+    Option(proxyRole), byop, Option(masterWrapperUrl), extendedFileTimeout, None
   )
 }
 

@@ -160,6 +160,8 @@ trait YtClientUtils {
       clientBuilder.setConfig(YTsaurusClientConfig.builder().setUseTLS(true).build())
     }
 
+    clientBuilder.setProxyNetworkName(config.proxyNetworkName.orNull)
+
     clientBuilder.build()
   }
 

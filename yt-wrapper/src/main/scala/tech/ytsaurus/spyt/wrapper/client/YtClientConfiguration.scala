@@ -12,7 +12,7 @@ import scala.concurrent.duration._
 import scala.language.postfixOps
 import scala.util.{Failure, Success, Try}
 
-@SerialVersionUID(-7486028686763336923L)
+@SerialVersionUID(-7486028686763336924L)
 case class YtClientConfiguration(proxy: String,
                                  user: String,
                                  token: String,
@@ -75,11 +75,7 @@ object YtClientConfiguration {
       ),
       getByName("masterWrapper.url"),
       getByName("extendedFileTimeout").forall(_.toBoolean),
-      if (System.getenv().containsKey("YT_JOB_ID")) {
-        None
-      } else {
-        getByName("proxyNetworkName")
-      }
+      sys.env.get("YT_JOB_ID").flatMap(_ => getByName("proxyNetworkName"))
     )
   }
 
@@ -119,9 +115,10 @@ object YtClientConfiguration {
              proxyRole: String,
              byop: ByopConfiguration,
              masterWrapperUrl: String,
-             extendedFileTimeout: Boolean) = new YtClientConfiguration(
+             extendedFileTimeout: Boolean,
+             proxyNetworkName: Option[String] = None) = new YtClientConfiguration(
     proxy, user, token, toScalaDuration(timeout),
-    Option(proxyRole), byop, Option(masterWrapperUrl), extendedFileTimeout, None
+    Option(proxyRole), byop, Option(masterWrapperUrl), extendedFileTimeout, proxyNetworkName
   )
 }
 

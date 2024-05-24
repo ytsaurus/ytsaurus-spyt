@@ -1,4 +1,4 @@
-<img width="64" src="yt/docs/images/logo.png"/><br/>
+<img width="64" src="https://raw.githubusercontent.com/ytsaurus/ytsaurus/main/yt/docs/images/logo.png"/><br/>
 
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://github.com/ytsaurus/spyt/blob/main/LICENSE)
 [![Telegram](https://img.shields.io/badge/chat-on%20Telegram-2ba2d9.svg)](https://t.me/ytsaurus)
@@ -13,7 +13,7 @@ YTsaurus is a distributed storage and processing platform for big data with supp
 
 You can read [post about YTsaurus](https://medium.com/p/42e7f5fa5fc6) or check video:
 
-[![video about YTsaurus](yt/docs/images/ytsaurus-promo-video.png)](https://youtu.be/4Q2EB_uimLs)
+[![video about YTsaurus](https://raw.githubusercontent.com/ytsaurus/ytsaurus/main/yt/docs/images/ytsaurus-promo-video.png)](https://youtu.be/4Q2EB_uimLs)
 
 ### SPYT powered by Apache Spark
 * A set of popular tools for writing ETL processes
@@ -24,6 +24,6 @@ You can read [post about YTsaurus](https://medium.com/p/42e7f5fa5fc6) or check v
 
 We are glad to welcome new contributors!
 
-1. Please read the [contributor's guide](CONTRIBUTING.md) and the [styleguide](yt/styleguide/styleguide.md).
+1. Please read the [contributor's guide](CONTRIBUTING.md) and the [styleguide](https://github.com/ytsaurus/ytsaurus/blob/main/yt/styleguide/styleguide.md).
 2. We can accept your work to YTsaurus after you have signed contributor's license agreement (aka CLA).
 3. Please don't forget to add a note to your pull request, that you agree to the terms of the CLA.

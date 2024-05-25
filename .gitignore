@@ -8,3 +8,11 @@ __pycache__/
 .idea
 .vscode
 .DS_Store
+.bsp
+target/
+build/
+dist/
+*.egg-info/
+*.iml
+*.pyc
+.tox

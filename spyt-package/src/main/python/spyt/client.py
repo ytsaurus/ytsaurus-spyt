@@ -346,7 +346,7 @@ def connect_direct(yt_proxy: str, conf: SparkConf = None):
     _set_spark_conf_dir()
 
     conf = conf or SparkConf()
-    spark = SparkSession.builder.master("ytsaurus://" + yt_proxy).config(conf=conf).getOrCreate()
+    spark = SparkSession.builder.config(conf=conf).master("ytsaurus://" + yt_proxy).getOrCreate()
     return spark
 
 

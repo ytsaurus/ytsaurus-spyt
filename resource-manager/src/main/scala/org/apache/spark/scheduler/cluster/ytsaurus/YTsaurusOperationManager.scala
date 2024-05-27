@@ -35,7 +35,8 @@ private[spark] class YTsaurusOperationManager(
     prepareEnvCommand: String,
     sparkClassPath: String,
     javaCommand: String,
-    ytsaurusJavaOptions: Seq[String])
+    ytsaurusJavaOptions: Seq[String],
+    unpackArchivesCommand: String)
   extends Logging {
   import YTsaurusOperationManager._
 
@@ -155,6 +156,7 @@ private[spark] class YTsaurusOperationManager(
     }
 
     val driverCommand = (Seq(
+      unpackArchivesCommand,
       prepareEnvCommand,
       "&&",
       javaCommand,
@@ -234,6 +236,7 @@ private[spark] class YTsaurusOperationManager(
     }
 
     val executorCommand = (Seq(
+      unpackArchivesCommand,
       prepareEnvCommand,
       "&&",
       javaCommand,
@@ -298,6 +301,35 @@ private[spark] object YTsaurusOperationManager extends Logging {
         filePaths.add(YTree.stringNode(fileName))
       }
 
+      val unpackArchivesCommands = conf.get(ARCHIVES).filter(_.startsWith("yt:/")).map(YtWrapper.formatPath).distinct.map { fullPath =>
+        var node: YTreeNode = YTree.stringNode(fullPath)
+        var fileName = fullPath.split('/').last
+        if (fullPath.contains('#')) {
+          val Array(ytPath, fileNameOverride) = fullPath.split('#')
+          node = YTree.stringNode(ytPath)
+          fileName = fileNameOverride
+          node.putAttribute("file_name", YTree.stringNode(fileNameOverride))
+        }
+        filePaths.add(node)
+        if (node.stringValue().endsWith(".zip")) {
+          s"mv $fileName $fileName.zip && unzip $fileName.zip -d $fileName && rm -rf $fileName.zip"
+        } else if (node.stringValue().endsWith(".tar.gz")) {
+          s"mv $fileName $fileName.tar.gz && mkdir $fileName && tar -xzvf $fileName.tar.gz -C $fileName && rm -rf $fileName.tar.gz"
+        } else if (node.stringValue().endsWith(".tar.bz2")) {
+          s"mv $fileName $fileName.tar.bz2 && mkdir $fileName && tar -xjvf $fileName.tar.bz2 -C $fileName && rm -rf $fileName.tar.bz2"
+        } else if (node.stringValue().endsWith(".tar")) {
+          s"mv $fileName $fileName.tar && mkdir $fileName && tar -xvf $fileName.tar -C $fileName && rm -rf $fileName.tar"
+        } else {
+          return null
+        }
+      }.filter(x => x != null)
+      val unpackArchivesCommand = if (unpackArchivesCommands.nonEmpty) {
+        unpackArchivesCommands.mkString(" && ") + " &&"
+      } else {
+        ""
+      }
+
+
       val sv = org.apache.spark.SPARK_VERSION_SHORT
       val (svMajor, svMinor, svPatch) = VersionUtils.majorMinorPatchVersion(sv).get
       val distrRootPath = Seq(conf.get(SPARK_DISTRIBUTIVES_PATH), svMajor, svMinor, svPatch).mkString("/")
@@ -344,7 +376,8 @@ private[spark] object YTsaurusOperationManager extends Logging {
         prepareEnvCommand,
         sparkClassPath,
         javaCommand,
-        ytsaurusJavaOptions
+        ytsaurusJavaOptions,
+        unpackArchivesCommand
       )
     } catch {
       case t: Throwable =>
@@ -381,7 +414,6 @@ private[spark] object YTsaurusOperationManager extends Logging {
   private[ytsaurus] def applicationFiles(conf: SparkConf): Seq[String] = {
     val providedLists = conf.get(JARS) ++
       conf.get(FILES) ++
-      conf.get(ARCHIVES) ++
       conf.get(SUBMIT_PYTHON_FILES)
 
     val primaryResource = conf.get(SPARK_PRIMARY_RESOURCE)

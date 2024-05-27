@@ -9,9 +9,9 @@ import org.apache.spark.sql.execution.datasources.v2.FileTable
 import org.apache.spark.sql.execution.streaming.MetadataLogFileIndex
 import org.apache.spark.sql.types._
 import org.apache.spark.sql.util.CaseInsensitiveStringMap
-import org.apache.spark.sql.yson.YsonType
 import tech.ytsaurus.spyt.format.conf.SparkYtConfiguration.Schema.ForcingNullableIfNoMetadata
 import tech.ytsaurus.spyt.fs.conf.SparkYtSparkSession
+import tech.ytsaurus.spyt.types.YTsaurusTypes
 
 import scala.annotation.tailrec
 import scala.collection.JavaConverters._
@@ -87,8 +87,7 @@ object YtTable {
     case _ => false
   }
 
-  private def supportsInnerDataType(dataType: DataType): Boolean = dataType match {
-    case YsonType => false
-    case _ => supportsDataType(dataType)
+  private def supportsInnerDataType(dataType: DataType): Boolean = {
+    YTsaurusTypes.instance.supportsInnerDataType(dataType).getOrElse(supportsDataType(dataType))
   }
 }

@@ -1,4 +1,4 @@
-package org.apache.spark.sql.yson
+package org.apache.spark.sql.spyt.types
 
 import org.apache.spark.sql.AnalysisException
 import org.apache.spark.sql.types.{DataType, LongType, SQLUserDefinedType, UserDefinedType}

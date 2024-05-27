@@ -1,7 +1,7 @@
 package tech.ytsaurus.spyt.serializers
 
+import org.apache.spark.sql.spyt.types.DatetimeType
 import org.apache.spark.sql.types._
-import org.apache.spark.sql.yson.{DatetimeType, UInt64Type, YsonType}
 import tech.ytsaurus.core.tables.ColumnValueType
 import tech.ytsaurus.spyt.serializers.SchemaConverter.MetadataFields
 import tech.ytsaurus.typeinfo.StructType.Member
@@ -75,10 +75,12 @@ sealed abstract class CompositeYtLogicalTypeAlias(name: String,
 }
 
 object YtLogicalType {
+  import tech.ytsaurus.spyt.types.YTsaurusTypes.instance.sparkTypeFor
+
   case object Null extends AtomicYtLogicalType("null", 0x02, ColumnValueType.NULL, TiType.nullType(), NullType)
 
   case object Int64 extends AtomicYtLogicalType("int64", 0x03, ColumnValueType.INT64, TiType.int64(), LongType)
-  case object Uint64 extends AtomicYtLogicalType("uint64", 0x04, ColumnValueType.UINT64, TiType.uint64(), UInt64Type)
+  case object Uint64 extends AtomicYtLogicalType("uint64", 0x04, ColumnValueType.UINT64, TiType.uint64(), sparkTypeFor(TiType.uint64()))
   case object Float extends AtomicYtLogicalType("float", 0x05, ColumnValueType.DOUBLE, TiType.floatType(), FloatType, arrowSupported = false)
   case object Double extends AtomicYtLogicalType("double", 0x05, ColumnValueType.DOUBLE, TiType.doubleType(), DoubleType)
   case object Boolean extends AtomicYtLogicalType("boolean", 0x06, ColumnValueType.BOOLEAN, TiType.bool(), BooleanType, Seq("bool"))
@@ -91,7 +93,7 @@ object YtLogicalType {
       if (inner) alias.name else "string"
     }
   }
-  case object Any extends AtomicYtLogicalType("any", 0x11, ColumnValueType.ANY, TiType.yson(), YsonType, Seq("yson")) {
+  case object Any extends AtomicYtLogicalType("any", 0x11, ColumnValueType.ANY, TiType.yson(), sparkTypeFor(TiType.yson()), Seq("yson")) {
     override def nullable: Boolean = true
   }
 

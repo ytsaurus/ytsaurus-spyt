@@ -37,13 +37,13 @@ lazy val `file-system` = (project in file("file-system"))
   .enablePlugins(CommonPlugin)
   .dependsOn(`yt-wrapper` % "compile->compile;test->test;provided->provided")
 
-lazy val `data-source` = (project in file("data-source"))
-  .configs(IntegrationTest)
-  .dependsOn(`file-system` % "compile->compile;test->test;provided->provided", `spark-patch` % Provided)
+lazy val `data-source-base` = (project in file("data-source"))
+  .dependsOn(`file-system` % "compile->compile;test->test;provided->provided")
+
+lazy val `data-source-extended` = (project in file("data-source-extended"))
+  .dependsOn(`data-source-base` % "compile->compile;test->test;provided->provided", `spark-patch` % Provided)
   .enablePlugins(JavaAgent)
   .settings(
-    Defaults.itSettings,
-    libraryDependencies ++= itTestDeps,
     resolvedJavaAgents := javaAgents.value
   )
 
@@ -54,13 +54,11 @@ lazy val `resource-manager` = (project in file("resource-manager"))
   )
 
 lazy val `cluster` = (project in file("spark-cluster"))
-  .configs(IntegrationTest)
-  .dependsOn(`data-source` % "compile->compile;test->test;provided->provided")
+  .dependsOn(`data-source-extended` % "compile->compile;test->test;provided->provided")
   .enablePlugins(JavaAgent)
   .settings(
     libraryDependencies ++= scaldingArgs,
     libraryDependencies ++= scalatra,
-    libraryDependencies ++= scalatraTestDeps,
     resolvedJavaAgents := javaAgents.value
   )
 
@@ -191,7 +189,8 @@ lazy val root = (project in file("."))
   .aggregate(
     `yt-wrapper`,
     `file-system`,
-    `data-source`,
+    `data-source-base`,
+    `data-source-extended`,
     `cluster`,
     `resource-manager`,
     `spark-submit`,
@@ -228,7 +227,8 @@ lazy val root = (project in file("."))
           `yt-wrapper` / publishSigned,
           `file-system` / publishSigned,
           `spark-patch` / publishSigned,
-          `data-source` / publishSigned,
+          `data-source-base` / publishSigned,
+          `data-source-extended` / publishSigned,
           `resource-manager` / publishSigned,
           `cluster` / publishSigned,
           `spark-submit` / publishSigned

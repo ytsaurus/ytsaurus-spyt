@@ -2,23 +2,24 @@ package tech.ytsaurus.spyt.serializers
 
 import org.apache.spark.sql.types._
 import org.apache.spark.sql.v2.YtUtils
-import org.apache.spark.sql.yson.{DatetimeType, UInt64Type, YsonType}
-import org.mockito.scalatest.MockitoSugar
+import org.apache.spark.sql.spyt.types.DatetimeType
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
-import org.scalatest.prop.TableDrivenPropertyChecks
 import tech.ytsaurus.core.tables.{ColumnValueType, TableSchema}
 import tech.ytsaurus.spyt.format.conf.SparkYtConfiguration.Read.TypeV3
 import tech.ytsaurus.spyt.serializers.SchemaConverter.{MetadataFields, Unordered, ytLogicalSchema}
 import tech.ytsaurus.spyt.test.{LocalSpark, TestUtils, TmpDir}
+import tech.ytsaurus.spyt.types.YTsaurusTypes
 import tech.ytsaurus.spyt.{SchemaTestUtils, YtReader}
 import tech.ytsaurus.typeinfo.StructType.Member
 import tech.ytsaurus.typeinfo.TiType
 import tech.ytsaurus.ysontree.{YTree, YTreeMapNode}
 
 class SchemaConverterTest extends AnyFlatSpec with Matchers
-  with TestUtils with TmpDir with LocalSpark with SchemaTestUtils with MockitoSugar with TableDrivenPropertyChecks {
+  with TestUtils with TmpDir with LocalSpark with SchemaTestUtils {
   behavior of "SchemaConverter"
+
+  import SchemaConverterTest._
 
   it should "convert yt schema to spark one" in {
     val schema = TableSchema.builder()
@@ -35,64 +36,6 @@ class SchemaConverterTest extends AnyFlatSpec with Matchers
     ))
   }
 
-  private val schema = TableSchema.builder().setUniqueKeys(false)
-    .addValue("NULL", ColumnValueType.NULL)
-    .addValue("INT64", ColumnValueType.INT64)
-    .addValue("int64_3", TiType.int64())
-    .addValue("UINT64", ColumnValueType.UINT64)
-    .addValue("uint64_3", TiType.uint64())
-    .addValue("floatType", TiType.floatType())
-    .addValue("DOUBLE", ColumnValueType.DOUBLE)
-    .addValue("doubleType", TiType.doubleType())
-    .addValue("BOOLEAN", ColumnValueType.BOOLEAN)
-    .addValue("bool", TiType.bool())
-    .addValue("STRING", ColumnValueType.STRING)
-    .addValue("string_3", TiType.string())
-    .addValue("ANY", ColumnValueType.ANY)
-    .addValue("yson", TiType.optional(TiType.yson()))
-    .addValue("int8", TiType.int8())
-    .addValue("uint8", TiType.uint8())
-    .addValue("int16", TiType.int16())
-    .addValue("uint16", TiType.uint16())
-    .addValue("int32", TiType.int32())
-    .addValue("uint32", TiType.uint32())
-    .addValue("utf8", TiType.utf8())
-    .addValue("date", TiType.date())
-    .addValue("datetime", TiType.datetime())
-    .addValue("timestamp", TiType.timestamp())
-    .addValue("interval", TiType.interval())
-    .addValue("list", TiType.list(TiType.bool()))
-    .addValue("dict", TiType.dict(TiType.doubleType(), TiType.string()))
-    .addValue("struct", TiType.struct(new Member("a", TiType.string()), new Member("b", TiType.optional(TiType.yson()))))
-    .addValue("tuple", TiType.tuple(TiType.bool(), TiType.date()))
-    .addValue("variantOverStruct",
-      TiType.variantOverStruct(java.util.List.of[Member](new Member("c", TiType.uint16()), new Member("d", TiType.timestamp()))))
-    .addValue("variantOverTuple", TiType.variantOverTuple(TiType.floatType(), TiType.interval()))
-    .build()
-
-  private val sparkSchema = StructType(Seq(
-    structField("Null", NullType, nullable = false),
-    structField("Long", LongType, nullable = false),
-    structField("UInt64", UInt64Type, nullable = false),
-    structField("Float", FloatType, nullable = false),
-    structField("Double", DoubleType, nullable = false),
-    structField("Boolean", BooleanType, nullable = false),
-    structField("String", StringType, nullable = false),
-    structField("Yson", YsonType, nullable = false),
-    structField("Byte", ByteType, nullable = false),
-    structField("Short", ShortType, nullable = false),
-    structField("Integer", IntegerType, nullable = false),
-    structField("Date", DateType, nullable = false),
-    structField("Datetime", new DatetimeType(), nullable = false),
-    structField("Timestamp", TimestampType, nullable = false),
-    structField("Array", ArrayType(BooleanType, containsNull = false), nullable = false),
-    structField("Map", MapType(DoubleType, StringType, valueContainsNull = false), nullable = false),
-    structField("Struct", StructType(Seq(StructField("a", StringType, nullable = false), StructField("b", YsonType, nullable = false))), nullable = false),
-    structField("Tuple", StructType(Seq(StructField("_1", BooleanType, nullable = false), StructField("_2", DateType, nullable = false))), nullable = false),
-    structField("VariantOverStruct", StructType(Seq(StructField("_vc", IntegerType, nullable = false), StructField("_vd", LongType, nullable = false))), nullable = false),
-    structField("VariantOverTuple", StructType(Seq(StructField("_v_1", FloatType, nullable = false), StructField("_v_2", LongType, nullable = false))), nullable = false)
-  ))
-
   it should "read schema without parsing type v3" in {
     // in sparkSchema.toYTree no type_v1 type names
     spark.conf.set(s"spark.yt.${TypeV3.name}", value = false)
@@ -107,8 +50,8 @@ class SchemaConverterTest extends AnyFlatSpec with Matchers
       structField("NULL", NullType, nullable = true),
       structField("INT64", LongType, nullable = true),
       structField("int64_3", LongType, nullable = true),
-      structField("UINT64", UInt64Type, nullable = true),
-      structField("uint64_3", UInt64Type, nullable = true),
+      structField("UINT64", YTsaurusTypes.UINT64_DEC_TYPE, nullable = true),
+      structField("uint64_3", YTsaurusTypes.UINT64_DEC_TYPE, nullable = true),
       structField("floatType", FloatType, nullable = true, arrowSupported = false),
       structField("DOUBLE", DoubleType, nullable = true),
       structField("doubleType", DoubleType, nullable = true),
@@ -116,25 +59,26 @@ class SchemaConverterTest extends AnyFlatSpec with Matchers
       structField("bool", BooleanType, nullable = true),
       structField("STRING", StringType, nullable = true),
       structField("string_3", StringType, nullable = true),
-      structField("ANY", YsonType, nullable = true),
-      structField("yson", YsonType, nullable = true),
+      structField("ANY", BinaryType, nullable = true),
+      structField("yson", BinaryType, nullable = true),
       structField("int8", ByteType, nullable = true),
       structField("uint8", ShortType, nullable = true),
       structField("int16", ShortType, nullable = true),
       structField("uint16", IntegerType, nullable = true),
       structField("int32", IntegerType, nullable = true),
       structField("uint32", LongType, nullable = true),
+      structField("decimal", StringType, nullable = true),
       structField("utf8", StringType, nullable = true),
       structField("date", DateType, nullable = true, arrowSupported = false),
       structField("datetime", new DatetimeType(), nullable = true, arrowSupported = false),
       structField("timestamp", TimestampType, nullable = true, arrowSupported = false),
       structField("interval", LongType, nullable = true, arrowSupported = false),
-      structField("list", YsonType, nullable = true),
-      structField("dict", YsonType, nullable = true),
-      structField("struct", YsonType, nullable = true),
-      structField("tuple", YsonType, nullable = true),
-      structField("variantOverStruct", YsonType, nullable = true),
-      structField("variantOverTuple", YsonType, nullable = true)
+      structField("list", BinaryType, nullable = true),
+      structField("dict", BinaryType, nullable = true),
+      structField("struct", BinaryType, nullable = true),
+      structField("tuple", BinaryType, nullable = true),
+      structField("variantOverStruct", BinaryType, nullable = true),
+      structField("variantOverTuple", BinaryType, nullable = true)
     ))
   }
 
@@ -144,8 +88,8 @@ class SchemaConverterTest extends AnyFlatSpec with Matchers
       structField("NULL", NullType, nullable = false),
       structField("INT64", LongType, nullable = true),
       structField("int64_3", LongType, nullable = false),
-      structField("UINT64", UInt64Type, nullable = true),
-      structField("uint64_3", UInt64Type, nullable = false),
+      structField("UINT64", YTsaurusTypes.UINT64_DEC_TYPE, nullable = true),
+      structField("uint64_3", YTsaurusTypes.UINT64_DEC_TYPE, nullable = false),
       structField("floatType", FloatType, nullable = false, arrowSupported = false),
       structField("DOUBLE", DoubleType, nullable = true),
       structField("doubleType", DoubleType, nullable = false),
@@ -153,14 +97,15 @@ class SchemaConverterTest extends AnyFlatSpec with Matchers
       structField("bool", BooleanType, nullable = false),
       structField("STRING", StringType, nullable = true),
       structField("string_3", StringType, nullable = false),
-      structField("ANY", YsonType, nullable = true),
-      structField("yson", YsonType, nullable = true),
+      structField("ANY", BinaryType, nullable = true),
+      structField("yson", BinaryType, nullable = true),
       structField("int8", ByteType, nullable = false),
       structField("uint8", ShortType, nullable = false),
       structField("int16", ShortType, nullable = false),
       structField("uint16", IntegerType, nullable = false),
       structField("int32", IntegerType, nullable = false),
       structField("uint32", LongType, nullable = false),
+      structField("decimal", DecimalType(22, 0), nullable = false),
       structField("utf8", StringType, nullable = false),
       structField("date", DateType, nullable = false, arrowSupported = false),
       structField("datetime", new DatetimeType(), nullable = false, arrowSupported = false),
@@ -168,7 +113,7 @@ class SchemaConverterTest extends AnyFlatSpec with Matchers
       structField("interval", LongType, nullable = false, arrowSupported = false),
       structField("list", ArrayType(BooleanType, containsNull = false), nullable = false),
       structField("dict", MapType(DoubleType, StringType, valueContainsNull = false), nullable = false),
-      structField("struct", StructType(Seq(StructField("a", StringType, nullable = false), StructField("b", YsonType, nullable = true))), nullable = false),
+      structField("struct", StructType(Seq(StructField("a", StringType, nullable = false), StructField("b", BinaryType, nullable = true))), nullable = false),
       structField("tuple", StructType(Seq(StructField("_1", BooleanType, nullable = false), StructField("_2", DateType, nullable = false))), nullable = false),
       structField("variantOverStruct", StructType(Seq(StructField("_vc", IntegerType, metadata = new MetadataBuilder().putBoolean("optional", false).build()),
         StructField("_vd", TimestampType, metadata = new MetadataBuilder().putBoolean("optional", false).build()))), nullable = false),
@@ -184,10 +129,10 @@ class SchemaConverterTest extends AnyFlatSpec with Matchers
       .addValue("b", ColumnValueType.INT64)
       .build()
     val res = SchemaConverter.sparkSchema(schema.toYTree,
-      Some(StructType(Seq(structField("a", UInt64Type, Some("x"), 1, nullable = false))))
+      Some(StructType(Seq(structField("a", DecimalType(22, 0), Some("x"), 1, nullable = false))))
     )
     res shouldBe StructType(Seq(
-      structField("a", UInt64Type, keyId = 0, nullable = false),
+      structField("a", DecimalType(22, 0), keyId = 0, nullable = false),
       structField("b", LongType, nullable = true)
     ))
   }
@@ -197,21 +142,21 @@ class SchemaConverterTest extends AnyFlatSpec with Matchers
     res shouldBe TableSchema.builder().setUniqueKeys(false)
       .addValue("Null", TiType.nullType())
       .addValue("Long", TiType.int64())
-      .addValue("UInt64", TiType.uint64())
       .addValue("Float", TiType.floatType())
       .addValue("Double", TiType.doubleType())
       .addValue("Boolean", TiType.bool())
       .addValue("String", TiType.string())
-      .addValue("Yson", TiType.yson())
+      .addValue("Binary", TiType.string())
       .addValue("Byte", TiType.int8())
       .addValue("Short", TiType.int16())
       .addValue("Integer", TiType.int32())
+      .addValue("Decimal", TiType.decimal(22,0))
       .addValue("Date", TiType.date())
       .addValue("Datetime", TiType.datetime())
       .addValue("Timestamp", TiType.timestamp())
       .addValue("Array", TiType.list(TiType.bool()))
       .addValue("Map", TiType.dict(TiType.doubleType(), TiType.string()))
-      .addValue("Struct", TiType.struct(new Member("a", TiType.string()), new Member("b", TiType.yson())))
+      .addValue("Struct", TiType.struct(new Member("a", TiType.string()), new Member("b", TiType.string())))
       .addValue("Tuple", TiType.tuple(TiType.bool(), TiType.date()))
       .addValue("VariantOverStruct",
         TiType.variantOverStruct(java.util.List.of[Member](new Member("c", TiType.int32()), new Member("d", TiType.int64()))))
@@ -234,15 +179,15 @@ class SchemaConverterTest extends AnyFlatSpec with Matchers
       .value(Seq(
         getColumn("Null", "null"),
         getColumn("Long", "int64"),
-        getColumn("UInt64", "uint64"),
         getColumn("Float", "float"),
         getColumn("Double", "double"),
         getColumn("Boolean", "boolean"),
         getColumn("String", "string"),
-        getColumn("Yson", "any"),
+        getColumn("Binary", "string"),
         getColumn("Byte", "int8"),
         getColumn("Short", "int16"),
         getColumn("Integer", "int32"),
+        getColumn("Decimal", "any"),
         getColumn("Date", "date"),
         getColumn("Datetime", "datetime"),
         getColumn("Timestamp", "timestamp"),
@@ -284,4 +229,65 @@ class SchemaConverterTest extends AnyFlatSpec with Matchers
     ))
     SchemaConverter.keys(schema4) shouldBe Seq(Some("a"), None, Some("c"))
   }
+}
+
+object SchemaConverterTest extends SchemaTestUtils {
+  val schema: TableSchema = TableSchema.builder().setUniqueKeys(false)
+    .addValue("NULL", ColumnValueType.NULL)
+    .addValue("INT64", ColumnValueType.INT64)
+    .addValue("int64_3", TiType.int64())
+    .addValue("UINT64", ColumnValueType.UINT64)
+    .addValue("uint64_3", TiType.uint64())
+    .addValue("floatType", TiType.floatType())
+    .addValue("DOUBLE", ColumnValueType.DOUBLE)
+    .addValue("doubleType", TiType.doubleType())
+    .addValue("BOOLEAN", ColumnValueType.BOOLEAN)
+    .addValue("bool", TiType.bool())
+    .addValue("STRING", ColumnValueType.STRING)
+    .addValue("string_3", TiType.string())
+    .addValue("ANY", ColumnValueType.ANY)
+    .addValue("yson", TiType.optional(TiType.yson()))
+    .addValue("int8", TiType.int8())
+    .addValue("uint8", TiType.uint8())
+    .addValue("int16", TiType.int16())
+    .addValue("uint16", TiType.uint16())
+    .addValue("int32", TiType.int32())
+    .addValue("uint32", TiType.uint32())
+    .addValue("decimal", TiType.decimal(22, 0))
+    .addValue("utf8", TiType.utf8())
+    .addValue("date", TiType.date())
+    .addValue("datetime", TiType.datetime())
+    .addValue("timestamp", TiType.timestamp())
+    .addValue("interval", TiType.interval())
+    .addValue("list", TiType.list(TiType.bool()))
+    .addValue("dict", TiType.dict(TiType.doubleType(), TiType.string()))
+    .addValue("struct", TiType.struct(new Member("a", TiType.string()), new Member("b", TiType.optional(TiType.yson()))))
+    .addValue("tuple", TiType.tuple(TiType.bool(), TiType.date()))
+    .addValue("variantOverStruct",
+      TiType.variantOverStruct(java.util.List.of[Member](new Member("c", TiType.uint16()), new Member("d", TiType.timestamp()))))
+    .addValue("variantOverTuple", TiType.variantOverTuple(TiType.floatType(), TiType.interval()))
+    .build()
+
+  val sparkSchema: StructType = StructType(Seq(
+    structField("Null", NullType, nullable = false),
+    structField("Long", LongType, nullable = false),
+    structField("Float", FloatType, nullable = false),
+    structField("Double", DoubleType, nullable = false),
+    structField("Boolean", BooleanType, nullable = false),
+    structField("String", StringType, nullable = false),
+    structField("Binary", BinaryType, nullable = false),
+    structField("Byte", ByteType, nullable = false),
+    structField("Short", ShortType, nullable = false),
+    structField("Integer", IntegerType, nullable = false),
+    structField("Decimal", DecimalType(22, 0), nullable = false),
+    structField("Date", DateType, nullable = false),
+    structField("Datetime", new DatetimeType(), nullable = false),
+    structField("Timestamp", TimestampType, nullable = false),
+    structField("Array", ArrayType(BooleanType, containsNull = false), nullable = false),
+    structField("Map", MapType(DoubleType, StringType, valueContainsNull = false), nullable = false),
+    structField("Struct", StructType(Seq(StructField("a", StringType, nullable = false), StructField("b", BinaryType, nullable = false))), nullable = false),
+    structField("Tuple", StructType(Seq(StructField("_1", BooleanType, nullable = false), StructField("_2", DateType, nullable = false))), nullable = false),
+    structField("VariantOverStruct", StructType(Seq(StructField("_vc", IntegerType, nullable = false), StructField("_vd", LongType, nullable = false))), nullable = false),
+    structField("VariantOverTuple", StructType(Seq(StructField("_v_1", FloatType, nullable = false), StructField("_v_2", LongType, nullable = false))), nullable = false)
+  ))
 }

@@ -39,7 +39,7 @@ class DatetimeType(UserDefinedType):
 
     @classmethod
     def scalaUDT(cls):
-        return 'org.apache.spark.sql.yson.DatetimeType'
+        return 'org.apache.spark.sql.spyt.types.DatetimeType'
 
 
 class Datetime:
@@ -75,7 +75,7 @@ class YsonType(UserDefinedType):
 
     @classmethod
     def scalaUDT(cls):
-        return 'org.apache.spark.sql.yson.YsonType'
+        return 'org.apache.spark.sql.spyt.types.YsonType'
 
     def needConversion(self):
         return True
@@ -136,7 +136,7 @@ def uint64_to_string_udf(s_col):
     sc = SparkContext._active_spark_context
     cols = sc._gateway.new_array(sc._jvm.Column, 1)
     cols[0] = _to_java_column(s_col)
-    jc = sc._jvm.org.apache.spark.sql.yson.UInt64Long.toStringUdf().apply(cols)
+    jc = sc._jvm.org.apache.spark.sql.spyt.types.UInt64Long.toStringUdf().apply(cols)
     return Column(jc)
 
 
@@ -144,7 +144,7 @@ def string_to_uint64_udf(s_col):
     sc = SparkContext._active_spark_context
     cols = sc._gateway.new_array(sc._jvm.Column, 1)
     cols[0] = _to_java_column(s_col)
-    jc = sc._jvm.org.apache.spark.sql.yson.UInt64Long.fromStringUdf().apply(cols)
+    jc = sc._jvm.org.apache.spark.sql.spyt.types.UInt64Long.fromStringUdf().apply(cols)
     return Column(jc)
 
 

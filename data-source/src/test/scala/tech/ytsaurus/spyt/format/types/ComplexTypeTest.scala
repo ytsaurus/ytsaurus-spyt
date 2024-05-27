@@ -3,7 +3,6 @@ package tech.ytsaurus.spyt.format.types
 import org.apache.log4j.{Level, Logger}
 import org.apache.spark.SparkException
 import org.apache.spark.sql.types._
-import org.apache.spark.sql.yson.YsonType
 import org.apache.spark.sql.{Encoders, Row, SaveMode}
 import org.scalatest.{FlatSpec, Matchers}
 import tech.ytsaurus.spyt._
@@ -416,14 +415,11 @@ class ComplexTypeTest extends FlatSpec with Matchers with LocalSpark with TmpDir
   }
 
   it should "read dataset with variant" in {
-    Seq(
-      Array[Byte](91, 1, 6, 's', 't', 'r', 59, 1, 2, 'a', 93),
-      Array[Byte](91, 1, 6, 's', 't', 'r', 59, 1, 6, 't', 'm', 'p', 59, 93),
-      Array[Byte](91, 1, 8, 'l', 'o', 'n', 'g', 59, 2, 200.toByte, 1, 59, 93)
-    ).toDF("value")
-      .coalesce(1)
-      .withColumn("value", 'value.cast(YsonType))
-      .write.yt(tmpPath)
+    writeTableFromYson(Seq(
+      """{value = [0; "a";]}""",
+      """{value = [0; "tmp";]}""",
+      """{value = [1; 100;]}""",
+    ), tmpPath, anySchema)
 
     val schema = TypeUtils.variantOverStruct(("str", StringType), ("long", LongType))
 

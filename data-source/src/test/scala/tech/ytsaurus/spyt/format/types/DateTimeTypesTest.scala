@@ -1,7 +1,7 @@
 package tech.ytsaurus.spyt.format.types
 
 import org.apache.spark.sql.types._
-import org.apache.spark.sql.yson.{Datetime, DatetimeType, UInt64Long, UInt64Type}
+import org.apache.spark.sql.spyt.types.{Datetime, DatetimeType}
 import org.apache.spark.sql.{DataFrame, Row}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -30,7 +30,7 @@ class DateTimeTypesTest extends AnyFlatSpec with Matchers with LocalSpark with T
 
   it should "datetime types test: write table by yt - read by spark" in {
     val tableSchema: TableSchema = TableSchema.builder()
-      .addValue("id", TiType.uint64())
+      .addValue("id", TiType.int64())
       .addValue("date", TiType.date())
       .addValue("datetime", TiType.datetime())
       .addValue("timestamp", TiType.timestamp())
@@ -50,7 +50,7 @@ class DateTimeTypesTest extends AnyFlatSpec with Matchers with LocalSpark with T
 
     val df: DataFrame = spark.read.yt(tmpPath)
     df.schema.fields.map(_.copy(metadata = Metadata.empty)) should contain theSameElementsInOrderAs Seq(
-      StructField("id", UInt64Type),
+      StructField("id", LongType),
       StructField("date", DateType),
       StructField("datetime", new DatetimeType()),
       StructField("timestamp", TimestampType),
@@ -59,21 +59,21 @@ class DateTimeTypesTest extends AnyFlatSpec with Matchers with LocalSpark with T
 
     val expectedData = Seq(
       Row(
-        UInt64Long(1L),
+        1L,
         Date.valueOf("1970-04-11"),
         Datetime(LocalDateTime.parse("1970-04-11T00:00:00")),
         convertUTCtoLocal("1970-04-11T00:00:00.000000Z", HOURS_OFFSET),
         101
       ),
       Row(
-        UInt64Long(2L),
+        2L,
         Date.valueOf("2019-02-09"),
         Datetime(LocalDateTime.parse("2019-02-09T13:41:11")),
         convertUTCtoLocal("2019-02-09T13:41:11.654321Z", HOURS_OFFSET),
         202
       ),
       Row(
-        UInt64Long(3L),
+        3L,
         Date.valueOf("1970-01-01"),
         Datetime(LocalDateTime.parse("1970-01-01T00:00:00")),
         convertUTCtoLocal("1970-01-01T00:00:00.000000Z", HOURS_OFFSET),

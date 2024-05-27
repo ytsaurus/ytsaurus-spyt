@@ -1,10 +1,9 @@
 package tech.ytsaurus.spyt.serialization
 
 import org.apache.spark.sql.types._
-import org.apache.spark.sql.yson.UInt64Type
 import org.apache.spark.unsafe.types.UTF8String
 import tech.ytsaurus.core.common.Decimal.binaryToText
-import tech.ytsaurus.spyt.serialization.YsonDecoder.decode
+import tech.ytsaurus.spyt.types.YTsaurusTypes
 import tech.ytsaurus.yson.{YsonError, YsonTags}
 
 import scala.annotation.tailrec
@@ -150,12 +149,13 @@ class YsonDecoder(bytes: Array[Byte], dataType: IndexedDataType) extends YsonBas
         dataType.sparkDataType match {
           case LongType => parseUInt64
           case IntegerType => parseUInt64.toInt
-          case UInt64Type => parseUInt64
           case DoubleType => java.lang.Double.parseDouble(java.lang.Long.toUnsignedString(parseUInt64))
           case BinaryType => first +: parseInt64AsBytes
+          case _: DecimalType => YTsaurusTypes.longToUnsignedDecimal(parseUInt64)
           case NullType =>
             parseUInt64
             null
+          case otherType => YTsaurusTypes.instance.parseUInt64Value(otherType, parseUInt64)
         }
       case YsonTags.BINARY_DOUBLE =>
         dataType.sparkDataType match {
@@ -198,13 +198,6 @@ class YsonDecoder(bytes: Array[Byte], dataType: IndexedDataType) extends YsonBas
           case BinaryType => Array[Byte](YsonTags.ENTITY)
           case _ => null
         }
-      //      case '"' =>
-      //        consumer.onBytes(readQuotedString)
-      //      case _ =>
-      //        if (YsonFormatUtil.isUnquotedStringFirstByte(first)) consumer.onBytes(readUnquotedString(first, allowEof))
-      //        else if (YsonFormatUtil.isNumericFirstByte(first)) parseNumeric(first, allowEof)
-      //        else if (first == '%') consumer.onBoolean(readBooleanValue)
-      //        else throw new YsonUnexpectedToken(first, "NODE")
     }
   }
 }

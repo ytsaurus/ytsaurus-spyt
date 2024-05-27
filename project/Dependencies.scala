@@ -30,16 +30,6 @@ object Dependencies {
     "org.scalatestplus" %% "scalacheck-1-14" % "3.1.0.0" % Test
   ) ++ mockito
 
-  lazy val itTestDeps = Seq(
-    "org.scalacheck" %% "scalacheck" % "1.14.1" % "it,test",
-    "org.scalatest" %% "scalatest" % scalatestVersion % "it,test"
-  )
-
-  lazy val scalatraTestDeps = Seq(
-    "org.scalatra" %% "scalatra-scalatest" % scalatraVersion % "it" excludeAll
-      ExclusionRule(organization = "org.scalatest")
-  )
-
   lazy val spark = Seq("spark-core", "spark-sql").map { module =>
     "org.apache.spark" %% module % sparkVersion % Provided
   }

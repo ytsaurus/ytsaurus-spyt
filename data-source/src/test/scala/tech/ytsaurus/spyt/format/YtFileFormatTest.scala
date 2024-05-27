@@ -7,11 +7,9 @@ import org.apache.spark.sql.functions.col
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.internal.SQLConf._
 import org.apache.spark.sql.types._
-import org.apache.spark.sql.yson.{Datetime, UInt64Long, UInt64Type}
+import org.apache.spark.sql.spyt.types.Datetime
 import org.apache.spark.sql.{AnalysisException, DataFrameReader, Row, SaveMode}
 import org.apache.spark.test.UtilsWrapper
-import org.mockito.scalatest.MockitoSugar
-import org.scalatest.PrivateMethodTester
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.prop.TableDrivenPropertyChecks
@@ -21,6 +19,7 @@ import tech.ytsaurus.spyt._
 import tech.ytsaurus.spyt.common.utils.DateTimeTypesConverter.{convertUTCtoLocal, getUtcHoursOffset}
 import tech.ytsaurus.spyt.format.conf.SparkYtConfiguration
 import tech.ytsaurus.spyt.test.{LocalSpark, TestUtils, TmpDir}
+import tech.ytsaurus.spyt.types.YTsaurusTypes
 import tech.ytsaurus.spyt.wrapper.YtWrapper
 import tech.ytsaurus.spyt.wrapper.table.OptimizeMode
 import tech.ytsaurus.typeinfo.TiType
@@ -34,7 +33,7 @@ import scala.language.postfixOps
 import scala.util.Random
 
 class YtFileFormatTest extends AnyFlatSpec with Matchers with LocalSpark
-  with TmpDir with TestUtils with MockitoSugar with TableDrivenPropertyChecks with PrivateMethodTester {
+  with TmpDir with TestUtils with TableDrivenPropertyChecks {
   behavior of "YtFileFormat"
 
   import spark.implicits._
@@ -623,12 +622,16 @@ class YtFileFormatTest extends AnyFlatSpec with Matchers with LocalSpark
 
   it should "read primitives in any column" in {
     val data = Seq(
-      Seq[Any](0L, 0.0, 0.0f, false, 0.toByte, UInt64Long(0)),
-      Seq[Any](65L, 1.5, 7.2f, true, 3.toByte, UInt64Long(4)))
+      Seq[Any](0L, 0.0, 0.0f, false, 0.toByte, BigDecimal(0).bigDecimal),
+      Seq[Any](65L, 1.5, 7.2f, true, 3.toByte, BigDecimal(4).bigDecimal),
+      Seq[Any](65L, 1.5, 7.2f, true, 3.toByte, BigDecimal("18446744073709551606").bigDecimal)
+    )
 
     val preparedData = Seq(
-      Seq[Any](0L, 0.0, 0.0, false, 0L, UInt64Long(0).toLong),
-      Seq[Any](65L, 1.5, 7.2, true, 3L, UInt64Long(4).toLong))
+      Seq[Any](0L, 0.0, 0.0, false, 0L, 0L),
+      Seq[Any](65L, 1.5, 7.2, true, 3L, 4L),
+      Seq[Any](65L, 1.5, 7.2, true, 3L, -10L),
+    )
 
     writeTableFromURow(
       preparedData.map(x => new UnversionedRow(java.util.List.of[UnversionedValue](
@@ -651,13 +654,16 @@ class YtFileFormatTest extends AnyFlatSpec with Matchers with LocalSpark
 
     val schemaHint = StructType(Seq(
       StructField("int64", LongType), StructField("double", DoubleType), StructField("float", FloatType),
-      StructField("boolean", BooleanType), StructField("int8", ByteType), StructField("uint64", UInt64Type)))
+      StructField("boolean", BooleanType), StructField("int8", ByteType),
+      StructField("uint64", YTsaurusTypes.UINT64_DEC_TYPE)
+    ))
 
-    val arrowRes = spark.read.enableArrow.schemaHint(schemaHint).yt(tmpPath).collect()
-    val wireRes = spark.read.disableArrow.schemaHint(schemaHint).yt(tmpPath).collect()
     val ans = data.map(Row.fromSeq)
 
+    val arrowRes = spark.read.enableArrow.schemaHint(schemaHint).yt(tmpPath).collect()
     arrowRes should contain theSameElementsAs ans
+
+    val wireRes = spark.read.disableArrow.schemaHint(schemaHint).yt(tmpPath).collect()
     wireRes should contain theSameElementsAs ans
   }
 

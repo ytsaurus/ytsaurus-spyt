@@ -1,8 +1,8 @@
 package tech.ytsaurus.spyt.serializers
 
+import org.apache.spark.sql.spyt.types.DatetimeType
 import org.apache.spark.sql.types._
 import org.apache.spark.sql.v2.YtTable
-import org.apache.spark.sql.yson.{DatetimeType, UInt64Type, YsonType}
 import tech.ytsaurus.core.common.Decimal.textToBinary
 import tech.ytsaurus.core.tables.{ColumnSortOrder, TableSchema}
 import tech.ytsaurus.spyt.common.utils.TypeUtils.{isTuple, isVariant, isVariantOverTuple}
@@ -11,6 +11,7 @@ import tech.ytsaurus.spyt.serialization.IndexedDataType
 import tech.ytsaurus.spyt.serialization.IndexedDataType.StructFieldMeta
 import tech.ytsaurus.spyt.serializers.YtLogicalType.getStructField
 import tech.ytsaurus.spyt.serializers.YtLogicalTypeSerializer.{deserializeTypeV3, serializeType, serializeTypeV3}
+import tech.ytsaurus.spyt.types.YTsaurusTypes
 import tech.ytsaurus.typeinfo.TiType
 import tech.ytsaurus.ysontree.{YTree, YTreeNode, YTreeTextSerializer}
 
@@ -209,12 +210,11 @@ object SchemaConverter {
       YtLogicalType.Dict(
         ytLogicalTypeV3(mT.keyType),
         wrapSparkAttributes(ytLogicalTypeV3(mT.valueType), mT.valueContainsNull))
-    case YsonType => YtLogicalType.Any
     case BinaryType => YtLogicalType.Binary
     case DateType => YtLogicalType.Date
     case _: DatetimeType => YtLogicalType.Datetime
     case TimestampType => YtLogicalType.Timestamp
-    case UInt64Type => YtLogicalType.Uint64
+    case otherType => YTsaurusTypes.instance.ytLogicalTypeV3(otherType)
   }
 
   private def ytLogicalSchemaImpl(sparkSchema: StructType,

@@ -10,6 +10,8 @@ import org.apache.spark.unsafe.types.UTF8String
 import tech.ytsaurus.core.common.Decimal.binaryToText
 import tech.ytsaurus.spyt.serialization.IndexedDataType.{ArrayType => IArrayType, AtomicType => IAtomicType}
 import tech.ytsaurus.spyt.serialization.{IndexedDataType, YsonDecoder}
+import tech.ytsaurus.spyt.types.YTsaurusTypes
+import tech.ytsaurus.yson.YsonTags
 
 class ArrowColumnVector(dataType: IndexedDataType,
                         vector: ValueVector,
@@ -217,6 +219,10 @@ class ArrowColumnVector(dataType: IndexedDataType,
     override final def getLong(rowId: Int): Long = values.get(id(rowId))
 
     override final def getBinary(rowId: Int): Array[Byte] = values.getObjectNoOverflow(id(rowId)).toByteArray
+
+    override final def getDecimal(rowId: Int, precision: Int, scale: Int): Decimal = {
+      YTsaurusTypes.longToUnsignedDecimal(values.get(id(rowId)))
+    }
   }
 
   private case class FloatAccessor(keys: Option[BaseIntVector], values: Float4Vector) extends ArrowVectorAccessor {
@@ -333,7 +339,11 @@ class ArrowColumnVector(dataType: IndexedDataType,
     override def getLong(rowId: Int): Long = getImpl(rowId, LongType)
 
     override def getDecimal(rowId: Int, precision: Int, scale: Int): Decimal = {
-      Decimal(BigDecimal(binaryToText(getBinary(rowId), precision, scale)), precision, scale)
+      val binaryRepr = getBinary(rowId)
+      binaryRepr.head match {
+        case YsonTags.BINARY_UINT => getImpl[Decimal](rowId, YTsaurusTypes.UINT64_DEC_TYPE)
+        case _ => Decimal(BigDecimal(binaryToText(getBinary(rowId), precision, scale)), precision, scale)
+      }
     }
   }
 

@@ -4,13 +4,14 @@ import org.apache.spark.sql.Row
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.{GenericRowWithSchema, UnsafeArrayData, UnsafeMapData, UnsafeRow}
 import org.apache.spark.sql.catalyst.util.MapData
+import org.apache.spark.sql.spyt.types.DatetimeType
 import org.apache.spark.sql.types._
-import org.apache.spark.sql.yson.{DatetimeType, UInt64Long, UInt64Type}
 import org.apache.spark.unsafe.types.UTF8String
 import tech.ytsaurus.client.TableWriter
 import tech.ytsaurus.core.rows.YTreeSerializer
 import tech.ytsaurus.spyt.serializers.SchemaConverter.{Unordered, decimalToBinary}
 import tech.ytsaurus.spyt.serializers.YsonRowConverter.{isNull, serializeValue}
+import tech.ytsaurus.spyt.types.YTsaurusTypes
 import tech.ytsaurus.typeinfo.TiType
 import tech.ytsaurus.yson.{YsonConsumer, YsonTags}
 import tech.ytsaurus.ysontree._
@@ -261,12 +262,9 @@ object YsonRowConverter {
           YsonRowConverter.getOrCreate(t, ytType, config).serializeStruct(value, consumer)
         case map: MapType =>
           serializeMap(value, map, ytType, config, consumer)
-        case UInt64Type => value match {
-          case v: Long => consumer.onUnsignedInteger(v)
-          case UInt64Long(v) => consumer.onUnsignedInteger(v)
-        }
         case _: DatetimeType => consumer.onInteger(value.asInstanceOf[Long])
         case TimestampType => consumer.onInteger(value.asInstanceOf[Long])
+        case otherType => YTsaurusTypes.instance.toYsonField(otherType, value, consumer)
       }
     }
   }

@@ -3,16 +3,15 @@ package tech.ytsaurus.spyt.serializers
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.GenericInternalRow
 import org.apache.spark.sql.sources.Filter
+import org.apache.spark.sql.spyt.types.DatetimeType
 import org.apache.spark.sql.types._
-import org.apache.spark.sql.yson.{DatetimeType, UInt64Type, YsonType}
 import org.apache.spark.unsafe.types.UTF8String
 import tech.ytsaurus.client.rows.{WireRowDeserializer, WireValueDeserializer}
 import tech.ytsaurus.core.common.Decimal.binaryToText
 import tech.ytsaurus.core.tables.ColumnValueType
 import tech.ytsaurus.spyt.serialization.YsonDecoder
-import tech.ytsaurus.ysontree.{YTreeBinarySerializer, YTreeBuilder}
+import tech.ytsaurus.spyt.types.YTsaurusTypes
 
-import java.io.ByteArrayOutputStream
 import scala.collection.mutable
 
 class InternalRowDeserializer(schema: StructType) extends WireRowDeserializer[InternalRow] with WireValueDeserializer[Any] {
@@ -72,9 +71,13 @@ class InternalRowDeserializer(schema: StructType) extends WireRowDeserializer[In
             case DateType => addValue(value.toInt)
             case _: DatetimeType => addValue(value)
             case TimestampType => addValue(value)
-            case YsonType => addValue(toYsonBytes(value))
-            case UInt64Type => addValue(value)
-            case _ => throwSchemaViolation()
+            case _: DecimalType => _currentType match {
+              case ColumnValueType.INT64 => addValue(Decimal(value))
+              case ColumnValueType.UINT64 => addValue(YTsaurusTypes.longToUnsignedDecimal(value))
+            }
+            case otherType => if (!YTsaurusTypes.instance.wireDeserializeLong(otherType, value, addValue)) {
+              throwSchemaViolation()
+            }
           }
         case _ => throwValueTypeViolation("integer")
       }
@@ -87,8 +90,9 @@ class InternalRowDeserializer(schema: StructType) extends WireRowDeserializer[In
         case ColumnValueType.BOOLEAN =>
           indexedSchema(_index) match {
             case BooleanType => addValue(value)
-            case YsonType => addValue(toYsonBytes(value))
-            case _ => throwSchemaViolation()
+            case otherType => if (!YTsaurusTypes.instance.wireDeserializeBoolean(otherType, value, addValue)) {
+              throwSchemaViolation()
+            }
           }
         case _ => throwValueTypeViolation("boolean")
       }
@@ -102,8 +106,9 @@ class InternalRowDeserializer(schema: StructType) extends WireRowDeserializer[In
           indexedSchema(_index) match {
             case FloatType => addValue(value.toFloat)
             case DoubleType => addValue(value)
-            case YsonType => addValue(toYsonBytes(value))
-            case _ => throwSchemaViolation()
+            case otherType => if (!YTsaurusTypes.instance.wireDeserializeDouble(otherType, value, addValue)) {
+              throwSchemaViolation()
+            }
           }
         case _ => throwValueTypeViolation("double")
       }
@@ -117,28 +122,25 @@ class InternalRowDeserializer(schema: StructType) extends WireRowDeserializer[In
           indexedSchema(_index) match {
             case BinaryType => addValue(bytes)
             case StringType => addValue(UTF8String.fromBytes(bytes))
-            case YsonType => addValue(toYsonBytes(bytes))
+
             case d: DecimalType =>
               addValue(Decimal(BigDecimal(binaryToText(bytes, d.precision, d.scale)), d.precision, d.scale))
-            case _ => throwSchemaViolation()
+            case otherType => if (!YTsaurusTypes.instance.wireDeserializeBytes(otherType, bytes, true, addValue)) {
+              throwSchemaViolation()
+            }
           }
         case ColumnValueType.ANY | ColumnValueType.COMPOSITE =>
           indexedSchema(_index) match {
-            case YsonType => addValue(bytes)
             case _@(ArrayType(_, _) | StructType(_) | MapType(_, _, _)) =>
               addValue(YsonDecoder.decode(bytes, indexedDataTypes(_index)))
-            case _ => throwSchemaViolation()
+            case BinaryType => addValue(bytes)
+            case otherType => if (!YTsaurusTypes.instance.wireDeserializeBytes(otherType, bytes, false, addValue)) {
+              throwSchemaViolation()
+            }
           }
         case _ => throwValueTypeViolation("string")
       }
     }
-  }
-
-  def toYsonBytes(value: Any): Array[Byte] = {
-    val output = new ByteArrayOutputStream(64)
-    val node = new YTreeBuilder().value(value).build()
-    YTreeBinarySerializer.serialize(node, output)
-    output.toByteArray
   }
 
   def throwSchemaViolation(): Unit = {

@@ -1,6 +1,5 @@
 package tech.ytsaurus.spyt.format
 
-import org.apache.hadoop.fs.Path
 import org.apache.spark.sql.execution.datasources.v2.BatchScanExec
 import org.apache.spark.sql.functions.col
 import org.apache.spark.sql.sources._
@@ -10,10 +9,8 @@ import org.scalatest.prop.TableDrivenPropertyChecks
 import org.scalatest.{FlatSpec, Matchers}
 import tech.ytsaurus.spyt._
 import tech.ytsaurus.spyt.common.utils.ExpressionTransformer.expressionToSegmentSet
-import tech.ytsaurus.spyt.common.utils._
 import tech.ytsaurus.spyt.format.YtInputSplit.{getKeyFilterSegments, pushdownFiltersToYPath}
 import tech.ytsaurus.spyt.format.conf.SparkYtConfiguration
-import tech.ytsaurus.spyt.fs.path.YPathEnriched.ypath
 import tech.ytsaurus.spyt.test._
 import tech.ytsaurus.spyt.wrapper.YtWrapper
 import tech.ytsaurus.spyt.wrapper.table.OptimizeMode

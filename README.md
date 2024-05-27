@@ -20,6 +20,9 @@ You can read [post about YTsaurus](https://medium.com/p/42e7f5fa5fc6) or check v
 * Launch and support for multiple mini SPYT clusters 
 * Easy migration for ready-made solutions
 
+## How to Build from Source Code
+* Build [from source code](BUILD.md).
+
 ## How to Contribute
 
 We are glad to welcome new contributors!

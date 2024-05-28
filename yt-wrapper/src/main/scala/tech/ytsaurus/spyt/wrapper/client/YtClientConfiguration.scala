@@ -75,7 +75,10 @@ object YtClientConfiguration {
       ),
       getByName("masterWrapper.url"),
       getByName("extendedFileTimeout").forall(_.toBoolean),
-      sys.env.get("YT_JOB_ID").map(_ => None).getOrElse(getByName("proxyNetworkName"))
+      sys.env.get("YT_JOB_ID") match {
+        case Some(_) => None
+        case None => getByName("proxyNetworkName")
+      }
     )
   }
 

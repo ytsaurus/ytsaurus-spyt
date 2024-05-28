@@ -301,26 +301,31 @@ private[spark] object YTsaurusOperationManager extends Logging {
         filePaths.add(YTree.stringNode(fileName))
       }
 
-      val unpackArchivesCommands = conf.get(ARCHIVES).filter(_.startsWith("yt:/")).map(YtWrapper.formatPath).distinct.map { fullPath =>
-        var node: YTreeNode = YTree.stringNode(fullPath)
-        var fileName = fullPath.split('/').last
-        if (fullPath.contains('#')) {
-          val Array(ytPath, fileNameOverride) = fullPath.split('#')
-          node = YTree.stringNode(ytPath)
-          fileName = fileNameOverride
-          node.putAttribute("file_name", YTree.stringNode(fileNameOverride))
-        }
-        filePaths.add(node)
-        if (node.stringValue().endsWith(".zip")) {
-          s"mv $fileName $fileName.zip && unzip $fileName.zip -d $fileName && rm -rf $fileName.zip"
-        } else if (node.stringValue().endsWith(".tar.gz")) {
-          s"mv $fileName $fileName.tar.gz && mkdir $fileName && tar -xzvf $fileName.tar.gz -C $fileName && rm -rf $fileName.tar.gz"
-        } else if (node.stringValue().endsWith(".tar.bz2")) {
-          s"mv $fileName $fileName.tar.bz2 && mkdir $fileName && tar -xjvf $fileName.tar.bz2 -C $fileName && rm -rf $fileName.tar.bz2"
-        } else if (node.stringValue().endsWith(".tar")) {
-          s"mv $fileName $fileName.tar && mkdir $fileName && tar -xvf $fileName.tar -C $fileName && rm -rf $fileName.tar"
+      val unpackArchivesCommands = conf.get(ARCHIVES).filter(_.startsWith("yt:/")).map(YtWrapper.formatPath).distinct.zipWithIndex.map { case (fullPath, archiveIndex) =>
+        val (ytPath, directoryName) = if (fullPath.contains('#')) {
+          val parts = fullPath.split('#')
+          if (parts.length != 2) {
+            throw new SparkException(s"Too many '#': $fullPath")
+          }
+          (parts(0), parts(1))
         } else {
-          return null
+          (fullPath, fullPath.split('/').last)
+        }
+        val node = YTree.stringNode(ytPath)
+        // to avoid collisions
+        val archiveFileName = s"__dep-$archiveIndex-" + ytPath.split('/').last
+        node.putAttribute("file_name", YTree.stringNode(archiveFileName))
+        filePaths.add(node)
+        if (archiveFileName.endsWith(".zip")) {
+          s"unzip $archiveFileName -d $directoryName"
+        } else if (archiveFileName.endsWith(".tar.gz")) {
+         s"mkdir $directoryName && tar -xzvf $archiveFileName -C $directoryName"
+        } else if (archiveFileName.endsWith(".tar.bz2")) {
+          s"mkdir $directoryName && tar -xjvf $archiveFileName -C $directoryName"
+        } else if (archiveFileName.endsWith(".tar")) {
+          s"mkdir $directoryName && tar -xvf $archiveFileName -C $directoryName"
+        } else {
+          throw new SparkException(s"Archive type is not supported: $fullPath")
         }
       }.filter(x => x != null)
       val unpackArchivesCommand = if (unpackArchivesCommands.nonEmpty) {

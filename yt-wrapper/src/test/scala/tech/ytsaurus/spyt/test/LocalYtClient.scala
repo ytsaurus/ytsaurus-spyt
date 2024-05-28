@@ -38,7 +38,8 @@ trait LocalYtClient extends LocalYt {
       ByopRemoteConfiguration(enabled = false, EmptyWorkersListStrategy.Default)
     ),
     masterWrapperUrl = None,
-    extendedFileTimeout = true
+    extendedFileTimeout = true,
+    proxyNetworkName = None
   )
 
   override protected def ytRpcClient: YtRpcClient = {

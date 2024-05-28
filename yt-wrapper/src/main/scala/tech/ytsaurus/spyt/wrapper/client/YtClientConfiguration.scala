@@ -12,7 +12,7 @@ import scala.concurrent.duration._
 import scala.language.postfixOps
 import scala.util.{Failure, Success, Try}
 
-@SerialVersionUID(-7486028686763336923L)
+@SerialVersionUID(-7486028686763336924L)
 case class YtClientConfiguration(proxy: String,
                                  user: String,
                                  token: String,
@@ -20,7 +20,8 @@ case class YtClientConfiguration(proxy: String,
                                  proxyRole: Option[String],
                                  byop: ByopConfiguration,
                                  masterWrapperUrl: Option[String],
-                                 extendedFileTimeout: Boolean) extends Serializable {
+                                 extendedFileTimeout: Boolean,
+                                 proxyNetworkName: Option[String]) extends Serializable {
 
   private def proxyUrl: Try[URL] = Try(new URL(proxy)).orElse {
     val normalizedProxy = if (proxy.contains(".") || proxy.contains(":")) {
@@ -73,7 +74,11 @@ object YtClientConfiguration {
         )
       ),
       getByName("masterWrapper.url"),
-      getByName("extendedFileTimeout").forall(_.toBoolean)
+      getByName("extendedFileTimeout").forall(_.toBoolean),
+      sys.env.get("YT_JOB_ID") match {
+        case Some(_) => None
+        case None => getByName("proxyNetworkName")
+      }
     )
   }
 
@@ -102,7 +107,8 @@ object YtClientConfiguration {
     proxyRole = None,
     byop = ByopConfiguration.DISABLED,
     masterWrapperUrl = None,
-    extendedFileTimeout = true
+    extendedFileTimeout = true,
+    None
   )
 
   def create(proxy: String,
@@ -112,9 +118,10 @@ object YtClientConfiguration {
              proxyRole: String,
              byop: ByopConfiguration,
              masterWrapperUrl: String,
-             extendedFileTimeout: Boolean) = new YtClientConfiguration(
+             extendedFileTimeout: Boolean,
+             proxyNetworkName: Option[String] = None) = new YtClientConfiguration(
     proxy, user, token, toScalaDuration(timeout),
-    Option(proxyRole), byop, Option(masterWrapperUrl), extendedFileTimeout
+    Option(proxyRole), byop, Option(masterWrapperUrl), extendedFileTimeout, proxyNetworkName
   )
 }
 

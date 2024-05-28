@@ -12,15 +12,13 @@ class DiscoveryServerService(client: DiscoveryClient, groupId: String,
                              masterGroupIdO: Option[String]) extends DiscoveryService {
   private val log = LoggerFactory.getLogger(getClass)
 
-  private def addressAttr: String = "spark_address"
-
   private def webUiAttr: String = "webui"
 
   private def restAttr: String = "rest"
 
   private def operationAttr: String = "operation"
 
-  private def livyAddressAttr: String = "livy_address"
+  private def urlAttr: String = "url"
 
   private def versionAttr: String = "version"
 
@@ -49,7 +47,7 @@ class DiscoveryServerService(client: DiscoveryClient, groupId: String,
       case (builder, (k, v)) => builder.key(k).value(v)
     }.buildMap()
     val attributes: Map[String, YTreeNode] = Map(
-      addressAttr -> YTree.stringNode(address.hostAndPort.toString),
+      urlAttr -> YTree.stringNode(address.hostAndPort.toString),
       webUiAttr -> YTree.stringNode(address.webUiHostAndPort.toString),
       restAttr -> YTree.stringNode(address.restHostAndPort.toString),
       operationAttr -> YTree.stringNode(operationId),
@@ -74,7 +72,7 @@ class DiscoveryServerService(client: DiscoveryClient, groupId: String,
     import scala.collection.JavaConverters._
 
     val attributes: Map[String, YTreeNode] = Map(
-      livyAddressAttr -> YTree.stringNode(address.toString),
+      urlAttr -> YTree.stringNode(address.toString),
       versionAttr -> YTree.stringNode(livyVersion),
     )
     val memberInfo = new MemberInfo("livy", 0L, 0L, attributes.asJava)
@@ -91,11 +89,11 @@ class DiscoveryServerService(client: DiscoveryClient, groupId: String,
 
   override def discoverAddress(): Try[Address] = {
     Try {
-      val attrs = Seq(addressAttr, webUiAttr, restAttr)
+      val attrs = Seq(urlAttr, webUiAttr, restAttr)
       val members = DiscoveryClientWrapper.listMembers(masterGroupId, attrs = attrs)(client)
       val masterMember = members.find(_.getId == "master").get
       Address(
-        getMemberAddress(masterMember, addressAttr),
+        getMemberAddress(masterMember, urlAttr),
         getMemberAddress(masterMember, webUiAttr),
         getMemberAddress(masterMember, restAttr),
       )

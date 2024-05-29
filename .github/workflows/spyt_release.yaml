@@ -50,7 +50,7 @@ jobs:
       - name: Test deadsnakes
         run: |
           echo "FROM ubuntu:focal" > Dockerfile
-          head -21 yt/spark/spark-over-yt/tools/release/spyt_image/Dockerfile | tail +4 >> Dockerfile
+          head -25 tools/release/spyt_image/Dockerfile | tail +4 >> Dockerfile
           docker build .
 
       - name: Parse tag
@@ -108,7 +108,6 @@ jobs:
 
       - name: Run sbt build
         run: |
-          cd yt/spark/spark-over-yt
           sbt \
             -DpublishRepo=True \
             -DpublishMavenCentral=True \
@@ -136,7 +135,7 @@ jobs:
 
       - name: Download Livy
         run: |
-          cd yt/spark/spark-over-yt/build_output/
+          cd build_output/
           wget https://storage.yandexcloud.net/ytsaurus-spyt/livy.tgz
 
       - name: DockerHub login
@@ -146,7 +145,7 @@ jobs:
 
       - name: Build and push spyt docker image
         run: |
-          cd yt/spark/spark-over-yt/tools/release/spyt_image
+          cd tools/release/spyt_image
           bash ./build.sh \
             --spyt-version ${{ needs.prepare_env.outputs.release_version }}
           docker push ytsaurus/spyt:${{ needs.prepare_env.outputs.release_version }}

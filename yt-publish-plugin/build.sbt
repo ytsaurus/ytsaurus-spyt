@@ -5,10 +5,10 @@ sbtPlugin := true
 organization := "tech.ytsaurus.spyt"
 
 name := "YtPublishPlugin"
-version := "1.78.1-SNAPSHOT"
+version := "2.1.0-SNAPSHOT"
 
 libraryDependencies ++= Seq(
-  "tech.ytsaurus" % "ytsaurus-client" % "1.2.1" excludeAll (
+  "tech.ytsaurus" % "ytsaurus-client" % "1.2.3" excludeAll (
     ExclusionRule(organization = "com.fasterxml.jackson.core")
   )
 )

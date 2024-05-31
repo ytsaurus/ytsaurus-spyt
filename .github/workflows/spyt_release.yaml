@@ -125,7 +125,7 @@ jobs:
 
   build_spyt_image:
     name: Build SPYT docker image
-    needs: 
+    needs:
       - start-vm
       - prepare_env
       - spyt_release
@@ -148,7 +148,7 @@ jobs:
           cd tools/release/spyt_image
           bash ./build.sh \
             --spyt-version ${{ needs.prepare_env.outputs.release_version }}
-          docker push ytsaurus/spyt:${{ needs.prepare_env.outputs.release_version }}
+          docker push ghcr.io/ytsaurus/spyt:${{ needs.prepare_env.outputs.release_version }}
 
   stop-vm:
     name: Stop VM

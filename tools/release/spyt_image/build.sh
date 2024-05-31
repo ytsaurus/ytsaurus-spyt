@@ -4,6 +4,7 @@ script_name=$0
 
 build_output=../../../build_output
 publish_scripts=../publisher
+image_cr="ghcr.io/"
 
 print_usage() {
     cat <<EOF
@@ -11,10 +12,12 @@ Usage: $script_name [-h|--help]
                     [--build-output build_output]
                     [--publish-scripts publish_scripts]
                     [--spyt-version spyt_version]
+                    [--image-cr image_cr]
 
   --build-output: Path to built spyt components (default: $build_output)
   --publish-scripts: Path to spyt publish scripts (default: $publish_scripts)
   --spyt-version: Spyt version
+  --image-cr: Image container registry (default: $image_cr)
 
 EOF
     exit 0
@@ -58,7 +61,7 @@ mkdir scripts
 cp -rL $publish_scripts/* scripts/
 
 docker build \
-    -t ytsaurus/spyt:"$spyt_version" \
+    -t ${image_cr}ytsaurus/spyt:"$spyt_version" \
     --build-arg BUILD_OUTPUT_PATH=data \
     --build-arg PUBLISH_SCRIPTS_PATH=scripts \
     .

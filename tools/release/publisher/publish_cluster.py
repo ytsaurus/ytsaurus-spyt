@@ -12,7 +12,7 @@ logger = configure_logger("Cluster publisher")
 
 
 def upload_livy(uploader: Client, sources_path: str):
-    logger.info("Uploading livy files")
+    logger.info("Uploading Livy files")
     uploader.mkdir("livy")
     livy_tgz = join(sources_path, 'livy.tgz')
     if not uploader.exists("livy/livy.tgz"):

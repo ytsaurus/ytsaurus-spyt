@@ -62,16 +62,19 @@ An example:
 sbt "data-source/testOnly tech.ytsaurus.spyt.format.types.DateTimeTypesConverterTest"
 ```
 
-#### Running python unit tests
+#### Running python integration tests
 
 Prerequisites for running python unit tests:
 - python3.9, python3.11 or python3.12
 - tox >= 4
 - wheel
-- running local YTsaurus cluster (see above)
 
-Python unit tests should be run under `spyt-package/src/test/python` directory. Tests are run using [tox](https://tox.wiki) python environment management tool, but you can use `run-tests.sh` script for convenience.
+Python tests are located in the `e2e-test` directory. 
 
-`run-tests.sh` rebuilds the project by default, but if you have already built the project you can skip build stage by passing `--no-rebuild` flag to the script.
+Before starting the tests it's required to build YTsaurus image with SPYT-friendly environment: visit the directory `e2e-test/yt_local` and run `build.sh`. It could be made once on a testing machine.
 
-To run on specific python version pass the option `-e py39` or `-e py311`. To run a specific test pass the following option: `-- pytest/test_data_types.py::test_read_uint64_type`.
+Tests are run using [tox](https://tox.wiki) python environment management tool, but you can use `run-tests.sh` script for convenience.
+
+`run-tests.sh` rebuilds the project by default, but if you have already built the project you can skip build stage by passing `--no-rebuild` flag to the script. Also if you don't need SPYT artifacts in cypress then option `--no-deploy` may be used.
+
+To run on specific python version pass the option `-e py39` or `-e py311`. To run a specific test pass the following option: `-- tests/test_data_types.py::test_read_uint64_type`.

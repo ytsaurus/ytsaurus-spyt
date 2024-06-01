@@ -1,10 +1,11 @@
 import spyt
 
+from common.helpers import assert_items_equal
+
 from pyspark.sql import Row
-from utils import assert_items_equal
 
 
-def test_read_uint64_type(yt_client, tmp_dir, spark_session):
+def test_read_uint64_type(yt_client, tmp_dir, local_session):
     table_path = f"{tmp_dir}/uint64_table_in"
     yt_client.create("table", table_path, attributes={"schema": [
         {"name": "id", "type": "uint64", "nullable": True},
@@ -21,7 +22,7 @@ def test_read_uint64_type(yt_client, tmp_dir, spark_session):
     ]
     yt_client.write_table(table_path, rows)
 
-    df = spark_session.read.yt(table_path)
+    df = local_session.read.yt(table_path)
     result = df.collect()
 
     assert_items_equal(result, [
@@ -35,7 +36,7 @@ def test_read_uint64_type(yt_client, tmp_dir, spark_session):
     ])
 
 
-def test_join_tables_with_uint64_type(yt_client, tmp_dir, spark_session):
+def test_join_tables_with_uint64_type(yt_client, tmp_dir, local_session):
     table_1_path = f"{tmp_dir}/uint64_table_1"
     table_2_path = f"{tmp_dir}/uint64_table_2"
     joined_path = f"{tmp_dir}/uint64_joined"
@@ -71,8 +72,8 @@ def test_join_tables_with_uint64_type(yt_client, tmp_dir, spark_session):
 
     yt_client.write_table(table_2_path, rows_2)
 
-    df_table_1 = spark_session.read.yt(table_1_path)
-    df_table_2 = spark_session.read.yt(table_2_path)
+    df_table_1 = local_session.read.yt(table_1_path)
+    df_table_2 = local_session.read.yt(table_2_path)
     df_joined = df_table_1.join(
         df_table_2,
         on=[df_table_1.id == df_table_2.id],
@@ -94,7 +95,7 @@ def test_join_tables_with_uint64_type(yt_client, tmp_dir, spark_session):
     assert_items_equal(result, rows_result)
 
 
-def test_write_uint64_type(yt_client, tmp_dir, spark_session):
+def test_write_uint64_type(yt_client, tmp_dir, local_session):
     table_path = f"{tmp_dir}/uint64_table_out"
 
     rows = [
@@ -106,7 +107,7 @@ def test_write_uint64_type(yt_client, tmp_dir, spark_session):
         (6, 18446744073709551615),
         (7, None)
     ]
-    df = spark_session.createDataFrame(rows, "id int, value uint64")
+    df = local_session.createDataFrame(rows, "id int, value uint64")
     df.write.mode("overwrite").optimize_for("scan").yt(table_path)
 
     result = yt_client.read_table(table_path)

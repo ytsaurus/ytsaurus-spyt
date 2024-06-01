@@ -61,6 +61,7 @@ mkdir scripts
 cp -rL $publish_scripts/* scripts/
 
 docker build \
+    --network=host \
     -t ${image_cr}ytsaurus/spyt:"$spyt_version" \
     --build-arg BUILD_OUTPUT_PATH=data \
     --build-arg PUBLISH_SCRIPTS_PATH=scripts \

@@ -96,7 +96,10 @@ private[spark] class SparkSubmitSpyt {
 
     childArgs ++= processOptions(options, deployMode, clusterManager, sparkConf)
 
-    if (clusterManager == YTSAURUS && args.isPython && deployMode == CLIENT) {
+    if (clusterManager == YTSAURUS &&
+      args.isPython &&
+      deployMode == CLIENT &&
+      !sparkConf.contains(YTSAURUS_PYTHON_VERSION.key)) {
       val basePythonVersion = getBasePythonVersion(sparkConf)
       sparkConf.set(YTSAURUS_PYTHON_VERSION.key, basePythonVersion)
     }

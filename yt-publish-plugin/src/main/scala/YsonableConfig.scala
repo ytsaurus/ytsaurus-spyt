@@ -55,6 +55,7 @@ case class SparkGlobalConfig(spark_conf: Map[String, String],
                              latest_spark_cluster_version: String = "1.75.4",
                              python_cluster_paths: Map[String, String] = Map(
                                "3.11" -> "/opt/python3.11/bin/python3.11",
+                               "3.12" -> "/opt/python3.12/bin/python3.12",
                                "3.9" -> "/opt/python3.9/bin/python3.9",
                                "3.8" -> "/opt/python3.8/bin/python3.8",
                                "3.7" -> "/opt/python3.7/bin/python3.7",

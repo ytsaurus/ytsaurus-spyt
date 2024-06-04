@@ -142,6 +142,7 @@ def prepare_global_config(os_release: bool) -> Dict[str, Any]:
     if not os_release:
         python_cluster_paths = {
             "3.11": "/opt/python3.11/bin/python3.11",
+            "3.12": "/opt/python3.12/bin/python3.12",
             "3.9": "/opt/python3.9/bin/python3.9",
             "3.8": "/opt/python3.8/bin/python3.8",
             "3.7": "/opt/python3.7/bin/python3.7",

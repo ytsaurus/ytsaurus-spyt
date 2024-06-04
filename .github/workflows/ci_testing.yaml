@@ -46,6 +46,7 @@ jobs:
   scala-tests:
     name: Run scala unit tests
     needs:
+      - start-vm
       - prepare-env
     runs-on: ${{ needs.start-vm.outputs.label }}
     steps:
@@ -58,6 +59,7 @@ jobs:
   python-tests:
     name: Run python integration tests
     needs:
+      - start-vm
       - scala-tests
     runs-on: ${{ needs.start-vm.outputs.label }}
     steps:

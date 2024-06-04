@@ -262,7 +262,6 @@ def build_worker_spec(builder: VanillaSpecBuilder, job_type: str, ytserver_proxy
 
     spark_conf_worker = common_params.spark_conf.copy()
 
-    spark_conf_worker['spark.shuffle.service.enabled'] = 'true'
     if "spark.workerLog.tablePath" not in common_params.spark_conf:
         worker_log_location = "yt:/{}".format(common_params.config.spark_discovery.worker_log())
         spark_conf_worker["spark.workerLog.tablePath"] = worker_log_location

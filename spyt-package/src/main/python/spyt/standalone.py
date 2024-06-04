@@ -506,7 +506,7 @@ def start_spark_cluster(worker_cores, worker_memory, worker_num, worker_cores_ov
     if ytserver_proxy_path:
         dynamic_config["ytserver_proxy_path"] = ytserver_proxy_path
     dynamic_config['spark_conf']['spark.dedicated_operation_mode'] = dedicated_operation_mode
-
+    dynamic_config['spark_conf']['spark.shuffle.service.enabled'] = 'true'
     if autoscaler_period:
         dynamic_config['spark_conf']['spark.autoscaler.enabled'] = True
         dynamic_config['spark_conf']['spark.autoscaler.period'] = autoscaler_period

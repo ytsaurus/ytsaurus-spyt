@@ -61,11 +61,12 @@ jobs:
     needs:
       - start-vm
       - prepare-env
+      # - scala-tests
     if: ${{ always() && (needs.prepare-env.result == 'success') }}
     runs-on: ${{ needs.start-vm.outputs.label }}
     steps:
       - name: Run tox tests
-        run: cd e2e-test && ./run-tests.sh --yt_local_runner_path ../run_local_cluster.sh
+        run: cd e2e-test && ./run-tests.sh --yt-local-runner-path ../run_local_cluster.sh
 
   stop-vm:
     name: Stop VM

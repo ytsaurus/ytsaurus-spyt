@@ -1,0 +1,88 @@
+name: "[ci]: Testing"
+
+on:
+  commit:
+
+jobs:
+  start-vm:
+    name: Start VM
+    runs-on: trampoline
+    outputs:
+      label: ${{ steps.start-yc-runner.outputs.label }}
+      instance-id: ${{ steps.start-yc-runner.outputs.instance-id }}
+    steps:
+      - name: Start YC runner
+        id: start-yc-runner
+        uses: yc-actions/yc-github-runner@v1
+        with:
+          mode: start
+          yc-sa-json-credentials: ${{ secrets.YC_SA_JSON_CREDENTIALS }}
+          github-token: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
+          folder-id: ${{ vars.YC_FOLDER_ID }}
+          image-id: fd8u2h6rcgrcsssjg57s
+          zone-id: ${{ vars.YC_ZONE_ID }}
+          subnet-id: ${{ vars.YC_SUBNET_ID }}
+          cores: 8
+          memory: 16GB
+          core-fraction: 100
+          disk-type: network-ssd-nonreplicated
+          disk-size: 93GB
+
+  checkout:
+    name: Checkout sources
+    needs: start-vm
+    runs-on: ${{ needs.start-vm.outputs.label }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+  prepare-env:
+    name: Prepare environment for tests
+    needs:
+      - checkout
+    runs-on: ${{ needs.start-vm.outputs.label }}
+    steps:
+      - name: Download local cluster runner
+        run: |
+          wget https://raw.githubusercontent.com/ytsaurus/ytsaurus/main/yt/docker/local/run_local_cluster.sh
+          chmod +x run_local_cluster.sh
+      - name: Build custom cluster image
+        run: cd e2e-test/yt_local && ./build.sh
+
+  scala-tests:
+    name: Run scala tests
+    needs:
+      - prepare-env
+    runs-on: ${{ needs.start-vm.outputs.label }}
+    steps:
+      - name: Run sbt tests
+        run: |
+          ./run_local_cluster.sh --rpc-proxy-count 1
+          trap "echo 'Stopping docker-compose with yt' && ./run_local_cluster.sh --stop" EXIT
+          sbt test
+
+  python-tests:
+    name: Run python tests
+    needs:
+      - scala-tests
+    runs-on: ${{ needs.start-vm.outputs.label }}
+    steps:
+      - name: Run tox tests
+        run: cd e2e-test && ./run-tests.sh --yt_local_runner_path ../run_local_cluster.sh
+
+  stop-vm:
+    name: Stop VM
+    needs:
+      - start-vm
+      - python-tests
+    if: ${{ always() }}
+    runs-on: trampoline
+    steps:
+      - name: Stop YC runner
+        uses: yc-actions/yc-github-runner@v1
+        with:
+          mode: stop
+          yc-sa-json-credentials: ${{ secrets.YC_SA_JSON_CREDENTIALS }}
+          github-token: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
+          label: ${{ needs.start-vm.outputs.label }}
+          instance-id: ${{ needs.start-vm.outputs.instance-id }}

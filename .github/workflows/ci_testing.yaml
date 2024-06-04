@@ -28,20 +28,14 @@ jobs:
           disk-type: network-ssd-nonreplicated
           disk-size: 93GB
 
-  checkout:
-    name: Checkout sources
-    needs: start-vm
+  prepare-env:
+    name: Prepare environment for tests
+    needs:
+      - start-vm
     runs-on: ${{ needs.start-vm.outputs.label }}
     steps:
       - name: Checkout
         uses: actions/checkout@v3
-
-  prepare-env:
-    name: Prepare environment for tests
-    needs:
-      - checkout
-    runs-on: ${{ needs.start-vm.outputs.label }}
-    steps:
       - name: Download local cluster runner
         run: |
           wget https://raw.githubusercontent.com/ytsaurus/ytsaurus/main/yt/docker/local/run_local_cluster.sh
@@ -50,7 +44,7 @@ jobs:
         run: cd e2e-test/yt_local && ./build.sh
 
   scala-tests:
-    name: Run scala tests
+    name: Run scala unit tests
     needs:
       - prepare-env
     runs-on: ${{ needs.start-vm.outputs.label }}
@@ -62,7 +56,7 @@ jobs:
           sbt test
 
   python-tests:
-    name: Run python tests
+    name: Run python integration tests
     needs:
       - scala-tests
     runs-on: ${{ needs.start-vm.outputs.label }}

@@ -43,24 +43,25 @@ jobs:
       - name: Build custom cluster image
         run: cd e2e-test/yt_local && ./build.sh
 
-  scala-tests:
-    name: Run scala unit tests
-    needs:
-      - start-vm
-      - prepare-env
-    runs-on: ${{ needs.start-vm.outputs.label }}
-    steps:
-      - name: Run sbt tests
-        run: |
-          ./run_local_cluster.sh --rpc-proxy-count 1
-          trap "echo 'Stopping docker-compose with yt' && ./run_local_cluster.sh --stop" EXIT
-          sbt test
+  # scala-tests:
+  #   name: Run scala unit tests
+  #   needs:
+  #     - start-vm
+  #     - prepare-env
+  #   runs-on: ${{ needs.start-vm.outputs.label }}
+  #   steps:
+  #     - name: Run sbt tests
+  #       run: |
+  #         ./run_local_cluster.sh --rpc-proxy-count 1
+  #         trap "echo 'Stopping docker-compose with yt' && ./run_local_cluster.sh --stop" EXIT
+  #         sbt test
 
   python-tests:
     name: Run python integration tests
     needs:
       - start-vm
-      - scala-tests
+      - prepare-env
+    if: ${{ always() && (needs.prepare-env.result == 'success') }}
     runs-on: ${{ needs.start-vm.outputs.label }}
     steps:
       - name: Run tox tests

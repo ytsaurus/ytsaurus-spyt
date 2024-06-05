@@ -742,8 +742,8 @@ class YtFileFormatTest extends AnyFlatSpec with Matchers with LocalSpark
     val res = spark.read.yt(tmpPath)
     res.select(cols: _*).collect() should contain theSameElementsAs data.map(Row.fromTuple(_))
     res.select(cols.map(_.cast(StringType)): _*).collect() should contain theSameElementsAs Seq(
-      Row("1970-01-02", "1970-01-01 03:00:01", "1", "1"),
-      Row("1997-05-18", "2021-01-27 10:52:34", "4", "5")
+      Row("1970-01-02", "1970-01-01 00:00:01", "1", "1"),
+      Row("1997-05-18", "2021-01-27 07:52:34", "4", "5")
     )
   }
 

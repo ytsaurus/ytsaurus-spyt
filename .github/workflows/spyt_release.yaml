@@ -21,7 +21,7 @@ jobs:
           yc-sa-json-credentials: ${{ secrets.YC_SA_JSON_CREDENTIALS }}
           github-token: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
           folder-id: ${{ vars.YC_FOLDER_ID }}
-          image-id: ${{ vars.YC_DEFAULT_IMAGE_ID }}
+          image-id: ${{ vars.YC_SPYT_IMAGE_ID }}
           zone-id: ${{ vars.YC_ZONE_ID }}
           subnet-id: ${{ vars.YC_SUBNET_ID }}
           cores: 8
@@ -77,20 +77,6 @@ jobs:
           server-password: OSSRH_PASSWORD
           gpg-private-key: ${{ secrets.GPG_PRIVATE_KEY }}
           gpg-passphrase: GPG_PASSWORD
-      - name: Set up SBT
-        run: |
-          curl -fsL "https://github.com/sbt/sbt/releases/download/v1.5.4/sbt-1.5.4.tgz" | tar xfz - -C /usr/share && \
-            chown -R root:root /usr/share/sbt && \
-            chmod -R 755 /usr/share/sbt && \
-            ln -s /usr/share/sbt/bin/sbt /usr/local/bin/sbt
-
-      - name: Set up scala
-        run: |
-          curl -fsL https://downloads.typesafe.com/scala/2.12.14/scala-2.12.14.tgz | tar xfz - -C /usr/share && \
-            mv /usr/share/scala-2.12.14 /usr/share/scala && \
-            chown -R root:root /usr/share/scala && \
-            chmod -R 755 /usr/share/scala && \
-            ln -s /usr/share/scala/bin/* /usr/local/bin
 
       - name: Set up python
         run: |
@@ -141,7 +127,7 @@ jobs:
       - name: DockerHub login
         shell: bash
         run: |
-          echo '${{ secrets.DOCKER_HUB_PASSWORD }}' | docker login --username ${{ secrets.DOCKER_HUB_LOGIN }} --password-stdin
+          echo '${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}' | docker login ghcr.io --username ${{ secrets.GH_USERNAME }} --password-stdin
 
       - name: Build and push spyt docker image
         run: |

@@ -40,35 +40,31 @@ jobs:
         run: |
           wget https://raw.githubusercontent.com/ytsaurus/ytsaurus/main/yt/docker/local/run_local_cluster.sh
           chmod +x run_local_cluster.sh
-      - name: Build custom cluster image
-        run: cd e2e-test/yt_local && ./build.sh
 
-  # scala-tests:
-  #   name: Run scala unit tests
-  #   needs:
-  #     - start-vm
-  #     - prepare-env
-  #   runs-on: ${{ needs.start-vm.outputs.label }}
-  #   steps:
-  #     - name: Run sbt tests
-  #       run: |
-  #         ./run_local_cluster.sh --rpc-proxy-count 1
-  #         trap "echo 'Stopping docker-compose with yt' && ./run_local_cluster.sh --stop" EXIT
-  #         sbt test
+  scala-tests:
+    name: Run scala unit tests
+    needs:
+      - start-vm
+      - prepare-env
+    runs-on: ${{ needs.start-vm.outputs.label }}
+    steps:
+      - name: Run sbt tests
+        run: |
+          ./run_local_cluster.sh --rpc-proxy-count 1
+          trap "echo 'Stopping docker-compose with yt' && ./run_local_cluster.sh --stop" EXIT
+          sbt test
 
   python-tests:
     name: Run python integration tests
     needs:
       - start-vm
-      - prepare-env
-      # - scala-tests
-    if: ${{ always() && (needs.prepare-env.result == 'success') }}
+      - scala-tests
     runs-on: ${{ needs.start-vm.outputs.label }}
     steps:
+      - name: Build custom cluster image
+        run: cd e2e-test/yt_local && ./build.sh
       - name: Run tox tests
-        run: |
-          cd e2e-test
-          ./run-tests.sh --yt-local-runner-path "$(pwd)/../run_local_cluster.sh"
+        run: cd e2e-test && ./run-tests.sh --yt-local-runner-path "$(pwd)/../run_local_cluster.sh"
 
   stop-vm:
     name: Stop VM

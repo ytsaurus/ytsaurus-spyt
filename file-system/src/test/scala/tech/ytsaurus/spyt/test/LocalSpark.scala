@@ -166,4 +166,5 @@ object LocalSpark {
     .set("spark.datasource.yt.recursiveFileLookup", "true")
     .set("spark.hadoop.fs.null.impl", "tech.ytsaurus.spyt.fs.YtTableFileSystem")
     .set("spark.sql.caseSensitive", "true")
+    .set("spark.sql.session.timeZone", "UTC")
 }

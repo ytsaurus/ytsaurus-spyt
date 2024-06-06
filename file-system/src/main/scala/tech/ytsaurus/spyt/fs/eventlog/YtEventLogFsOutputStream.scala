@@ -2,6 +2,7 @@ package tech.ytsaurus.spyt.fs.eventlog
 
 import org.apache.hadoop.conf.Configuration
 import org.slf4j.LoggerFactory
+import tech.ytsaurus.spyt.fs.conf._
 import tech.ytsaurus.spyt.fs.PathUtils.getMetaPath
 import tech.ytsaurus.spyt.wrapper.YtWrapper
 import tech.ytsaurus.spyt.wrapper.model.EventLogSchema.{metaSchema, schema}
@@ -62,8 +63,9 @@ class YtEventLogFsOutputStream(conf: Configuration, path: String, fileName: Stri
 
   def open(): Unit = {
     try {
-      YtWrapper.createDynTableAndMount(path, schema)
-      YtWrapper.createDynTableAndMount(metaPath, metaSchema)
+      val extraTableOpts = conf.getConfWithPrefix("eventLog.extraTableOpts")
+      YtWrapper.createDynTableAndMount(path, schema, extraTableOpts)
+      YtWrapper.createDynTableAndMount(metaPath, metaSchema, extraTableOpts)
       YtWrapper.runWithRetry(transaction => updateInfo(Some(transaction)))
       started = true
     } catch {

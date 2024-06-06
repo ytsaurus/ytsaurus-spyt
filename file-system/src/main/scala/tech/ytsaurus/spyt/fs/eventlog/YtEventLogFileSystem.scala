@@ -5,6 +5,7 @@ import org.apache.hadoop.fs._
 import org.apache.hadoop.fs.permission.FsPermission
 import org.apache.hadoop.util.Progressable
 import org.slf4j.LoggerFactory
+import tech.ytsaurus.spyt.fs.conf._
 import tech.ytsaurus.spyt.fs.PathUtils.{getMetaPath, hadoopPathToYt}
 import tech.ytsaurus.spyt.fs.YtClientConfigurationConverter.ytClientConfiguration
 import tech.ytsaurus.spyt.wrapper.{LogLazy, YtWrapper}
@@ -185,8 +186,9 @@ class YtEventLogFileSystem extends FileSystem with LogLazy {
     implicit val ytClient: CompoundClient = yt
     YtWrapper.createDir(hadoopPathToYt(f.getParent), ignoreExisting = true)
     val path = hadoopPathToYt(f)
-    YtWrapper.createDynTableAndMount(path, schema)
-    YtWrapper.createDynTableAndMount(getMetaPath(path), metaSchema)
+    val extraTableOpts = getConf.getConfWithPrefix("eventLog.extraTableOpts")
+    YtWrapper.createDynTableAndMount(path, schema, extraTableOpts)
+    YtWrapper.createDynTableAndMount(getMetaPath(path), metaSchema, extraTableOpts)
     true
   }
 

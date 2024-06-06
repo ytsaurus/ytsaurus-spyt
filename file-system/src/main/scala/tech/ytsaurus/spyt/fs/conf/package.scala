@@ -115,6 +115,8 @@ package object conf {
   }
 
   implicit class SparkYtHadoopConfiguration(configuration: Configuration) extends ConfProvider {
+    import scala.collection.JavaConverters._
+
     private val configurationPrefix = "yt"
 
     override def getYtConf(name: String): Option[String] = {
@@ -122,7 +124,6 @@ package object conf {
     }
 
     def getYtSpecConf(name: String): Map[String, YTreeNode] = {
-      import scala.collection.JavaConverters._
       configuration.asScala.collect {
         case entry if entry.getKey.startsWith(s"spark.yt.$name") =>
           val key = entry.getKey.drop(s"spark.yt.$name.".length)
@@ -139,8 +140,15 @@ package object conf {
       setYtConf(configEntry.name, configEntry.set(value))
     }
 
+    def getConfWithPrefix(prefix: String): Map[String, String] = {
+      val fullPrefix = s"$configurationPrefix.$prefix."
+      configuration.asScala
+        .filter(_.getKey.startsWith(fullPrefix))
+        .map(entry => (entry.getKey.drop(fullPrefix.length), entry.getValue))
+        .toMap
+    }
+
     override def getAllKeys: Seq[String] = {
-      import scala.collection.JavaConverters._
       dropPrefix(configuration.asScala.map(_.getKey).toList, configurationPrefix)
     }
   }

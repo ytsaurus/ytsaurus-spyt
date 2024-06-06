@@ -66,14 +66,8 @@ object WorkerLogLauncher extends VanillaLauncher {
         }
 
         val additionalTableOptions = sparkConf
-              .filter(_._1.startsWith("spark.workerLog.additionalTableOptions."))
-              .map { case (k, v) => k.substring("spark.workerLog.additionalTableOptions.".length) -> v } ++
-            args.list("wlog-add-table-option")
-              .map(v => {
-                 val parts = v.split('=')
-                 parts(0) -> parts(1)
-              })
-              .toMap
+              .filter(_._1.startsWith("spark.workerLog.extraTableOpts."))
+              .map { case (k, v) => k.substring("spark.workerLog.extraTableOpts.".length) -> v }
 
         Some(WorkerLogConfig(
           enableService = enableService,

@@ -4,17 +4,21 @@ Usage notes: spyt module must be imported before any of pyspark.* modules in ord
 for extensions to take an effect.
 """
 
+from .dependency_utils import require_pyspark
+
+require_pyspark()
+
 from .client import connect, spark_session, connect_direct, direct_spark_session, \
-    info, stop, jvm_process_pid, yt_client, is_stopped
+    info, stop, jvm_process_pid, yt_client, is_stopped  # noqa: E402
 from .extensions import read_yt, schema_hint, write_yt, sorted_by, optimize_for, withYsonColumn, transform, \
-    _extract_code_globals, _code_reduce
-from spyt.types import UInt64Type
-import pyspark.context
-import pyspark.sql.types
-import pyspark.sql.readwriter
-import pyspark.cloudpickle.cloudpickle
-import pyspark.cloudpickle.cloudpickle_fast
-from types import CodeType
+    _extract_code_globals, _code_reduce  # noqa: E402
+from spyt.types import UInt64Type  # noqa: E402
+import pyspark.context  # noqa: E402
+import pyspark.sql.types  # noqa: E402
+import pyspark.sql.readwriter  # noqa: E402
+import pyspark.cloudpickle.cloudpickle  # noqa: E402
+import pyspark.cloudpickle.cloudpickle_fast  # noqa: E402
+from types import CodeType  # noqa: E402
 
 __all__ = [
     'connect',

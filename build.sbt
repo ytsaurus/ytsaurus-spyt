@@ -35,13 +35,13 @@ lazy val `yt-wrapper` = (project in file("yt-wrapper"))
 
 lazy val `file-system` = (project in file("file-system"))
   .enablePlugins(CommonPlugin)
-  .dependsOn(`yt-wrapper` % "compile->compile;test->test;provided->provided")
+  .dependsOn(`yt-wrapper` % "compile->compile;test->test;provided->provided;compileonly->compileonly")
 
 lazy val `data-source-base` = (project in file("data-source"))
-  .dependsOn(`file-system` % "compile->compile;test->test;provided->provided")
+  .dependsOn(`file-system` % "compile->compile;test->test;provided->provided;compileonly->compileonly")
 
 lazy val `data-source-extended` = (project in file("data-source-extended"))
-  .dependsOn(`data-source-base` % "compile->compile;test->test;provided->provided", `spark-patch` % Provided)
+  .dependsOn(`data-source-base` % "compile->compile;test->test;provided->provided;compileonly->compileonly", `spark-patch` % Provided)
   .enablePlugins(JavaAgent)
   .settings(
     resolvedJavaAgents := javaAgents.value
@@ -54,7 +54,7 @@ lazy val `resource-manager` = (project in file("resource-manager"))
   )
 
 lazy val `cluster` = (project in file("spark-cluster"))
-  .dependsOn(`data-source-extended` % "compile->compile;test->test;provided->provided")
+  .dependsOn(`data-source-extended` % "compile->compile;test->test;provided->provided;compileonly->compileonly")
   .enablePlugins(JavaAgent)
   .settings(
     libraryDependencies ++= scaldingArgs,
@@ -63,7 +63,7 @@ lazy val `cluster` = (project in file("spark-cluster"))
   )
 
 lazy val `spark-submit` = (project in file("spark-submit"))
-  .dependsOn(`cluster` % "compile->compile;test->test;provided->provided", `resource-manager` % "compile->compile;test->test")
+  .dependsOn(`cluster` % "compile->compile;test->test;provided->provided;compileonly->compileonly", `resource-manager` % "compile->compile;test->test")
   .enablePlugins(JavaAgent)
   .settings(
     libraryDependencies ++= scaldingArgs,
@@ -72,7 +72,7 @@ lazy val `spark-submit` = (project in file("spark-submit"))
 
 lazy val `spyt-package` = (project in file("spyt-package"))
   .enablePlugins(JavaAppPackaging, PythonPlugin)
-  .dependsOn(`spark-submit` % "compile->compile;test->test;provided->provided", `resource-manager`, `spark-patch`)
+  .dependsOn(`spark-submit` % "compile->compile;test->test;provided->provided;compileonly->compileonly", `resource-manager`, `spark-patch`)
   .settings(
 
     // These dependencies are already provided by spark distributive
@@ -198,7 +198,6 @@ lazy val root = (project in file("."))
     `spyt-package`
   )
   .settings(
-    sparkCompileVersion := sparkVersion,
     prepareBuildDirectory := {
       streams.value.log.info(s"Preparing build directory in ${baseDirectory.value}")
       deleteBuildDirectory(baseDirectory.value)

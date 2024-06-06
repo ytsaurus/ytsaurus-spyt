@@ -87,7 +87,7 @@ if [ "$deploy" = "true" ]; then
     # Deploy with SPYT image
     docker run --network=host \
                -e YT_PROXY="localhost:8000" -e YT_USER="root" -e YT_TOKEN="token" \
-               -e EXTRA_SPARK_VERSIONS="--use-cache 3.2.2" \
+               -e EXTRA_SPARK_VERSIONS="--use-cache 3.2.2 3.2.4" \
                -v /tmp:/tmp \
                ghcr.io/ytsaurus/spyt:$spyt_version
 fi;

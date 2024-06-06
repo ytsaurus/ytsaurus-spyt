@@ -33,10 +33,17 @@ setuptools.setup(
         'spyt.conf',
     ],
     install_requires=[
-        'pyspark=={}'.format(__spark_version__),
         'pyarrow',
-        'pyyaml'
+        'pyyaml',
+        'packaging'
     ],
+    extras_require={
+        "all": [
+            'pyspark>=3.2.2,<3.3.0',
+            'ytsaurus-client',
+            'ytsaurus-yson'
+        ]
+    },
     scripts=scripts,
     license='http://www.apache.org/licenses/LICENSE-2.0',
     package_dir={

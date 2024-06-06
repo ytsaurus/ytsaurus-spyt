@@ -21,8 +21,6 @@ object SpytPlugin extends AutoPlugin {
     val spytVersion = settingKey[String]("Spyt client version")
     val spytPythonVersion = settingKey[String]("ytsaurus-spyt version")
 
-    val sparkCompileVersion = settingKey[String]("Spark compile version")
-
     val spytVersions = settingKey[Versions]("")
 
     val pypiRegistry = settingKey[String]("PyPi registry to use")
@@ -119,8 +117,7 @@ object SpytPlugin extends AutoPlugin {
       updatePythonVersion(
         (ThisBuild / spytPythonVersion).value,
         (ThisBuild / spytVersion).value,
-        spytVersionPyFile.value,
-        sparkCompileVersion.value
+        spytVersionPyFile.value
       )
     },
 

@@ -1,7 +1,6 @@
 from spyt.submit import SubmissionStatus
 
 from common.helpers import assert_items_equal
-
 from utils import upload_file
 
 

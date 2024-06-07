@@ -4,18 +4,17 @@ from spyt.dependency_utils import require_yt_client
 require_yt_client()
 
 from yt.wrapper import YtClient  # noqa: E402
-from yt.wrapper.cli_helpers import ParseStructuredArgument  # noqa: E402
 from yt.wrapper.http_helpers import get_user_name  # noqa: E402
 from spyt.enabler import SpytEnablers  # noqa: E402
+from spyt.launch_utils import add_default_launch_options, add_hs_options, add_livy_options, add_parser_group  # noqa: E402
 from spyt.spec import SparkDefaultArguments  # noqa: E402
 from spyt.standalone import start_spark_cluster  # noqa: E402
-from spyt.utils import add_parser_group, default_token, default_tvm_id, default_tvm_secret, get_default_arg_parser, \
-    parse_args  # noqa: E402
+from spyt.utils import default_token, default_tvm_id, default_tvm_secret, get_default_arg_parser, parse_args  # noqa: E402
 
 
 def main(raw_args=None):
     parser = get_default_arg_parser(description="Spark Launch")
-
+    add_default_launch_options(parser)
     parser.add_argument("--worker-cores", required=True, type=int)
     parser.add_argument("--worker-memory", required=True)
     parser.add_argument("--worker-num", required=True, type=int)
@@ -24,7 +23,6 @@ def main(raw_args=None):
     parser.add_argument("--worker-memory-overhead", required=False,
                         default=SparkDefaultArguments.SPARK_WORKER_MEMORY_OVERHEAD)
     parser.add_argument("--worker-timeout", required=False, default=SparkDefaultArguments.SPARK_WORKER_TIMEOUT)
-    parser.add_argument("--pool", required=False)
     parser.add_argument("--tmpfs-limit", required=False, default=SparkDefaultArguments.SPARK_WORKER_TMPFS_LIMIT)
     # COMPAT(alex-shishkin): replace with worker-disk-name='ssd_slots_physical' and worker-disk-limit
     parser.add_argument("--ssd-limit", required=False, default=None)
@@ -36,32 +34,16 @@ def main(raw_args=None):
     parser.add_argument("--worker-port", required=False, default=SparkDefaultArguments.SPARK_WORKER_PORT, type=int),
     parser.add_argument("--master-memory-limit", required=False,
                         default=SparkDefaultArguments.SPARK_MASTER_MEMORY_LIMIT)
-    parser.add_argument("--master-port", required=False, default=SparkDefaultArguments.SPARK_MASTER_PORT, type=int),
-    parser.add_argument("--history-server-memory-limit",
-                        required=False, default=SparkDefaultArguments.SPARK_HISTORY_SERVER_MEMORY_LIMIT)
-    parser.add_argument("--history-server-memory-overhead",
-                        required=False, default=SparkDefaultArguments.SPARK_HISTORY_SERVER_MEMORY_OVERHEAD)
-    parser.add_argument("--history-server-cpu-limit",
-                        required=False, default=SparkDefaultArguments.SPARK_HISTORY_SERVER_CPU_LIMIT, type=int)
-    parser.add_argument("--operation-alias", required=False)
-    parser.add_argument("--network-project", required=False)
-    parser.add_argument("--params", required=False, action=ParseStructuredArgument, dest="params",
-                        default=SparkDefaultArguments.get_params())
-    parser.add_argument('--abort-existing', required=False,
-                        action='store_true', default=False)
-    parser.add_argument("--spyt-version", required=False)
+    parser.add_argument("--master-port", required=False, default=SparkDefaultArguments.SPARK_MASTER_PORT, type=int)
+    add_hs_options(parser)
+    parser.add_argument('--abort-existing', required=False, action='store_true', default=False)
     parser.add_argument("--worker-log-update-interval",
                         required=False, default=SparkDefaultArguments.SPARK_WORKER_LOG_UPDATE_INTERVAL)
     parser.add_argument("--worker-log-table-ttl", required=False,
                         default=SparkDefaultArguments.SPARK_WORKER_LOG_TABLE_TTL)
-    parser.add_argument("--shs-location", required=False)
-    parser.add_argument("--preemption_mode", required=False, default="normal")
-    parser.add_argument("--cluster-log-level", required=False, default="INFO")
 
-    parser.add_argument('--enable-multi-operation-mode',
-                        dest='enable_multi_operation_mode', action='store_true')
-    parser.add_argument('--disable-multi-operation-mode',
-                        dest='enable_multi_operation_mode', action='store_false')
+    parser.add_argument('--enable-multi-operation-mode', dest='enable_multi_operation_mode', action='store_true')
+    parser.add_argument('--disable-multi-operation-mode', dest='enable_multi_operation_mode', action='store_false')
     parser.set_defaults(enable_multi_operation_mode=False)
 
     default_enablers = SpytEnablers()
@@ -70,24 +52,10 @@ def main(raw_args=None):
                      default_enablers.enable_solomon_agent)
     add_parser_group(parser, '--enable-profiling', '--disable-profiling', 'enable_profiling',
                      default_enablers.enable_profiling)
-    add_parser_group(parser, '--enable-mtn', '--disable-mtn', 'enable_mtn', default_enablers.enable_mtn)
-    add_parser_group(parser, '--prefer-ipv6', '--prefer-ipv4', 'enable_preference_ipv6',
-                     default_enablers.enable_preference_ipv6)
 
-    add_parser_group(parser, '--enable-tmpfs', '--disable-tmpfs', 'enable_tmpfs', True)
-    add_parser_group(parser, '--enable-stderr-table', '--disable-stderr-table', 'enable_stderr_table', False)
-
-    add_parser_group(parser, '--enable-tcp-proxy', '--disable-tcp-proxy', 'enable_tcp_proxy',
-                     default_enablers.enable_tcp_proxy)
-    parser.add_argument('--tcp-proxy-range-start', required=False, default=30000, type=int)
-    parser.add_argument('--tcp-proxy-range-size', required=False, default=100, type=int)
+    parser.set_defaults(enable_tmpfs=True)
 
     add_parser_group(parser, '--enable-history-server', '--disable-history-server', 'enable_history_server', True)
-
-    add_parser_group(parser, '--enable-advanced-event-log', '--disable-advanced-event-log', 'advanced_event_log', True)
-
-    add_parser_group(parser, '--enable-rpc-job-proxy', '--disable-rpc-job-proxy', 'rpc_job_proxy', True)
-    parser.add_argument("--rpc-job-proxy-thread-pool-size", required=False, default=4, type=int)
 
     add_parser_group(parser, '--enable-worker-log-transfer', '--disable-worker-log-transfer', 'worker_log_transfer',
                      False)
@@ -128,12 +96,7 @@ def main(raw_args=None):
 
     subgroup = parser.add_argument_group("Livy server")
     subgroup.add_argument('--enable-livy', action='store_true', default=False)
-    subgroup.add_argument('--livy-driver-cores', required=False,
-                          default=SparkDefaultArguments.LIVY_DRIVER_CORES, type=int)
-    subgroup.add_argument('--livy-driver-memory', required=False, default=SparkDefaultArguments.LIVY_DRIVER_MEMORY)
-    subgroup.add_argument('--livy-max-sessions', required=False,
-                          default=SparkDefaultArguments.LIVY_MAX_SESSIONS, type=int)
-    parser.add_argument('--group-id', required=False, type=str)
+    add_livy_options(subgroup)
 
     args, unknown_args = parse_args(parser, raw_args=raw_args)
 

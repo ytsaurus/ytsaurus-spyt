@@ -11,7 +11,7 @@ logger = logging.getLogger(__name__)
 
 
 def run(command, args):
-    required_file = "spark-{}-yt".format(command)
+    required_file = "{}-yt".format(command)
     module = None
     try:
         required_module = "yt.spark.spark-over-yt.spyt-package.src.main.bin." + required_file
@@ -31,7 +31,8 @@ def run(command, args):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('command', choices=['discovery', 'launch', 'manage', 'shell', 'submit'])
+    parser.add_argument('command', choices=['livy-launch', 'shs-launch', 'spark-discovery', 'spark-launch',
+                                            'spark-manage', 'spark-shell', 'spark-submit'])
     args, unknown_args = parser.parse_known_args()
     run(args.command, unknown_args)
 

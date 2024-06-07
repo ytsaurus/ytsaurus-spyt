@@ -294,7 +294,22 @@ def get_base_cluster_config(global_conf, spark_cluster_version, params, base_dis
     return dynamic_config
 
 
-def start_livy_server(operation_alias=None, discovery_path=None, pool=None, enable_tmpfs=True, network_project=None,
+def run_operation_wrapper(op_builder, address_path, client):
+    op = None
+    try:
+        op = run_operation(op_builder, sync=False, client=client)
+        if address_path is not None:
+            _wait_op_start(op, address_path, client)
+            address = SparkDiscovery.get(address_path, client=client)
+            logger.info("URL: http://{0}".format(address))
+        logger.info("Operation %s", op.id)
+    except Exception as err:
+        logging.error(err, exc_info=True)
+        abort_operation_silently(op, client)
+    return op
+
+
+def start_livy_server(operation_alias=None, discovery_path=None, pool=None, enable_tmpfs=False, network_project=None,
                       tvm_id=None, tvm_secret=None, params=None, spark_cluster_version=None, enablers=None, client=None,
                       preemption_mode="normal", cluster_log_level="INFO",
                       livy_driver_cores=SparkDefaultArguments.LIVY_DRIVER_CORES,
@@ -338,27 +353,52 @@ def start_livy_server(operation_alias=None, discovery_path=None, pool=None, enab
     livy_config = LivyConfig(
         livy_driver_cores, livy_driver_memory, livy_max_sessions, spark_master_address, master_group_id
     )
-    livy_args = {
-        'config': dynamic_config,
-        'client': client,
-        'job_types': ['livy'],
-        'common_config': common_config,
-        'livy_config': livy_config,
-    }
-    livy_builder = build_spark_operation_spec(**livy_args)
+    livy_builder = build_spark_operation_spec(config=dynamic_config, client=client, job_types=['livy'],
+                                              common_config=common_config, livy_config=livy_config)
+    address_path = spark_discovery.livy() if spark_discovery is not None else None
+    return run_operation_wrapper(livy_builder, address_path, client)
 
-    op = None
-    try:
-        op = run_operation(livy_builder, sync=False, client=client)
-        if spark_discovery is not None:
-            _wait_livy_start(op, spark_discovery, client)
-            logger.info("Livy operation %s", op.id)
-            livy_address = SparkDiscovery.get(spark_discovery.livy(), client=client)
-            logger.info("Livy UI: http://{0}".format(livy_address))
-        return op
-    except Exception as err:
-        logging.error(err, exc_info=True)
-        abort_operation_silently(op, client)
+
+def start_history_server(operation_alias=None, discovery_path=None, pool=None, enable_tmpfs=False,
+                         history_server_memory_limit=SparkDefaultArguments.SPARK_HISTORY_SERVER_MEMORY_LIMIT,
+                         history_server_cpu_limit=SparkDefaultArguments.SPARK_HISTORY_SERVER_CPU_LIMIT,
+                         history_server_memory_overhead=SparkDefaultArguments.SPARK_HISTORY_SERVER_MEMORY_OVERHEAD,
+                         network_project=None, tvm_id=None, tvm_secret=None, advanced_event_log=True,
+                         params=None, shs_location=None, spark_cluster_version=None, enablers=None, client=None,
+                         preemption_mode="normal", cluster_log_level="INFO", rpc_job_proxy=False,
+                         rpc_job_proxy_thread_pool_size=4, tcp_proxy_range_start=30000,
+                         tcp_proxy_range_size=100, enable_stderr_table=False):
+    enablers = enablers or SpytEnablers()
+
+    spark_discovery = SparkDiscovery(discovery_path=discovery_path)
+
+    global_conf = read_global_conf(client=client)
+    if spark_cluster_version is None:
+        spark_cluster_version = latest_compatible_spyt_version(__scala_version__, client=client)
+
+    validate_cluster_version(spark_cluster_version, client=client)
+    validate_custom_params(params)
+    validate_mtn_config(enablers, network_project, tvm_id, tvm_secret)
+
+    dynamic_config = get_base_cluster_config(global_conf, spark_cluster_version, params,
+                                             spark_discovery.base_discovery_path, client)
+
+    enablers.apply_config(dynamic_config)
+
+    spark_discovery.create(client)
+
+    common_config = CommonComponentConfig(
+        operation_alias, pool, enable_tmpfs, network_project, tvm_id, tvm_secret, enablers, preemption_mode,
+        cluster_log_level, rpc_job_proxy, rpc_job_proxy_thread_pool_size, tcp_proxy_range_start,
+        tcp_proxy_range_size, enable_stderr_table, "shs", spark_discovery, None
+    )
+    hs_config = HistoryServerConfig(
+        history_server_memory_limit, history_server_cpu_limit, history_server_memory_overhead, shs_location,
+        advanced_event_log
+    )
+    hs_builder = build_spark_operation_spec(config=dynamic_config, client=client, job_types=['history'],
+                                            common_config=common_config, hs_config=hs_config)
+    return run_operation_wrapper(hs_builder, spark_discovery.shs(), client)
 
 
 def start_spark_cluster(worker_cores, worker_memory, worker_num, worker_cores_overhead=None,
@@ -479,6 +519,10 @@ def start_spark_cluster(worker_cores, worker_memory, worker_num, worker_cores_ov
     if spark_cluster_version is None:
         spark_cluster_version = latest_compatible_spyt_version(__scala_version__, client=client)
     logger.info(f"{spark_cluster_version} cluster version will be launched")
+
+    if enable_history_server and not advanced_event_log:
+        logger.info("Reading event logs from dynamic tables is disabled in history server. "
+                    "Applications use dynamic tables for logs by default, so history server may not work properly")
 
     if ssd_limit is not None:
         worker_disk_name = "ssd_slots_physical"

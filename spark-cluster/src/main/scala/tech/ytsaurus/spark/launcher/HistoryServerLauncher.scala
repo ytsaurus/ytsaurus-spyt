@@ -21,7 +21,6 @@ object HistoryServerLauncher extends App with VanillaLauncher with SparkLauncher
 
   withYtClient(ytConfig) { yt =>
     withCypressDiscovery(baseDiscoveryPath, yt) { cypressDiscovery =>
-      val masterAddress = waitForMaster(waitMasterTimeout, cypressDiscovery)
       val tcpRouter = TcpProxyService.register("SHS")(yt)
 
       withService(startHistoryServer(logPath, memory, cypressDiscovery)) { historyServer =>
@@ -34,14 +33,7 @@ object HistoryServerLauncher extends App with VanillaLauncher with SparkLauncher
           log.info("Tcp proxy port addresses updated")
         }
 
-        def isAlive: Boolean = {
-          val isMasterAlive = DiscoveryService.isAlive(masterAddress.hostAndPort, 3)
-          val isShsAlive = historyServer.isAlive(3)
-
-          isMasterAlive && isShsAlive
-        }
-
-        checkPeriodically(isAlive)
+        checkPeriodically(historyServer.isAlive(3))
         log.error("Shutdown SHS")
       }
     }
@@ -51,16 +43,14 @@ object HistoryServerLauncher extends App with VanillaLauncher with SparkLauncher
 case class HistoryServerLauncherArgs(logPath: String,
                                      memory: String,
                                      ytConfig: YtClientConfiguration,
-                                     baseDiscoveryPath: String,
-                                     waitMasterTimeout: Duration)
+                                     baseDiscoveryPath: String)
 
 object HistoryServerLauncherArgs {
   def apply(args: Args): HistoryServerLauncherArgs = HistoryServerLauncherArgs(
     args.required("log-path"),
-    args.optional("memory").getOrElse("16G"),
+    args.optional("memory").getOrElse("1G"),
     YtClientConfiguration(args.optional),
-    args.optional("base-discovery-path").getOrElse(sys.env("SPARK_BASE_DISCOVERY_PATH")),
-    args.optional("wait-master-timeout").map(parseDuration).getOrElse(5 minutes)
+    args.optional("base-discovery-path").getOrElse(sys.env("SPARK_BASE_DISCOVERY_PATH"))
   )
 
   def apply(args: Array[String]): HistoryServerLauncherArgs = HistoryServerLauncherArgs(Args(args))

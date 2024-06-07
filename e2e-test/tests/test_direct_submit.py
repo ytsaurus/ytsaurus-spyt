@@ -1,10 +1,12 @@
 import spyt
 
 from common.helpers import assert_items_equal
-
+from pyspark.conf import SparkConf
 from pyspark.sql.types import IntegerType
 from pyspark.sql.functions import col, udf
-
+import requests
+import time
+from utils import SPARK_CONF, YT_PROXY
 import yt.yson as yson
 
 
@@ -46,6 +48,17 @@ def test_spyt_types_in_lambda(yt_client, tmp_dir, direct_session):
 
     result = yt_client.read_table(table_out)
     assert_items_equal(result, expected)
+
+
+def test_history_server(history_server):
+    log_path = f"ytEventLog:/{history_server.discovery_path}/logs/event_log_table"
+    conf_patch = {"spark.eventLog.enabled": "true", "spark.eventLog.dir": log_path}
+    spark_conf = SparkConf().setAll(SPARK_CONF.getAll()).setAll(conf_patch.items())
+    with spyt.direct_spark_session(YT_PROXY, spark_conf) as direct_session:
+        app_id = direct_session.conf.get("spark.app.id")
+    applications = requests.get(f"http://{history_server.rest()}/api/v1/applications").json()
+    assert len(applications) == 1
+    assert applications[0]['id'] == app_id
 
 
 # TODO write tests for cluster submit and cluster submit with dependencies

@@ -1,37 +1,13 @@
 import spyt
 
-from common.cluster import SpytCluster
+from common.cluster import HistoryServer, SpytCluster
 import logging
-from pyspark.conf import SparkConf
 from pyspark.sql import SparkSession
 import pytest
 import spyt.client
+from utils import DRIVER_CLIENT_CONF, SPARK_CONF, YT_PROXY
 import uuid
 from yt.wrapper import YtClient
-
-
-YT_PROXY = "127.0.0.1:8000"
-DRIVER_HOST = "172.17.0.1"
-
-DRIVER_CLIENT_CONF = {
-    "spark.driver.host": DRIVER_HOST,
-    "spark.driver.port": "27010",
-    "spark.ui.port": "27015",
-    "spark.blockManager.port": "27018",
-}
-
-SPARK_CONF = SparkConf() \
-    .setMaster("local[4]") \
-    .set("spark.hadoop.yt.proxy", YT_PROXY) \
-    .set("spark.hadoop.yt.user", "root") \
-    .set("spark.hadoop.yt.token", "") \
-    .set("spark.yt.log.enabled", "false") \
-    .set("spark.driver.cores", "1") \
-    .set("spark.driver.memory", "768M") \
-    .set("spark.executor.instances", "1") \
-    .set("spark.executor.cores", "1") \
-    .set("spark.executor.memory", "768M") \
-    .setAll(DRIVER_CLIENT_CONF.items())
 
 
 @pytest.fixture(scope="module")
@@ -45,6 +21,12 @@ def yt_client():
 def spyt_cluster():
     with SpytCluster(proxy=YT_PROXY) as cluster:
         yield cluster
+
+
+@pytest.fixture(scope="function")
+def history_server():
+    with HistoryServer(proxy=YT_PROXY) as server:
+        yield server
 
 
 @pytest.fixture(scope="function")

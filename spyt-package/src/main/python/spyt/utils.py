@@ -49,9 +49,7 @@ class SparkDiscovery(object):
         try:
             return yt_list(path, client=client)
         except YtHttpResponseError as e:
-            logging.warning("Failed to get path {}, message: {}".format(path, e.message))
-            for inner in e.inner_errors:
-                logging.debug("Failed to get path {}, inner message {}".format(path, inner["message"]))
+            logging.debug("Failed to get path {}, message: {}".format(path, e.message))
             raise e
 
     @staticmethod
@@ -287,13 +285,6 @@ def get_default_arg_parser(**kwargs):
     parser.add_argument("--discovery-dir", required=False)
     parser.add_argument("--proxy", required=False, default=default_proxy())
     return parser
-
-
-def add_parser_group(parser, enabler_arg, disabler_arg, dest_arg, default_value):
-    group = parser.add_mutually_exclusive_group(required=False)
-    group.add_argument(enabler_arg, dest=dest_arg, action='store_true')
-    group.add_argument(disabler_arg, dest=dest_arg, action='store_false')
-    parser.set_defaults(**{dest_arg: default_value})
 
 
 def parse_args(parser=None, parser_arguments=None, raw_args=None):

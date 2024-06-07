@@ -1,7 +1,6 @@
 import spyt
 
 from common.helpers import assert_items_equal
-
 from pyspark.sql import Row
 
 

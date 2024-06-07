@@ -1,6 +1,7 @@
 from spyt.client import spark_session
 from spyt.enabler import SpytEnablers
-from spyt.standalone import start_spark_cluster, SparkDefaultArguments, find_spark_cluster, start_livy_server
+from spyt.standalone import start_spark_cluster, SparkDefaultArguments, \
+    find_spark_cluster, start_livy_server, start_history_server
 from spyt.submit import java_gateway, SparkSubmissionClient
 
 from .cluster_utils import dump_debug_data, is_accessible
@@ -40,12 +41,15 @@ class ClusterBase(object):
     def get_enablers():
         return SpytEnablers()
 
-    def wait_livy_startup(self):
-        logger.debug("Waiting livy server startup")
+    def get_component_url(self, name):
+        return getattr(find_spark_cluster(self.discovery_path, self.yt_client), name)
+
+    def wait_component_startup(self, name):
+        logger.debug("Waiting component startup")
         while True:
-            livy_url = find_spark_cluster(self.discovery_path, self.yt_client).livy_url
-            if is_accessible(livy_url):
-                logger.info(f"Livy server: {livy_url}")
+            url = self.get_component_url(name)
+            if is_accessible(url):
+                logger.info(f"{name} address: {url}")
                 break
             time.sleep(2)
 
@@ -82,7 +86,7 @@ class SpytCluster(ClusterBase):
             raise YtError("Cluster starting failed")
         cluster_info = find_spark_cluster(self.discovery_path, self.yt_client)
         if self.enable_livy:
-            self.wait_livy_startup()
+            self.wait_component_startup('livy_url')
         logger.info(f"Master webUI: {cluster_info.master_web_ui_url}")
         return self
 
@@ -125,13 +129,39 @@ class LivyServer(ClusterBase):
     def __enter__(self):
         self.op = start_livy_server(
             operation_alias='integration_tests', discovery_path=self.discovery_path,
-            params=self.get_params(), enable_tmpfs=False,
+            params=self.get_params(),
             enablers=self.get_enablers(), client=self.yt_client, spark_cluster_version=VERSION,
             livy_max_sessions=1, spark_master_address=self.master_address, group_id=self.group_id)
         if self.op is None:
             raise YtError("Server starting failed")
-        self.wait_livy_startup()
+        self.wait_component_startup('livy_url')
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.finish(exc_type, exc_val)
+
+
+class HistoryServer(ClusterBase):
+    def __init__(self, proxy, discovery_path=None):
+        super().__init__(proxy, discovery_path)
+
+    def get_params(self):
+        params = super().get_params()
+        params['spark_conf'] = {'spark.history.fs.update.interval': '1s'}
+        return params
+
+    def __enter__(self):
+        self.op = start_history_server(
+            operation_alias='integration_tests', discovery_path=self.discovery_path, history_server_cpu_limit=1,
+            history_server_memory_limit='512m', history_server_memory_overhead='512m', params=self.get_params(),
+            enablers=self.get_enablers(), client=self.yt_client, spark_cluster_version=VERSION)
+        if self.op is None:
+            raise YtError("Server starting failed")
+        self.wait_component_startup('shs_url')
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.finish(exc_type, exc_val)
+
+    def rest(self):
+        return self.get_component_url('shs_url')

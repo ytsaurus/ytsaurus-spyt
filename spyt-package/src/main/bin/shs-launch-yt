@@ -1,0 +1,53 @@
+#!/usr/bin/env python
+
+from spyt.dependency_utils import require_yt_client
+
+require_yt_client()
+
+from yt.wrapper import YtClient  # noqa: E402
+from yt.wrapper.http_helpers import get_user_name  # noqa: E402
+from spyt.enabler import SpytEnablers  # noqa: E402
+from spyt.launch_utils import add_default_launch_options, add_hs_options  # noqa: E402
+from spyt.standalone import start_history_server  # noqa: E402
+from spyt.utils import default_token, default_tvm_id, default_tvm_secret, get_default_arg_parser  # noqa: E402
+
+
+def main(raw_args=None):
+    parser = get_default_arg_parser(description="History Server Launch")
+    add_default_launch_options(parser)
+    add_hs_options(parser)
+    args, unknown_args = parser.parse_known_args(args=raw_args)
+
+    yt_client = YtClient(proxy=args.proxy, token=default_token())
+
+    start_history_server(operation_alias=args.operation_alias,
+                         discovery_path=args.discovery_path,
+                         pool=args.pool or get_user_name(client=yt_client),
+                         enable_tmpfs=args.enable_tmpfs,
+                         history_server_memory_limit=args.history_server_memory_limit,
+                         history_server_memory_overhead=args.history_server_memory_overhead,
+                         history_server_cpu_limit=args.history_server_cpu_limit,
+                         network_project=args.network_project,
+                         tvm_id=default_tvm_id(),
+                         tvm_secret=default_tvm_secret(),
+                         advanced_event_log=args.advanced_event_log,
+                         params=args.params,
+                         shs_location=args.shs_location,
+                         spark_cluster_version=args.spyt_version,
+                         enablers=SpytEnablers(
+                             enable_mtn=args.enable_mtn,
+                             enable_preference_ipv6=args.enable_preference_ipv6,
+                             enable_tcp_proxy=args.enable_tcp_proxy
+                         ),
+                         client=yt_client,
+                         preemption_mode=args.preemption_mode,
+                         cluster_log_level=args.cluster_log_level,
+                         rpc_job_proxy=args.rpc_job_proxy,
+                         rpc_job_proxy_thread_pool_size=args.rpc_job_proxy_thread_pool_size,
+                         tcp_proxy_range_start=args.tcp_proxy_range_start,
+                         tcp_proxy_range_size=args.tcp_proxy_range_size,
+                         enable_stderr_table=args.enable_stderr_table)
+
+
+if __name__ == '__main__':
+    main()

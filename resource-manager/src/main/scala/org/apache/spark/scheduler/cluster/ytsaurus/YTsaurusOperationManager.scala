@@ -30,7 +30,7 @@ private[spark] class YTsaurusOperationManager(
     portoLayers: YTreeNode,
     filePaths: YTreeNode,
     pythonPaths: YTreeMapNode,
-    environment: YTreeMapNode,
+  environment: YTreeMapNode,
     home: String,
     prepareEnvCommand: String,
     sparkClassPath: String,
@@ -297,37 +297,11 @@ private[spark] object YTsaurusOperationManager extends Logging {
       val filePaths = releaseConfig.getListO("file_paths").orElse(YTree.listBuilder().buildList())
       val pythonPaths = globalConfig.getMapO("python_cluster_paths").orElse(YTree.mapBuilder().buildMap())
 
-      applicationFiles(conf).foreach { fileName =>
-        filePaths.add(YTree.stringNode(fileName))
-      }
+      val unpackArchivesCommands = applicationFiles(conf).map { file =>
+        filePaths.add(file.toNode())
+        file.unpackCommand
+      }.filter(cmd => cmd.isDefined)
 
-      val unpackArchivesCommands = conf.get(ARCHIVES).filter(_.startsWith("yt:/")).map(YtWrapper.formatPath).distinct.zipWithIndex.map { case (fullPath, archiveIndex) =>
-        val (ytPath, directoryName) = if (fullPath.contains('#')) {
-          val parts = fullPath.split('#')
-          if (parts.length != 2) {
-            throw new SparkException(s"Too many '#': $fullPath")
-          }
-          (parts(0), parts(1))
-        } else {
-          (fullPath, fullPath.split('/').last)
-        }
-        val node = YTree.stringNode(ytPath)
-        // to avoid collisions
-        val archiveFileName = s"__dep-$archiveIndex-" + ytPath.split('/').last
-        node.putAttribute("file_name", YTree.stringNode(archiveFileName))
-        filePaths.add(node)
-        if (archiveFileName.endsWith(".zip")) {
-          s"unzip $archiveFileName -d $directoryName"
-        } else if (archiveFileName.endsWith(".tar.gz")) {
-         s"mkdir $directoryName && tar -xzvf $archiveFileName -C $directoryName"
-        } else if (archiveFileName.endsWith(".tar.bz2")) {
-          s"mkdir $directoryName && tar -xjvf $archiveFileName -C $directoryName"
-        } else if (archiveFileName.endsWith(".tar")) {
-          s"mkdir $directoryName && tar -xvf $archiveFileName -C $directoryName"
-        } else {
-          throw new SparkException(s"Archive type is not supported: $fullPath")
-        }
-      }.filter(x => x != null)
       val unpackArchivesCommand = if (unpackArchivesCommands.nonEmpty) {
         unpackArchivesCommands.mkString(" && ") + " &&"
       } else {
@@ -416,7 +390,17 @@ private[spark] object YTsaurusOperationManager extends Logging {
     versions.max.toString
   }
 
-  private[ytsaurus] def applicationFiles(conf: SparkConf): Seq[String] = {
+  private[ytsaurus] case class ApplicationFile(val ytPath: String, val alias: Option[String], val unpackCommand: Option[String]) {
+    def toNode(): YTreeNode = {
+      val node = YTree.stringNode(ytPath)
+      alias.foreach(alias => {
+        node.putAttribute("file_name", YTree.stringNode(alias))
+      })
+      node
+    }
+  }
+
+  private[ytsaurus] def applicationFiles(conf: SparkConf): Seq[ApplicationFile] = {
     val providedLists = conf.get(JARS) ++
       conf.get(FILES) ++
       conf.get(SUBMIT_PYTHON_FILES)
@@ -430,7 +414,35 @@ private[spark] object YTsaurusOperationManager extends Logging {
         Seq.empty
       }
 
-    (providedLists ++ primaryResourceSeq).filter(_.startsWith("yt:/")).map(YtWrapper.formatPath).distinct
+    val archives = conf.get(ARCHIVES).filter(_.startsWith("yt:/")).map(YtWrapper.formatPath).distinct.zipWithIndex.map { case (fullPath, archiveIndex) =>
+      val (ytPath, directoryName) = if (fullPath.contains('#')) {
+        val parts = fullPath.split('#')
+        if (parts.length != 2) {
+          throw new SparkException(s"Too many '#': $fullPath")
+        }
+        (parts(0), parts(1))
+      } else {
+        (fullPath, fullPath.split('/').last)
+      }
+      // to avoid collisions
+      val archiveFileName = s"__dep-$archiveIndex-" + ytPath.split('/').last
+
+      val unpackCommand = if (archiveFileName.endsWith(".zip")) {
+        s"unzip $archiveFileName -d $directoryName"
+      } else if (archiveFileName.endsWith(".tar.gz") || archiveFileName.endsWith(".tgz")) {
+        s"mkdir $directoryName && tar -xzvf $archiveFileName -C $directoryName"
+      } else if (archiveFileName.endsWith(".tar.bz2")) {
+        s"mkdir $directoryName && tar -xjvf $archiveFileName -C $directoryName"
+      } else if (archiveFileName.endsWith(".tar")) {
+        s"mkdir $directoryName && tar -xvf $archiveFileName -C $directoryName"
+      } else {
+        throw new SparkException(s"Archive type is not supported: $fullPath")
+      }
+
+      new ApplicationFile(ytPath, Some(archiveFileName), Some(unpackCommand))
+    }
+
+    (providedLists ++ primaryResourceSeq).filter(_.startsWith("yt:/")).map(YtWrapper.formatPath).distinct.map(x => new ApplicationFile(x, None, None)) ++ archives
   }
 
   private[ytsaurus] def enrichSparkConf(conf: SparkConf, ytSparkConfig: YTreeMapNode): Unit = {

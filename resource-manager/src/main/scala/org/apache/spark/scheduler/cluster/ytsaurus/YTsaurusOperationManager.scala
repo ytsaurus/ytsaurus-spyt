@@ -24,7 +24,7 @@ import scala.collection.JavaConverters._
 import scala.collection.mutable.ArrayBuffer
 
 private[spark] class YTsaurusOperationManager(
-    ytClient: YTsaurusClient,
+    val ytClient: YTsaurusClient,
     user: String,
     token: String,
     portoLayers: YTreeNode,

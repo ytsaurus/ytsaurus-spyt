@@ -2,7 +2,8 @@ package tech.ytsaurus.spark.launcher
 
 import com.twitter.scalding.Args
 import org.slf4j.LoggerFactory
-import tech.ytsaurus.spark.launcher.TcpProxyService.updateTcpAddress
+import tech.ytsaurus.spyt.wrapper.TcpProxyService
+import tech.ytsaurus.spyt.wrapper.TcpProxyService.updateTcpAddress
 import tech.ytsaurus.spyt.HostAndPort
 import tech.ytsaurus.spyt.wrapper.Utils.{parseDuration, ytHostnameOrIpAddress}
 import tech.ytsaurus.spyt.wrapper.client.YtClientConfiguration
@@ -28,7 +29,7 @@ object LivyLauncher extends App with VanillaLauncher with SparkLauncher {
         (s"spark://${address.hostAndPort.toString}", Some(address.webUiHostAndPort))
       }
       log.info(s"Starting livy server for master $masterAddress")
-      val tcpRouter = ytO.flatMap(yt => TcpProxyService.register("LIVY")(yt))
+      val tcpRouter = ytO.flatMap(yt => TcpProxyService().register("LIVY")(yt))
       val address = HostAndPort(ytHostnameOrIpAddress, port)
       val externalAddress = tcpRouter.map(_.getExternalAddress("LIVY")).getOrElse(address)
       log.info(f"Server will started on address $externalAddress")

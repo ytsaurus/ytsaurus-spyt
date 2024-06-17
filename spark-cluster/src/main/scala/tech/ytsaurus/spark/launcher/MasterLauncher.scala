@@ -3,7 +3,8 @@ package tech.ytsaurus.spark.launcher
 import com.codahale.metrics.MetricRegistry
 import com.twitter.scalding.Args
 import org.slf4j.LoggerFactory
-import tech.ytsaurus.spark.launcher.TcpProxyService.updateTcpAddress
+import tech.ytsaurus.spyt.wrapper.TcpProxyService
+import tech.ytsaurus.spyt.wrapper.TcpProxyService.updateTcpAddress
 import tech.ytsaurus.spyt.wrapper.client.YtClientConfiguration
 import tech.ytsaurus.spyt.wrapper.discovery.{Address, SparkConfYsonable}
 import tech.ytsaurus.spark.launcher.rest.MasterWrapperLauncher
@@ -30,7 +31,7 @@ object MasterLauncher extends App
     val masterGroupId = groupId.map(getFullGroupId)
     withCompoundDiscovery(masterGroupId, masterGroupId, Some(baseDiscoveryPath), Some(yt)) { discoveryService =>
       log.info("Used discovery service: " + discoveryService.toString)
-      val tcpRouter = TcpProxyService.register("HOST", "WEBUI", "REST", "WRAPPER")(yt)
+      val tcpRouter = TcpProxyService().register("HOST", "WEBUI", "REST", "WRAPPER")(yt)
       val reverseProxyUrl = tcpRouter.map(x => "http://" + x.getExternalAddress("WEBUI").toString)
       withService(startMaster(reverseProxyUrl)) { master =>
         withService(startMasterWrapper(args, master)) { masterWrapper =>

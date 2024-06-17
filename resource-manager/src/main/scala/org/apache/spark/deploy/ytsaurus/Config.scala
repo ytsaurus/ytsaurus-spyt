@@ -76,6 +76,18 @@ object Config {
     .stringConf
     .createOptional
 
+  val TCP_PROXY_ENABLED = ConfigBuilder("spark.ytsaurus.tcp.proxy.enabled")
+    .booleanConf
+    .createWithDefault(false)
+
+  val TCP_PROXY_RANGE_START = ConfigBuilder("spark.ytsaurus.tcp.proxy.range.start")
+    .intConf
+    .createWithDefault(30000)
+
+  val TCP_PROXY_RANGE_SIZE = ConfigBuilder("spark.ytsaurus.tcp.proxy.range.size")
+    .intConf
+    .createWithDefault(1000)
+
   val DRIVER_OPERATION_ID = "spark.ytsaurus.driver.operation.id"
   val EXECUTOR_OPERATION_ID = "spark.ytsaurus.executor.operation.id"
   val SPARK_PRIMARY_RESOURCE = "spark.ytsaurus.primary.resource"

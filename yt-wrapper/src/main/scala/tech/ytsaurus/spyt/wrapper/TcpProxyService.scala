@@ -1,11 +1,10 @@
-package tech.ytsaurus.spark.launcher
+package tech.ytsaurus.spyt.wrapper
 
 import org.slf4j.{Logger, LoggerFactory}
 import tech.ytsaurus.client.CompoundClient
 import tech.ytsaurus.client.request.CreateNode
 import tech.ytsaurus.core.cypress.{CypressNodeType, YPath}
 import tech.ytsaurus.spyt.HostAndPort
-import tech.ytsaurus.spyt.wrapper.YtWrapper
 import tech.ytsaurus.spyt.wrapper.discovery.Address
 import tech.ytsaurus.ysontree.{YTree, YTreeNode}
 
@@ -14,30 +13,8 @@ import scala.concurrent.duration.DurationInt
 import scala.language.postfixOps
 
 
-object TcpProxyService {
-  case class TcpRouter(externalAddress: String, mapping: Map[String, Int]) {
-    def getExternalAddress(internalName: String): HostAndPort = HostAndPort(externalAddress, getPort(internalName))
-
-    def getPort(internalName: String): Int = mapping(internalName)
-  }
-
-  private val log: Logger = LoggerFactory.getLogger(getClass)
-
-  private val EXPIRATION_TIMEOUT: Long = (10 minutes).toMillis
-
-  private val DEFAULT_ROUTES: YPath = YPath.simple("//sys/tcp_proxies/routes/default")
-
-  private val isEnabled: Boolean = {
-    sys.env.get("SPARK_YT_TCP_PROXY_ENABLED").exists(_.toBoolean)
-  }
-
-  private val startPort: Int = {
-    sys.env.get("SPARK_YT_TCP_PROXY_RANGE_START").map(_.toInt).getOrElse(30000)
-  }
-
-  private val endPort: Int = {
-    startPort + sys.env.get("SPARK_YT_TCP_PROXY_RANGE_SIZE").map(_.toInt).getOrElse(1000)
-  }
+class TcpProxyService(isEnabled: Boolean, startPort: Int, endPort: Int) {
+  import TcpProxyService._
 
   private def proxyAddress(implicit yt: CompoundClient): Option[String] = {
     if (isEnabled) {
@@ -58,11 +35,7 @@ object TcpProxyService {
     }
   }
 
-  private def portYPath(port: Int): YPath = DEFAULT_ROUTES.child(port.toString)
-
   private def isPortBusy(port: Int)(implicit yt: CompoundClient): Boolean = YtWrapper.exists(portYPath(port))
-
-  private def buildEndpointsNode(address: String): YTreeNode = YTree.listBuilder().value(address).endList().build()
 
   private def createPortNode(address: String, port: Int)(implicit yt: CompoundClient): Unit = {
     val attributes = java.util.Map.of(
@@ -145,6 +118,30 @@ object TcpProxyService {
   def register(address: Address)(implicit yt: CompoundClient): Option[TcpRouter] = {
     register(address.hostAndPort.toString, address.webUiHostAndPort.toString, address.restHostAndPort.toString)
   }
+}
+
+object TcpProxyService {
+  private val log: Logger = LoggerFactory.getLogger(getClass)
+
+  def apply(): TcpProxyService = {
+    val isEnabled: Boolean = sys.env.get("SPARK_YT_TCP_PROXY_ENABLED").exists(_.toBoolean)
+    val startPort: Int =  sys.env.get("SPARK_YT_TCP_PROXY_RANGE_START").map(_.toInt).getOrElse(30000)
+    val endPort: Int = startPort + sys.env.get("SPARK_YT_TCP_PROXY_RANGE_SIZE").map(_.toInt).getOrElse(1000)
+    new TcpProxyService(isEnabled, startPort, endPort)
+  }
+
+  def apply(isEnabled: Boolean, startPort: Int, portRange: Int): TcpProxyService = {
+    val endPort: Int = startPort + portRange
+    new TcpProxyService(isEnabled, startPort, endPort)
+  }
+
+  private val EXPIRATION_TIMEOUT: Long = (10 minutes).toMillis
+
+  private val DEFAULT_ROUTES: YPath = YPath.simple("//sys/tcp_proxies/routes/default")
+
+  private def portYPath(port: Int): YPath = DEFAULT_ROUTES.child(port.toString)
+
+  private def buildEndpointsNode(address: String): YTreeNode = YTree.listBuilder().value(address).endList().build()
 
   def updateTcpAddress(address: String, port: Int)(implicit yt: CompoundClient): Unit = {
     log.info(f"Update address $address request for port $port")
@@ -153,5 +150,11 @@ object TcpProxyService {
     } catch {
       case e: Exception => log.warn(f"Error while updating port $port map node to address $address", e)
     }
+  }
+
+  case class TcpRouter(externalAddress: String, mapping: Map[String, Int]) {
+    def getExternalAddress(internalName: String): HostAndPort = HostAndPort(externalAddress, getPort(internalName))
+
+    def getPort(internalName: String): Int = mapping(internalName)
   }
 }

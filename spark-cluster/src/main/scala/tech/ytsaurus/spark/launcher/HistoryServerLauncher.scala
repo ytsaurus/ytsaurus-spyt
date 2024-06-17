@@ -2,12 +2,10 @@ package tech.ytsaurus.spark.launcher
 
 import com.twitter.scalding.Args
 import org.slf4j.LoggerFactory
-import tech.ytsaurus.spark.launcher.TcpProxyService.updateTcpAddress
-import tech.ytsaurus.spyt.wrapper.Utils.parseDuration
+import tech.ytsaurus.spyt.wrapper.TcpProxyService
+import tech.ytsaurus.spyt.wrapper.TcpProxyService.updateTcpAddress
 import tech.ytsaurus.spyt.wrapper.client.YtClientConfiguration
-import tech.ytsaurus.spyt.wrapper.discovery.DiscoveryService
 
-import scala.concurrent.duration._
 import scala.language.postfixOps
 
 object HistoryServerLauncher extends App with VanillaLauncher with SparkLauncher {
@@ -21,7 +19,7 @@ object HistoryServerLauncher extends App with VanillaLauncher with SparkLauncher
 
   withYtClient(ytConfig) { yt =>
     withCypressDiscovery(baseDiscoveryPath, yt) { cypressDiscovery =>
-      val tcpRouter = TcpProxyService.register("SHS")(yt)
+      val tcpRouter = TcpProxyService().register("SHS")(yt)
 
       withService(startHistoryServer(logPath, memory, cypressDiscovery)) { historyServer =>
         val historyServerAddress =

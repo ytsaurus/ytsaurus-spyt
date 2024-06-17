@@ -75,6 +75,7 @@ case class SparkGlobalConfig(spark_conf: Map[String, String],
                                "job_cpu_monitor" -> YsonableConfig.toYTree(Map("enable_cpu_reclaim" -> "false"))
                              ),
                              worker_num_limit: Int = 1000,
+                             cuda_toolkit_version: String = "11.0",
                              ytserver_proxy_path: String = defaultYtServerProxyPath) extends YsonableConfig
 
 case class SparkLaunchConfig(spark_yt_base_path: String,

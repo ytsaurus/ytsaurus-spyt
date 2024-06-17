@@ -35,6 +35,7 @@ class SparkDefaultArguments(object):
     SPARK_WORKER_LOG_TABLE_TTL = "7d"
     SPARK_WORKER_CORES_OVERHEAD = 0
     SPARK_WORKER_CORES_BYOP_OVERHEAD = 0
+    SPARK_WORKER_GPU_LIMIT = 0
     LIVY_DRIVER_CORES = 1
     LIVY_DRIVER_MEMORY = "1024m"
     LIVY_MAX_SESSIONS = 3
@@ -97,7 +98,7 @@ class WorkerConfig(NamedTuple):
     worker_port: int = SparkDefaultArguments.SPARK_WORKER_PORT
     driver_op_discovery_script: str = None
     extra_metrics_enabled: bool = True
-    autoscaler_enabled: bool = None
+    autoscaler_enabled: bool = False
     worker_log_transfer: bool = False
     worker_log_json_mode: bool = False
     worker_log_update_interval: str = SparkDefaultArguments.SPARK_WORKER_LOG_UPDATE_INTERVAL
@@ -105,6 +106,8 @@ class WorkerConfig(NamedTuple):
     worker_disk_name: str = "default"
     worker_disk_limit = None
     worker_disk_account = None
+    worker_gpu_limit: int = 0
+    cuda_toolkit_version: str = None
 
 
 class HistoryServerConfig(NamedTuple):
@@ -262,7 +265,7 @@ def build_worker_spec(builder: VanillaSpecBuilder, job_type: str, ytserver_proxy
 
     spark_conf_worker = common_params.spark_conf.copy()
 
-    if "spark.workerLog.tablePath" not in common_params.spark_conf:
+    if "spark.workerLog.tablePath" not in spark_conf_worker:
         worker_log_location = "yt:/{}".format(common_params.config.spark_discovery.worker_log())
         spark_conf_worker["spark.workerLog.tablePath"] = worker_log_location
     if config.driver_op_discovery_script:
@@ -279,6 +282,11 @@ def build_worker_spec(builder: VanillaSpecBuilder, job_type: str, ytserver_proxy
             "spark/bin/job-id-discovery.sh")
         spark_conf_worker["spark.driver.resource.jobid.discoveryScript"] = _script_absolute_path(
             "spark/bin/job-id-discovery.sh")
+
+    if config.worker_gpu_limit > 0:
+        spark_conf_worker["spark.worker.resource.gpu.amount"] = str(config.worker_gpu_limit)
+        spark_conf_worker["spark.worker.resource.gpu.discoveryScript"] = _script_absolute_path(
+            "spyt-package/bin/getGpusResources.sh")
 
     worker_launcher_opts = \
         "--cores {0} --memory {1} --wait-master-timeout {2} --wlog-service-enabled {3} --wlog-enable-json {4} " \
@@ -333,6 +341,10 @@ def build_worker_spec(builder: VanillaSpecBuilder, job_type: str, ytserver_proxy
         worker_ram_memory += parse_memory(config.tmpfs_limit)
         worker_local_dirs = "./tmpfs"
     worker_environment["SPARK_LOCAL_DIRS"] = worker_local_dirs
+
+    if config.worker_gpu_limit > 0:
+        worker_task_spec["cuda_toolkit_version"] = config.cuda_toolkit_version
+        worker_task_spec["gpu_limit"] = config.worker_gpu_limit
 
     driver_task_spec = copy.deepcopy(worker_task_spec)
     driver_environment = driver_task_spec["environment"]

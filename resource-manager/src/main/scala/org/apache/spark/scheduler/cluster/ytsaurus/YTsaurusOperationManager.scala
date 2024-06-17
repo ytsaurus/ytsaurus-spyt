@@ -17,7 +17,7 @@ import tech.ytsaurus.client.request.{CompleteOperation, GetOperation, UpdateOper
 import tech.ytsaurus.client.rpc.YTsaurusClientAuth
 import tech.ytsaurus.core.GUID
 import tech.ytsaurus.spyt.wrapper.YtWrapper
-import tech.ytsaurus.ysontree.{YTree, YTreeMapNode, YTreeNode}
+import tech.ytsaurus.ysontree.{YTree, YTreeMapNode, YTreeNode, YTreeTextSerializer}
 
 import java.nio.file.Paths
 import scala.collection.JavaConverters._
@@ -106,9 +106,7 @@ private[spark] class YTsaurusOperationManager(
   }
 
   private def createSpec(conf: SparkConf, taskName: String, opParams: OperationParameters): VanillaSpec = {
-
-    val poolParameters = conf.get(YTSAURUS_POOL)
-      .map(pool => Map("pool" -> YTree.stringNode(pool))).getOrElse(Map.empty)
+    val poolParameters = conf.get(YTSAURUS_POOL).map(pool => Map("pool" -> YTree.stringNode(pool))).getOrElse(Map.empty)
 
     val opSpecBuilder: VanillaSpec.BuilderBase[_] = VanillaSpec.builder()
 
@@ -121,12 +119,15 @@ private[spark] class YTsaurusOperationManager(
 
     val title = s"Spark $taskName for ${conf.get("spark.app.name")}${opParams.attemptId}"
 
+    val userParameters = conf.getOption(s"spark.ytsaurus.$taskName.operation.parameters")
+      .map(YTreeTextSerializer.deserialize(_).asMap().asScala).getOrElse(Map.empty)
+
     val additionalParameters: Map[String, YTreeNode] = Map(
       "secure_vault" -> secureVault,
       "max_failed_job_count" -> YTree.integerNode(opParams.maxFailedJobCount),
       "preemption_mode" -> YTree.stringNode("normal"),
       "title" -> YTree.stringNode(title),
-    ) ++ poolParameters
+    ) ++ poolParameters ++ userParameters
 
     opSpecBuilder.setAdditionalSpecParameters(additionalParameters.asJava)
 
@@ -163,6 +164,7 @@ private[spark] class YTsaurusOperationManager(
       sparkJavaOpts ++
       ytsaurusJavaOptions ++ Seq(
       driverOpts,
+      "org.apache.spark.deploy.ytsaurus.DriverWrapper",
       appArgs.mainClass
     ) ++ additionalArgs ++ appArgs.driverArgs).mkString(" ")
 
@@ -193,10 +195,11 @@ private[spark] class YTsaurusOperationManager(
   }
 
   private def executorParams(
-    conf: SparkConf,
+    commonConf: SparkConf,
     appId: String,
     resourceProfile: ResourceProfile,
     numExecutors: Int): OperationParameters = {
+    val conf = commonConf.clone()
 
     val isPythonApp = conf.get(YTSAURUS_IS_PYTHON)
 
@@ -212,6 +215,7 @@ private[spark] class YTsaurusOperationManager(
       conf,
       isPythonApp,
       Map.empty)
+
     val sparkJavaOpts = Utils.sparkJavaOpts(conf, SparkConf.isExecutorStartupConf).map { opt =>
       val Array(k, v) = opt.split("=", 2)
       k + "=\"" + v + "\""
@@ -252,16 +256,24 @@ private[spark] class YTsaurusOperationManager(
     )).mkString(" ")
 
     val memoryLimit = execResources.totalMemMiB * MIB
+    val gpuLimit = execResources.customResources.get("gpu").map(_.amount).getOrElse(0L)
 
-    val spec: Spec = (specBuilder, _, _) => specBuilder.beginMap()
-      .key("command").value(executorCommand)
-      .key("job_count").value(numExecutors)
-      .key("cpu_limit").value(execResources.cores)
-      .key("memory_limit").value(memoryLimit)
-      .key("layer_paths").value(portoLayers)
-      .key("file_paths").value(filePaths)
-      .key("environment").value(execEnvironmentBuilder.endMap().build())
-      .endMap()
+    val spec: Spec = (specBuilder, _, _) => {
+      specBuilder.beginMap()
+        .key("command").value(executorCommand)
+        .key("job_count").value(numExecutors)
+        .key("cpu_limit").value(execResources.cores)
+        .key("memory_limit").value(memoryLimit)
+        .key("layer_paths").value(portoLayers)
+        .key("file_paths").value(filePaths)
+        .key("environment").value(execEnvironmentBuilder.endMap().build())
+      if (gpuLimit > 0) {
+        specBuilder
+          .key("gpu_limit").value(gpuLimit)
+          .key("cuda_toolkit_version").value(conf.get(YTSAURUS_CUDA_VERSION).get)
+      }
+      specBuilder.endMap()
+    }
 
     val attemptId = s" [${sys.env.getOrElse("YT_TASK_JOB_INDEX", "0")}]"
     OperationParameters(spec, conf.get(MAX_EXECUTOR_FAILURES) * numExecutors, attemptId)
@@ -285,14 +297,14 @@ private[spark] object YTsaurusOperationManager extends Logging {
         .orElseThrow(() => new SparkException("JAVA_HOME is not set in " +
           s"${GLOBAL_CONFIG_PATH.key} parameter value"))
 
-      val releaseConfigPath =
-        s"${conf.get(RELEASE_CONFIG_PATH)}/$spytVersion/${conf.get(LAUNCH_CONF_FILE)}"
+      val releaseConfigPath = s"${conf.get(RELEASE_CONFIG_PATH)}/$spytVersion/${conf.get(LAUNCH_CONF_FILE)}"
 
       val releaseConfig: YTreeMapNode = getDocument(ytClient, releaseConfigPath)
 
       val portoLayers = releaseConfig.getListO("layer_paths").orElse(YTree.listBuilder().buildList())
       val filePaths = releaseConfig.getListO("file_paths").orElse(YTree.listBuilder().buildList())
       val pythonPaths = globalConfig.getMapO("python_cluster_paths").orElse(YTree.mapBuilder().buildMap())
+      val cudaVersion = globalConfig.getStringO("cuda_toolkit_version").orElse("11.0")
 
       applicationFiles(conf).foreach { fileName =>
         filePaths.add(YTree.stringNode(fileName))
@@ -324,11 +336,18 @@ private[spark] object YTsaurusOperationManager extends Logging {
       val sparkClassPath = s"$home/*:$spytHome/conf/:$spytHome/jars/*:$sparkHome/jars/*"
       environment.put("SPARK_HOME", YTree.stringNode(sparkHome))
       environment.put("PYTHONPATH", YTree.stringNode(s"$spytHome/python"))
+
+      conf.set("spark.executor.resource.gpu.discoveryScript", s"$spytHome/bin/getGpusResources.sh")
+
       val ytsaurusJavaOptions = ArrayBuffer[String]()
       if (conf.getBoolean("spark.hadoop.yt.preferenceIpv6.enabled", false)) {
         ytsaurusJavaOptions += "-Djava.net.preferIPv6Addresses=true"
       }
       ytsaurusJavaOptions += s"$$(cat $spytHome/conf/java-opts)"
+
+      if (!conf.contains(YTSAURUS_CUDA_VERSION)) {
+        conf.set(YTSAURUS_CUDA_VERSION, cudaVersion)
+      }
 
       val prepareEnvCommand = s"./setup-spyt-env.sh --spark-home $home --spark-distributive $sparkTgz"
 

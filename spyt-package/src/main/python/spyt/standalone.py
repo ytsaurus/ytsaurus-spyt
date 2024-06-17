@@ -25,7 +25,7 @@ except Exception:
 from .conf import read_remote_conf, validate_cluster_version, \
     latest_compatible_spyt_version, update_config_inplace, validate_custom_params, validate_mtn_config, \
     latest_ytserver_proxy_path, read_global_conf, python_bin_path, \
-    worker_num_limit, validate_worker_num, read_cluster_conf, validate_ssd_config  # noqa: E402
+    worker_num_limit, validate_worker_num, read_cluster_conf, validate_ssd_config, cuda_toolkit_version  # noqa: E402
 from .utils import get_spark_master, base_spark_conf, SparkDiscovery, SparkCluster, call_get_proxy_address_url, \
     parse_bool  # noqa: E402
 from .enabler import SpytEnablers  # noqa: E402
@@ -429,7 +429,8 @@ def start_spark_cluster(worker_cores, worker_memory, worker_num, worker_cores_ov
                         livy_driver_memory=SparkDefaultArguments.LIVY_DRIVER_MEMORY,
                         livy_max_sessions=SparkDefaultArguments.LIVY_MAX_SESSIONS, rpc_job_proxy=False,
                         rpc_job_proxy_thread_pool_size=4, tcp_proxy_range_start=30000,
-                        tcp_proxy_range_size=100, enable_stderr_table=False, group_id=None):
+                        tcp_proxy_range_size=100, enable_stderr_table=False, group_id=None,
+                        worker_gpu_limit=0):
     """Start Spark cluster
     :param operation_alias: alias for the underlying YT operation
     :param pool: pool for the underlying YT operation
@@ -494,6 +495,7 @@ def start_spark_cluster(worker_cores, worker_memory, worker_num, worker_cores_ov
     :param tcp_proxy_range_size: size of TCP proxy allocation range
     :param enable_stderr_table: enables writing YT operation logs to stderr table
     :param group_id: discovery group id
+    :param worker_gpu_limit: number of gpu for each worker
     :return:
     """
     worker_res = WorkerResources(worker_cores, worker_memory, worker_num, worker_cores_overhead, worker_timeout,
@@ -581,7 +583,8 @@ def start_spark_cluster(worker_cores, worker_memory, worker_num, worker_cores_ov
     master_config = MasterConfig(master_memory_limit, master_port)
     worker_config = WorkerConfig(
         tmpfs_limit, worker_res, worker_port, None, True, autoscaler_period is not None, worker_log_transfer,
-        worker_log_json_mode, worker_log_update_interval, worker_log_table_ttl, worker_disk_name
+        worker_log_json_mode, worker_log_update_interval, worker_log_table_ttl, worker_disk_name, worker_gpu_limit,
+        cuda_toolkit_version(global_conf)
     )
     hs_config = HistoryServerConfig(
         history_server_memory_limit, history_server_cpu_limit, history_server_memory_overhead, shs_location,

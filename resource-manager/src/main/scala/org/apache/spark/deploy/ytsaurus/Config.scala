@@ -88,6 +88,12 @@ object Config {
     .intConf
     .createWithDefault(1000)
 
+  val YTSAURUS_CUDA_VERSION = ConfigBuilder("spark.ytsaurus.cuda.version")
+    .internal()
+    .version("3.2.2")
+    .stringConf
+    .createOptional
+
   val DRIVER_OPERATION_ID = "spark.ytsaurus.driver.operation.id"
   val EXECUTOR_OPERATION_ID = "spark.ytsaurus.executor.operation.id"
   val SPARK_PRIMARY_RESOURCE = "spark.ytsaurus.primary.resource"

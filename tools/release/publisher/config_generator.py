@@ -38,7 +38,8 @@ GLOBAL_CONFIG = {
     'operation_spec': {
         "job_cpu_monitor": {"enable_cpu_reclaim": "false"}
     },
-    'worker_num_limit': 1000
+    'worker_num_limit': 1000,
+    'cuda_toolkit_version': "11.0",
 }
 
 

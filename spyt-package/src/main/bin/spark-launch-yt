@@ -28,6 +28,7 @@ def main(raw_args=None):
     parser.add_argument("--ssd-limit", required=False, default=None)
     # COMPAT(alex-shishkin): replace with worker-disk-name='ssd_slots_physical' and worker-disk-account
     parser.add_argument("--ssd-account", required=False, default=None)
+    parser.add_argument("--worker-gpu-limit", type=int, default=SparkDefaultArguments.SPARK_WORKER_GPU_LIMIT)
     parser.add_argument("--worker-disk-name", required=False, default="default")
     parser.add_argument("--worker-disk-limit", required=False, default=None)
     parser.add_argument("--worker-disk-account", required=False, default=None)
@@ -173,7 +174,8 @@ def main(raw_args=None):
                         tcp_proxy_range_start=args.tcp_proxy_range_start,
                         tcp_proxy_range_size=args.tcp_proxy_range_size,
                         enable_stderr_table=args.enable_stderr_table,
-                        group_id=args.group_id)
+                        group_id=args.group_id,
+                        worker_gpu_limit=args.worker_gpu_limit)
 
 
 if __name__ == '__main__':

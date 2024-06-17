@@ -101,6 +101,10 @@ def worker_num_limit(global_conf):
     return global_conf.get("worker_num_limit", 1000)
 
 
+def cuda_toolkit_version(global_conf):
+    return global_conf.get("cuda_toolkit_version", "11.0")
+
+
 def validate_worker_num(worker_num, worker_num_lim):
     if worker_num > worker_num_lim:
         raise RuntimeError("Number of workers ({0}) is more than limit ({1})".format(worker_num, worker_num_lim))

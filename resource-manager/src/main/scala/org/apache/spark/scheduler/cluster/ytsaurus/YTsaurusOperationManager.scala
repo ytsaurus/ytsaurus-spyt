@@ -166,7 +166,7 @@ private[spark] class YTsaurusOperationManager(
       driverOpts,
       "org.apache.spark.deploy.ytsaurus.DriverWrapper",
       appArgs.mainClass
-    ) ++ additionalArgs ++ appArgs.driverArgs).mkString(" ")
+    ) ++ additionalArgs ++ appArgs.driverArgs ++ "1>&2").mkString(" ")
 
     val overheadFactor = if (appArgs.mainAppResourceType == "java") {
       MEMORY_OVERHEAD_FACTOR
@@ -252,7 +252,8 @@ private[spark] class YTsaurusOperationManager(
       "--executor-id", "$YT_TASK_JOB_INDEX",
       "--cores", execResources.cores.toString,
       "--app-id", appId,
-      "--hostname", "$HOSTNAME"
+      "--hostname", "$HOSTNAME",
+      "1>&2"
     )).mkString(" ")
 
     val memoryLimit = execResources.totalMemMiB * MIB

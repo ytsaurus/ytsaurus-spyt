@@ -259,7 +259,7 @@ private[spark] class YTsaurusOperationManager(
       "--hostname", "$HOSTNAME"
     )).mkString(" ")
 
-    if (conf.getBoolean("spark.ytsaurus.redirect.stdout.to.stderr", defaultValue = false)) {
+    if (conf.getBoolean(YTSAURUS_REDIRECT_STDOUT_TO_STDERR, defaultValue = false)) {
       executorCommand += " 1>&2"
     }
 

@@ -99,7 +99,6 @@ object Config {
   val SPARK_PRIMARY_RESOURCE = "spark.ytsaurus.primary.resource"
 
   val YTSAURUS_REDIRECT_STDOUT_TO_STDERR = ConfigBuilder("spark.ytsaurus.redirect.stdout.to.stderr")
-    .internal()
     .version("3.2.2")
     .booleanConf
     .createWithDefault(false)

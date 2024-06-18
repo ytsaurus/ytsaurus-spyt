@@ -168,9 +168,7 @@ private[spark] class YTsaurusOperationManager(
       appArgs.mainClass
     ) ++ additionalArgs ++ appArgs.driverArgs).mkString(" ")
 
-    if (conf.get(YTSAURUS_REDIRECT_STDOUT_TO_STDERR)) {
-      driverCommand += " 1>&2"
-    }
+    addRedirectToStderrIfNeeded(conf, driverCommand)
 
     val overheadFactor = if (appArgs.mainAppResourceType == "java") {
       MEMORY_OVERHEAD_FACTOR
@@ -196,6 +194,14 @@ private[spark] class YTsaurusOperationManager(
       .endMap()
 
     OperationParameters(spec, conf.get(MAX_DRIVER_FAILURES), "")
+  }
+
+  private def addRedirectToStderrIfNeeded(conf: SparkConf, cmd: String): String = {
+    if (conf.get(YTSAURUS_REDIRECT_STDOUT_TO_STDERR)) {
+      cmd + " 1>&2"
+    } else {
+      cmd
+    }
   }
 
   private def executorParams(
@@ -259,9 +265,7 @@ private[spark] class YTsaurusOperationManager(
       "--hostname", "$HOSTNAME"
     )).mkString(" ")
 
-    if (conf.get(YTSAURUS_REDIRECT_STDOUT_TO_STDERR)) {
-      executorCommand += " 1>&2"
-    }
+    addRedirectToStderrIfNeeded(conf, executorCommand)
 
     val memoryLimit = execResources.totalMemMiB * MIB
     val gpuLimit = execResources.customResources.get("gpu").map(_.amount).getOrElse(0L)

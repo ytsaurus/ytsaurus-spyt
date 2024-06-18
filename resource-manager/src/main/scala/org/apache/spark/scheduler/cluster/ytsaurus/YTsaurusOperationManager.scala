@@ -155,7 +155,7 @@ private[spark] class YTsaurusOperationManager(
       case _ => Seq.empty
     }
 
-    val driverCommand = (Seq(
+    var driverCommand = (Seq(
       prepareEnvCommand,
       "&&",
       javaCommand,
@@ -166,7 +166,11 @@ private[spark] class YTsaurusOperationManager(
       driverOpts,
       "org.apache.spark.deploy.ytsaurus.DriverWrapper",
       appArgs.mainClass
-    ) ++ additionalArgs ++ appArgs.driverArgs ++ "1>&2").mkString(" ")
+    ) ++ additionalArgs ++ appArgs.driverArgs).mkString(" ")
+
+    if (conf.getBoolean("spark.ytsaurus.redirect.stdout.to.stderr", defaultValue = false)) {
+      driverCommand += " 1>&2"
+    }
 
     val overheadFactor = if (appArgs.mainAppResourceType == "java") {
       MEMORY_OVERHEAD_FACTOR
@@ -237,7 +241,7 @@ private[spark] class YTsaurusOperationManager(
       execEnvironmentBuilder.key("PYSPARK_EXECUTOR_PYTHON").value(pythonPathOpt.get())
     }
 
-    val executorCommand = (Seq(
+    var executorCommand = (Seq(
       prepareEnvCommand,
       "&&",
       javaCommand,
@@ -252,9 +256,12 @@ private[spark] class YTsaurusOperationManager(
       "--executor-id", "$YT_TASK_JOB_INDEX",
       "--cores", execResources.cores.toString,
       "--app-id", appId,
-      "--hostname", "$HOSTNAME",
-      "1>&2"
+      "--hostname", "$HOSTNAME"
     )).mkString(" ")
+
+    if (conf.getBoolean("spark.ytsaurus.redirect.stdout.to.stderr", defaultValue = false)) {
+      executorCommand += " 1>&2"
+    }
 
     val memoryLimit = execResources.totalMemMiB * MIB
     val gpuLimit = execResources.customResources.get("gpu").map(_.amount).getOrElse(0L)

@@ -155,7 +155,7 @@ private[spark] class YTsaurusOperationManager(
       case _ => Seq.empty
     }
 
-    val driverCommand = (Seq(
+    var driverCommand = (Seq(
       prepareEnvCommand,
       "&&",
       javaCommand,
@@ -167,6 +167,8 @@ private[spark] class YTsaurusOperationManager(
       "org.apache.spark.deploy.ytsaurus.DriverWrapper",
       appArgs.mainClass
     ) ++ additionalArgs ++ appArgs.driverArgs).mkString(" ")
+
+    driverCommand = addRedirectToStderrIfNeeded(conf, driverCommand)
 
     val overheadFactor = if (appArgs.mainAppResourceType == "java") {
       MEMORY_OVERHEAD_FACTOR
@@ -192,6 +194,14 @@ private[spark] class YTsaurusOperationManager(
       .endMap()
 
     OperationParameters(spec, conf.get(MAX_DRIVER_FAILURES), "")
+  }
+
+  private def addRedirectToStderrIfNeeded(conf: SparkConf, cmd: String): String = {
+    if (conf.get(YTSAURUS_REDIRECT_STDOUT_TO_STDERR)) {
+      cmd + " 1>&2"
+    } else {
+      cmd
+    }
   }
 
   private def executorParams(
@@ -237,7 +247,7 @@ private[spark] class YTsaurusOperationManager(
       execEnvironmentBuilder.key("PYSPARK_EXECUTOR_PYTHON").value(pythonPathOpt.get())
     }
 
-    val executorCommand = (Seq(
+    var executorCommand = (Seq(
       prepareEnvCommand,
       "&&",
       javaCommand,
@@ -254,6 +264,8 @@ private[spark] class YTsaurusOperationManager(
       "--app-id", appId,
       "--hostname", "$HOSTNAME"
     )).mkString(" ")
+
+    executorCommand = addRedirectToStderrIfNeeded(conf, executorCommand)
 
     val memoryLimit = execResources.totalMemMiB * MIB
     val gpuLimit = execResources.customResources.get("gpu").map(_.amount).getOrElse(0L)

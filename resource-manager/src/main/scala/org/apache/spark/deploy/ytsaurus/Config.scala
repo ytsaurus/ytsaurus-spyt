@@ -97,4 +97,9 @@ object Config {
   val DRIVER_OPERATION_ID = "spark.ytsaurus.driver.operation.id"
   val EXECUTOR_OPERATION_ID = "spark.ytsaurus.executor.operation.id"
   val SPARK_PRIMARY_RESOURCE = "spark.ytsaurus.primary.resource"
+
+  val YTSAURUS_REDIRECT_STDOUT_TO_STDERR = ConfigBuilder("spark.ytsaurus.redirect.stdout.to.stderr")
+    .version("3.2.2")
+    .booleanConf
+    .createWithDefault(false)
 }

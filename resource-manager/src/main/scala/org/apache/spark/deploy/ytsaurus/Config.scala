@@ -98,5 +98,9 @@ object Config {
   val EXECUTOR_OPERATION_ID = "spark.ytsaurus.executor.operation.id"
   val SPARK_PRIMARY_RESOURCE = "spark.ytsaurus.primary.resource"
 
-  val YTSAURUS_REDIRECT_STDOUT_TO_STDERR = "spark.ytsaurus.redirect.stdout.to.stderr"
+  val YTSAURUS_REDIRECT_STDOUT_TO_STDERR = ConfigBuilder("spark.ytsaurus.redirect.stdout.to.stderr")
+    .internal()
+    .version("3.2.2")
+    .booleanConf
+    .createWithDefault(false)
 }

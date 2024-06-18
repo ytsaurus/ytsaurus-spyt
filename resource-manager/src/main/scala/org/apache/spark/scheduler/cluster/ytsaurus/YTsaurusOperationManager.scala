@@ -168,7 +168,7 @@ private[spark] class YTsaurusOperationManager(
       appArgs.mainClass
     ) ++ additionalArgs ++ appArgs.driverArgs).mkString(" ")
 
-    if (conf.getBoolean(YTSAURUS_REDIRECT_STDOUT_TO_STDERR, defaultValue = false)) {
+    if (conf.get(YTSAURUS_REDIRECT_STDOUT_TO_STDERR)) {
       driverCommand += " 1>&2"
     }
 
@@ -259,7 +259,7 @@ private[spark] class YTsaurusOperationManager(
       "--hostname", "$HOSTNAME"
     )).mkString(" ")
 
-    if (conf.getBoolean(YTSAURUS_REDIRECT_STDOUT_TO_STDERR, defaultValue = false)) {
+    if (conf.get(YTSAURUS_REDIRECT_STDOUT_TO_STDERR)) {
       executorCommand += " 1>&2"
     }
 

@@ -313,7 +313,19 @@ private[spark] object YTsaurusOperationManager extends Logging {
 
       val releaseConfig: YTreeMapNode = getDocument(ytClient, releaseConfigPath)
 
-      val portoLayers = releaseConfig.getListO("layer_paths").orElse(YTree.listBuilder().buildList())
+      val portoLayers = conf.get(YTSAURUS_PORTO_LAYER_PATHS).map(layers => {
+        val builder = YTree.listBuilder()
+        layers.split(',').foreach(layer => {
+          builder.value(YTree.stringNode(layer))
+        })
+        builder.buildList()
+      }).getOrElse(releaseConfig.getListO("layer_paths").orElse(YTree.listBuilder().buildList()))
+      conf.get(YTSAURUS_EXTRA_PORTO_LAYER_PATHS).foreach(extraPortoLayers => {
+        extraPortoLayers.split(',').foreach(layer => {
+          portoLayers.add(YTree.stringNode(layer))
+        })
+      })
+
       val filePaths = releaseConfig.getListO("file_paths").orElse(YTree.listBuilder().buildList())
       val pythonPaths = globalConfig.getMapO("python_cluster_paths").orElse(YTree.mapBuilder().buildMap())
       val cudaVersion = globalConfig.getStringO("cuda_toolkit_version").orElse("11.0")

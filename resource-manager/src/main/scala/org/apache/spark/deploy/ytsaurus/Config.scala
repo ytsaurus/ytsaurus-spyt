@@ -102,4 +102,14 @@ object Config {
     .version("3.2.2")
     .booleanConf
     .createWithDefault(false)
+
+  val YTSAURUS_PORTO_LAYER_PATHS = ConfigBuilder("spark.ytsaurus.porto.layer.paths")
+    .version("3.2.2")
+    .stringConf
+    .createOptional
+
+  val YTSAURUS_EXTRA_PORTO_LAYER_PATHS = ConfigBuilder("spark.ytsaurus.porto.extra.layer.paths")
+    .version("3.2.2")
+    .stringConf
+    .createOptional
 }

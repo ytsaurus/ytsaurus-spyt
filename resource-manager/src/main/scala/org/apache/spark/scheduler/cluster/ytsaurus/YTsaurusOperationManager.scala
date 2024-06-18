@@ -168,7 +168,7 @@ private[spark] class YTsaurusOperationManager(
       appArgs.mainClass
     ) ++ additionalArgs ++ appArgs.driverArgs).mkString(" ")
 
-    if (conf.getBoolean("spark.ytsaurus.redirect.stdout.to.stderr", defaultValue = false)) {
+    if (conf.getBoolean(YTSAURUS_REDIRECT_STDOUT_TO_STDERR, defaultValue = false)) {
       driverCommand += " 1>&2"
     }
 

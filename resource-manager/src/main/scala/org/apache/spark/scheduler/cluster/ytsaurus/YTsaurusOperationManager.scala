@@ -17,7 +17,7 @@ import tech.ytsaurus.client.request.{CompleteOperation, GetOperation, UpdateOper
 import tech.ytsaurus.client.rpc.YTsaurusClientAuth
 import tech.ytsaurus.core.GUID
 import tech.ytsaurus.spyt.wrapper.YtWrapper
-import tech.ytsaurus.ysontree.{YTree, YTreeMapNode, YTreeNode, YTreeTextSerializer}
+import tech.ytsaurus.ysontree.{YTree, YTreeListNode, YTreeMapNode, YTreeNode, YTreeTextSerializer}
 
 import java.nio.file.Paths
 import scala.collection.JavaConverters._
@@ -313,7 +313,8 @@ private[spark] object YTsaurusOperationManager extends Logging {
 
       val releaseConfig: YTreeMapNode = getDocument(ytClient, releaseConfigPath)
 
-      val portoLayers = releaseConfig.getListO("layer_paths").orElse(YTree.listBuilder().buildList())
+      val portoLayers = getPortoLayers(conf, releaseConfig.getListO("layer_paths").orElse(YTree.listBuilder().buildList()))
+
       val filePaths = releaseConfig.getListO("file_paths").orElse(YTree.listBuilder().buildList())
       val pythonPaths = globalConfig.getMapO("python_cluster_paths").orElse(YTree.mapBuilder().buildMap())
       val cudaVersion = globalConfig.getStringO("cuda_toolkit_version").orElse("11.0")
@@ -382,6 +383,22 @@ private[spark] object YTsaurusOperationManager extends Logging {
         ytClient.close()
         throw t
     }
+  }
+
+  private[ytsaurus] def getPortoLayers(conf: SparkConf, defaultLayers: YTreeListNode): YTreeNode = {
+    val layers = conf.get(YTSAURUS_PORTO_LAYER_PATHS).map(layers => {
+      val builder = YTree.listBuilder()
+      layers.split(',').foreach(layer => {
+        builder.value(YTree.stringNode(layer))
+      })
+      builder.buildList()
+    }).getOrElse(defaultLayers)
+    conf.get(YTSAURUS_EXTRA_PORTO_LAYER_PATHS).foreach(extraPortoLayers => {
+      extraPortoLayers.split(',').foreach(layer => {
+        layers.add(YTree.stringNode(layer))
+      })
+    })
+    layers
   }
 
   private[ytsaurus] def getDocument(ytClient: YTsaurusClient, path: String): YTreeMapNode = {

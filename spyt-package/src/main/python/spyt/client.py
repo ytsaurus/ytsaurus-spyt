@@ -348,6 +348,7 @@ def connect_direct(yt_proxy: str, conf: SparkConf = None):
     conf = conf or SparkConf()
     if not conf.contains("spark.ytsaurus.python.version"):
         conf.set("spark.ytsaurus.python.version", f"{sys.version_info.major}.{sys.version_info.minor}")
+    conf.set("spark.executor.resource.gpu.discoveryScript", "./spyt-package/bin/getGpusResources.sh")
     spark = SparkSession.builder.config(conf=conf).master("ytsaurus://" + yt_proxy).getOrCreate()
     return spark
 

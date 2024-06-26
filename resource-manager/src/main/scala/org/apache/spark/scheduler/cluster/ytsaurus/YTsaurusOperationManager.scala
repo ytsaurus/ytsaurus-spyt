@@ -205,11 +205,10 @@ private[spark] class YTsaurusOperationManager(
   }
 
   private def executorParams(
-    commonConf: SparkConf,
+    conf: SparkConf,
     appId: String,
     resourceProfile: ResourceProfile,
     numExecutors: Int): OperationParameters = {
-    val conf = commonConf.clone()
 
     val isPythonApp = conf.get(YTSAURUS_IS_PYTHON)
 

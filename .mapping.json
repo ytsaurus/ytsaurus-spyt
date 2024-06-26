@@ -319,6 +319,7 @@
   "project/plugins.sbt":"yt/spark/spark-over-yt/project/plugins.sbt",
   "project/scalapb.sbt":"yt/spark/spark-over-yt/project/scalapb.sbt",
   "python-examples/direct_submit_example/direct_submit_example.py":"yt/spark/spark-over-yt/python-examples/direct_submit_example/direct_submit_example.py",
+  "python-examples/gpu_example/main.py":"yt/spark/spark-over-yt/python-examples/gpu_example/main.py",
   "python-examples/yamake_sample/main.py":"yt/spark/spark-over-yt/python-examples/yamake_sample/main.py",
   "resource-manager/src/main/resources/META-INF/services/org.apache.spark.scheduler.ExternalClusterManager":"yt/spark/spark-over-yt/resource-manager/src/main/resources/META-INF/services/org.apache.spark.scheduler.ExternalClusterManager",
   "resource-manager/src/main/scala/org/apache/spark/deploy/ytsaurus/Config.scala":"yt/spark/spark-over-yt/resource-manager/src/main/scala/org/apache/spark/deploy/ytsaurus/Config.scala",

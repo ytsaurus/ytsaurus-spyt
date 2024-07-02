@@ -17,7 +17,8 @@ class YtPartitionedFile(val serializedYPath: Array[Byte],
                         val byteLength: Long,
                         val isDynamic: Boolean,
                         val modificationTs: Long,
-                        override val partitionValues: InternalRow)
+                        override val partitionValues: InternalRow,
+                        val transaction: Option[String] = None)
   extends PartitionedFile(
     partitionValues = partitionValues,
     filePath = getPath(serializedYPath),
@@ -83,13 +84,14 @@ class YtPartitionedFile(val serializedYPath: Array[Byte],
 
   def endRow: Long = getAttributeFromSelf(getEnd)
 
-  def withNewRangeCriteria(rangeCriteria: RangeCriteria): YtPartitionedFile = {
+  private def withNewRangeCriteria(rangeCriteria: RangeCriteria): YtPartitionedFile = {
     new YtPartitionedFile(
       serializedYPath = serializeYPath(ypath.ranges(rangeCriteria)),
       byteLength = byteLength,
       isDynamic = isDynamic,
       modificationTs = modificationTs,
-      partitionValues = partitionValues
+      partitionValues = partitionValues,
+      transaction = transaction,
     )
   }
 }
@@ -104,32 +106,35 @@ object YtPartitionedFile {
   }
 
   def static(path: String, beginRow: Long, endRow: Long, byteLength: Long, modificationTs: Long = 0L,
-             emptyInternalRow: InternalRow = YtPartitionedFile.emptyInternalRow): YtPartitionedFile = {
-    static(toSimpleYPath(path), beginRow, endRow, byteLength, modificationTs, emptyInternalRow)
+             emptyInternalRow: InternalRow = YtPartitionedFile.emptyInternalRow,
+             transaction: Option[String] = None): YtPartitionedFile = {
+    static(toSimpleYPath(path), beginRow, endRow, byteLength, modificationTs, emptyInternalRow, transaction)
   }
 
   def static(path: YPath, beginRow: Long, endRow: Long, byteLength: Long, modificationTs: Long,
-             emptyInternalRow: InternalRow): YtPartitionedFile = {
+             emptyInternalRow: InternalRow, transaction: Option[String]): YtPartitionedFile = {
     val ypath = path.ranges(new Range(RangeLimit.row(beginRow), RangeLimit.row(endRow)))
-    YtPartitionedFile(ypath, byteLength, isDynamic = false, modificationTs, emptyInternalRow)
+    YtPartitionedFile(ypath, byteLength, isDynamic = false, modificationTs, emptyInternalRow, transaction)
   }
 
   def dynamic(path: String, range: RangeCriteria, byteLength: Long, modificationTs: Long = 0L,
-              emptyInternalRow: InternalRow = YtPartitionedFile.emptyInternalRow): YtPartitionedFile = {
-    dynamic(toSimpleYPath(path), range, byteLength, modificationTs, emptyInternalRow)
+              emptyInternalRow: InternalRow = YtPartitionedFile.emptyInternalRow,
+              transaction: Option[String] = None): YtPartitionedFile = {
+    dynamic(toSimpleYPath(path), range, byteLength, modificationTs, emptyInternalRow, transaction)
   }
 
-  def dynamic(path: YPath, range: RangeCriteria,
-              byteLength: Long, modificationTs: Long, emptyInternalRow: InternalRow): YtPartitionedFile = {
+  def dynamic(path: YPath, range: RangeCriteria, byteLength: Long, modificationTs: Long,
+              emptyInternalRow: InternalRow, transaction: Option[String]): YtPartitionedFile = {
     val ypath = path.ranges(range)
-    YtPartitionedFile(ypath, byteLength = byteLength, isDynamic = true, modificationTs = modificationTs, partitionValues = emptyInternalRow)
+    YtPartitionedFile(ypath, byteLength, isDynamic = true, modificationTs, emptyInternalRow, transaction)
   }
 
-  def apply(yPath: YPath, byteLength: Long, isDynamic: Boolean, modificationTs: Long, partitionValues: InternalRow): YtPartitionedFile = {
-    new YtPartitionedFile(serializeYPath(yPath), byteLength, isDynamic, modificationTs, partitionValues)
+  def apply(yPath: YPath, byteLength: Long, isDynamic: Boolean, modificationTs: Long,
+            partitionValues: InternalRow, transaction: Option[String]): YtPartitionedFile = {
+    new YtPartitionedFile(serializeYPath(yPath), byteLength, isDynamic, modificationTs, partitionValues, transaction)
   }
 
-  def getAttributeFromYPath[T](attributeGetter: YPath => T)(serializedPath: Array[Byte]): T = {
+  private def getAttributeFromYPath[T](attributeGetter: YPath => T)(serializedPath: Array[Byte]): T = {
     attributeGetter(deserializeYPath(serializedPath))
   }
 

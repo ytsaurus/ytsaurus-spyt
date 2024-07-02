@@ -76,7 +76,7 @@ object YtFilePartition {
         ranges.map { range =>
           val ypathWithSingleRange = tableRange.ranges(range)
           YtPartitionedFile(ypathWithSingleRange, maxSplitBytes,
-            path.meta.isDynamic, path.meta.modificationTime, partitionValues)
+            path.meta.isDynamic, path.meta.modificationTime, partitionValues, path.ypath.transaction)
         }
       }
     }
@@ -94,7 +94,8 @@ object YtFilePartition {
         require(partitionEnd > partitionStart)
         val approximatePartitionLength = (partitionEnd - partitionStart) * path.meta.approximateRowSize
         val yPath = path.toYPath.withRange(partitionStart, partitionEnd)
-        YtPartitionedFile(yPath, approximatePartitionLength, isDynamic = false, path.meta.modificationTime, partitionValues)
+        YtPartitionedFile(yPath, approximatePartitionLength, isDynamic = false,
+          path.meta.modificationTime, partitionValues, path.ypath.transaction)
       }
     } else {
       Nil
@@ -116,7 +117,8 @@ object YtFilePartition {
     allLimits.sliding(2).map {
       case Seq(lowerLimit, upperLimit) =>
         val yPath = path.toYPath.withRange(lowerLimit, upperLimit)
-        YtPartitionedFile(yPath, approximatePartitionLength, isDynamic = true, path.meta.modificationTime, partitionValues)
+        YtPartitionedFile(yPath, approximatePartitionLength, isDynamic = true,
+          path.meta.modificationTime, partitionValues, path.ypath.transaction)
     }.toSeq
   }
 

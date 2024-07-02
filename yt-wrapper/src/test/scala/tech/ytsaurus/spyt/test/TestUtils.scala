@@ -83,6 +83,12 @@ trait TestUtils {
   def writeTableFromYson(rows: Seq[String], path: String, schema: YTreeNode, physicalSchema: TableSchema,
                          optimizeFor: OptimizeMode, options: Map[String, YTreeNode])
                         (implicit yt: CompoundClient): Unit = {
+    YtWrapper.createTable(path, options ++ Map("schema" -> schema, "optimize_for" -> optimizeFor.node), None)
+    overwriteTableFromYson(rows, path, physicalSchema)
+  }
+
+  def overwriteTableFromYson(rows: Seq[String], path: String, physicalSchema: TableSchema)
+                            (implicit yt: CompoundClient): Unit = {
     import scala.collection.JavaConverters._
 
     val serializer = new YTreeRowSerializer[String] {
@@ -101,7 +107,6 @@ trait TestUtils {
         serialize(obj, consumer)
       }
     }
-    YtWrapper.createTable(path, options ++ Map("schema" -> schema, "optimize_for" -> optimizeFor.node), None)
     val req = WriteTable.builder[String]()
       .setPath(path)
       .setSerializationContext(new SerializationContext(serializer))

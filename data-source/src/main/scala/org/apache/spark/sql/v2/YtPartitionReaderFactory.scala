@@ -57,9 +57,9 @@ case class YtPartitionReaderFactory(sqlConf: SQLConf,
     implicit val yt: CompoundClient = YtClientProvider.ytClient(ytClientConf)
     buildLockedSplitReader(file) { case (split, transaction) =>
       val reader = if (readBatch) {
-        createVectorizedReader(split, returnBatch = false, file.partitionValues)
+        createVectorizedReader(split, returnBatch = false, transaction)
       } else {
-        createRowBaseReader(split)
+        createRowBaseReader(split, transaction)
       }
 
       val fileReader = new PartitionReader[InternalRow] {
@@ -68,7 +68,6 @@ case class YtPartitionReaderFactory(sqlConf: SQLConf,
         override def get(): InternalRow = reader.getCurrentValue.asInstanceOf[InternalRow]
 
         override def close(): Unit = {
-          transaction.foreach(_.commit().join())
           reader.close()
         }
       }
@@ -81,7 +80,7 @@ case class YtPartitionReaderFactory(sqlConf: SQLConf,
   override def buildColumnarReader(file: PartitionedFile): PartitionReader[ColumnarBatch] = {
     implicit val yt: CompoundClient = YtClientProvider.ytClient(ytClientConf)
     buildLockedSplitReader(file) { case (split, transaction) =>
-      val vectorizedReader = createVectorizedReader(split, returnBatch = true, file.partitionValues)
+      val vectorizedReader = createVectorizedReader(split, returnBatch = true, transaction)
       new PartitionReader[ColumnarBatch] {
         override def next(): Boolean = vectorizedReader.nextKeyValue()
 
@@ -105,7 +104,6 @@ case class YtPartitionReaderFactory(sqlConf: SQLConf,
         }
 
         override def close(): Unit = {
-          transaction.foreach(_.commit().join())
           vectorizedReader.close()
         }
       }
@@ -113,12 +111,12 @@ case class YtPartitionReaderFactory(sqlConf: SQLConf,
   }
 
   private def buildLockedSplitReader[T](file: PartitionedFile)
-                                       (splitReader: (YtInputSplit, Option[ApiServiceTransaction]) => PartitionReader[T])
+                                       (splitReader: (YtInputSplit, Option[String]) => PartitionReader[T])
                                        (implicit yt: CompoundClient): PartitionReader[T] = {
     file match {
       case ypf: YtPartitionedFile =>
         val split = createSplit(ypf)
-        splitReader(split, None)
+        splitReader(split, ypf.transaction)
       case _ =>
         throw new IllegalArgumentException(s"Partitions of type ${file.getClass.getSimpleName} are not supported")
     }
@@ -137,12 +135,12 @@ case class YtPartitionReaderFactory(sqlConf: SQLConf,
     split
   }
 
-  private def createRowBaseReader(split: YtInputSplit)
+  private def createRowBaseReader(split: YtInputSplit, transaction: Option[String])
                                  (implicit yt: CompoundClient): RecordReader[Void, InternalRow] = {
     val iter = YtWrapper.readTable(
       split.ytPathWithFiltersDetailed,
       InternalRowDeserializer.getOrCreate(resultSchema),
-      ytClientConf.timeout, None,
+      ytClientConf.timeout, transaction,
       bytesReadReporter(broadcastedConf)
     )
     val unsafeProjection = UnsafeProjection.create(resultSchema)
@@ -175,9 +173,7 @@ case class YtPartitionReaderFactory(sqlConf: SQLConf,
     }
   }
 
-  private def createVectorizedReader(split: YtInputSplit,
-                                     returnBatch: Boolean,
-                                     partitionValues: InternalRow)
+  private def createVectorizedReader(split: YtInputSplit, returnBatch: Boolean, transaction: Option[String])
                                     (implicit yt: CompoundClient): YtVectorizedReader = {
     new YtVectorizedReader(
       split = split,
@@ -188,6 +184,7 @@ case class YtPartitionReaderFactory(sqlConf: SQLConf,
       timeout = ytClientConf.timeout,
       reportBytesRead = bytesReadReporter(broadcastedConf),
       countOptimizationEnabled = countOptimizationEnabled,
+      transaction = transaction,
     )
   }
 }

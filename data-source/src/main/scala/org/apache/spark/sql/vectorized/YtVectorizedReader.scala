@@ -19,7 +19,8 @@ class YtVectorizedReader(split: YtInputSplit,
                          optimizedForScan: Boolean,
                          timeout: Duration,
                          reportBytesRead: Long => Unit,
-                         countOptimizationEnabled: Boolean)
+                         countOptimizationEnabled: Boolean,
+                         transaction: Option[String] = None)
                         (implicit yt: CompoundClient) extends RecordReader[Void, Object] {
   private val log = LoggerFactory.getLogger(getClass)
   private var _batchIdx = 0
@@ -33,10 +34,10 @@ class YtVectorizedReader(split: YtInputSplit,
       // Empty schemas always batch readable
       new EmptyColumnsBatchReader(totalRowCount.get)
     } else if (arrowEnabled && optimizedForScan) {
-      val stream = YtWrapper.readTableArrowStream(path, timeout, None, reportBytesRead)
+      val stream = YtWrapper.readTableArrowStream(path, timeout, transaction, reportBytesRead)
       new ArrowBatchReader(stream, schema)
     } else {
-      val rowIterator = YtWrapper.readTable(path, ArrayAnyDeserializer.getOrCreate(schema), timeout, None,
+      val rowIterator = YtWrapper.readTable(path, ArrayAnyDeserializer.getOrCreate(schema), timeout, transaction,
         reportBytesRead)
       new WireRowBatchReader(rowIterator, batchMaxSize, schema)
     }

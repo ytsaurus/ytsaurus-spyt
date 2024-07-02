@@ -41,6 +41,24 @@ class YtReadLockTest extends FlatSpec with Matchers with LocalSpark with TestUti
     }
   }
 
+  it should "ignore if table was modified while reading" in {
+    (1 to 5).toDF().write.yt(tmpPath)
+
+    readWithinTransaction(tmpPath) { (df, _) =>
+      df.as[Long].collect() should contain theSameElementsAs (1 to 5)
+
+      overwriteTableFromYson(Seq(
+        """{value = 6}""",
+        """{value = 7}"""
+      ), tmpPath, longColumnSchema)
+
+      df.as[Long].collect() should contain theSameElementsAs (1 to 5)
+
+      val df2 = spark.read.yt(tmpPath)
+      df2.as[Long].collect() should contain theSameElementsAs Seq(6, 7)
+    }
+  }
+
   it should "lock dataset while reading arrow" in {
     createDir(tmpPath)
     (1 to 10).toDF().write.optimizeFor(OptimizeMode.Scan).yt(s"$tmpPath/1")

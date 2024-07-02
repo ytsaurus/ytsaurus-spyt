@@ -14,7 +14,7 @@ sealed trait YPathEnriched {
 
   def toStringPath: String = toPath.toString
 
-  def transaction: Option[String] = None
+  def transaction: Option[String] = parent.transaction
 
   def parent: YPathEnriched
 
@@ -75,6 +75,8 @@ object YPathEnriched {
     override def toPath: Path = path
 
     override def toYPath: YPath = YPath.simple(YtWrapper.formatPath(path.toString))
+
+    override def transaction: Option[String] = None
 
     override def parent: YPathEnriched = null
 

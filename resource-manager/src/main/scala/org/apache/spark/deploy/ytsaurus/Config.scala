@@ -121,4 +121,9 @@ object Config {
   val SPYT_ANNOTATIONS = "spark.ytsaurus.annotations"
   val SPYT_DRIVER_ANNOTATIONS = "spark.ytsaurus.driver.annotations"
   val SPYT_EXECUTORS_ANNOTATIONS = "spark.ytsaurus.executors.annotations"
+
+  val YTSAURUS_UNTRACKED_DRIVER_OPERATION = ConfigBuilder("spark.ytsaurus.untracked.driver.operation")
+    .version("3.2.2")
+    .booleanConf
+    .createWithDefault(false)
 }

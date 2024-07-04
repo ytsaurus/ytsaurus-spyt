@@ -109,6 +109,16 @@ class YtSparkSQLTest extends FlatSpec with Matchers with LocalSpark with TmpDir
     }
   }
 
+  it should "apply functions" in {
+    Seq(1, 2).toDF("a").write.yt(tmpPath)
+    val res = spark.sql(s"SELECT md5(CAST (a as STRING)) FROM yt.`ytTable:/$tmpPath`")
+
+    res.collect() should contain theSameElementsAs Seq(
+      Row("c4ca4238a0b923820dcc509a6f75849b"),
+      Row("c81e728d9d4c2f636f067f89cc14862c")
+    )
+  }
+
   it should "filter rows" in {
     YtWrapper.createDir(tmpPath)
     forAll(testModes) { optimizeFor =>

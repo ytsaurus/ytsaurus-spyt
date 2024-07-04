@@ -62,6 +62,7 @@ class CastBaseDecorators {
   @DecoratedMethod
   private[this] def castToBinaryCode(from: DataType): CastFunction = from match {
     case YsonType => YsonCastToBinaryCode
+    case _ => __castToBinaryCode(from)
   }
   private[this] def __castToBinaryCode(from: DataType): CastFunction = ???
 }

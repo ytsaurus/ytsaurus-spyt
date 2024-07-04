@@ -49,6 +49,7 @@ SPARK_CONFS = {
         "spark.hadoop.yt.proxyRole": "spark",
     },
     'hume': {
+        "spark.yt.log.enabled": "false",
         "spark.test": "test",
     },
     'vanga': {

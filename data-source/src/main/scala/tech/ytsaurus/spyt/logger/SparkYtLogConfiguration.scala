@@ -7,7 +7,7 @@ object SparkYtLogConfiguration {
   import ConfigEntry.implicits._
   private val prefix = "log"
 
-  case object Enabled extends ConfigEntry[Boolean](s"$prefix.enabled", Some(true))
+  case object Enabled extends ConfigEntry[Boolean](s"$prefix.enabled", Some(false))
 
   case object Table extends ConfigEntry[String](s"$prefix.table", Some("//home/spark/logs/log_table"))
 

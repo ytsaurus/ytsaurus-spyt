@@ -41,7 +41,7 @@ object YtDynTableLoggerConfig {
         appId = spark.conf.get("spark.app.id"),
         appName = spark.conf.get("spark.app.name"),
         discoveryPath = spark.conf.getOption("spark.base.discovery.path").getOrElse("-"),
-        spytVersion = spark.conf.get("spark.yt.version"),
+        spytVersion = spark.conf.getOption("spark.yt.version").getOrElse("-"),
         logLevels = spark.ytConf(LogLevel),
         mergeExecutors = spark.ytConf(MergeExecutors),
         maxPartitionId = spark.ytConf(MaxPartitionId)

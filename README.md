@@ -27,6 +27,4 @@ You can read [post about YTsaurus](https://medium.com/p/42e7f5fa5fc6) or check v
 
 We are glad to welcome new contributors!
 
-1. Please read the [contributor's guide](CONTRIBUTING.md) and the [styleguide](https://github.com/ytsaurus/ytsaurus/blob/main/yt/styleguide/styleguide.md).
-2. We can accept your work to YTsaurus after you have signed contributor's license agreement (aka CLA).
-3. Please don't forget to add a note to your pull request, that you agree to the terms of the CLA.
+Please read the [contributor's guide](CONTRIBUTING.md) and the [styleguide](https://github.com/ytsaurus/ytsaurus/blob/main/yt/styleguide/styleguide.md) for more details.

@@ -5,15 +5,13 @@ import org.apache.hadoop.fs._
 import org.apache.hadoop.fs.permission.FsPermission
 import org.apache.hadoop.util.Progressable
 import org.slf4j.LoggerFactory
-import tech.ytsaurus.spyt.fs.PathUtils.hadoopPathToYt
-import tech.ytsaurus.spyt.fs.YtClientConfigurationConverter._
-import tech.ytsaurus.spyt.fs.path.YPathEnriched.ypath
-import tech.ytsaurus.spyt.wrapper.client.{YtClientConfiguration, YtRpcClient}
-import tech.ytsaurus.spyt.wrapper.{LogLazy, YtWrapper}
 import tech.ytsaurus.TError
 import tech.ytsaurus.client.CompoundClient
 import tech.ytsaurus.core.common.YTsaurusError
-import tech.ytsaurus.spyt.wrapper.client.YtClientProvider
+import tech.ytsaurus.spyt.fs.YtClientConfigurationConverter._
+import tech.ytsaurus.spyt.fs.path.YPathEnriched
+import tech.ytsaurus.spyt.wrapper.client.{YtClientConfiguration, YtClientProvider, YtRpcClient}
+import tech.ytsaurus.spyt.wrapper.{LogLazy, YtWrapper}
 
 import java.io.FileNotFoundException
 import java.net.URI
@@ -25,40 +23,51 @@ import scala.concurrent.duration._
 import scala.language.postfixOps
 
 abstract class YtFileSystemBase extends FileSystem with LogLazy {
-  val id: String = s"YtFileSystemBase-${UUID.randomUUID()}"
+  private val idPrefix: String = s"YtFileSystemBase-${UUID.randomUUID()}"
 
   private val log = LoggerFactory.getLogger(getClass)
 
   private var _uri: URI = _
   private var _workingDirectory: Path = new Path("/")
-  protected var _ytConf: YtClientConfiguration = _
-  protected lazy val yt: CompoundClient = YtClientProvider.ytClient(_ytConf, id)
+
+  private var defaultYtConf: YtClientConfiguration = _
+
+  protected[fs] def ytClient(f: YPathEnriched): CompoundClient = {
+    YtClientProvider.ytClientWithProxy(defaultYtConf, f.cluster, idPrefix)
+  }
+
+  private[fs] def validateSameCluster(src: YPathEnriched, dst: YPathEnriched): Unit = {
+    if (src.cluster != dst.cluster) {
+      throw new IllegalArgumentException(
+        s"Source (${src.cluster}) and destination (${dst.cluster}) must be located on same cluster")
+    }
+  }
 
   override def initialize(uri: URI, conf: Configuration): Unit = {
     super.initialize(uri, conf)
     setConf(conf)
     this._uri = uri
-    this._ytConf = ytClientConfiguration(getConf)
+    this.defaultYtConf = ytClientConfiguration(getConf)
   }
-
-  private[fs] def ytClient: CompoundClient = yt  // For YtFs class
 
   override def getUri: URI = _uri
 
   override def open(f: Path, bufferSize: Int): FSDataInputStream = convertExceptions {
     log.debugLazy(s"Open file ${f.toUri.toString}")
     statistics.incrementReadOps(1)
-    new FSDataInputStream(new YtFsInputStream(YtWrapper.readFile(hadoopPathToYt(f), timeout = _ytConf.timeout)(yt),
-      statistics))
+    val path = YPathEnriched.fromPath(f)
+    val inputStream = YtWrapper.readFile(path.toYPath, path.transaction, timeout = defaultYtConf.timeout)(ytClient(path))
+    new FSDataInputStream(new YtFsInputStream(inputStream, statistics))
   }
 
   protected def create(f: Path, permission: FsPermission, overwrite: Boolean, bufferSize: Int,
                        replication: Short, blockSize: Long, progress: Progressable,
                        statistics: FileSystem.Statistics): FSDataOutputStream = convertExceptions {
     log.debugLazy(s"Create new file: $f")
-    statistics.incrementWriteOps(1)
-    val path = ypath(f)
+    val path = YPathEnriched.fromPath(f)
+    implicit val yt: CompoundClient = ytClient(path)
 
+    statistics.incrementWriteOps(1)
     YtWrapper.createDir(path.toYPath.parent(), path.transaction, ignoreExisting = true)(yt)
 
     def createFile(ytRpcClient: Option[YtRpcClient], ytClient: CompoundClient): FSDataOutputStream = {
@@ -68,8 +77,8 @@ abstract class YtFileSystemBase extends FileSystem with LogLazy {
       new FSDataOutputStream(writeFile, statistics)
     }
 
-    if (_ytConf.extendedFileTimeout) {
-      val ytConf = _ytConf.copy(timeout = 7 days)
+    if (defaultYtConf.extendedFileTimeout) {
+      val ytConf = defaultYtConf.copy(timeout = 7 days)
       val ytRpcClient: YtRpcClient = YtClientProvider.ytRpcClient(ytConf, s"create-file-${UUID.randomUUID().toString}")
       try {
         createFile(Some(ytRpcClient), ytRpcClient.yt)
@@ -83,34 +92,45 @@ abstract class YtFileSystemBase extends FileSystem with LogLazy {
     }
   }
 
+  override def create(f: Path, permission: FsPermission, overwrite: Boolean, bufferSize: Int,
+                      replication: Short, blockSize: Long, progress: Progressable): FSDataOutputStream = {
+    create(f, permission, overwrite, bufferSize, replication, blockSize, progress, statistics)
+  }
+
   override def append(f: Path, bufferSize: Int, progress: Progressable): FSDataOutputStream = convertExceptions {
     ???
   }
 
   override def rename(src: Path, dst: Path): Boolean = convertExceptions {
     log.debugLazy(s"Rename $src to $dst")
+    val srcPath = YPathEnriched.fromPath(src)
+    val dstPath = YPathEnriched.fromPath(dst)
+    validateSameCluster(srcPath, dstPath)
     statistics.incrementWriteOps(1)
-    YtWrapper.move(hadoopPathToYt(src), hadoopPathToYt(dst))(yt)
+    YtWrapper.move(srcPath.toStringYPath, dstPath.toStringYPath)(ytClient(srcPath))
     true
   }
 
   override def mkdirs(f: Path, permission: FsPermission): Boolean = convertExceptions {
     log.debugLazy(s"Create $f")
+    val path = YPathEnriched.fromPath(f)
     statistics.incrementWriteOps(1)
-    YtWrapper.createDir(hadoopPathToYt(f), ignoreExisting = true)(yt)
+    YtWrapper.createDir(path.toStringYPath, ignoreExisting = true)(ytClient(path))
     true
   }
 
   override def delete(f: Path, recursive: Boolean): Boolean = convertExceptions {
     log.debugLazy(s"Delete $f")
-    statistics.incrementWriteOps(1)
-    if (!YtWrapper.exists(hadoopPathToYt(f))(yt)) {
+    val path = YPathEnriched.fromPath(f)
+    implicit val yt: CompoundClient = ytClient(path)
+    if (!YtWrapper.exists(path.toStringYPath, path.transaction)) {
       log.debugLazy(s"$f is not exist")
-      return false
+      false
+    } else {
+      statistics.incrementWriteOps(1)
+      YtWrapper.remove(path.toStringYPath, path.transaction)
+      true
     }
-
-    YtWrapper.remove(hadoopPathToYt(f))(yt)
-    true
   }
 
   def listYtDirectory(f: Path, path: String, transaction: Option[String])
@@ -127,7 +147,7 @@ abstract class YtFileSystemBase extends FileSystem with LogLazy {
 
   override def close(): Unit = {
     log.info("Close YtFileSystem")
-    YtClientProvider.close(id)
+    YtClientProvider.closeByPrefix(idPrefix)
     super.close()
   }
 

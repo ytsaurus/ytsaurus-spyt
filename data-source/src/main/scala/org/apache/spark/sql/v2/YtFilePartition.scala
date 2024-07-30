@@ -11,7 +11,7 @@ import tech.ytsaurus.spyt.common.utils.TuplePoint
 import tech.ytsaurus.spyt.format.YtInputSplit
 import tech.ytsaurus.spyt.fs.YtClientConfigurationConverter.ytClientConfiguration
 import tech.ytsaurus.spyt.fs.conf.{SparkYtSparkSession, YT_MIN_PARTITION_BYTES}
-import tech.ytsaurus.spyt.fs.path.YPathEnriched.ypath
+import tech.ytsaurus.spyt.fs.path.YPathEnriched
 import tech.ytsaurus.spyt.serializers.{InternalRowDeserializer, PivotKeysConverter}
 import tech.ytsaurus.spyt.wrapper.YtWrapper
 import tech.ytsaurus.client.CompoundClient
@@ -25,7 +25,6 @@ import tech.ytsaurus.spyt.wrapper.client.YtClientProvider
 import tech.ytsaurus.spyt.wrapper.table.OptimizeMode
 import tech.ytsaurus.ysontree.YTreeNode
 
-import scala.collection.mutable.ArrayBuffer
 
 object YtFilePartition {
   @transient private val log = LoggerFactory.getLogger(getClass)
@@ -75,8 +74,7 @@ object YtFilePartition {
         val ranges = tableRange.getRanges.asScala
         ranges.map { range =>
           val ypathWithSingleRange = tableRange.ranges(range)
-          YtPartitionedFile(ypathWithSingleRange, maxSplitBytes,
-            path.meta.isDynamic, path.meta.modificationTime, partitionValues, path.ypath.transaction)
+          YtPartitionedFile(ypathWithSingleRange, maxSplitBytes, partitionValues, path)
         }
       }
     }
@@ -94,8 +92,7 @@ object YtFilePartition {
         require(partitionEnd > partitionStart)
         val approximatePartitionLength = (partitionEnd - partitionStart) * path.meta.approximateRowSize
         val yPath = path.toYPath.withRange(partitionStart, partitionEnd)
-        YtPartitionedFile(yPath, approximatePartitionLength, isDynamic = false,
-          path.meta.modificationTime, partitionValues, path.ypath.transaction)
+        YtPartitionedFile(yPath, approximatePartitionLength, partitionValues, path)
       }
     } else {
       Nil
@@ -117,8 +114,7 @@ object YtFilePartition {
     allLimits.sliding(2).map {
       case Seq(lowerLimit, upperLimit) =>
         val yPath = path.toYPath.withRange(lowerLimit, upperLimit)
-        YtPartitionedFile(yPath, approximatePartitionLength, isDynamic = true,
-          path.meta.modificationTime, partitionValues, path.ypath.transaction)
+        YtPartitionedFile(yPath, approximatePartitionLength, partitionValues, path)
     }.toSeq
   }
 
@@ -131,7 +127,8 @@ object YtFilePartition {
                  readDataSchema: Option[StructType] = None): Seq[PartitionedFile] = {
     YtHadoopPath.fromPath(file.getPath) match {
       case yp: YtHadoopPath =>
-        implicit val yt: CompoundClient = YtClientProvider.ytClient(ytClientConfiguration(sparkSession.sessionState.conf))
+        implicit val yt: CompoundClient = YtClientProvider.ytClientWithProxy(
+          ytClientConfiguration(sparkSession.sessionState.conf), yp.ypath.cluster)
         val keyColumns = YtWrapper.keyColumns(yp.toYPath, yp.ypath.transaction)
         // TODO(alex-shishkin): Ordered dynamic tables could not be partitioned by YT partitioning.
         if (sparkSession.ytConf(SparkYtConfiguration.Read.YtPartitioningEnabled) && !(yp.meta.isDynamic && keyColumns.isEmpty)) {
@@ -166,7 +163,6 @@ object YtFilePartition {
   def tryGetKeyPartitions(sparkSession: SparkSession, splitFiles: Seq[PartitionedFile], schema: StructType,
                           keyPartitioningConfig: KeyPartitioningConfig,
                           requiredKeysO: Option[Seq[String]] = None): Option[Seq[FilePartition]] = {
-    implicit val yt: CompoundClient = YtClientProvider.ytClient(ytClientConfiguration(sparkSession.sessionState.conf))
     val keys = SchemaConverter.prefixKeys(schema)
     log.info(s"Partitioned table has keys ${keys.toString()}. " +
       s"Required keys: ${requiredKeysO.map(_.mkString(",")).getOrElse("-")}")
@@ -182,7 +178,10 @@ object YtFilePartition {
           log.warn("Empty file list")
           Some(Seq.empty)
         } else {
-          if (ytSplitFiles.forall(ytSplitFiles.head.filePath == _.filePath)) {
+          val headFile = ytSplitFiles.head
+          if (ytSplitFiles.forall(headFile.filePath == _.filePath)) {
+            implicit val yt: CompoundClient = YtClientProvider.ytClientWithProxy(
+              ytClientConfiguration(sparkSession.sessionState.conf), headFile.cluster)
             val keyPartitioning = requiredKeysO match {
               case Some(requiredKeys) => getKeyPartitions(schema, requiredKeys, ytSplitFiles, keyPartitioningConfig)
               case None => collectFirstKeyPartitions(schema, keys, ytSplitFiles, keyPartitioningConfig)
@@ -293,7 +292,7 @@ object YtFilePartition {
   private[v2] def getPivotKeys(schema: StructType, keys: Seq[String], files: Seq[YtPartitionedFile])
                           (implicit yt: CompoundClient): Seq[TuplePoint] = {
     val filepath = files.head.filePath
-    val basePath = ypath(new Path(filepath)).toYPath.withColumns(keys: _*)
+    val basePath = YPathEnriched.fromPath(new Path(filepath)).toYPath.withColumns(keys: _*)
     val pathWithRanges = files.tail.map(_.beginRow)
       .foldLeft(basePath) { case (path, br) => path.withRange(br, br + 1) }
     val tableIterator = YtWrapper.readTable(

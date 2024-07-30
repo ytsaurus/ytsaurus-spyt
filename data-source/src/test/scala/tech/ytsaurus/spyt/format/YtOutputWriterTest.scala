@@ -16,6 +16,7 @@ import tech.ytsaurus.client.{ApiServiceTransaction, CompoundClient, TableWriter}
 import tech.ytsaurus.core.cypress.YPath
 import tech.ytsaurus.core.tables.{ColumnValueType, TableSchema}
 import tech.ytsaurus.spyt.format.conf.SparkYtWriteConfiguration
+import tech.ytsaurus.spyt.fs.path.YPathEnriched
 
 import java.util
 import java.util.concurrent.CompletableFuture
@@ -42,7 +43,8 @@ class YtOutputWriterTest extends FlatSpec with TmpDir with LocalSpark with Match
 
   it should "not write several batches if table is sorted" in {
     prepareWrite(tmpPath, Sorted(Seq("a"), uniqueKeys = false)) { transaction =>
-      val writer = new MockYtOutputWriter(tmpPath.drop(1), transaction, 2, Sorted(Seq("a"), uniqueKeys = false))
+      val p = YPathEnriched.fromString(tmpPath).withTransaction(transaction.getId.toString)
+      val writer = new MockYtOutputWriter(p, 2, Sorted(Seq("a"), uniqueKeys = false))
       val rows = Seq(Row(1), Row(2), Row(3), Row(4))
 
       writeRows(rows, writer, transaction)
@@ -69,7 +71,8 @@ class YtOutputWriterTest extends FlatSpec with TmpDir with LocalSpark with Match
 
   def runTestWithSpecificPath(path: String): Unit = {
     prepareWrite(path, Unordered) { transaction =>
-      val writer = new MockYtOutputWriter(path.drop(1), transaction, 2, Unordered)
+      val p = YPathEnriched.fromString(path).withTransaction(transaction.getId.toString)
+      val writer = new MockYtOutputWriter(p, 2, Unordered)
       val rows = Seq(Row(1), Row(2), Row(3), Row(4))
 
       writeRows(rows, writer, transaction)
@@ -113,13 +116,11 @@ class YtOutputWriterTest extends FlatSpec with TmpDir with LocalSpark with Match
     }
   }
 
-  class MockYtOutputWriter(path: String, transaction: ApiServiceTransaction, batchSize: Int,
-                           sortOption: SortOption)
+  class MockYtOutputWriter(path: YPathEnriched, batchSize: Int, sortOption: SortOption)
     extends YtOutputWriter(
       path,
       schema,
       SparkYtWriteConfiguration(1, batchSize, batchSize, 5 minutes, typeV3Format = false),
-      transaction.getId.toString,
       Map("sort_columns" -> SortColumns.set(sortOption.keys), "unique_keys" -> UniqueKeys.set(sortOption.uniqueKeys))
     ) {
     override protected def initializeWriter(): TableWriter[InternalRow] = {

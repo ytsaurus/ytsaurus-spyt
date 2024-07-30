@@ -1,12 +1,14 @@
 package tech.ytsaurus.spyt.format
 
 import org.apache.hadoop.conf.Configuration
+import org.apache.hadoop.fs.Path
 import org.apache.hadoop.mapreduce.TaskAttemptContext
 import org.apache.spark.sql.execution.datasources.{OutputWriter, OutputWriterFactory}
 import org.apache.spark.sql.types.StructType
 import org.slf4j.LoggerFactory
 import tech.ytsaurus.client.CompoundClient
 import tech.ytsaurus.spyt.format.conf.{SparkYtWriteConfiguration, YtTableSparkSettings}
+import tech.ytsaurus.spyt.fs.path.YPathEnriched
 import tech.ytsaurus.spyt.serializers.SchemaConverter
 import tech.ytsaurus.spyt.wrapper.YtWrapper
 import tech.ytsaurus.spyt.wrapper.client.{YtClientConfiguration, YtClientProvider}
@@ -18,16 +20,19 @@ class YtOutputWriterFactory(ytClientConf: YtClientConfiguration,
 
   override def getFileExtension(context: TaskAttemptContext): String = ""
 
-  override def newInstance(path: String, dataSchema: StructType, context: TaskAttemptContext): OutputWriter = {
-    log.debug(s"[${Thread.currentThread().getName}] Creating new output writer for ${context.getTaskAttemptID.getTaskID} at path $path")
+  override def newInstance(f: String, dataSchema: StructType, context: TaskAttemptContext): OutputWriter = {
+    log.debug(s"[${Thread.currentThread().getName}] Creating new output writer for ${context.getTaskAttemptID.getTaskID} at path $f")
 
     implicit val ytClient: CompoundClient = YtClientProvider.ytClient(ytClientConf)
+    val path = YPathEnriched.fromPath(new Path(f))
+    val normalizedPath = path.toStringPath
 
-    if (YtWrapper.isDynamicTable(path)) {
-      new YtDynamicTableWriter(path, dataSchema, writeConfiguration, options)
+    if (YtWrapper.isDynamicTable(normalizedPath)) {
+      new YtDynamicTableWriter(normalizedPath, dataSchema, writeConfiguration, options)
     } else {
       val transaction = YtOutputCommitter.getWriteTransaction(context.getConfiguration)
-      new YtOutputWriter(path, dataSchema, writeConfiguration, transaction, options)
+      val richPath = path.withTransaction(transaction)
+      new YtOutputWriter(richPath, dataSchema, writeConfiguration, options)
     }
   }
 }

@@ -275,10 +275,10 @@ class SortedTablesKeyPartitioningTest extends FlatSpec with Matchers with LocalS
       TuplePoint(Seq(PInfinity()))
     )
     val files = Seq(
-      YtPartitionedFile.static(tmpPath, 0, 1, 0, 0, null),
-      YtPartitionedFile.static(tmpPath, 2, 3, 0, 0, null),
-      YtPartitionedFile.static(tmpPath, 3, 4, 0, 0, null),
-      YtPartitionedFile.static(tmpPath, 5, 6, 0, 0, null)
+      YtPartitionedFile.static(tmpPath, 0, 1, 0, null),
+      YtPartitionedFile.static(tmpPath, 2, 3, 0, null),
+      YtPartitionedFile.static(tmpPath, 3, 4, 0, null),
+      YtPartitionedFile.static(tmpPath, 5, 6, 0, null)
     )
     val filesGroupedByPoint = Seq(
       (pivotKeys(0), Seq(files(0))),

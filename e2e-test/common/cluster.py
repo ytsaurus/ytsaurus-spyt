@@ -1,10 +1,12 @@
-from spyt.client import spark_session
+from pyspark.conf import SparkConf
+
+from spyt.client import direct_spark_session, spark_session
 from spyt.enabler import SpytEnablers
 from spyt.standalone import start_spark_cluster, SparkDefaultArguments, \
     find_spark_cluster, start_livy_server, start_history_server
 from spyt.submit import java_gateway, SparkSubmissionClient
 
-from .cluster_utils import dump_debug_data, is_accessible
+from .cluster_utils import apply_default_conf, dump_debug_data, is_accessible
 from .version import VERSION
 
 from yt.common import YtError
@@ -139,6 +141,14 @@ class LivyServer(ClusterBase):
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.finish(exc_type, exc_val)
+
+
+@contextmanager
+def direct_session(proxy, extra_conf=None):
+    extra_conf = extra_conf or {}
+    conf = apply_default_conf(SparkConf()).set("spark.hadoop.yt.proxy", proxy).setAll(extra_conf.items())
+    with direct_spark_session(proxy, conf) as session:
+        yield session
 
 
 class HistoryServer(ClusterBase):

@@ -6,10 +6,10 @@ import org.apache.spark.sql.types._
 import org.apache.spark.sql.v2.YtUtils.{FileWithSchema, _}
 import org.scalatest.prop.TableDrivenPropertyChecks
 import org.scalatest.{FlatSpec, Matchers}
-import tech.ytsaurus.spyt.fs.path.YPathEnriched.YtRootPath
 import tech.ytsaurus.spyt.fs.{YtFileStatus, YtHadoopPath, YtTableMeta}
 import tech.ytsaurus.spyt.wrapper.table.OptimizeMode
 import tech.ytsaurus.spyt.SchemaTestUtils
+import tech.ytsaurus.spyt.fs.path.YPathEnriched
 
 import scala.util.Try
 
@@ -141,7 +141,7 @@ class YtUtilsTest extends FlatSpec with Matchers with SchemaTestUtils with Table
   }
 
   private def fileStatus(path: String): FileStatus = {
-    val ytPath = YtRootPath(new Path(path))
+    val ytPath = YPathEnriched.fromPath(new Path(path))
     val chunkPath = YtHadoopPath(ytPath, YtTableMeta(1, 1, 0, OptimizeMode.Scan, isDynamic = false))
     YtFileStatus.toFileStatus(chunkPath)
   }

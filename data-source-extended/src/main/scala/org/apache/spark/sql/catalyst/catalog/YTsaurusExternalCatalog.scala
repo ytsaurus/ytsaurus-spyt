@@ -7,6 +7,7 @@ import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.analysis.NoSuchTableException
 import org.apache.spark.sql.types.StructType
 import tech.ytsaurus.spyt.fs.YtClientConfigurationConverter.ytClientConfiguration
+import tech.ytsaurus.spyt.fs.path.YPathEnriched
 import tech.ytsaurus.spyt.serializers.{SchemaConverter, SchemaConverterConfig}
 import tech.ytsaurus.spyt.wrapper.YtWrapper
 import tech.ytsaurus.spyt.wrapper.client.YtClientProvider
@@ -18,8 +19,8 @@ import java.util.UUID
 class YTsaurusExternalCatalog(conf: SparkConf, hadoopConf: Configuration)
   extends InMemoryCatalog(conf, hadoopConf) with Logging {
 
-  private val id: String = s"YTsaurusExternalCatalog-${UUID.randomUUID()}"
-  private val yt = YtClientProvider.ytClient(ytClientConfiguration(hadoopConf), id)
+  private val idPrefix: String = s"YTsaurusExternalCatalog-${UUID.randomUUID()}"
+  private val ytConf = ytClientConfiguration(hadoopConf)
 
   private val YTSAURUS_DB = "yt"
 
@@ -48,11 +49,12 @@ class YTsaurusExternalCatalog(conf: SparkConf, hadoopConf: Configuration)
 
   override def createTable(tableDefinition: CatalogTable, ignoreIfExists: Boolean): Unit = synchronized {
     if (isYtDatabase(tableDefinition.identifier.database)) {
-      val path = YtWrapper.formatPath(tableDefinition.identifier.table)
-      if (!YtWrapper.exists(path)(yt)) {
+      val path = YPathEnriched.fromString(tableDefinition.identifier.table)
+      val yt = YtClientProvider.ytClientWithProxy(ytConf, path.cluster, idPrefix)
+      if (!YtWrapper.exists(path.toStringYPath)(yt)) {
         val tableSchema = SchemaConverter.tableSchema(tableDefinition.schema)
         val settings = new BaseYtTableSettings(tableSchema)
-        YtWrapper.createTable(path, settings)(yt)
+        YtWrapper.createTable(path.toStringYPath, settings)(yt)
       } else {
         logWarning("Table is created twice. Ignoring new query")
       }
@@ -63,11 +65,12 @@ class YTsaurusExternalCatalog(conf: SparkConf, hadoopConf: Configuration)
 
   override def dropTable(db: String, table: String, ignoreIfNotExists: Boolean, purge: Boolean): Unit = synchronized {
     if (isYtDatabase(db)) {
-      val path = YtWrapper.formatPath(table)
+      val path = YPathEnriched.fromString(table)
+      val yt = YtClientProvider.ytClientWithProxy(ytConf, path.cluster, idPrefix)
       if (ignoreIfNotExists) {
-        YtWrapper.removeIfExists(path)(yt)
+        YtWrapper.removeIfExists(path.toStringYPath)(yt)
       } else {
-        YtWrapper.remove(path)(yt)
+        YtWrapper.remove(path.toStringYPath)(yt)
       }
     } else {
       super.dropTable(db, table, ignoreIfNotExists, purge)
@@ -95,14 +98,15 @@ class YTsaurusExternalCatalog(conf: SparkConf, hadoopConf: Configuration)
   }
 
   private def getYtTableOptional(table: String): Option[CatalogTable] = {
-    val path = YtWrapper.formatPath(table)
-    if (YtWrapper.exists(path)(yt)) {
+    val path = YPathEnriched.fromString(table)
+    val yt = YtClientProvider.ytClientWithProxy(ytConf, path.cluster, idPrefix)
+    if (YtWrapper.exists(path.toStringYPath)(yt)) {
       val ident = TableIdentifier(table, Some(YTSAURUS_DB))
       val config = SchemaConverterConfig(conf)
-      val schemaTree = YtWrapper.attribute(path, "schema")(yt)
+      val schemaTree = YtWrapper.attribute(path.toStringYPath, "schema")(yt)
       val schema = SchemaConverter.sparkSchema(schemaTree, parsingTypeV3 = config.parsingTypeV3)
       val storage = CatalogStorageFormat(
-        locationUri = Some(new URI("ytTable:/" + path)),
+        locationUri = Some(path.toPath.toUri),
         inputFormat = None, outputFormat = None, serde = None, compressed = false, properties = Map.empty
       )
       Some(CatalogTable(ident, CatalogTableType.MANAGED, storage, schema, provider = Some("yt")))
@@ -131,8 +135,9 @@ class YTsaurusExternalCatalog(conf: SparkConf, hadoopConf: Configuration)
 
   override def tableExists(db: String, table: String): Boolean = {
     if (isYtDatabase(db)) {
-      val path = YtWrapper.formatPath(table)
-      YtWrapper.exists(path)(yt)
+      val path = YPathEnriched.fromString(table)
+      val yt = YtClientProvider.ytClientWithProxy(ytConf, path.cluster, idPrefix)
+      YtWrapper.exists(path.toYPath, None)(yt)
     } else {
       super.tableExists(db, table)
     }

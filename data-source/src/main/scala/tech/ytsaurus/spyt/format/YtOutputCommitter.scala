@@ -9,8 +9,7 @@ import tech.ytsaurus.spyt.format.conf.YtTableSparkSettings._
 import tech.ytsaurus.spyt.format.conf.{SparkYtConfiguration, YtTableSparkSettings}
 import tech.ytsaurus.spyt.fs.YtClientConfigurationConverter.ytClientConfiguration
 import tech.ytsaurus.spyt.fs.conf._
-import tech.ytsaurus.spyt.fs.path.GlobalTableSettings
-import tech.ytsaurus.spyt.fs.path.YPathEnriched.YtRootPath
+import tech.ytsaurus.spyt.fs.path.YPathEnriched
 import tech.ytsaurus.spyt.wrapper.YtWrapper
 import tech.ytsaurus.client.{ApiServiceTransaction, CompoundClient}
 import tech.ytsaurus.spyt.exceptions._
@@ -21,8 +20,8 @@ import tech.ytsaurus.spyt.wrapper.client.YtClientProvider
 class YtOutputCommitter(jobId: String,
                         outputPath: String,
                         dynamicPartitionOverwrite: Boolean) extends FileCommitProtocol with Serializable {
-  private val path = new Path(outputPath).toUri.getPath
-  private val tmpPath = s"${path}_tmp"
+  private val richPath = YPathEnriched.fromPath(new Path(outputPath))
+  private val tmpRichPath = richPath.parent.child(richPath.path.getName + "_tmp")
 
   @transient private val deletedDirectories = ThreadLocal.withInitial[Seq[Path]](() => Nil)
 
@@ -34,60 +33,44 @@ class YtOutputCommitter(jobId: String,
     implicit val ytClient: CompoundClient = yt(conf)
     val externalTransaction = jobContext.getConfiguration.getYtConf(WriteTransaction)
 
-    log.debug(s"Setting up job for path $path")
+    log.debug(s"Setting up job for path $richPath")
 
     if (isDynamicTable(conf)) {
-      setupDynamicTable(path, conf)
+      setupDynamicTable(richPath, conf)
     } else {
-      withTransaction(createTransaction(conf, GlobalTransaction, externalTransaction))({ transaction =>
-        GlobalTableSettings.setTransaction(path, transaction)
-        deletedDirectories.get().foreach(p => YtWrapper.remove(p.toUri.getPath, Some(transaction)))
+      withTransaction(createTransaction(conf, GlobalTransaction, externalTransaction)) { transaction =>
+        deletedDirectories.get().foreach(p => YtWrapper.remove(YPathEnriched.fromPath(p).toStringYPath, Some(transaction)))
         deletedDirectories.set(Nil)
         if (isTableSorted(conf)) {
           setupSortedTmpTables(transaction)
         }
         if (isTable(conf)) {
-          setupTable(path, conf, transaction)
+          setupTable(richPath, conf, transaction)
         } else {
           setupFiles(transaction)
         }
-      }, removeGlobalTransactions())
+      }
     }
   }
 
   private def setupSortedTmpTables(transaction: String)(implicit yt: CompoundClient): Unit = {
-    YtWrapper.createDir(tmpPath, Some(transaction))
+    YtWrapper.createDir(tmpRichPath.toYPath, Some(transaction), ignoreExisting = false)
   }
 
   private def setupFiles(transaction: String)(implicit yt: CompoundClient): Unit = {
-    YtWrapper.createDir(path, Some(transaction))
+    YtWrapper.createDir(richPath.toYPath, Some(transaction), ignoreExisting = false)
   }
 
-  /**
-   * @deprecated Do not use before YT 21.1 release
-   */
-  @Deprecated
-  private def setupSortedTable(transaction: String, conf: Configuration)
-                              (implicit yt: CompoundClient): Unit = {
-    GlobalTableSettings.setTransaction(tmpPath, transaction)
-    setupUnsortedTable(tmpPath, conf, transaction)
-  }
-
-  private def removeGlobalTransactions(): Unit = {
-    GlobalTableSettings.removeTransaction(path)
-    GlobalTableSettings.removeTransaction(tmpPath)
-  }
-
-  private def setupTable(path: String, conf: Configuration, transaction: String)
+  private def setupTable(path: YPathEnriched, conf: Configuration, transaction: String)
                         (implicit yt: CompoundClient): Unit = {
-    if (!YtWrapper.exists(path, Some(transaction))) {
+    if (!YtWrapper.exists(path.toStringYPath, Some(transaction))) {
       val options = YtTableSparkSettings.deserialize(conf)
-      YtWrapper.createTable(path, options, Some(transaction))
+      YtWrapper.createTable(path.toStringYPath, options, Some(transaction))
     }
   }
 
-  private def setupDynamicTable(path: String, conf: Configuration)(implicit yt: CompoundClient): Unit = {
-    if (!YtWrapper.isMounted(path)) {
+  private def setupDynamicTable(path: YPathEnriched, conf: Configuration)(implicit yt: CompoundClient): Unit = {
+    if (!YtWrapper.isMounted(path.toStringYPath)) {
       throw TableNotMountedException("Dynamic table should be mounted before writing to it")
     }
 
@@ -103,14 +86,6 @@ class YtOutputCommitter(jobId: String,
     if (dynBatchSize > maxDynBatchSize) {
       throw TooLargeBatchException(s"spark.yt.write.batchSize must be set to no more than $maxDynBatchSize for dynamic tables")
     }
-  }
-
-  private def setupUnsortedTable(path: String, conf: Configuration, transaction: String)
-                                (implicit yt: CompoundClient): Unit = {
-    import tech.ytsaurus.spyt.fs.conf._
-    val newConf = new Configuration(conf)
-    newConf.setYtConf(SortColumns, Seq.empty)
-    setupTable(path, newConf, transaction)
   }
 
   private def setupTmpTable(taskContext: TaskAttemptContext, transaction: String): Unit = {
@@ -134,7 +109,6 @@ class YtOutputCommitter(jobId: String,
     val conf = jobContext.getConfiguration
     implicit val ytClient: CompoundClient = yt(conf)
     if (!isDynamicTable(conf)) {
-      removeGlobalTransactions()
       abortTransaction(conf, GlobalTransaction)
     }
   }
@@ -149,15 +123,18 @@ class YtOutputCommitter(jobId: String,
 
   private def concatenateSortedTables(conf: Configuration, transaction: String): Unit = {
     implicit val yt: CompoundClient = YtClientProvider.ytClient(ytClientConfiguration(conf))
-    val tmpTables = YtWrapper.listDir(tmpPath, Some(transaction)).map(name => s"$tmpPath/$name")
+    val sRichPath = richPath.toStringYPath
+    val sTmpRichPath = tmpRichPath.toStringYPath
+    val tmpTables = YtWrapper.listDir(sTmpRichPath, Some(transaction)).map(tmpRichPath.child).map(_.toStringYPath)
     try {
-      YtWrapper.concatenate(path +: tmpTables, path, Some(transaction))
+      YtWrapper.concatenate(sRichPath +: tmpTables, sRichPath, Some(transaction))
     } catch {
       case e: RuntimeException =>
         logWarning("Concatenate operation failed. Fallback to merge", e)
-        YtWrapper.mergeTables(tmpPath, path, sorted = true, Some(transaction), conf.getYtSpecConf("merge"))
+        YtWrapper.mergeTables(sTmpRichPath, sRichPath, sorted = true,
+          Some(transaction), conf.getYtSpecConf("merge"))
     }
-    YtWrapper.remove(tmpPath, Some(transaction))
+    YtWrapper.remove(sTmpRichPath, Some(transaction))
   }
 
   override def commitJob(jobContext: JobContext, taskCommits: Seq[FileCommitProtocol.TaskCommitMessage]): Unit = {
@@ -168,7 +145,6 @@ class YtOutputCommitter(jobId: String,
         if (isTableSorted(conf)) {
           concatenateSortedTables(conf, transaction)
         }
-        removeGlobalTransactions()
         commitTransaction(conf, GlobalTransaction)
       }
     }
@@ -190,8 +166,8 @@ class YtOutputCommitter(jobId: String,
     true
   }
 
-  private def tmpTablePath(taskContext: TaskAttemptContext): String = {
-    s"$tmpPath/part-${taskContext.getTaskAttemptID.getTaskID.getId}"
+  private def tmpTablePath(taskContext: TaskAttemptContext): YPathEnriched = {
+    tmpRichPath.child(s"part-${taskContext.getTaskAttemptID.getTaskID.getId}")
   }
 
   private def partFilename(taskContext: TaskAttemptContext, ext: String): String = {
@@ -202,18 +178,19 @@ class YtOutputCommitter(jobId: String,
   override def newTaskTempFile(taskContext: TaskAttemptContext, dir: Option[String], ext: String): String = {
     val conf = taskContext.getConfiguration
     implicit val ytClient: CompoundClient = yt(conf)
-    if (isTableSorted(conf) && !isDynamicTable(conf)) {
+    val path = if (isTableSorted(conf) && !isDynamicTable(conf)) {
       tmpTablePath(taskContext)
     } else if (isTable(conf)) {
-      path
+      richPath
     } else {
-      YtRootPath(new Path(s"$path/${partFilename(taskContext, ext)}"))
-        .withTransaction(conf.ytConf(Transaction))
-        .toStringPath
+      richPath.child(partFilename(taskContext, ext)).withTransaction(conf.ytConf(Transaction))
     }
+    path.toStringPath
   }
 
-  override def newTaskTempFileAbsPath(taskContext: TaskAttemptContext, absoluteDir: String, ext: String): String = path
+  override def newTaskTempFileAbsPath(taskContext: TaskAttemptContext, absoluteDir: String, ext: String): String = {
+    richPath.toStringPath
+  }
 
   override def onTaskCommit(taskCommit: FileCommitProtocol.TaskCommitMessage): Unit = {
     if (taskCommit == FileCommitProtocol.EmptyTaskCommitMessage) {
@@ -238,14 +215,13 @@ object YtOutputCommitter {
 
   private def yt(conf: Configuration): CompoundClient = YtClientProvider.ytClient(ytClientConfiguration(conf), "committer")
 
-  def withTransaction(transaction: String)(f: String => Unit, abort: => Unit = () => ()): Unit = {
+  def withTransaction(transaction: String)(f: String => Unit): Unit = {
     try {
       f(transaction)
     } catch {
       case e: Throwable =>
         try {
           abortTransaction(transaction)
-          abort
         } catch {
           case inner: Throwable =>
             e.addSuppressed(inner)

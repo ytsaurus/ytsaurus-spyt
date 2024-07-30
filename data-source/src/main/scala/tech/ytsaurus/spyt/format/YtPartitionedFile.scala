@@ -8,6 +8,7 @@ import YtPartitionedFile._
 import tech.ytsaurus.spyt.serializers.PivotKeysConverter
 import tech.ytsaurus.spyt.wrapper.YtWrapper
 import tech.ytsaurus.core.cypress.{Range, RangeCriteria, RangeLimit, YPath}
+import tech.ytsaurus.spyt.fs.YtHadoopPath
 import tech.ytsaurus.ysontree.{YTreeBinarySerializer, YTreeNode}
 
 import java.io.ByteArrayInputStream
@@ -15,10 +16,8 @@ import java.io.ByteArrayInputStream
 // At most one range supported inside ypath.
 class YtPartitionedFile(val serializedYPath: Array[Byte],
                         val byteLength: Long,
-                        val isDynamic: Boolean,
-                        val modificationTs: Long,
                         override val partitionValues: InternalRow,
-                        val transaction: Option[String] = None)
+                        val hadoopPath: YtHadoopPath)
   extends PartitionedFile(
     partitionValues = partitionValues,
     filePath = getPath(serializedYPath),
@@ -26,6 +25,10 @@ class YtPartitionedFile(val serializedYPath: Array[Byte],
     length = byteLength
   ) {
   def path: String = filePath
+
+  def isDynamic: Boolean = hadoopPath.meta.isDynamic
+
+  def cluster: Option[String] = hadoopPath.ypath.cluster
 
   def copy(newEndRow: Long): YtPartitionedFile = {
     withNewRangeCriteria(
@@ -88,10 +91,8 @@ class YtPartitionedFile(val serializedYPath: Array[Byte],
     new YtPartitionedFile(
       serializedYPath = serializeYPath(ypath.ranges(rangeCriteria)),
       byteLength = byteLength,
-      isDynamic = isDynamic,
-      modificationTs = modificationTs,
       partitionValues = partitionValues,
-      transaction = transaction,
+      hadoopPath = hadoopPath,
     )
   }
 }
@@ -105,33 +106,32 @@ object YtPartitionedFile {
     YPath.simple(YtWrapper.formatPath(path))
   }
 
-  def static(path: String, beginRow: Long, endRow: Long, byteLength: Long, modificationTs: Long = 0L,
-             emptyInternalRow: InternalRow = YtPartitionedFile.emptyInternalRow,
-             transaction: Option[String] = None): YtPartitionedFile = {
-    static(toSimpleYPath(path), beginRow, endRow, byteLength, modificationTs, emptyInternalRow, transaction)
+  def static(path: String, beginRow: Long, endRow: Long, byteLength: Long,
+             partitionValues: InternalRow = YtPartitionedFile.emptyInternalRow,
+             hadoopPath: YtHadoopPath = null): YtPartitionedFile = {
+    static(toSimpleYPath(path), beginRow, endRow, byteLength, partitionValues, hadoopPath)
   }
 
-  def static(path: YPath, beginRow: Long, endRow: Long, byteLength: Long, modificationTs: Long,
-             emptyInternalRow: InternalRow, transaction: Option[String]): YtPartitionedFile = {
+  def static(path: YPath, beginRow: Long, endRow: Long, byteLength: Long,
+             partitionValues: InternalRow, hadoopPath: YtHadoopPath): YtPartitionedFile = {
     val ypath = path.ranges(new Range(RangeLimit.row(beginRow), RangeLimit.row(endRow)))
-    YtPartitionedFile(ypath, byteLength, isDynamic = false, modificationTs, emptyInternalRow, transaction)
+    YtPartitionedFile(ypath, byteLength, partitionValues, hadoopPath)
   }
 
-  def dynamic(path: String, range: RangeCriteria, byteLength: Long, modificationTs: Long = 0L,
-              emptyInternalRow: InternalRow = YtPartitionedFile.emptyInternalRow,
-              transaction: Option[String] = None): YtPartitionedFile = {
-    dynamic(toSimpleYPath(path), range, byteLength, modificationTs, emptyInternalRow, transaction)
+  def dynamic(path: String, range: RangeCriteria, byteLength: Long,
+              partitionValues: InternalRow, hadoopPath: YtHadoopPath = null): YtPartitionedFile = {
+    dynamic(toSimpleYPath(path), range, byteLength, partitionValues, hadoopPath)
   }
 
-  def dynamic(path: YPath, range: RangeCriteria, byteLength: Long, modificationTs: Long,
-              emptyInternalRow: InternalRow, transaction: Option[String]): YtPartitionedFile = {
+  def dynamic(path: YPath, range: RangeCriteria, byteLength: Long, partitionValues: InternalRow,
+              hadoopPath: YtHadoopPath): YtPartitionedFile = {
     val ypath = path.ranges(range)
-    YtPartitionedFile(ypath, byteLength, isDynamic = true, modificationTs, emptyInternalRow, transaction)
+    YtPartitionedFile(ypath, byteLength, partitionValues, hadoopPath)
   }
 
-  def apply(yPath: YPath, byteLength: Long, isDynamic: Boolean, modificationTs: Long,
-            partitionValues: InternalRow, transaction: Option[String]): YtPartitionedFile = {
-    new YtPartitionedFile(serializeYPath(yPath), byteLength, isDynamic, modificationTs, partitionValues, transaction)
+  def apply(yPath: YPath, byteLength: Long, partitionValues: InternalRow,
+            hadoopPath: YtHadoopPath): YtPartitionedFile = {
+    new YtPartitionedFile(serializeYPath(yPath), byteLength, partitionValues, hadoopPath)
   }
 
   private def getAttributeFromYPath[T](attributeGetter: YPath => T)(serializedPath: Array[Byte]): T = {

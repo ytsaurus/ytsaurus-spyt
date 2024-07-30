@@ -9,6 +9,7 @@ import tech.ytsaurus.spyt.serializers.ArrayAnyDeserializer
 import tech.ytsaurus.spyt.wrapper.YtWrapper
 import tech.ytsaurus.client.CompoundClient
 import tech.ytsaurus.spyt.format.conf.SparkYtConfiguration
+import tech.ytsaurus.spyt.fs.YtHadoopPath
 
 import scala.concurrent.duration.Duration
 
@@ -20,7 +21,7 @@ class YtVectorizedReader(split: YtInputSplit,
                          timeout: Duration,
                          reportBytesRead: Long => Unit,
                          countOptimizationEnabled: Boolean,
-                         transaction: Option[String] = None)
+                         hadoopPath: YtHadoopPath)
                         (implicit yt: CompoundClient) extends RecordReader[Void, Object] {
   private val log = LoggerFactory.getLogger(getClass)
   private var _batchIdx = 0
@@ -34,11 +35,11 @@ class YtVectorizedReader(split: YtInputSplit,
       // Empty schemas always batch readable
       new EmptyColumnsBatchReader(totalRowCount.get)
     } else if (arrowEnabled && optimizedForScan) {
-      val stream = YtWrapper.readTableArrowStream(path, timeout, transaction, reportBytesRead)
+      val stream = YtWrapper.readTableArrowStream(path, timeout, hadoopPath.ypath.transaction, reportBytesRead)
       new ArrowBatchReader(stream, schema)
     } else {
-      val rowIterator = YtWrapper.readTable(path, ArrayAnyDeserializer.getOrCreate(schema), timeout, transaction,
-        reportBytesRead)
+      val rowIterator = YtWrapper.readTable(path, ArrayAnyDeserializer.getOrCreate(schema), timeout,
+        hadoopPath.ypath.transaction, reportBytesRead)
       new WireRowBatchReader(rowIterator, batchMaxSize, schema)
     }
   }

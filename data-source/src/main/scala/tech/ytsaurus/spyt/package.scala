@@ -20,7 +20,7 @@ package object spyt {
   }
 
   implicit class YtReader(reader: DataFrameReader) {
-    def yt(paths: String*): DataFrame = reader.format("yt").load(paths.map(normalizePath): _*)
+    def yt(paths: String*): DataFrame = reader.format("yt").load(paths: _*)
 
     def schemaHint(schemaHint: StructType): DataFrameReader = {
       reader.options(SchemaConverter.serializeSchemaHint(schemaHint))

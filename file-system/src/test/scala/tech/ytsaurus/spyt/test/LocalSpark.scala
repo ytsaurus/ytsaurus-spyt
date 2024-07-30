@@ -141,19 +141,19 @@ object LocalSpark {
     val loader = getClass.getClassLoader
     try {
       loader.loadClass(extensionsClass)
-      sparkConf.set("spark.sql.extensions", "tech.ytsaurus.spyt.format.YtSparkExtensions")
+      sparkConf.set("spark.sql.extensions", extensionsClass)
     } catch {
       case _: ClassNotFoundException => sparkConf
     }
   }
 
-  val defaultSparkConf: SparkConf = maybeSetExtensions(new SparkConf()
+  val defaultSparkConf: SparkConf = maybeSetExtensions(new SparkConf())
     .set("fs.ytTable.impl", "tech.ytsaurus.spyt.fs.YtTableFileSystem")
     .set("fs.yt.impl", "tech.ytsaurus.spyt.fs.YtFileSystem")
     .set("spark.hadoop.fs.AbstractFileSystem.yt.impl", "tech.ytsaurus.spyt.fs.YtFs")
     .set("spark.hadoop.fs.yt.impl", "tech.ytsaurus.spyt.fs.YtFileSystem")
     .set("fs.defaultFS", "ytTable:///")
-    .set("spark.hadoop.yt.proxy", s"${LocalYt.host}:${LocalYt.proxyPort}")
+    .set("spark.hadoop.yt.proxy", LocalYt.proxy)
     .set("spark.hadoop.yt.user", "root")
     .set("spark.hadoop.yt.token", "")
     .set("spark.hadoop.yt.timeout", "300")
@@ -162,7 +162,7 @@ object LocalSpark {
     .set("spark.ui.enabled", "false")
     .set("spark.hadoop.yt.read.arrow.enabled", "true")
     .set("spark.sql.adaptive.enabled", "true")
-    .set("spark.yt.log.enabled", "false"))
+    .set("spark.yt.log.enabled", "false")
     .set("spark.datasource.yt.recursiveFileLookup", "true")
     .set("spark.hadoop.fs.null.impl", "tech.ytsaurus.spyt.fs.YtTableFileSystem")
     .set("spark.sql.caseSensitive", "true")

@@ -108,3 +108,13 @@ def is_accessible(url):
     except Exception as e:
         logger.debug(f"Failed accessible query: {e}")
         return False
+
+
+def apply_default_conf(spark_conf):
+    return spark_conf \
+        .set("spark.hadoop.yt.user", "root") \
+        .set("spark.hadoop.yt.token", "") \
+        .set("spark.yt.log.enabled", "false") \
+        .set("spark.executor.instances", "1") \
+        .set("spark.executor.cores", "1") \
+        .set("spark.executor.memory", "768M")

@@ -10,7 +10,7 @@ import org.scalatest.{FlatSpec, Matchers}
 import tech.ytsaurus.core.tables.{ColumnValueType, TableSchema}
 import tech.ytsaurus.spyt._
 import tech.ytsaurus.spyt.serialization.YsonEncoder
-import tech.ytsaurus.spyt.test.{DynTableTestUtils, LocalSpark, TestRow, TestUtils, TmpDir}
+import tech.ytsaurus.spyt.test.{DynTableTestUtils, LocalSpark, LocalYt, TestRow, TestUtils, TmpDir}
 import tech.ytsaurus.spyt.wrapper.YtWrapper
 import tech.ytsaurus.spyt.wrapper.table.OptimizeMode
 
@@ -207,7 +207,7 @@ class YtSparkSQLTest extends FlatSpec with Matchers with LocalSpark with TmpDir
     prepareTestTable(tmpPath, testData, Seq(Seq(), Seq(3), Seq(6, 12)))
     // @latest_version is required
     // otherwise it will be appended to path in runtime and fail because of nested "directory" reading
-    val res = spark.sql(s"SELECT * FROM yt.`ytTable:/$tmpPath/@latest_version`")
+    val res = spark.sql(s"SELECT * FROM yt.`ytTable:/$tmpPath/@timestamp_-1`")
     res.columns should contain theSameElementsAs Seq("a", "b", "c")
     res.select("a", "b", "c").selectAs[TestRow].collect() should contain theSameElementsAs testData
   }
@@ -226,7 +226,7 @@ class YtSparkSQLTest extends FlatSpec with Matchers with LocalSpark with TmpDir
     val res = spark.sql(
       s"""
          |SELECT t1.a, t2.b
-         |FROM yt.`ytTable:/$path1/@latest_version` t1
+         |FROM yt.`ytTable:/$path1/@timestamp_-1` t1
          |INNER JOIN yt.`ytTable:/$path2` t2
          |ON t1.a == t2.a AND t1.b != CAST(t2.b AS INT)""".stripMargin
     )
@@ -333,7 +333,7 @@ class YtSparkSQLTest extends FlatSpec with Matchers with LocalSpark with TmpDir
     val totalOutputBefore = stagesBefore.map(_.outputBytes).sum
 
     data.toDF().coalesce(1).write.yt(customPath)
-    val allRows = spark.sql(s"SELECT * FROM yt.`ytTable:/${tmpPath}`").collect()
+    val allRows = spark.sql(s"SELECT * FROM yt.`ytTable:/$tmpPath`").collect()
     allRows should have size data.length
 
     val stages = store.stageList(null)
@@ -343,5 +343,16 @@ class YtSparkSQLTest extends FlatSpec with Matchers with LocalSpark with TmpDir
     totalInput should be > totalInputBefore
     totalOutput should be > totalOutputBefore
 
+  }
+
+  it should "work with cluster specification" in {
+    val df1 = Seq((1, "q"), (3, "c")).toDF("num", "name")
+    df1.write.yt(tmpPath)
+
+    val res = spark.sql(s"""SELECT * FROM yt.`<cluster="${LocalYt.proxy}">$tmpPath`""")
+    res.collect() should contain theSameElementsAs Seq(Row(1, "q"), Row(3, "c"))
+
+    val res2 = spark.sql(s"""SELECT * FROM yt.`ytTable:/<cluster="${LocalYt.proxy}">$tmpPath`""")
+    res2.collect() should contain theSameElementsAs Seq(Row(1, "q"), Row(3, "c"))
   }
 }

@@ -3,7 +3,7 @@ package tech.ytsaurus.spyt.fs
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.{DelegateToFileSystem, Path}
 import org.slf4j.LoggerFactory
-import tech.ytsaurus.spyt.fs.PathUtils.hadoopPathToYt
+import tech.ytsaurus.spyt.fs.path.YPathEnriched
 import tech.ytsaurus.spyt.wrapper.{LogLazy, YtWrapper}
 
 import java.net.URI
@@ -15,7 +15,10 @@ class YtFs(uri: URI, conf: Configuration)
 
   override def renameInternal(src: Path, dst: Path, overwrite: Boolean): Unit = {
     log.debugLazy(s"Rename internal: $src -> $dst. Overwrite: $overwrite")
-    val yt = this.fsImpl.asInstanceOf[YtFileSystem].ytClient
-    YtWrapper.move(hadoopPathToYt(src), hadoopPathToYt(dst), force = overwrite)(yt)
+    val fs = this.fsImpl.asInstanceOf[YtFileSystem]
+    val srcPath = YPathEnriched.fromPath(src)
+    val dstPath = YPathEnriched.fromPath(dst)
+    fs.validateSameCluster(srcPath, dstPath)
+    YtWrapper.move(srcPath.toStringYPath, dstPath.toStringYPath, force = overwrite)(fs.ytClient(srcPath))
   }
 }

@@ -10,9 +10,7 @@ import types
 
 # DataFrameReader extensions
 def read_yt(self, *paths):
-    def fix_path(path):
-        return path[1:] if path.startswith("//") else path
-    return self.format("yt").load(path=[fix_path(path) for path in paths])
+    return self.format("yt").load(path=list(paths))
 
 
 def _dict_to_struct(dict_type):

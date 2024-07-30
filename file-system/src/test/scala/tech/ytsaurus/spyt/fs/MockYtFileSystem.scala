@@ -7,8 +7,6 @@ import tech.ytsaurus.client.CompoundClient
 import java.net.URI
 
 class MockYtFileSystem extends YtFileSystem {
-  override protected lazy val yt: CompoundClient = null
-
   override def initialize(uri: URI, conf: Configuration): Unit = ()
 
   override def getFileStatus(f: Path): FileStatus = {

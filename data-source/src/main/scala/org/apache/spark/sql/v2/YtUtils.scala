@@ -11,7 +11,6 @@ import tech.ytsaurus.client.CompoundClient
 import tech.ytsaurus.core.cypress.YPath
 import tech.ytsaurus.spyt.fs.YtClientConfigurationConverter.ytClientConfiguration
 import tech.ytsaurus.spyt.fs.path.YPathEnriched
-import tech.ytsaurus.spyt.fs.path.YPathEnriched.ypath
 import tech.ytsaurus.spyt.fs.{YtFileSystemBase, YtHadoopPath}
 import tech.ytsaurus.spyt.serializers.SchemaConverter.MetadataFields
 import tech.ytsaurus.spyt.serializers.{SchemaConverter, SchemaConverterConfig}
@@ -28,40 +27,34 @@ object YtUtils {
 
   private val log = LoggerFactory.getLogger(getClass)
 
-  def inferSchema(sparkSession: SparkSession,
-                  parameters: Map[String, String],
-                  files: Seq[FileStatus])
-                 (implicit client: CompoundClient = getClient(sparkSession)): Option[StructType] = {
+  def inferSchema(sparkSession: SparkSession, parameters: Map[String, String],
+                  files: Seq[FileStatus]): Option[StructType] = {
     val enableMerge = parameters.get(Options.MERGE_SCHEMA)
       .orElse(sparkSession.conf.getOption("spark.sql.yt.mergeSchema")).exists(_.toBoolean)
     val allSchemas = getFilesSchemas(sparkSession, parameters, files)
     mergeFileSchemas(allSchemas, enableMerge)
   }
 
-
   private def getTablePath(fileStatus: FileStatus): YPathEnriched = {
     fileStatus.getPath match {
       case ytPath: YtHadoopPath => ytPath.ypath
-      case p => ypath(p.getParent)
+      case p => YPathEnriched.fromPath(p.getParent)
     }
   }
 
-  private def getSchema(sparkSession: SparkSession, path: YPathEnriched, parameters: Map[String, String])
-                       (implicit client: CompoundClient): StructType = {
-    getSchema(sparkSession, path.toYPath, path.transaction, parameters)
+  private def getSchema(sparkSession: SparkSession, path: YPathEnriched,
+                        parameters: Map[String, String]): StructType = {
+    getSchema(sparkSession, path.toYPath, path.transaction, path.cluster, parameters)
   }
 
-  def getSchema(sparkSession: SparkSession, path: YPath, transaction: Option[String], parameters: Map[String, String])
-               (implicit client: CompoundClient = getClient(sparkSession)): StructType = {
+  def getSchema(sparkSession: SparkSession, path: YPath, transaction: Option[String], proxy: Option[String],
+                parameters: Map[String, String]): StructType = {
+    val yt = YtClientProvider.ytClientWithProxy(ytClientConfiguration(sparkSession), proxy)
     val config = SchemaConverterConfig(sparkSession)
     val parsingTypeV3 = parameters.get(Options.PARSING_TYPE_V3).map(_.toBoolean).getOrElse(config.parsingTypeV3)
     val schemaHint = SchemaConverter.schemaHint(parameters)
-    val schemaTree = YtWrapper.attribute(path, "schema", transaction)
+    val schemaTree = YtWrapper.attribute(path, "schema", transaction)(yt)
     SchemaConverter.sparkSchema(schemaTree, schemaHint, parsingTypeV3)
-  }
-
-  private def getClient(sparkSession: SparkSession): CompoundClient = {
-    YtClientProvider.ytClient(ytClientConfiguration(sparkSession))
   }
 
   private[v2] case class FileWithSchema(file: FileStatus, schema: StructType)
@@ -108,8 +101,7 @@ object YtUtils {
 
   private[v2] def getFilesSchemas(sparkSession: SparkSession,
                                   parameters: Map[String, String],
-                                  files: Seq[FileStatus])
-                                 (implicit client: CompoundClient = getClient(sparkSession)): Seq[FileWithSchema] = {
+                                  files: Seq[FileStatus]): Seq[FileWithSchema] = {
     val (_, allSchemas) = files.foldLeft((Set.empty[YPathEnriched], List.empty[FileWithSchema])) {
       case ((curSet, schemas), fileStatus) =>
         val path = getTablePath(fileStatus)

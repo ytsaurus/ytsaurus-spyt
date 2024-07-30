@@ -18,7 +18,7 @@ import tech.ytsaurus.client.request.GetNode
 import tech.ytsaurus.core.tables.{ColumnValueType, TableSchema}
 import tech.ytsaurus.spyt.SchemaTestUtils
 import tech.ytsaurus.spyt.fs.YtTableFileSystem
-import tech.ytsaurus.spyt.wrapper.client.YtClientProvider
+import tech.ytsaurus.spyt.wrapper.client.{YtClientProvider, YtRpcClient}
 
 class YtInferSchemaTest extends FlatSpec with Matchers with LocalSpark
   with TmpDir with SchemaTestUtils with MockitoSugar with TestUtils {
@@ -241,13 +241,18 @@ class YtInferSchemaTest extends FlatSpec with Matchers with LocalSpark
 
     val filesStatus = tables.flatMap(x => fs.listStatus(new Path(s"ytTable:/$x")))
 
-    val mockYt: CompoundClient = Mockito.spy(YtClientProvider.ytClient(ytClientConfiguration(spark)))
-    YtUtils.inferSchema(spark, Map.empty, filesStatus)(mockYt)
-
-    // getNode invoked in YtWrapper.attribute(path, "schema"), that might be invoked for every chunk in inferSchema
-    // schema should be asked exactly 1 time for every file
-    verify(mockYt, times(tables.length)).getNode(any[GetNode])
-    Mockito.reset(mockYt)
+    val rpcClient = YtClientProvider.ytRpcClientWithProxy(ytClientConfiguration(spark), None)
+    val mockYt: CompoundClient = Mockito.spy(rpcClient.yt)
+    try {
+      YtClientProvider.getClients(rpcClient.id) = rpcClient.copy(yt = mockYt)
+      YtUtils.inferSchema(spark, Map.empty, filesStatus)
+      // getNode invoked in YtWrapper.attribute(path, "schema"), that might be invoked for every chunk in inferSchema
+      // schema should be asked exactly 1 time for every file
+      verify(mockYt, times(tables.length)).getNode(any[GetNode])
+      Mockito.reset(mockYt)
+    } finally {
+      YtClientProvider.getClients(rpcClient.id) = rpcClient
+    }
   }
 
 }

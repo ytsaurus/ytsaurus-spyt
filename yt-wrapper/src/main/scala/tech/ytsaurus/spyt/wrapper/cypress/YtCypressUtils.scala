@@ -20,6 +20,14 @@ trait YtCypressUtils {
 
   private val log = LoggerFactory.getLogger(getClass)
 
+  def correctSlashes(path: String, count: Int): String = {
+    if (path.startsWith("/")) {
+      "/".repeat(count) + path.dropWhile(_ == '/')
+    } else {
+      path
+    }
+  }
+
   @tailrec
   final def formatPath(path: String): String = {
     log.debugLazy(s"Formatting path $path")
@@ -30,7 +38,7 @@ trait YtCypressUtils {
         throw new IllegalArgumentException(s"Relative paths are not allowed: $path")
       }
     } else {
-      "//" + path.dropWhile(_ == '/')
+      correctSlashes(path, 2)
     }
   }
 
@@ -150,12 +158,13 @@ trait YtCypressUtils {
     yt.removeNode(request).join()
   }
 
-  def removeDir(path: String, recursive: Boolean, transaction: Option[String] = None)
+  def removeDir(path: String, recursive: Boolean, force: Boolean = false, transaction: Option[String] = None)
                (implicit yt: CompoundClient): Unit = {
     log.debug(s"Remove directory: $path, transaction $transaction")
     val request = RemoveNode.builder()
       .setPath(YPath.simple(formatPath(path)))
       .setRecursive(true)
+      .setForce(force)
       .optionalTransaction(transaction)
       .build()
     yt.removeNode(request).join()
@@ -167,10 +176,10 @@ trait YtCypressUtils {
     }
   }
 
-  def removeDirIfExists(path: String, recursive: Boolean, transaction: Option[String] = None)
+  def removeDirIfExists(path: String, recursive: Boolean, force: Boolean = false, transaction: Option[String] = None)
                        (implicit yt: CompoundClient): Unit = {
     if (exists(path)) {
-      removeDir(path, recursive, transaction)
+      removeDir(path, recursive, force, transaction)
     }
   }
 

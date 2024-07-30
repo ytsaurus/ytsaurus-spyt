@@ -1,6 +1,5 @@
 package org.apache.spark.sql.v2
 
-import org.apache.hadoop.fs.Path
 import org.apache.spark.sql.connector.catalog.{SessionConfigSupport, Table}
 import org.apache.spark.sql.execution.datasources.FileFormat
 import org.apache.spark.sql.execution.datasources.v2.FileDataSourceV2
@@ -8,9 +7,7 @@ import org.apache.spark.sql.types.StructType
 import org.apache.spark.sql.util.CaseInsensitiveStringMap
 import org.apache.spark.sql.vectorized.YtFileFormat
 import tech.ytsaurus.spyt.format.GlobalTransactionUtils
-import tech.ytsaurus.spyt.format.conf.SparkYtConfiguration.GlobalTransaction
-import tech.ytsaurus.spyt.format.conf.SparkYtConfiguration.Read.YtPartitioningEnabled
-import tech.ytsaurus.spyt.fs.path.YPathEnriched.{YtLatestVersionPath, YtRootPath, YtTimestampPath, YtTransactionPath}
+import tech.ytsaurus.spyt.fs.path.YPathEnriched
 
 class YtDataSourceV2 extends FileDataSourceV2 with SessionConfigSupport {
   private val defaultOptions: Map[String, String] = Map()
@@ -33,11 +30,14 @@ class YtDataSourceV2 extends FileDataSourceV2 with SessionConfigSupport {
     }
 
     paths.map { s =>
-      val path = new Path(s)
-      val transactionYPath = transaction.map(YtTransactionPath(path, _)).getOrElse(YtRootPath(path))
-      val timestampYPath = timestamp.map(YtTimestampPath(transactionYPath, _)).getOrElse(transactionYPath)
-      val latestVersionPath = if (inconsistentReadEnabled) YtLatestVersionPath(transactionYPath) else timestampYPath
-      latestVersionPath.toPath.toString
+      val path = YPathEnriched.fromString(s)
+      val transactionYPath = transaction.map(path.withTransaction).getOrElse(path)
+      val versionedPath = if (inconsistentReadEnabled) {
+        transactionYPath.withLatestVersion
+      } else {
+        timestamp.map(transactionYPath.withTimestamp).getOrElse(transactionYPath)
+      }
+      versionedPath.toStringPath
     }
   }
 

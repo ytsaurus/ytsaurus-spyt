@@ -33,7 +33,7 @@ trait YtClientUtils {
   def createRpcClient(id: String, config: YtClientConfiguration): YtRpcClient = {
     log.info(s"Create RPC YT Client, id $id, configuration ${config.copy(token = "*****")}")
 
-    jobProxyEndpoint match {
+    jobProxyEndpoint(config) match {
       case Some(jobProxy) =>
         log.info(s"Create job proxy client with config $jobProxy")
         createYtClientWrapper(id, config.timeout, new EpollEventLoopGroup(1, daemonThreadFactory)) {
@@ -86,7 +86,7 @@ trait YtClientUtils {
   }
 
   private def byopLocalEndpoint(config: YtClientConfiguration): Option[HostAndPort] = {
-    if (config.byop.enabled && SystemUtils.isEnabled("byop")) {
+    if (!config.useCommonProxies && config.byop.enabled && SystemUtils.isEnabled("byop")) {
       for {
         host <- SystemUtils.envGet("byop_host")
         port <- SystemUtils.envGet("byop_port").map(_.toInt)
@@ -94,19 +94,19 @@ trait YtClientUtils {
     } else None
   }
 
-  private def jobProxyEndpoint: Option[SocketAddress] = {
-    if (SystemUtils.isEnabled("rpc_job_proxy")) {
+  private def jobProxyEndpoint(config: YtClientConfiguration): Option[SocketAddress] = {
+    if (!config.useCommonProxies && SystemUtils.isEnabled("rpc_job_proxy")) {
       for {
         socketFile <- sys.env.get("YT_JOB_PROXY_SOCKET_PATH")
       } yield new DomainSocketAddress(socketFile)
     } else {
-      log.info("RPC Job proxy disabled by env variable")
+      log.info(s"RPC Job proxy disabled (proxy: ${config.proxy})")
       None
     }
   }
 
   private def byopRemoteEndpoint(config: YtClientConfiguration): Option[HostAndPort] = {
-    if (config.byop.remote.enabled) {
+    if (!config.useCommonProxies && config.byop.remote.enabled) {
       config.masterWrapperUrl.map(HostAndPort.fromString) match {
         case Some(url) =>
           val client = new MasterWrapperClient(url)

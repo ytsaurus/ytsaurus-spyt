@@ -1,6 +1,5 @@
 package tech.ytsaurus.spyt.format
 
-import org.apache.hadoop.fs.Path
 import org.apache.spark.metrics.yt.YtMetricsRegister
 import org.apache.spark.metrics.yt.YtMetricsRegister.ytMetricsSource._
 import org.apache.spark.sql.catalyst.InternalRow
@@ -9,25 +8,23 @@ import org.apache.spark.sql.types.StructType
 import org.slf4j.LoggerFactory
 import tech.ytsaurus.spyt.format.conf.YtTableSparkSettings._
 import tech.ytsaurus.spyt.fs.conf._
-import tech.ytsaurus.spyt.fs.path.GlobalTableSettings
+import tech.ytsaurus.spyt.fs.path.YPathEnriched
 import tech.ytsaurus.spyt.serializers.InternalRowSerializer
 import tech.ytsaurus.spyt.wrapper.LogLazy
-import tech.ytsaurus.spyt.wrapper.client.YtClientConfiguration
 import tech.ytsaurus.client.request.{TransactionalOptions, WriteSerializationContext, WriteTable}
 import tech.ytsaurus.client.{CompoundClient, TableWriter}
 import tech.ytsaurus.core.GUID
+import tech.ytsaurus.core.cypress.YPath
 import tech.ytsaurus.spyt.format.conf.SparkYtWriteConfiguration
-import tech.ytsaurus.spyt.wrapper.client.YtClientProvider
 
 import java.util
 import java.util.concurrent.{CompletableFuture, TimeUnit}
 import scala.concurrent.{Await, Future}
 import scala.util.{Failure, Try}
 
-class YtOutputWriter(val path: String,
+class YtOutputWriter(richPath: YPathEnriched,
                      schema: StructType,
                      writeConfiguration: SparkYtWriteConfiguration,
-                     transactionGuid: String,
                      options: Map[String, String])
                     (implicit client: CompoundClient) extends OutputWriter with LogLazy {
 
@@ -48,22 +45,11 @@ class YtOutputWriter(val path: String,
   private var count = 0L
   private var batchCount = 0L
 
+  val path: String = richPath.toStringPath
+
   initialize()
 
-  /**
-   * @deprecated Do not use before YT 21.1 release
-   */
-  @Deprecated
-  private def sortedChunkPath(): String = {
-    s"""<
-       |chunk_key_column_count=${options.ytConf(SortColumns).length};
-       |append=true
-       |>/${new Path(path).toUri}""".stripMargin
-  }
-
-  private def appendPath(): String = {
-    s"""<append=true>/${new Path(path).toUri.getPath}""".stripMargin
-  }
+  private def transactionGuid: String = richPath.transaction.get
 
   override def write(record: InternalRow): Unit = {
     try {
@@ -88,7 +74,6 @@ class YtOutputWriter(val path: String,
         log.warn("Write failed, writer closed")
         throw e
     }
-
   }
 
   private def closeCurrentWriter(): Unit = {
@@ -149,9 +134,10 @@ class YtOutputWriter(val path: String,
   }
 
   protected def initializeWriter(): TableWriter[InternalRow] = {
-    log.debugLazy(s"Initialize new write: ${appendPath()}, transaction: $transactionGuid")
+    val appendPath = richPath.withAttr("append", "true").toYPath
+    log.debugLazy(s"Initialize new write: $appendPath, transaction: $transactionGuid")
     val request = WriteTable.builder[InternalRow]()
-      .setPath(appendPath())
+      .setPath(appendPath)
       .setSerializationContext(new WriteSerializationContext(new InternalRowSerializer(schema, schemaHint, typeV3Format)))
       .setTransactionalOptions(new TransactionalOptions(GUID.valueOf(transactionGuid)))
       .setNeedRetries(false)
@@ -161,6 +147,5 @@ class YtOutputWriter(val path: String,
 
   protected def initialize(): Unit = {
     YtMetricsRegister.register()
-    GlobalTableSettings.setTransaction(path, transactionGuid)
   }
 }

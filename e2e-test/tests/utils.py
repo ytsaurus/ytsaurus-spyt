@@ -1,5 +1,6 @@
 import spyt
 
+from common.cluster_utils import apply_default_conf
 import logging
 from pyspark.conf import SparkConf
 import os
@@ -15,17 +16,11 @@ DRIVER_CLIENT_CONF = {
     "spark.blockManager.port": "27018",
 }
 
-SPARK_CONF = SparkConf() \
+SPARK_CONF = apply_default_conf(SparkConf()) \
     .setMaster("local[4]") \
     .set("spark.hadoop.yt.proxy", YT_PROXY) \
-    .set("spark.hadoop.yt.user", "root") \
-    .set("spark.hadoop.yt.token", "") \
-    .set("spark.yt.log.enabled", "false") \
     .set("spark.driver.cores", "1") \
     .set("spark.driver.memory", "768M") \
-    .set("spark.executor.instances", "1") \
-    .set("spark.executor.cores", "1") \
-    .set("spark.executor.memory", "768M") \
     .setAll(DRIVER_CLIENT_CONF.items())
 
 

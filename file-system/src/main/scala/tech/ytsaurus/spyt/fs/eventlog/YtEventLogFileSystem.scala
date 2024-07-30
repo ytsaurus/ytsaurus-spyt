@@ -42,7 +42,7 @@ class YtEventLogFileSystem extends FileSystem with LogLazy {
     super.initialize(uri, conf)
     setConf(conf)
     this._uri = uri
-    this._ytConf = ytClientConfiguration(getConf, Option(uri.getAuthority).filter(_.nonEmpty))
+    this._ytConf = ytClientConfiguration(getConf)
   }
 
   override def create(f: Path, permission: FsPermission, overwrite: Boolean, bufferSize: Int,

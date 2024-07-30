@@ -30,8 +30,13 @@ import tech.ytsaurus.spyt.streaming.{YtStreamingSink, YtStreamingSource}
 import tech.ytsaurus.spyt.wrapper.YtWrapper
 import tech.ytsaurus.spyt.wrapper.client.YtClientProvider
 
+import java.util.UUID
+
 class YtFileFormat extends FileFormat with DataSourceRegister with StreamSourceProvider with StreamSinkProvider
   with Serializable {
+
+  private val idPrefix: String = s"YtFileFormat-${UUID.randomUUID()}"
+
   override def inferSchema(sparkSession: SparkSession,
                            options: Map[String, String],
                            files: Seq[FileStatus]): Option[StructType] = {
@@ -76,7 +81,7 @@ class YtFileFormat extends FileFormat with DataSourceRegister with StreamSourceP
     {
       case ypf: YtPartitionedFile =>
         val log = LoggerFactory.getLogger(getClass)
-        implicit val yt: CompoundClient = YtClientProvider.ytClient(ytClientConf)
+        implicit val yt: CompoundClient = YtClientProvider.ytClientWithProxy(ytClientConf, ypf.cluster, idPrefix)
         val split = YtInputSplit(ypf, requiredSchema, filterPushdownConfig = filterPushdownConfig,
           ytLoggerConfig = ytLoggerConfig)
         log.info(s"Reading ${split.ytPathWithFilters}")
@@ -90,6 +95,7 @@ class YtFileFormat extends FileFormat with DataSourceRegister with StreamSourceP
             timeout = ytClientConf.timeout,
             reportBytesRead = bytesReadReporter(broadcastedConf),
             countOptimizationEnabled = countOptimizationEnabled,
+            hadoopPath = ypf.hadoopPath
           )
           val iter = new RecordReaderIterator(ytVectorizedReader)
           Option(TaskContext.get()).foreach(_.addTaskCompletionListener[Unit](_ => iter.close()))
@@ -142,7 +148,7 @@ class YtFileFormat extends FileFormat with DataSourceRegister with StreamSourceP
                             parameters: Map[String, String]): (String, StructType) = {
     val caseInsensitiveParameters = CaseInsensitiveMap(parameters)
     val ypath = RichYPath.fromString(caseInsensitiveParameters(YtUtils.Options.QUEUE_PATH))
-    (shortName(), YtUtils.getSchema(sqlContext.sparkSession, ypath, None, caseInsensitiveParameters))
+    (shortName(), YtUtils.getSchema(sqlContext.sparkSession, ypath, None, None, caseInsensitiveParameters))
   }
 
   override def createSource(sqlContext: SQLContext, metadataPath: String, schema: Option[StructType],
@@ -151,7 +157,7 @@ class YtFileFormat extends FileFormat with DataSourceRegister with StreamSourceP
     val consumerPath = caseInsensitiveParameters(YtUtils.Options.CONSUMER_PATH)
     val queuePath = caseInsensitiveParameters(YtUtils.Options.QUEUE_PATH)
     val requiredSchema = schema.getOrElse {
-      YtUtils.getSchema(sqlContext.sparkSession, YPath.simple(queuePath), None, caseInsensitiveParameters)
+      YtUtils.getSchema(sqlContext.sparkSession, YPath.simple(queuePath), None, None, caseInsensitiveParameters)
     }
     new YtStreamingSource(sqlContext, consumerPath, queuePath, requiredSchema, caseInsensitiveParameters)
   }

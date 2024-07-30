@@ -12,7 +12,7 @@ import scala.concurrent.duration._
 import scala.language.postfixOps
 import scala.util.{Failure, Success, Try}
 
-@SerialVersionUID(-7486028686763336924L)
+@SerialVersionUID(6764302982752098915L)
 case class YtClientConfiguration(proxy: String,
                                  user: String,
                                  token: String,
@@ -21,7 +21,8 @@ case class YtClientConfiguration(proxy: String,
                                  byop: ByopConfiguration,
                                  masterWrapperUrl: Option[String],
                                  extendedFileTimeout: Boolean,
-                                 proxyNetworkName: Option[String]) extends Serializable {
+                                 proxyNetworkName: Option[String],
+                                 useCommonProxies: Boolean = false) extends Serializable {
 
   private def proxyUrl: Try[URL] = Try(new URL(proxy)).orElse {
     val normalizedProxy = if (proxy.contains(".") || proxy.contains(":")) {
@@ -41,6 +42,14 @@ case class YtClientConfiguration(proxy: String,
   def isHttps: Boolean = proxyUrl.toOption.exists(_.getProtocol == "https")
 
   def clientAuth: YTsaurusClientAuth = YTsaurusClientAuth.builder().setUser(user).setToken(token).build()
+
+  def replaceProxy(newProxy: Option[String]): YtClientConfiguration = {
+    if (newProxy.isDefined && newProxy.get != proxy) {
+      copy(proxy = newProxy.get, useCommonProxies = true)
+    } else {
+      this
+    }
+  }
 }
 
 object YtClientConfiguration {
@@ -55,11 +64,11 @@ object YtClientConfiguration {
     strategyFromConf.getOrElse(EmptyWorkersListStrategy.Default)
   }
 
-  def apply(getByName: String => Option[String], proxy: Option[String] = None): YtClientConfiguration = {
+  def apply(getByName: String => Option[String]): YtClientConfiguration = {
     val byopEnabled = getByName("byop.enabled").orElse(sys.env.get("SPARK_YT_BYOP_ENABLED")).exists(_.toBoolean)
 
     YtClientConfiguration(
-      proxy.orElse(getByName("proxy")).orElse(sys.env.get("YT_PROXY")).getOrElse(
+      getByName("proxy").orElse(sys.env.get("YT_PROXY")).getOrElse(
         throw new IllegalArgumentException("Proxy must be specified")
       ),
       getByName("user").orElse(sys.env.get("YT_SECURE_VAULT_YT_USER")).getOrElse(DefaultRpcCredentials.user),

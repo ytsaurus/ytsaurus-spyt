@@ -15,7 +15,7 @@ trait TmpDir extends BeforeAndAfterEach with BeforeAndAfterAll {
 
   override def beforeAll(): Unit = {
     super.beforeAll()
-    YtWrapper.removeDirIfExists(testDir, recursive = true)
+    YtWrapper.removeDirIfExists(testDir, recursive = true, force = true)
     YtWrapper.createDir(testDir)
   }
 
@@ -30,7 +30,7 @@ trait TmpDir extends BeforeAndAfterEach with BeforeAndAfterAll {
   }
 
   override def afterAll(): Unit = {
-    YtWrapper.removeDirIfExists(testDir, recursive = true)
+    YtWrapper.removeDirIfExists(testDir, recursive = true, force = true)
     super.afterAll()
   }
 }

@@ -105,7 +105,7 @@ class CypressDiscoveryService(baseDiscoveryPath: String)(implicit yt: CompoundCl
     val transaction = YtWrapper.createTransaction(None, 1 minute)
     val tr = Some(transaction.getId.toString)
     val addr = YtWrapper.escape(address.toString)
-    YtWrapper.removeDirIfExists(dirPath, recursive = true, tr)
+    YtWrapper.removeDirIfExists(dirPath, recursive = true, transaction = tr)
     YtWrapper.createDir(s"$dirPath/$addr", tr)
     transaction.commit().join()
   }
@@ -170,7 +170,7 @@ class CypressDiscoveryService(baseDiscoveryPath: String)(implicit yt: CompoundCl
     YtWrapper.listDir(discoveryPath)
       .map(name => s"$discoveryPath/$name")
       .filter(_ != shsPath)
-      .foreach(YtWrapper.removeDirIfExists(_, recursive = true, transaction))
+      .foreach(YtWrapper.removeDirIfExists(_, recursive = true, transaction = transaction))
   }
 }
 

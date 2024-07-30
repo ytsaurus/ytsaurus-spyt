@@ -9,7 +9,6 @@ import tech.ytsaurus.spyt.common.utils.TupleSegment.TupleSegment
 import tech.ytsaurus.spyt.common.utils._
 import tech.ytsaurus.spyt.format.YPathUtils.RichRangeCriteria
 import tech.ytsaurus.spyt.format.YtInputSplit._
-import tech.ytsaurus.spyt.fs.path.YPathEnriched.ypath
 import tech.ytsaurus.spyt.logger.YtLogger
 import tech.ytsaurus.core.cypress.{Exact, Range, RangeCriteria, RangeLimit, YPath}
 import tech.ytsaurus.spyt.serializers.PivotKeysConverter.{prepareKey, toList, toRangeLimit}

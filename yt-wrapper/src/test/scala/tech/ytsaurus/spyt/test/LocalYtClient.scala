@@ -22,13 +22,15 @@ object LocalYt {
   val host: String = sys.env.getOrElse("YT_LOCAL_HOST", "localhost")
   val proxyPort = 8000
   val rpcProxyPort = 8002
+
+  val proxy = s"${LocalYt.host}:${LocalYt.proxyPort}"
 }
 
 trait LocalYtClient extends LocalYt {
   self: TestSuite =>
 
   private val conf: YtClientConfiguration = YtClientConfiguration(
-    proxy = s"${LocalYt.host}:${LocalYt.proxyPort}",
+    proxy = LocalYt.proxy,
     user = "root",
     token = "",
     timeout = 5 minutes,

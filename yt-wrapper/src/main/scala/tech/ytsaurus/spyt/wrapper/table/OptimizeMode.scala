@@ -2,7 +2,7 @@ package tech.ytsaurus.spyt.wrapper.table
 
 import tech.ytsaurus.ysontree.{YTreeBuilder, YTreeNode}
 
-sealed abstract class OptimizeMode(val name: String) {
+sealed abstract class OptimizeMode(val name: String) extends Serializable {
   def node: YTreeNode = new YTreeBuilder().value(name).build()
 }
 

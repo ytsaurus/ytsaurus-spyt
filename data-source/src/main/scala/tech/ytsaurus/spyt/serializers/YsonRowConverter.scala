@@ -235,6 +235,8 @@ object YsonRowConverter {
       consumer.onEntity()
     } else {
       dataType match {
+        case ByteType => consumer.onInteger(value.asInstanceOf[Byte])
+        case ShortType => consumer.onInteger(value.asInstanceOf[Short])
         case IntegerType => consumer.onInteger(value.asInstanceOf[Int].toLong)
         case LongType => consumer.onInteger(value.asInstanceOf[Long])
         case StringType =>

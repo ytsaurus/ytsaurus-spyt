@@ -1,19 +1,26 @@
 package tech.ytsaurus.spyt.serializers
 
+import org.apache.spark.sql.Row
+import org.apache.spark.sql.spyt.types.DatetimeType
 import org.apache.spark.sql.types._
 import org.apache.spark.sql.v2.YtUtils
-import org.apache.spark.sql.spyt.types.DatetimeType
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
+import tech.ytsaurus.client.rows.{UnversionedRow, UnversionedValue}
 import tech.ytsaurus.core.tables.{ColumnValueType, TableSchema}
 import tech.ytsaurus.spyt.format.conf.SparkYtConfiguration.Read.TypeV3
+import tech.ytsaurus.spyt.format.conf.{SparkYtConfiguration, YtTableSparkSettings}
 import tech.ytsaurus.spyt.serializers.SchemaConverter.{MetadataFields, Unordered, ytLogicalSchema}
 import tech.ytsaurus.spyt.test.{LocalSpark, TestUtils, TmpDir}
 import tech.ytsaurus.spyt.types.YTsaurusTypes
-import tech.ytsaurus.spyt.{SchemaTestUtils, YtReader}
+import tech.ytsaurus.spyt.wrapper.YtWrapper
+import tech.ytsaurus.spyt.{SchemaTestUtils, YtReader, YtWriter}
 import tech.ytsaurus.typeinfo.StructType.Member
 import tech.ytsaurus.typeinfo.TiType
+import tech.ytsaurus.yson.YsonParser
 import tech.ytsaurus.ysontree.{YTree, YTreeMapNode}
+
+import scala.collection.mutable.ListBuffer
 
 class SchemaConverterTest extends AnyFlatSpec with Matchers
   with TestUtils with TmpDir with LocalSpark with SchemaTestUtils {
@@ -150,7 +157,7 @@ class SchemaConverterTest extends AnyFlatSpec with Matchers
       .addValue("Byte", TiType.int8())
       .addValue("Short", TiType.int16())
       .addValue("Integer", TiType.int32())
-      .addValue("Decimal", TiType.decimal(22,0))
+      .addValue("Decimal", TiType.decimal(22, 0))
       .addValue("Date", TiType.date())
       .addValue("Datetime", TiType.datetime())
       .addValue("Timestamp", TiType.timestamp())
@@ -170,6 +177,7 @@ class SchemaConverterTest extends AnyFlatSpec with Matchers
       YTree.builder.beginMap.key("name").value(name).key("type").value(t)
         .key("required").value(false).buildMap
     }
+
     val res = ytLogicalSchema(sparkSchema, Unordered, Map.empty, typeV3Format = false)
     res shouldBe YTree.builder
       .beginAttributes
@@ -228,6 +236,58 @@ class SchemaConverterTest extends AnyFlatSpec with Matchers
       StructField("a", LongType, metadata = createMetadata("a", 0))
     ))
     SchemaConverter.keys(schema4) shouldBe Seq(Some("a"), None, Some("c"))
+  }
+
+  it should "correctly write byte and short" in {
+    withConf(SparkYtConfiguration.Schema.ForcingNullableIfNoMetadata, false){
+      val df_0 = spark.createDataFrame(
+        spark.sparkContext.parallelize(rightSparkDataForByteAndShortTests),
+        rightSparkSchemaForByteAndShortTests)
+      df_0.write
+        .option(YtTableSparkSettings.WriteTypeV3.name, value = true)
+        .option(YtTableSparkSettings.NullTypeAllowed.name, value = false)
+        .option(YtUtils.Options.PARSING_TYPE_V3, value = true)
+        .yt(tmpPath)
+
+      val schema = TableSchema.fromYTree(YtWrapper.attribute(tmpPath, "schema"))
+
+      schema shouldEqual rightYtSchemaForByteAndShortTests
+
+      val data = readTableAsYson(tmpPath).map { row =>
+        val yson = row.asMap()
+        val map = yson.get("yson").bytesValue()
+        val ysonParser = new YsonParser(map)
+        val ytreeBuilder = YTree.builder()
+        ysonParser.parseNode(ytreeBuilder)
+        val ysonMap = ytreeBuilder.build().asList()
+        (
+          ysonMap.get(0).intValue(),
+          ysonMap.get(1).intValue().toShort,
+          ysonMap.get(2).intValue().toByte,
+        )
+      }
+
+      data should contain theSameElementsAs rightYtDataForByteAndShortTests
+    }
+
+  }
+
+  it should "correctly read byte and short" in {
+    withConf(SparkYtConfiguration.Schema.ForcingNullableIfNoMetadata, false){
+      val data = ListBuffer[UnversionedRow]()
+      for (row <- rightYtDataForByteAndShortTests) {
+        data += packToRow(buildRow(row._1, row._2, row._3))
+      }
+      writeTableFromURow(data, tmpPath, rightYtSchemaForByteAndShortTests)
+
+      val df_1 = spark.read
+        .option(YtTableSparkSettings.NullTypeAllowed.name, value = false)
+        .option(YtUtils.Options.PARSING_TYPE_V3, value = true)
+        .yt(tmpPath)
+
+      df_1.schema.fields.map(_.copy(metadata = Metadata.empty)) should contain theSameElementsInOrderAs rightSparkSchemaForByteAndShortTests
+      df_1.collect() should contain theSameElementsAs rightSparkDataForByteAndShortTests
+    }
   }
 }
 
@@ -290,4 +350,48 @@ object SchemaConverterTest extends SchemaTestUtils {
     structField("VariantOverStruct", StructType(Seq(StructField("_vc", IntegerType, nullable = false), StructField("_vd", LongType, nullable = false))), nullable = false),
     structField("VariantOverTuple", StructType(Seq(StructField("_v_1", FloatType, nullable = false), StructField("_v_2", LongType, nullable = false))), nullable = false)
   ))
+
+  private val rightSparkSchemaForByteAndShortTests: StructType = {
+    StructType(Seq(
+      StructField("yson", StructType(Seq(
+        StructField("int32", IntegerType, nullable = false),
+        StructField("int16", ShortType, nullable = false),
+        StructField("int8", ByteType, nullable = false)
+      )), nullable = false)
+    ))
+  }
+
+  private val rightYtSchemaForByteAndShortTests: TableSchema = TableSchema.builder().setUniqueKeys(false)
+    .addValue("yson", TiType.struct(
+      new Member("int32", TiType.int32()),
+      new Member("int16", TiType.int16()),
+      new Member("int8", TiType.int8())))
+    .build()
+
+  private val rightSparkDataForByteAndShortTests: Seq[Row] = Seq(
+    Row(Row(Int.MaxValue, Short.MaxValue, Byte.MaxValue)), // Maximum positive values
+    Row(Row(Int.MinValue, Short.MinValue, Byte.MinValue)), // Minimum negative values
+    Row(Row(0, 0.toShort, 0.toByte)), // Edge case for zero values
+    Row(Row(-1, (-1).toShort, (-1).toByte)) // Small negative numbers close to zero
+  )
+
+  private val rightYtDataForByteAndShortTests: ListBuffer[(Int, Short, Byte)] = ListBuffer[(Int, Short, Byte)](
+    (Int.MaxValue, Short.MaxValue, Byte.MaxValue),
+    (Int.MinValue, Short.MinValue, Byte.MinValue),
+    (0, 0.toShort, 0.toByte),
+    (-1, (-1).toShort, (-1).toByte)
+  )
+
+  private def buildRow(int32: Int, int16: Short, int8: Byte): Array[Byte] = YTree.listBuilder()
+    .value(int32).value(int16).value(int8).endList().build().toBinary
+
+
+  private def packToRow(value: Any,
+                        cVType: ColumnValueType = ColumnValueType.COMPOSITE): UnversionedRow = {
+    new UnversionedRow(java.util.List.of[UnversionedValue](
+      new UnversionedValue(0, cVType, false, value)
+    ))
+  }
+
+
 }

@@ -141,6 +141,8 @@ class YsonDecoder(bytes: Array[Byte], dataType: IndexedDataType) extends YsonBas
         }
       case YsonTags.BINARY_INT =>
         dataType.sparkDataType match {
+          case ByteType => parseVarInt64.toByte
+          case ShortType => parseVarInt64.toShort
           case IntegerType => parseVarInt64.toInt
           case BinaryType => first +: parseInt64AsBytes
           case _ => parseVarInt64

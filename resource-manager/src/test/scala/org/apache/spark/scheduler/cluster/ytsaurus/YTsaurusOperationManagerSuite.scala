@@ -3,6 +3,8 @@ package org.apache.spark.scheduler.cluster.ytsaurus
 
 import org.apache.spark.deploy.ytsaurus.Config.{SPARK_PRIMARY_RESOURCE, YTSAURUS_EXTRA_PORTO_LAYER_PATHS, YTSAURUS_PORTO_LAYER_PATHS}
 import org.apache.spark.internal.config.{FILES, JARS, SUBMIT_PYTHON_FILES}
+import org.apache.spark.deploy.ytsaurus.Config.SPARK_PRIMARY_RESOURCE
+import org.apache.spark.internal.config.{ARCHIVES, FILES, JARS, SUBMIT_PYTHON_FILES}
 import org.apache.spark.{SparkConf, SparkFunSuite}
 import org.scalatest.BeforeAndAfter
 import org.scalatest.matchers.should.Matchers
@@ -16,10 +18,27 @@ class YTsaurusOperationManagerSuite extends SparkFunSuite with BeforeAndAfter wi
     val conf = new SparkConf()
     conf.set(SUBMIT_PYTHON_FILES, Seq("yt:/path/to/my/super/lib.zip"))
     conf.set(SPARK_PRIMARY_RESOURCE, "yt:///path/to/my/super/app.py")
+    conf.set(ARCHIVES, Seq(
+      "yt:///path/to/my/super/env.tar",
+      "yt:///path/to/my/super/env.tar#env-alias",
+      "yt:///path/to/my/super/env.tar.gz#tar-gz-env",
+      "yt:///path/to/my/super/env.tgz#tgz-env",
+      "yt:///path/to/my/super/env.tar.bz2#tar-bz2-env",
+      "yt:///path/to/my/super/env.zip#zip-env",
+    ))
 
     val result = YTsaurusOperationManager.applicationFiles(conf)
 
-    result should contain theSameElementsAs Seq("//path/to/my/super/app.py", "//path/to/my/super/lib.zip")
+    result should contain theSameElementsAs Seq(
+      new YTsaurusOperationManager.ApplicationFile("//path/to/my/super/app.py", None, None),
+      new YTsaurusOperationManager.ApplicationFile("//path/to/my/super/lib.zip", None, None),
+      new YTsaurusOperationManager.ApplicationFile("//path/to/my/super/env.tar", Some("__dep-0-env.tar"), Some("mkdir env.tar && tar -xvf __dep-0-env.tar -C env.tar")),
+      new YTsaurusOperationManager.ApplicationFile("//path/to/my/super/env.tar", Some("__dep-1-env.tar"), Some("mkdir env-alias && tar -xvf __dep-1-env.tar -C env-alias")),
+      new YTsaurusOperationManager.ApplicationFile("//path/to/my/super/env.tar.gz", Some("__dep-2-env.tar.gz"), Some("mkdir tar-gz-env && tar -xzvf __dep-2-env.tar.gz -C tar-gz-env")),
+      new YTsaurusOperationManager.ApplicationFile("//path/to/my/super/env.tgz", Some("__dep-3-env.tgz"), Some("mkdir tgz-env && tar -xzvf __dep-3-env.tgz -C tgz-env")),
+      new YTsaurusOperationManager.ApplicationFile("//path/to/my/super/env.tar.bz2", Some("__dep-4-env.tar.bz2"), Some("mkdir tar-bz2-env && tar -xjvf __dep-4-env.tar.bz2 -C tar-bz2-env")),
+      new YTsaurusOperationManager.ApplicationFile("//path/to/my/super/env.zip", Some("__dep-5-env.zip"), Some("unzip __dep-5-env.zip -d zip-env")),
+    )
   }
 
   test("Generate application files for python spark-submit in client mode") {
@@ -30,7 +49,10 @@ class YTsaurusOperationManagerSuite extends SparkFunSuite with BeforeAndAfter wi
 
     val result = YTsaurusOperationManager.applicationFiles(conf)
 
-    result should contain theSameElementsAs Seq("//path/to/my/super/app.py", "//path/to/my/super/lib.zip")
+    result should contain theSameElementsAs Seq(
+      new YTsaurusOperationManager.ApplicationFile("//path/to/my/super/app.py", None, None),
+      new YTsaurusOperationManager.ApplicationFile("//path/to/my/super/lib.zip", None, None)
+    )
   }
 
   test("Generate application files for java spark-submit") {
@@ -40,7 +62,10 @@ class YTsaurusOperationManagerSuite extends SparkFunSuite with BeforeAndAfter wi
 
     val result = YTsaurusOperationManager.applicationFiles(conf)
 
-    result should contain theSameElementsAs Seq("//path/to/my/super/lib.jar", "//path/to/my/super/app.jar")
+    result should contain theSameElementsAs Seq(
+      new YTsaurusOperationManager.ApplicationFile("//path/to/my/super/lib.jar", None, None),
+      new YTsaurusOperationManager.ApplicationFile("//path/to/my/super/app.jar", None, None)
+    )
   }
 
   test("Generate application files for spark-shell") {

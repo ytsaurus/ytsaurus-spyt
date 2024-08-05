@@ -1,8 +1,6 @@
-import spyt
+from common.cluster_utils import DEFAULT_SPARK_CONF
 
-from common.cluster_utils import apply_default_conf
 import logging
-from pyspark.conf import SparkConf
 import os
 
 
@@ -16,12 +14,15 @@ DRIVER_CLIENT_CONF = {
     "spark.blockManager.port": "27018",
 }
 
-SPARK_CONF = apply_default_conf(SparkConf()) \
-    .setMaster("local[4]") \
-    .set("spark.hadoop.yt.proxy", YT_PROXY) \
-    .set("spark.driver.cores", "1") \
-    .set("spark.driver.memory", "768M") \
-    .setAll(DRIVER_CLIENT_CONF.items())
+SPARK_CONF = DEFAULT_SPARK_CONF | {
+    "spark.master": "local[4]",
+    "spark.hadoop.yt.proxy": YT_PROXY,
+    "spark.driver.cores": "1",
+    "spark.driver.memory": "768M",
+    "spark.ytsaurus.redirect.stdout.to.stderr": "true",
+    "spark.ytsaurus.driver.maxFailures": 2,
+    "spark.ytsaurus.executor.maxFailures": 2,
+} | DRIVER_CLIENT_CONF
 
 
 def upload_file(yt_client, source_path, remote_path):

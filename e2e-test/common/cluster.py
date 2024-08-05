@@ -1,12 +1,12 @@
-from pyspark.conf import SparkConf
+import spyt
 
-from spyt.client import direct_spark_session, spark_session
+from spyt.client import spark_session
 from spyt.enabler import SpytEnablers
 from spyt.standalone import start_spark_cluster, SparkDefaultArguments, \
     find_spark_cluster, start_livy_server, start_history_server
-from spyt.submit import java_gateway, SparkSubmissionClient
+from spyt.submit import java_gateway, SparkSubmissionClient, direct_submit
 
-from .cluster_utils import apply_default_conf, dump_debug_data, is_accessible
+from .cluster_utils import DEFAULT_SPARK_CONF, default_conf, dump_debug_data, is_accessible
 from .version import VERSION
 
 from yt.common import YtError
@@ -14,6 +14,8 @@ from yt.wrapper import YtClient
 
 from contextlib import contextmanager
 import logging
+import shutil
+import tempfile
 import time
 import uuid
 
@@ -57,7 +59,8 @@ class ClusterBase(object):
 
     def finish(self, exc_type, exc_val):
         try:
-            dump_debug_data(self.dump_dir, self.op, self.yt_root_path, self.yt_client, self.discovery_path)
+            op_id = self.op.id if self.op is not None else None
+            dump_debug_data(self.dump_dir, op_id, self.yt_root_path, self.yt_client, self.discovery_path)
         except Exception:
             logger.warning("Fail in dumping debug data", exc_info=True)
         try:
@@ -100,9 +103,7 @@ class SpytCluster(ClusterBase):
         with java_gateway(java_home=self.java_home) as gw:
             yield SparkSubmissionClient(gw, self.proxy, self.discovery_path, self.user, self.token)
 
-    def submit_cluster_job(self, job_path, conf=None, args=None, py_files=[]):
-        conf = conf or {}
-        args = args or []
+    def submit_cluster_job(self, job_path, conf={}, args=[], py_files=[]):
         with self.submission_client() as client:
             launcher = client.new_launcher()
             launcher.set_app_resource("yt:/" + job_path)
@@ -144,11 +145,44 @@ class LivyServer(ClusterBase):
 
 
 @contextmanager
-def direct_session(proxy, extra_conf=None):
+def direct_spark_session(proxy, extra_conf=None):
     extra_conf = extra_conf or {}
-    conf = apply_default_conf(SparkConf()).set("spark.hadoop.yt.proxy", proxy).setAll(extra_conf.items())
-    with direct_spark_session(proxy, conf) as session:
+    conf = default_conf().set("spark.hadoop.yt.proxy", proxy).setAll(extra_conf.items())
+    with spyt.direct_spark_session(proxy, conf) as session:
         yield session
+
+
+class DirectSubmitter:
+    def __init__(self, proxy, extra_conf={}, dump_dir=None):
+        self.proxy = proxy
+        self.default_conf = DEFAULT_SPARK_CONF | {"spark.hadoop.yt.proxy": self.proxy} | extra_conf
+        self.dump_dir = dump_dir
+        self.op_ids = []
+        self.token = "token"
+        self.yt_client = YtClient(proxy=self.proxy, token=self.token)
+
+    def __enter__(self):
+        return self
+
+    def submit(self, job_path, spark_base_args=[], job_args=[], conf={}):
+        op_path = None
+        spark_conf = self.default_conf | conf
+        if self.dump_dir:
+            _, op_path = tempfile.mkstemp()
+            spark_conf |= {"spark.ytsaurus.driver.operation.dump.path": op_path}
+        direct_submit(self.proxy, num_executors=1, main_file=job_path,
+                      spark_base_args=spark_base_args, job_args=job_args, spark_conf=spark_conf)
+        if op_path:
+            with open(op_path, 'r') as fd:
+                self.op_ids.append(fd.read())
+            shutil.rmtree(op_path, ignore_errors=True)
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        try:
+            for op_id in self.op_ids:
+                dump_debug_data(self.dump_dir, op_id=op_id, yt_client=self.yt_client)
+        except Exception:
+            logger.warning("Fail in dumping debug data", exc_info=True)
 
 
 class HistoryServer(ClusterBase):

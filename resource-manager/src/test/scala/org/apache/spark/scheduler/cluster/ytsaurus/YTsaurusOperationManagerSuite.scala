@@ -2,7 +2,9 @@
 package org.apache.spark.scheduler.cluster.ytsaurus
 
 import org.apache.spark.deploy.ytsaurus.Config.{SPARK_PRIMARY_RESOURCE, YTSAURUS_EXTRA_PORTO_LAYER_PATHS, YTSAURUS_PORTO_LAYER_PATHS}
-import org.apache.spark.internal.config.{FILES, JARS, SUBMIT_PYTHON_FILES}
+import org.apache.spark.internal.config.{ARCHIVES, FILES, JARS, SUBMIT_PYTHON_FILES}
+import org.apache.spark.launcher.SparkLauncher
+import org.apache.spark.scheduler.cluster.ytsaurus.YTsaurusOperationManager.ApplicationFile
 import org.apache.spark.{SparkConf, SparkFunSuite}
 import org.scalatest.BeforeAndAfter
 import org.scalatest.matchers.should.Matchers
@@ -19,7 +21,8 @@ class YTsaurusOperationManagerSuite extends SparkFunSuite with BeforeAndAfter wi
 
     val result = YTsaurusOperationManager.applicationFiles(conf)
 
-    result should contain theSameElementsAs Seq("//path/to/my/super/app.py", "//path/to/my/super/lib.zip")
+    result should contain theSameElementsAs
+      Seq(ApplicationFile("//path/to/my/super/app.py"), ApplicationFile("//path/to/my/super/lib.zip"))
   }
 
   test("Generate application files for python spark-submit in client mode") {
@@ -30,7 +33,8 @@ class YTsaurusOperationManagerSuite extends SparkFunSuite with BeforeAndAfter wi
 
     val result = YTsaurusOperationManager.applicationFiles(conf)
 
-    result should contain theSameElementsAs Seq("//path/to/my/super/app.py", "//path/to/my/super/lib.zip")
+    result should contain theSameElementsAs
+      Seq(ApplicationFile("//path/to/my/super/app.py"), ApplicationFile("//path/to/my/super/lib.zip"))
   }
 
   test("Generate application files for java spark-submit") {
@@ -40,7 +44,21 @@ class YTsaurusOperationManagerSuite extends SparkFunSuite with BeforeAndAfter wi
 
     val result = YTsaurusOperationManager.applicationFiles(conf)
 
-    result should contain theSameElementsAs Seq("//path/to/my/super/lib.jar", "//path/to/my/super/app.jar")
+    result should contain theSameElementsAs
+      Seq(ApplicationFile("//path/to/my/super/lib.jar"), ApplicationFile("//path/to/my/super/app.jar"))
+  }
+
+  test("Generate application files for archives") {
+    val conf = new SparkConf()
+    conf.set(ARCHIVES, Seq("yt:/path/lib.tar.gz#unpacked", "yt:///path/lib2.zip"))
+    conf.set(SUBMIT_PYTHON_FILES, Seq("yt:/path/to/lib.py#dep.py"))
+    conf.set(SPARK_PRIMARY_RESOURCE, SparkLauncher.NO_RESOURCE)
+
+    val result = YTsaurusOperationManager.applicationFiles(conf)
+
+    result should contain theSameElementsAs
+      Seq(ApplicationFile("//path/lib.tar.gz", Some("unpacked"), isArchive = true),
+          ApplicationFile("//path/lib2.zip", isArchive = true), ApplicationFile("//path/to/lib.py", Some("dep.py")))
   }
 
   test("Generate application files for spark-shell") {

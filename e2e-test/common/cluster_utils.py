@@ -1,22 +1,35 @@
 from spyt.standalone import find_spark_cluster
 
+import json
 import logging
 import os
 from pathlib import Path
+from pyspark.conf import SparkConf
 import requests
 import shutil
+from yt.wrapper.operation_commands import get_jobs_with_error_or_stderr, get_operation_error
 
 
 logger = logging.getLogger(__name__)
 
 
-def dump_debug_data(dump_dir=None, operation=None, yt_root_path=None, yt_client=None, discovery_path=None):
+DEFAULT_SPARK_CONF = {
+    "spark.hadoop.yt.user": "root",
+    "spark.hadoop.yt.token": "",
+    "spark.yt.log.enabled": "false",
+    "spark.executor.instances": "1",
+    "spark.executor.cores": "1",
+    "spark.executor.memory": "768M"
+}
+
+
+def dump_debug_data(dump_dir=None, op_id=None, yt_root_path=None, yt_client=None, discovery_path=None):
     if not dump_dir:
         logger.info("Directory for preserving debug data is not provided")
         return
 
-    if operation:
-        dump_operation_logs(dump_dir, operation)
+    if op_id and yt_client:
+        dump_operation_logs(dump_dir, op_id, yt_client)
     if yt_root_path:
         dump_cluster_logs(dump_dir, yt_root_path)
     if yt_client and discovery_path:
@@ -65,9 +78,12 @@ def dump_cluster_logs(dump_dir, yt_root_path):
     dump_runtime_files(dump_dir, yt_root_path, os.path.join("spark", "work"), "worker", ignore_function)
 
 
-def dump_operation_logs(dump_dir, operation):
+def dump_operation_logs(dump_dir, op_id, client):
     dest_logs_path = get_data_path(dump_dir, "operation_logs", create_dir=True)
-    job_infos = operation.get_jobs_with_error_or_stderr()
+    op_error = get_operation_error(op_id, client=client)
+    if op_error:
+        Path(dest_logs_path, 'operation_stderr').write_text(json.dumps(op_error, indent=2))
+    job_infos = get_jobs_with_error_or_stderr(op_id, only_failed_jobs=False, client=client)
     for i, job_info in enumerate(job_infos):
         Path(dest_logs_path, f'stderr_{i}').write_text(job_info['stderr'])
 
@@ -110,11 +126,5 @@ def is_accessible(url):
         return False
 
 
-def apply_default_conf(spark_conf):
-    return spark_conf \
-        .set("spark.hadoop.yt.user", "root") \
-        .set("spark.hadoop.yt.token", "") \
-        .set("spark.yt.log.enabled", "false") \
-        .set("spark.executor.instances", "1") \
-        .set("spark.executor.cores", "1") \
-        .set("spark.executor.memory", "768M")
+def default_conf():
+    return SparkConf().setAll(DEFAULT_SPARK_CONF.items())

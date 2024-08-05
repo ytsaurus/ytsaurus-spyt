@@ -11,7 +11,8 @@ from subprocess import Popen, PIPE
 from py4j.protocol import Py4JJavaError
 from enum import Enum
 from datetime import timedelta
-from .utils import scala_buffer_to_list, get_spark_home, get_spyt_home
+from .utils import scala_buffer_to_list, get_spark_home, get_spyt_home, _add_conf
+import subprocess
 
 
 logger = logging.getLogger(__name__)
@@ -335,3 +336,32 @@ class SparkLauncher(object):
 
     def set_verbose(self, verbose):
         self._jlauncher.setVerbose(verbose)
+
+
+def create_base_spark_env(spark_home):
+    spark_env = os.environ.copy()
+    spark_env["SPARK_CONF_DIR"] = os.path.join(get_spyt_home(), "conf")
+    if spark_home:
+        spark_env["SPARK_HOME"] = spark_home
+    return spark_env
+
+
+def direct_submit(yt_proxy, num_executors, main_file, deploy_mode="cluster", pool=None,
+                  spark_base_args=[], job_args=[], spark_conf={}):
+    spark_home = get_spark_home()
+    spark_submit_path = "{}/bin/spark-submit".format(spark_home)
+    spark_args = [spark_submit_path]
+    spark_args.extend(["--master", "ytsaurus://" + yt_proxy])
+    spark_args.extend(["--deploy-mode", deploy_mode])
+    spark_args.extend(["--num-executors", str(num_executors)])
+    if pool:
+        spark_args.extend(["--queue", pool])
+    _add_conf(spark_conf, spark_args)
+    spark_args.extend(spark_base_args)
+    spark_args.append(main_file)
+    spark_args.extend(job_args)
+
+    spark_env = create_base_spark_env(spark_home)
+
+    # replace stdin to avoid https://bugs.openjdk.java.net/browse/JDK-8211842
+    return subprocess.call(spark_args, env=spark_env, stdin=subprocess.PIPE)

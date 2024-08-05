@@ -27,21 +27,14 @@ from .conf import read_remote_conf, validate_cluster_version, \
     latest_ytserver_proxy_path, read_global_conf, python_bin_path, \
     worker_num_limit, validate_worker_num, read_cluster_conf, validate_ssd_config, cuda_toolkit_version  # noqa: E402
 from .utils import get_spark_master, base_spark_conf, SparkDiscovery, SparkCluster, call_get_proxy_address_url, \
-    parse_bool  # noqa: E402
+    parse_bool, _add_conf  # noqa: E402
 from .enabler import SpytEnablers  # noqa: E402
 from .spec import SparkDefaultArguments, CommonComponentConfig, MasterConfig, WorkerConfig, HistoryServerConfig, \
     LivyConfig, build_spark_operation_spec, WorkerResources  # noqa: E402
 from .version import __scala_version__  # noqa: E402
-from .utils import get_spyt_home  # noqa: E402
+from .submit import create_base_spark_env  # noqa: E402
 
 logger = logging.getLogger(__name__)
-
-
-def _add_conf(spark_conf, spark_args):
-    if spark_conf:
-        for k, v in spark_conf.items():
-            spark_args.append("--conf")
-            spark_args.append("{}={}".format(k, v))
 
 
 def _add_master(discovery, spark_args, rest, client=None):
@@ -72,16 +65,10 @@ def _add_job_args(job_args, spark_args):
 
 
 def _create_spark_env(client, spark_home):
-    spark_env = os.environ.copy()
-    yt_token = get_token(client=client)
-    yt_user = get_user_name(client=client)
-    yt_proxy = call_get_proxy_address_url(client=client)
-    spark_env["SPARK_USER"] = yt_user
-    spark_env["SPARK_YT_TOKEN"] = yt_token
-    spark_env["SPARK_YT_PROXY"] = yt_proxy
-    spark_env["SPARK_CONF_DIR"] = os.path.join(get_spyt_home(), "conf")
-    if spark_home:
-        spark_env["SPARK_HOME"] = spark_home
+    spark_env = create_base_spark_env(spark_home)
+    spark_env["SPARK_USER"] = get_user_name(client=client)
+    spark_env["SPARK_YT_TOKEN"] = get_token(client=client)
+    spark_env["SPARK_YT_PROXY"] = call_get_proxy_address_url(client=client)
     return spark_env
 
 

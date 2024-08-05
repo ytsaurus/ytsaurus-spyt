@@ -89,7 +89,6 @@ object Config {
     .createWithDefault(1000)
 
   val YTSAURUS_CUDA_VERSION = ConfigBuilder("spark.ytsaurus.cuda.version")
-    .internal()
     .version("3.2.2")
     .stringConf
     .createOptional
@@ -109,6 +108,12 @@ object Config {
     .createOptional
 
   val YTSAURUS_EXTRA_PORTO_LAYER_PATHS = ConfigBuilder("spark.ytsaurus.porto.extra.layer.paths")
+    .version("3.2.2")
+    .stringConf
+    .createOptional
+
+  val YTSAURUS_DRIVER_OPERATION_DUMP_PATH = ConfigBuilder("spark.ytsaurus.driver.operation.dump.path")
+    .doc("File where driver operation id will be written after successful start")
     .version("3.2.2")
     .stringConf
     .createOptional

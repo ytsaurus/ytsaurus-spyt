@@ -1,13 +1,23 @@
 import spyt
 
-from common.cluster import HistoryServer, SpytCluster
+from common.cluster import DirectSubmitter, HistoryServer, SpytCluster, direct_spark_session
+from common.cluster_utils import default_conf
 import logging
+import os
 from pyspark.sql import SparkSession
 import pytest
+import shutil
 import spyt.client
 from utils import DRIVER_CLIENT_CONF, SPARK_CONF, YT_PROXY
 import uuid
 from yt.wrapper import YtClient
+
+
+def test_directory(request):
+    dir_path = os.path.join(os.getcwd(), "test-results", request.node.parent.name + "__" + request.node.name)
+    shutil.rmtree(dir_path, ignore_errors=True)
+    os.makedirs(dir_path)
+    return dir_path
 
 
 @pytest.fixture(scope="module")
@@ -18,8 +28,8 @@ def yt_client():
 
 
 @pytest.fixture(scope="function")
-def spyt_cluster():
-    with SpytCluster(proxy=YT_PROXY) as cluster:
+def spyt_cluster(request):
+    with SpytCluster(proxy=YT_PROXY, dump_dir=test_directory(request)) as cluster:
         yield cluster
 
 
@@ -41,7 +51,7 @@ def tmp_dir(yt_client):
 
 @pytest.fixture(scope="function")
 def local_session():
-    session = SparkSession.builder.config(conf=SPARK_CONF).getOrCreate()
+    session = SparkSession.builder.config(conf=default_conf().setAll(SPARK_CONF.items())).getOrCreate()
     logging.debug("Created local spark session")
     try:
         yield session
@@ -52,10 +62,18 @@ def local_session():
 
 @pytest.fixture(scope="function")
 def direct_session():
-    with spyt.direct_spark_session(YT_PROXY, SPARK_CONF) as session:
+    with direct_spark_session(YT_PROXY, extra_conf=SPARK_CONF) as session:
         logging.debug("Created direct spark session")
         yield session
     logging.debug("Stopped direct spark session")
+
+
+@pytest.fixture(scope="function")
+def direct_submitter(request):
+    with DirectSubmitter(YT_PROXY, extra_conf=SPARK_CONF, dump_dir=test_directory(request)) as submitter:
+        logging.debug("Created direct submitter")
+        yield submitter
+    logging.debug("Stopped direct submitter")
 
 
 @pytest.fixture(scope="function")

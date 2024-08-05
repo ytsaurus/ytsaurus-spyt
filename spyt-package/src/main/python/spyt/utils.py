@@ -343,3 +343,10 @@ def call_get_proxy_address_url(**kwargs):
 
 def parse_bool(flag):
     return flag is not None and flag.lower() == 'true'
+
+
+def _add_conf(spark_conf, spark_args):
+    if spark_conf:
+        for k, v in spark_conf.items():
+            spark_args.append("--conf")
+            spark_args.append("{}={}".format(k, v))

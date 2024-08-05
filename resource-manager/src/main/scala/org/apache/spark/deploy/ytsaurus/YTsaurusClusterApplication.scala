@@ -4,9 +4,12 @@ package org.apache.spark.deploy.ytsaurus
 import scala.collection.mutable
 import org.apache.spark.SparkConf
 import org.apache.spark.deploy.SparkApplication
+import org.apache.spark.deploy.ytsaurus.Config.YTSAURUS_DRIVER_OPERATION_DUMP_PATH
 import org.apache.spark.internal.Logging
 import org.apache.spark.scheduler.cluster.ytsaurus.YTsaurusOperationManager
-import org.apache.spark.scheduler.cluster.ytsaurus.YTsaurusOperationManager.{getWebUIAddress, getOperationState}
+import org.apache.spark.scheduler.cluster.ytsaurus.YTsaurusOperationManager.{getOperationState, getWebUIAddress}
+
+import scala.reflect.io.File
 
 
 private[spark] class YTsaurusClusterApplication extends SparkApplication with Logging {
@@ -32,6 +35,7 @@ private[spark] class YTsaurusClusterApplication extends SparkApplication with Lo
 
       var currentState = "undefined"
       var webUIAddress: Option[String] = None
+      conf.get(YTSAURUS_DRIVER_OPERATION_DUMP_PATH).foreach { File(_).writeAll(driverOperation.id.toString) }
       while (!YTsaurusOperationManager.isFinalState(currentState)) {
         Thread.sleep(pingInterval)
         val opSpec = operationManager.getOperation(driverOperation)

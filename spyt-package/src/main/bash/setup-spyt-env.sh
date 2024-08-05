@@ -50,3 +50,15 @@ fi
 if [ $enable_livy ]; then
   tar --warning=no-unknown-keyword -xf livy.tgz -C $spark_home
 fi
+
+for file in $(ls); do
+  if [[ $file =~ ^(.*)-arc-dep(.*)$ ]]; then
+    target=${BASH_REMATCH[1]}
+    extension=${BASH_REMATCH[2]}
+    if [ $extension = ".zip" ] || [ $extension == ".jar" ]; then
+      unzip $file -d $target
+    else
+      mkdir $target && tar -xf $file -C $target
+    fi
+  fi
+done

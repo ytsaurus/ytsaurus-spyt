@@ -305,8 +305,7 @@ private[spark] object YTsaurusOperationManager extends Logging {
       logInfo(s"Used SPYT version: $spytVersion")
       val environment = globalConfig.getMap("environment")
       val javaHome = environment.getStringO("JAVA_HOME")
-        .orElseThrow(() => new SparkException("JAVA_HOME is not set in " +
-          s"${GLOBAL_CONFIG_PATH.key} parameter value"))
+        .orElseThrow(() => new SparkException(s"JAVA_HOME is not set in ${GLOBAL_CONFIG_PATH.key} parameter value"))
 
       val releaseConfigPath = s"${conf.get(RELEASE_CONFIG_PATH)}/$spytVersion/${conf.get(LAUNCH_CONF_FILE)}"
 
@@ -318,8 +317,10 @@ private[spark] object YTsaurusOperationManager extends Logging {
       val pythonPaths = globalConfig.getMapO("python_cluster_paths").orElse(YTree.mapBuilder().buildMap())
       val cudaVersion = globalConfig.getStringO("cuda_toolkit_version").orElse("11.0")
 
-      applicationFiles(conf).foreach { fileName =>
-        filePaths.add(YTree.stringNode(fileName))
+      applicationFiles(conf).foreach { appFile =>
+        val node = YTree.stringNode(appFile.ytPath)
+        node.putAttribute("file_name", YTree.stringNode(appFile.downloadName))
+        filePaths.add(node)
       }
 
       val sv = org.apache.spark.SPARK_VERSION_SHORT
@@ -352,7 +353,7 @@ private[spark] object YTsaurusOperationManager extends Logging {
       conf.set("spark.executor.resource.gpu.discoveryScript", s"$spytHome/bin/getGpusResources.sh")
 
       val ytsaurusJavaOptions = ArrayBuffer[String]()
-      if (conf.getBoolean("spark.hadoop.yt.preferenceIpv6.enabled", false)) {
+      if (conf.getBoolean("spark.hadoop.yt.preferenceIpv6.enabled", defaultValue = false)) {
         ytsaurusJavaOptions += "-Djava.net.preferIPv6Addresses=true"
       }
       ytsaurusJavaOptions += s"$$(cat $spytHome/conf/java-opts)"
@@ -425,22 +426,36 @@ private[spark] object YTsaurusOperationManager extends Logging {
     versions.max.toString
   }
 
-  private[ytsaurus] def applicationFiles(conf: SparkConf): Seq[String] = {
-    val providedLists = conf.get(JARS) ++
-      conf.get(FILES) ++
-      conf.get(ARCHIVES) ++
-      conf.get(SUBMIT_PYTHON_FILES)
+  private[ytsaurus] case class ApplicationFile(ytPath: String, targetName: Option[String] = None,
+                                               isArchive: Boolean = false) {
+    private def originName: String = ytPath.split('/').last
 
-    val primaryResource = conf.get(SPARK_PRIMARY_RESOURCE)
+    private def originExtension: String = originName.split("\\.", 2).last
 
-    val primaryResourceSeq =
-      if (primaryResource != null && primaryResource != SparkLauncher.NO_RESOURCE) {
-        Seq(primaryResource)
+    private def localName: String = targetName.getOrElse(originName)
+
+    def downloadName: String = if (isArchive) s"$localName-arc-dep.$originExtension" else localName
+  }
+
+  private[ytsaurus] def extractYtFiles(files: Seq[String], isArchive: Boolean = false): Seq[ApplicationFile] = {
+    files.filter(_.startsWith("yt:/")).map(YtWrapper.formatPath).map { file =>
+      val parts = file.split('#')
+      if (parts.length == 1) {
+        ApplicationFile(file, None, isArchive)
+      } else if (parts.length == 2) {
+        ApplicationFile(parts.head, Some(parts.last), isArchive)
       } else {
-        Seq.empty
+        throw new SparkException(s"Too many '#': $file")
       }
+    }
+  }
 
-    (providedLists ++ primaryResourceSeq).filter(_.startsWith("yt:/")).map(YtWrapper.formatPath).distinct
+  private[ytsaurus] def applicationFiles(conf: SparkConf): Seq[ApplicationFile] = {
+    val files = Seq(JARS, FILES, ARCHIVES, SUBMIT_PYTHON_FILES).flatMap(k => extractYtFiles(conf.get(k), k == ARCHIVES))
+    val primaryResource =
+      extractYtFiles(Option(conf.get(SPARK_PRIMARY_RESOURCE)).filter(_ != SparkLauncher.NO_RESOURCE).toSeq)
+
+    (files ++ primaryResource).distinct
   }
 
   private[ytsaurus] def enrichSparkConf(conf: SparkConf, ytSparkConfig: YTreeMapNode): Unit = {
@@ -456,7 +471,7 @@ private[spark] object YTsaurusOperationManager extends Logging {
       val enablers = ytSparkConfig.getMap("enablers")
       enablers.keys().forEach { enabler =>
         if (conf.contains(enabler)) {
-          val confValue = conf.getBoolean(enabler, false)
+          val confValue = conf.getBoolean(enabler, defaultValue = false)
           val updatedValue = confValue && enablers.getBool(enabler)
           if (confValue != updatedValue) {
             logWarning(s"Property $enabler was explicitly set to $updatedValue because of cluster settings")

@@ -88,6 +88,15 @@ class YtSparkSQLTest extends FlatSpec with Matchers with LocalSpark with TmpDir
     }
   }
 
+  it should "select rows with wrong schema" in {
+    writeTableFromYson(Seq(
+      """{a = 1; b = "a"; c = 0.3}"""
+    ), tmpPath, atomicSchema)
+
+    val res = spark.sql(s"SELECT * FROM yt.`yt:/$tmpPath`")
+    res.collect() should contain theSameElementsAs Seq(Row(1, "a", 0.3))
+  }
+
   it should "select rows in complex table" in {
     val data = Seq("""{array = [1; 2; 3]; map = {k1 = "a"; k2 = "b"}}""")
     val correctResult = Array(Seq(

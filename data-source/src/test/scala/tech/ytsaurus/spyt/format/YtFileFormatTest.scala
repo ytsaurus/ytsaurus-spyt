@@ -755,6 +755,13 @@ class YtFileFormatTest extends AnyFlatSpec with Matchers with LocalSpark
     spark.read.yt(customPath).as[Double].collect() should contain theSameElementsAs data
   }
 
+  // The only accepted schema in table path is ytTable. So user specified should be ignored
+  it should "read with wrong schema for tables" in {
+    val data = Seq(0.4, 0.5, 0.6)
+    data.toDF().coalesce(1).write.yt(tmpPath)
+    spark.read.yt("yt:/" + tmpPath).as[Double].collect() should contain theSameElementsAs data
+  }
+
   it should "read dataframe from several tables" in {
     YtWrapper.createDir(tmpPath)
     val table1 = s"$tmpPath/t1"

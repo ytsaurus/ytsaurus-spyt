@@ -85,12 +85,9 @@ object YPathEnriched {
   }
 
   def fromString(p: String): YPathEnriched = {
-    val (scheme, path) = if (p.contains(":/")) {
-      val parts = p.split(":/", 2)
-      (parts.head, parts.last)
-    } else {
-      (null, p)
-    }
+    // It can be taken from path, but now ytTable is the only right schema
+    val scheme = "ytTable"
+    val path = if (p.contains(":/")) p.split(":/", 2).last else p
     val richP = RichYPath.fromString(path)
     val strP = YtWrapper.correctSlashes(richP.justPath().toStableString, 1)
     val attrs = mutable.ListMap[String, String]()

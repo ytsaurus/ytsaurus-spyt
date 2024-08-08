@@ -7,6 +7,7 @@ import org.apache.arrow.vector.{FieldVector, VectorSchemaRoot}
 import org.apache.spark.sql.types.StructType
 import org.apache.spark.sql.vectorized.{ColumnVector, ColumnarBatch}
 import org.slf4j.LoggerFactory
+import tech.ytsaurus.core.tables.{ColumnSchema, ColumnValueType, TableSchema}
 import tech.ytsaurus.spyt.serializers.SchemaConverter.MetadataFields
 import tech.ytsaurus.spyt.wrapper.LogLazy
 import tech.ytsaurus.spyt.serialization.IndexedDataType
@@ -15,8 +16,8 @@ import tech.ytsaurus.spyt.wrapper.table.YtArrowInputStream
 
 import scala.collection.JavaConverters._
 
-class ArrowBatchReader(stream: YtArrowInputStream,
-                       schema: StructType) extends BatchReaderBase with LogLazy {
+class ArrowBatchReader(stream: YtArrowInputStream, schema: StructType,
+                       ytSchema: TableSchema) extends BatchReaderBase with LogLazy {
   private val log = LoggerFactory.getLogger(getClass)
 
   private val indexedSchema = schema.fields.map(f => SchemaConverter.indexedDataType(f.dataType))
@@ -87,7 +88,8 @@ class ArrowBatchReader(stream: YtArrowInputStream,
     _dictionaries = _reader.getDictionaryVectors
   }
 
-  private def createArrowColumnVector(vector: FieldVector, dataType: IndexedDataType): ArrowColumnVector = {
+  private def createArrowColumnVector(vector: FieldVector, dataType: IndexedDataType,
+                                      columnType: ColumnValueType): ArrowColumnVector = {
     val isNullVector = vector.getNullCount == vector.getValueCount
     val dict = Option(vector.getField.getDictionary).flatMap { encoding =>
       if (_dictionaries.containsKey(encoding.getId)) {
@@ -96,7 +98,7 @@ class ArrowBatchReader(stream: YtArrowInputStream,
         throw new UnsupportedOperationException
       } else None
     }
-    new ArrowColumnVector(dataType, vector, dict, isNullVector)
+    new ArrowColumnVector(dataType, vector, dict, isNullVector, columnType)
   }
 
   private def updateBatch(): Unit = {
@@ -108,10 +110,17 @@ class ArrowBatchReader(stream: YtArrowInputStream,
 
     val arrowSchema = _root.getSchema.getFields.asScala.map(_.getName)
     val arrowVectors = arrowSchema.zip(_root.getFieldVectors.asScala).toMap
-    schema.fields.zipWithIndex.foreach { case (fieldName, index) =>
+    schema.fields.zipWithIndex.foreach { case (field, index) =>
       val dataType = indexedSchema(index)
-      val arrowVector = arrowVectors.get(fieldName.metadata.getString(MetadataFields.ORIGINAL_NAME))
-        .map(createArrowColumnVector(_, dataType))
+      val fieldName = MetadataFields.getOriginalName(field)
+      val arrowVector = arrowVectors.get(fieldName)
+        .map { vec =>
+          val columnSchema = ytSchema.getColumnSchema(ytSchema.findColumn(fieldName))
+          if (columnSchema == null) {
+            throw new IllegalStateException(s"Column $fieldName not found in schema")
+          }
+          createArrowColumnVector(vec, dataType, columnSchema.getType)
+        }
         .getOrElse(ArrowColumnVector.nullVector(dataType))
       _columnVectors(index) = arrowVector
     }

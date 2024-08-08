@@ -8,15 +8,19 @@ import org.apache.spark.sql.types._
 import org.apache.spark.sql.vectorized.{ColumnVector, ColumnarArray, ColumnarMap}
 import org.apache.spark.unsafe.types.UTF8String
 import tech.ytsaurus.core.common.Decimal.binaryToText
+import tech.ytsaurus.core.tables.ColumnValueType
 import tech.ytsaurus.spyt.serialization.IndexedDataType.{ArrayType => IArrayType, AtomicType => IAtomicType}
 import tech.ytsaurus.spyt.serialization.{IndexedDataType, YsonDecoder}
 import tech.ytsaurus.spyt.types.YTsaurusTypes
 import tech.ytsaurus.yson.YsonTags
 
+import java.nio.charset.StandardCharsets
+
 class ArrowColumnVector(dataType: IndexedDataType,
                         vector: ValueVector,
                         dictionary: Option[Dictionary],
-                        isNullVector: Boolean) extends ColumnVector(dataType.sparkDataType) {
+                        isNullVector: Boolean,
+                        columnType: ColumnValueType) extends ColumnVector(dataType.sparkDataType) {
   private val accessor: ArrowVectorAccessor = {
     if (isNullVector) {
       NullAccessor
@@ -46,12 +50,10 @@ class ArrowColumnVector(dataType: IndexedDataType,
         case v: Float8Vector => DoubleAccessor(keys, v)
         case v: DecimalVector => DecimalAccessor(keys, v)
         case v: VarCharVector => StringAccessor(keys, v)
-        case v: VarBinaryVector =>
-          dataType match {
-            case IAtomicType(_: BinaryType) => BinaryAccessor(keys, v)
-            case IAtomicType(_: StringType) => StringBinaryAccessor(keys, v)
-            case _ => YsonAccessor(keys, v)
-          }
+        case v: VarBinaryVector
+          if columnType == ColumnValueType.STRING && !dataType.sparkDataType.isInstanceOf[DecimalType] =>
+          BinaryAccessor(keys, v)
+        case v: VarBinaryVector => YsonAccessor(keys, v)
         case v: DateDayVector => DateAccessor(keys, v)
         case v: TimeStampMicroTZVector => TimestampAccessor(keys, v)
         case v: ListVector => ArrayAccessor(keys, v)
@@ -127,16 +129,13 @@ class ArrowColumnVector(dataType: IndexedDataType,
 
     protected val k: BaseIntVector = keys.orNull
 
-    def id(rowId: Int): Int = {
-      if (isDict) k.getValueAsLong(rowId).toInt else rowId
-    }
+    def id(rowId: Int): Int = if (isDict) k.getValueAsLong(rowId).toInt else rowId
 
-    val vector = keys.getOrElse(values)
+    val vector: ValueVector = keys.getOrElse(values)
 
     def isNullAt(rowId: Int): Boolean = {
-      if (isDict) {
-        isNull(k, rowId) || isNull(values, id(rowId))
-      } else isNull(values, rowId)
+      if (isDict) isNull(k, rowId) || isNull(values, id(rowId))
+      else isNull(values, rowId)
     }
 
     private def isNull(vector: ValueVector, index: Int): Boolean = vector.isNull(index)
@@ -173,25 +172,47 @@ class ArrowColumnVector(dataType: IndexedDataType,
 
   private case class BooleanAccessor(keys: Option[BaseIntVector], values: BitVector) extends ArrowVectorAccessor {
     override final def getBoolean(rowId: Int): Boolean = values.get(id(rowId)) == 1
+
+    override final def getInt(rowId: Int): Int = if (getBoolean(rowId)) 1 else 0
+
+    override final def getLong(rowId: Int): Long = getInt(rowId)
+
+    override final def getUTF8String(rowId: Int): UTF8String = UTF8String.fromString(getBoolean(rowId).toString)
   }
 
-  private case class ByteAccessor(keys: Option[BaseIntVector], values: TinyIntVector) extends ArrowVectorAccessor {
+  private abstract class BaseLongAccessor extends ArrowVectorAccessor {
+    override final def getBoolean(rowId: Int): Boolean = getLong(rowId) != 0L
+
+    override final def getFloat(rowId: Int): Float = getLong(rowId).toFloat
+
+    override final def getDouble(rowId: Int): Double = getLong(rowId).toDouble
+
+    override final def getUTF8String(rowId: Int): UTF8String = UTF8String.fromString(getLong(rowId).toString)
+  }
+
+  private case class ByteAccessor(keys: Option[BaseIntVector], values: TinyIntVector) extends BaseLongAccessor {
     override final def getByte(rowId: Int): Byte = values.get(id(rowId))
+
+    override final def getLong(rowId: Int): Long = getByte(rowId)
   }
 
-  private case class ShortAccessor(keys: Option[BaseIntVector], values: SmallIntVector) extends ArrowVectorAccessor {
+  private case class ShortAccessor(keys: Option[BaseIntVector], values: SmallIntVector) extends BaseLongAccessor {
     override final def getShort(rowId: Int): Short = values.get(id(rowId))
+
+    override final def getLong(rowId: Int): Long = getShort(rowId)
   }
 
-  private case class IntAccessor(keys: Option[BaseIntVector], values: IntVector) extends ArrowVectorAccessor {
+  private case class IntAccessor(keys: Option[BaseIntVector], values: IntVector) extends BaseLongAccessor {
     override final def getInt(rowId: Int): Int = values.get(id(rowId))
+
+    override final def getLong(rowId: Int): Long = getInt(rowId)
   }
 
-  private case class LongAccessor(keys: Option[BaseIntVector], values: BigIntVector) extends ArrowVectorAccessor {
+  private case class LongAccessor(keys: Option[BaseIntVector], values: BigIntVector) extends BaseLongAccessor {
     override final def getLong(rowId: Int): Long = values.get(id(rowId))
   }
 
-  private case class UInt1Accessor(keys: Option[BaseIntVector], values: UInt1Vector) extends ArrowVectorAccessor {
+  private case class UInt1Accessor(keys: Option[BaseIntVector], values: UInt1Vector) extends BaseLongAccessor {
     override final def getLong(rowId: Int): Long = values.get(id(rowId))
 
     override final def getInt(rowId: Int): Int = values.get(id(rowId))
@@ -201,7 +222,7 @@ class ArrowColumnVector(dataType: IndexedDataType,
     override def getByte(rowId: Int): Byte = values.get(id(rowId))
   }
 
-  private case class UInt2Accessor(keys: Option[BaseIntVector], values: UInt2Vector) extends ArrowVectorAccessor {
+  private case class UInt2Accessor(keys: Option[BaseIntVector], values: UInt2Vector) extends BaseLongAccessor {
     override final def getLong(rowId: Int): Long = values.get(id(rowId)).toLong
 
     override final def getInt(rowId: Int): Int = values.get(id(rowId)).toInt
@@ -209,13 +230,13 @@ class ArrowColumnVector(dataType: IndexedDataType,
     override def getShort(rowId: Int): Short = values.get(id(rowId)).toShort
   }
 
-  private case class UInt4Accessor(keys: Option[BaseIntVector], values: UInt4Vector) extends ArrowVectorAccessor {
+  private case class UInt4Accessor(keys: Option[BaseIntVector], values: UInt4Vector) extends BaseLongAccessor {
     override final def getLong(rowId: Int): Long = values.get(id(rowId))
 
     override final def getInt(rowId: Int): Int = values.get(id(rowId))
   }
 
-  private case class UInt8Accessor(keys: Option[BaseIntVector], values: UInt8Vector) extends ArrowVectorAccessor {
+  private case class UInt8Accessor(keys: Option[BaseIntVector], values: UInt8Vector) extends BaseLongAccessor {
     override final def getLong(rowId: Int): Long = values.get(id(rowId))
 
     override final def getBinary(rowId: Int): Array[Byte] = values.getObjectNoOverflow(id(rowId)).toByteArray
@@ -225,11 +246,21 @@ class ArrowColumnVector(dataType: IndexedDataType,
     }
   }
 
-  private case class FloatAccessor(keys: Option[BaseIntVector], values: Float4Vector) extends ArrowVectorAccessor {
-    override final def getFloat(rowId: Int): Float = values.get(id(rowId))
+  private abstract class BaseDoubleAccessor extends ArrowVectorAccessor {
+    override final def getLong(rowId: Int): Long = getDouble(rowId).toLong
+
+    override final def getInt(rowId: Int): Int = getDouble(rowId).toInt
+
+    override final def getUTF8String(rowId: Int): UTF8String = UTF8String.fromString(getDouble(rowId).toString)
   }
 
-  private case class DoubleAccessor(keys: Option[BaseIntVector], values: Float8Vector) extends ArrowVectorAccessor {
+  private case class FloatAccessor(keys: Option[BaseIntVector], values: Float4Vector) extends BaseDoubleAccessor {
+    override final def getFloat(rowId: Int): Float = values.get(id(rowId))
+
+    override final def getDouble(rowId: Int): Double = getFloat(rowId).toDouble
+  }
+
+  private case class DoubleAccessor(keys: Option[BaseIntVector], values: Float8Vector) extends BaseDoubleAccessor {
     override final def getDouble(rowId: Int): Double = values.get(id(rowId))
   }
 
@@ -260,7 +291,21 @@ class ArrowColumnVector(dataType: IndexedDataType,
     }
   }
 
-  private case class StringBinaryAccessor(keys: Option[BaseIntVector], values: VarBinaryVector) extends ArrowVectorAccessor {
+  private case class BinaryAccessor(keys: Option[BaseIntVector], values: VarBinaryVector) extends ArrowVectorAccessor {
+    private def getString(rowId: Int): String = new String(getBinary(rowId), StandardCharsets.UTF_8)
+
+    override def getBoolean(rowId: Int): Boolean = getString(rowId).toBoolean
+
+    override final def getLong(rowId: Int): Long = getString(rowId).toLong
+
+    override final def getInt(rowId: Int): Int = getString(rowId).toInt
+
+    override final def getFloat(rowId: Int): Float = getString(rowId).toFloat
+
+    override final def getDouble(rowId: Int): Double = getString(rowId).toDouble
+
+    override final def getBinary(rowId: Int): Array[Byte] = values.getObject(id(rowId))
+
     override final def getUTF8String(rowId: Int): UTF8String = {
       if (isDict && k.isNull(rowId)) {
         null
@@ -276,10 +321,6 @@ class ArrowColumnVector(dataType: IndexedDataType,
     }
   }
 
-  private case class BinaryAccessor(keys: Option[BaseIntVector], values: VarBinaryVector) extends ArrowVectorAccessor {
-    override final def getBinary(rowId: Int): Array[Byte] = values.getObject(id(rowId))
-  }
-
   private case class DateAccessor(keys: Option[BaseIntVector], values: DateDayVector) extends ArrowVectorAccessor {
     override final def getInt(rowId: Int): Int = values.get(id(rowId))
   }
@@ -292,7 +333,7 @@ class ArrowColumnVector(dataType: IndexedDataType,
     if (keys.nonEmpty) throw new UnsupportedOperationException
 
     private val dt = dataType.asInstanceOf[IArrayType]
-    final private val arrayData = new ArrowColumnVector(dt.element, values.getDataVector, None, false)
+    final private val arrayData = new ArrowColumnVector(dt.element, values.getDataVector, None, false, null)
 
     override final def isNullAt(rowId: Int): Boolean = { // TODO: Workaround if vector has all non-null values, see ARROW-1948
       if (values.getValueCount > 0 && values.getValidityBuffer.capacity == 0) false
@@ -330,12 +371,12 @@ class ArrowColumnVector(dataType: IndexedDataType,
     }
 
     override def getBoolean(rowId: Int): Boolean = getImpl(rowId, BooleanType)
-    override def getFloat(rowId: Int): Float = getImpl[Double](rowId, DoubleType).toFloat
+    override def getFloat(rowId: Int): Float = getDouble(rowId).toFloat
     override def getDouble(rowId: Int): Double = getImpl(rowId, DoubleType)
     override def getUTF8String(rowId: Int): UTF8String = getImpl(rowId, StringType)
-    override def getByte(rowId: Int): Byte = getImpl[Long](rowId, LongType).toByte
-    override def getShort(rowId: Int): Short = getImpl[Long](rowId, LongType).toShort
-    override def getInt(rowId: Int): Int = getImpl[Long](rowId, LongType).toInt
+    override def getByte(rowId: Int): Byte = getLong(rowId).toByte
+    override def getShort(rowId: Int): Short = getLong(rowId).toShort
+    override def getInt(rowId: Int): Int = getLong(rowId).toInt
     override def getLong(rowId: Int): Long = getImpl(rowId, LongType)
 
     override def getDecimal(rowId: Int, precision: Int, scale: Int): Decimal = {
@@ -383,7 +424,7 @@ class ArrowColumnVector(dataType: IndexedDataType,
 
 object ArrowColumnVector {
   def nullVector(dataType: IndexedDataType): ArrowColumnVector = {
-    new ArrowColumnVector(dataType, null, None, isNullVector = true)
+    new ArrowColumnVector(dataType, null, None, isNullVector = true, null)
   }
 
   def dataType(vector: ValueVector, dictionary: Option[Dictionary]): DataType = {

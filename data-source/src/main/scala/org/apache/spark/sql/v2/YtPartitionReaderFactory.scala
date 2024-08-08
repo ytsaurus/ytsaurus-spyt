@@ -127,8 +127,7 @@ case class YtPartitionReaderFactory(sqlConf: SQLConf,
   private def createSplit(file: YtPartitionedFile): YtInputSplit = {
     val log = LoggerFactory.getLogger(getClass)
     val ytLoggerConfigWithTaskInfo = ytLoggerConfig.map(_.copy(taskContext = Some(TaskInfo(TaskContext.get()))))
-    val split = YtInputSplit(file, resultSchema, pushedFilterSegments, filterPushdownConf,
-      ytLoggerConfigWithTaskInfo)
+    val split = YtInputSplit(file, resultSchema, pushedFilterSegments, filterPushdownConf, ytLoggerConfigWithTaskInfo)
 
     log.info(s"Reading ${split.ytPath}, " +
       s"read batch: $readBatch, return batch: $returnBatch, arrowEnabled: $arrowEnabled, " +

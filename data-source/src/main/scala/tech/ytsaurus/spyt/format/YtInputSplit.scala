@@ -234,7 +234,7 @@ object YtInputSplit {
   }
 
   def addColumnsList(yPath: YPath, schema: StructType): YPath = {
-    val originalFieldNames = schema.fields.map(x => x.metadata.getString(MetadataFields.ORIGINAL_NAME))
+    val originalFieldNames = schema.fields.map(MetadataFields.getOriginalName)
     val columns = java.util.List.of(originalFieldNames: _*)
     val res = yPath.withAdditionalAttributes(java.util.Map.of("columns", new YTreeBuilder().value(columns).build()))
     res

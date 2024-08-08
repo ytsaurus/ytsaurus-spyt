@@ -36,6 +36,6 @@ object YtReaderOptions {
   }
 
   private def arrowSchemaSupported(dataSchema: StructType): Boolean = {
-    dataSchema.fields.forall(_.metadata.getBoolean(MetadataFields.ARROW_SUPPORTED))
+    dataSchema.fields.forall(MetadataFields.isArrowSupported)
   }
 }

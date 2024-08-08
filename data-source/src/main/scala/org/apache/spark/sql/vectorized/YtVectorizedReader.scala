@@ -8,6 +8,7 @@ import tech.ytsaurus.spyt.format.batch.{ArrowBatchReader, BatchReader, EmptyColu
 import tech.ytsaurus.spyt.serializers.ArrayAnyDeserializer
 import tech.ytsaurus.spyt.wrapper.YtWrapper
 import tech.ytsaurus.client.CompoundClient
+import tech.ytsaurus.core.tables.TableSchema
 import tech.ytsaurus.spyt.format.conf.SparkYtConfiguration
 import tech.ytsaurus.spyt.fs.YtHadoopPath
 
@@ -35,8 +36,9 @@ class YtVectorizedReader(split: YtInputSplit,
       // Empty schemas always batch readable
       new EmptyColumnsBatchReader(totalRowCount.get)
     } else if (arrowEnabled && optimizedForScan) {
+      val ytSchema = TableSchema.fromYTree(YtWrapper.attribute(path, "schema", hadoopPath.ypath.transaction))
       val stream = YtWrapper.readTableArrowStream(path, timeout, hadoopPath.ypath.transaction, reportBytesRead)
-      new ArrowBatchReader(stream, schema)
+      new ArrowBatchReader(stream, schema, ytSchema)
     } else {
       val rowIterator = YtWrapper.readTable(path, ArrayAnyDeserializer.getOrCreate(schema), timeout,
         hadoopPath.ypath.transaction, reportBytesRead)

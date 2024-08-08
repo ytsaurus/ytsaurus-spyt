@@ -22,6 +22,14 @@ object SchemaConverter {
     val TAG = "tag"
     val OPTIONAL = "optional"
     val ARROW_SUPPORTED = "arrow_supported"
+
+    def getOriginalName(field: StructField): String = {
+      if (field.metadata.contains(ORIGINAL_NAME)) field.metadata.getString(ORIGINAL_NAME) else field.name
+    }
+
+    def isArrowSupported(field: StructField): Boolean = {
+      field.metadata.contains(ARROW_SUPPORTED) && field.metadata.getBoolean(ARROW_SUPPORTED)
+    }
   }
 
   sealed trait SortOption {

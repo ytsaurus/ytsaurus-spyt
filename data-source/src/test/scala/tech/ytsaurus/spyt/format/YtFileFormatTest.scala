@@ -775,6 +775,42 @@ class YtFileFormatTest extends AnyFlatSpec with Matchers with LocalSpark
     )
   }
 
+  it should "read with strong schema" in {
+    writeTableFromYson(Seq(
+      """{a = 1; b = "5"; c = 0.3; d = %true}""",
+      """{a = 2; b = "6"; c = 1.5; d = %false}"""
+    ), tmpPath, TableSchema.builder()
+      .addValue("a", ColumnValueType.INT64)
+      .addValue("b", ColumnValueType.STRING)
+      .addValue("c", ColumnValueType.DOUBLE)
+      .addValue("d", ColumnValueType.BOOLEAN)
+      .build())
+
+    forAll(Table("arrow_enabled", true, false)) { arrow =>
+      val metadata =
+        if (arrow) new MetadataBuilder().putBoolean("arrow_supported", value = true).build()
+        else Metadata.empty
+
+      val df1 = spark.read.schema(StructType(Seq(
+          StructField("a", StringType, metadata = metadata), StructField("b", DoubleType, metadata = metadata),
+          StructField("c", LongType, metadata = metadata), StructField("d", StringType, metadata = metadata),
+      ))).yt(tmpPath)
+      df1.collect() should contain theSameElementsAs Seq(Row("1", 5.0, 0, "true"), Row("2", 6.0, 1, "false"))
+
+      val df2 = spark.read.schema(StructType(Seq(
+        StructField("a", LongType, metadata = metadata), StructField("b", StringType, metadata = metadata),
+        StructField("c", DoubleType, metadata = metadata), StructField("d", BooleanType, metadata = metadata),
+      ))).yt(tmpPath)
+      df2.collect() should contain theSameElementsAs Seq(Row(1, "5", 0.3, true), Row(2, "6", 1.5, false))
+
+      val df3 = spark.read.schema(StructType(Seq(
+        StructField("a", DoubleType, metadata = metadata), StructField("b", LongType, metadata = metadata),
+        StructField("c", StringType, metadata = metadata), StructField("d", LongType, metadata = metadata),
+      ))).yt(tmpPath)
+      df3.collect() should contain theSameElementsAs Seq(Row(1.0, 5, "0.3", 1), Row(2.0, 6, "1.5", 0))
+    }
+  }
+
   it should "count io statistics" in {
     val customPath = "ytTable:/" + tmpPath
     val data = Stream.from(1).take(1000)

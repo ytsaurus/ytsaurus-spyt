@@ -13,41 +13,23 @@
         <maven.compiler.source>11</maven.compiler.source>
     </properties>
 
-    <repositories>
-        <repository>
-            <id>YandexMedia</id>
-            <name>Yandex artifactory</name>
-            <url>http://artifactory.yandex.net/artifactory/yandex_media_releases</url>
-        </repository>
-        <repository>
-            <id>YandexSpark</id>
-            <name>Yandex artifactory</name>
-            <url>http://artifactory.yandex.net/artifactory/yandex_spark_releases</url>
-        </repository>
-        <repository>
-            <id>YandexSparkSnapshots</id>
-            <name>Yandex artifactory</name>
-            <url>http://artifactory.yandex.net/artifactory/yandex_spark_snapshots</url>
-        </repository>
-    </repositories>
-
     <dependencies>
         <dependency>
             <groupId>org.apache.spark</groupId>
             <artifactId>spark-core_2.12</artifactId>
-            <version>3.0.1</version>
+            <version>3.2.2</version>
             <scope>provided</scope>
         </dependency>
         <dependency>
             <groupId>org.apache.spark</groupId>
             <artifactId>spark-sql_2.12</artifactId>
-            <version>3.0.1</version>
+            <version>3.2.2</version>
             <scope>provided</scope>
         </dependency>
         <dependency>
             <groupId>tech.ytsaurus</groupId>
-            <artifactId>spark-yt-data-source_2.12</artifactId>
-            <version>1.11.0</version>
+            <artifactId>spark-yt-data-source-base_2.12</artifactId>
+            <version>2.1.0</version>
             <scope>provided</scope>
         </dependency>
     </dependencies>

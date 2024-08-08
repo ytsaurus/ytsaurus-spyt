@@ -11,7 +11,7 @@ public class ExceptionLogTest extends SparkAppJava {
         int a = 1 / 0;
         spark.read()
                 .format("yt")
-                .load("/sys/spark/examples/test_data")
+                .load("//home/spark/examples/tables/test_data")
                 .show();
     }
 

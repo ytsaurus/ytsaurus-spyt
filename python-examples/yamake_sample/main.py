@@ -1,8 +1,9 @@
 import argparse
 import logging
-from spyt.arcadia import clean_extracted
+
 import spyt.submit as submit
 import spyt.utils as utils
+from spyt.arcadia import clean_extracted
 
 
 def run_job(proxy, discovery_path):
@@ -26,8 +27,8 @@ def run_job(proxy, discovery_path):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('proxy')
-    parser.add_argument('discovery_path')
+    parser.add_argument('proxy', required=True)
+    parser.add_argument('discovery_path', required=True)
     args, _ = parser.parse_known_args()
     run_job(args.proxy, args.discovery_path)
 

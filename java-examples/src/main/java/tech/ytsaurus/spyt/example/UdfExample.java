@@ -10,14 +10,14 @@ import tech.ytsaurus.spyt.SparkAppJava;
 public class UdfExample extends SparkAppJava {
     @Override
     protected void doRun(String[] args, SparkSession spark, CompoundClient yt) {
-        Dataset<Row> df = spark.read().format("yt").load("/sys/spark/examples/example_1");
+        Dataset<Row> df = spark.read().format("yt").load("//home/spark/examples/tables/example_1");
         UserDefinedFunction splitUdf = functions.udf((String s) -> s.split("-")[1], DataTypes.StringType);
 
         df
           .filter(df.col("id").gt(5))
           .select(splitUdf.apply(df.col("uuid")).as("value"))
           .write().mode(SaveMode.Overwrite).format("yt")
-          .save("/sys/spark/examples/example_1_map");
+          .save("//home/spark/examples/tables/example_1_map");
     }
 
     public static void main(String[] args) {

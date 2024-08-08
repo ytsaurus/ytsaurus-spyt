@@ -10,10 +10,6 @@ public class UdfToPythonExample {
 
     public static UserDefinedFunction parseString = functions.udf((UDF1<String, Integer>) s -> {
         String[] split = s.split(",");
-        if (split.length > 0) {
-            return split.length;
-        } else {
-            return 1;
-        }
+        return split.length > 0 ? split.length : 1
     }, DataTypes.IntegerType);
 }

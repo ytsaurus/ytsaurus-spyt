@@ -18,7 +18,7 @@ public class ParallelTest extends SparkAppJava {
         try {
             CompletableFuture.supplyAsync(() -> {
                 Thread.currentThread().setContextClassLoader(loader);
-                spark.read().format("yt").load("/sys/spark/examples/example_1").show();
+                spark.read().format("yt").load("//home/spark/examples/tables/example_1").show();
                 return 1;
             }, pool).join();
         } finally {

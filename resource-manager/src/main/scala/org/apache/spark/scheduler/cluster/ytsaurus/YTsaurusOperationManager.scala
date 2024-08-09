@@ -2,7 +2,6 @@
 package org.apache.spark.scheduler.cluster.ytsaurus
 
 import org.apache.spark.deploy.ytsaurus.Config._
-import org.apache.spark.{SparkConf, SparkContext, SparkException}
 import org.apache.spark.deploy.ytsaurus.{ApplicationArguments, Config, YTsaurusUtils}
 import org.apache.spark.internal.Logging
 import org.apache.spark.internal.config._
@@ -11,32 +10,33 @@ import org.apache.spark.resource.ResourceProfile
 import org.apache.spark.rpc.RpcEndpointAddress
 import org.apache.spark.scheduler.cluster.CoarseGrainedSchedulerBackend
 import org.apache.spark.util.{Utils, VersionUtils}
+import org.apache.spark.{SparkConf, SparkContext, SparkException}
 import tech.ytsaurus.client.YTsaurusClient
 import tech.ytsaurus.client.operations.{Spec, VanillaSpec}
 import tech.ytsaurus.client.request.{CompleteOperation, GetOperation, UpdateOperationParameters, VanillaOperation}
 import tech.ytsaurus.client.rpc.YTsaurusClientAuth
 import tech.ytsaurus.core.GUID
 import tech.ytsaurus.spyt.wrapper.YtWrapper
-import tech.ytsaurus.ysontree.{YTree, YTreeListNode, YTreeMapNode, YTreeNode, YTreeTextSerializer}
+import tech.ytsaurus.ysontree._
 
 import java.nio.file.Paths
 import scala.collection.JavaConverters._
 import scala.collection.mutable.ArrayBuffer
 
-private[spark] class YTsaurusOperationManager(
-    val ytClient: YTsaurusClient,
-    user: String,
-    token: String,
-    portoLayers: YTreeNode,
-    filePaths: YTreeNode,
-    pythonPaths: YTreeMapNode,
-    environment: YTreeMapNode,
-    home: String,
-    prepareEnvCommand: String,
-    sparkClassPath: String,
-    javaCommand: String,
-    ytsaurusJavaOptions: Seq[String])
+
+private[spark] class YTsaurusOperationManager(val ytClient: YTsaurusClient,
+                                              user: String, token: String,
+                                              portoLayers: YTreeNode,
+                                              filePaths: YTreeNode,
+                                              pythonPaths: YTreeMapNode,
+                                              environment: YTreeMapNode,
+                                              home: String,
+                                              prepareEnvCommand: String,
+                                              sparkClassPath: String,
+                                              javaCommand: String,
+                                              ytsaurusJavaOptions: Seq[String])
   extends Logging {
+
   import YTsaurusOperationManager._
 
   def startDriver(conf: SparkConf, appArgs: ApplicationArguments): YTsaurusOperation = {
@@ -47,11 +47,10 @@ private[spark] class YTsaurusOperationManager(
     operation
   }
 
-  def startExecutors(
-    sc: SparkContext,
-    appId: String,
-    resourceProfile: ResourceProfile,
-    numExecutors: Int): YTsaurusOperation = {
+  def startExecutors(sc: SparkContext,
+                     appId: String,
+                     resourceProfile: ResourceProfile,
+                     numExecutors: Int): YTsaurusOperation = {
     val opParams = executorParams(sc.conf, appId, resourceProfile, numExecutors)
     val operation = startVanillaOperation(sc.conf, EXECUTOR_TASK, opParams)
     // TODO 2. autoscaling with multiple operations
@@ -90,12 +89,10 @@ private[spark] class YTsaurusOperationManager(
   }
 
   private def startVanillaOperation(
-    conf: SparkConf, taskName: String, opParams: OperationParameters): YTsaurusOperation = {
+                                     conf: SparkConf, taskName: String, opParams: OperationParameters): YTsaurusOperation = {
     val jobSpec = createSpec(conf, taskName, opParams)
     val operationSpec = VanillaOperation.builder().setSpec(jobSpec).build()
-
     val runningOperation = ytClient.startVanilla(operationSpec).get()
-
     val operationId = runningOperation.getId
     YTsaurusOperation(operationId)
   }
@@ -105,11 +102,10 @@ private[spark] class YTsaurusOperationManager(
     ytClient.getOperation(request).join()
   }
 
-  private def createSpec(conf: SparkConf, taskName: String, opParams: OperationParameters): VanillaSpec = {
+  private[ytsaurus] def createSpec(conf: SparkConf, taskName: String, opParams: OperationParameters): VanillaSpec = {
     val poolParameters = conf.get(YTSAURUS_POOL).map(pool => Map("pool" -> YTree.stringNode(pool))).getOrElse(Map.empty)
 
     val opSpecBuilder: VanillaSpec.BuilderBase[_] = VanillaSpec.builder()
-
     opSpecBuilder.setTask(taskName, opParams.taskSpec)
 
     val secureVault = YTree.mapBuilder()
@@ -122,15 +118,16 @@ private[spark] class YTsaurusOperationManager(
     val userParameters = conf.getOption(s"spark.ytsaurus.$taskName.operation.parameters")
       .map(YTreeTextSerializer.deserialize(_).asMap().asScala).getOrElse(Map.empty)
 
-    val additionalParameters: Map[String, YTreeNode] = Map(
+    val annotations = SpecificationUtils.getAnnotationsAsYTreeMapNode(conf, taskName)
+    val additionalParameters: Map[String, YTreeNode] = (userParameters ++ Map(
       "secure_vault" -> secureVault,
       "max_failed_job_count" -> YTree.integerNode(opParams.maxFailedJobCount),
       "preemption_mode" -> YTree.stringNode("normal"),
       "title" -> YTree.stringNode(title),
-    ) ++ poolParameters ++ userParameters
+    ) ++ (if (!annotations.isEmpty) Map("annotations" -> annotations) else Map.empty) ++
+      poolParameters).toMap
 
     opSpecBuilder.setAdditionalSpecParameters(additionalParameters.asJava)
-
     opSpecBuilder.build()
   }
 
@@ -204,11 +201,9 @@ private[spark] class YTsaurusOperationManager(
     }
   }
 
-  private def executorParams(
-    conf: SparkConf,
-    appId: String,
-    resourceProfile: ResourceProfile,
-    numExecutors: Int): OperationParameters = {
+
+  private[ytsaurus] def executorParams(conf: SparkConf, appId: String, resourceProfile: ResourceProfile,
+                                       numExecutors: Int): OperationParameters = {
 
     val isPythonApp = conf.get(YTSAURUS_IS_PYTHON)
 
@@ -525,6 +520,7 @@ private[spark] object YTsaurusOperationManager extends Logging {
 }
 
 private[spark] case class YTsaurusOperation(id: GUID)
+
 private[spark] case class OperationParameters(taskSpec: Spec, maxFailedJobCount: Int, attemptId: String)
 
 private case class SpytVersion(major: Int, minor: Int, patch: Int) extends Comparable[SpytVersion] {

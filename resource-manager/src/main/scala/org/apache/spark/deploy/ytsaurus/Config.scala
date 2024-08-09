@@ -117,4 +117,8 @@ object Config {
     .version("3.2.2")
     .stringConf
     .createOptional
+
+  val SPYT_ANNOTATIONS = "spark.ytsaurus.annotations"
+  val SPYT_DRIVER_ANNOTATIONS = "spark.ytsaurus.driver.annotations"
+  val SPYT_EXECUTORS_ANNOTATIONS = "spark.ytsaurus.executors.annotations"
 }

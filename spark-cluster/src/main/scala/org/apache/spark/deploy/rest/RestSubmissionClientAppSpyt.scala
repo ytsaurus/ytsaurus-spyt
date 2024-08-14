@@ -5,7 +5,6 @@ import org.apache.hadoop.fs.FileSystem
 import org.apache.spark.deploy.SparkHadoopUtil
 import org.apache.spark.internal.Logging
 import org.apache.spark.{SparkConf, SparkException}
-import tech.ytsaurus.spyt.Utils
 import tech.ytsaurus.spyt.patch.annotations.{OriginClass, Subclass}
 
 import java.io.File
@@ -93,7 +92,6 @@ class RestSubmissionClientAppSpyt extends RestSubmissionClientApp with Logging {
     FileUtils.moveFile(tmpFile, file)
   }
 
-
   override def start(args: Array[String], conf: SparkConf): Unit = {
     val submissionIdFile = conf.getOption("spark.rest.client.submissionIdFile").map(new File(_))
     val submissionErrorFile = conf.getOption("spark.rest.client.submissionErrorFile")
@@ -107,7 +105,12 @@ class RestSubmissionClientAppSpyt extends RestSubmissionClientApp with Logging {
       val appResource = args(0)
       val mainClass = args(1)
       val appArgs = args.slice(2, args.length)
-      val env = RestSubmissionClient.filterSystemEnvironment(sys.env) ++ Utils.filterSparkConf(conf)
+      val confEnv = conf.getAll.filter {
+        case (key, _) => key.startsWith("spark.yt") || key.startsWith("spark.hadoop.yt")
+      }.map {
+        case (key, value) => key.toUpperCase().replace(".", "_") -> value
+      }.toMap
+      val env = RestSubmissionClient.filterSystemEnvironment(sys.env) ++ confEnv
 
       val submissionId = try {
         val response = run(appResource, mainClass, appArgs, conf, env)

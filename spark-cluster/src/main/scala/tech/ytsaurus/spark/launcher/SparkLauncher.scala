@@ -91,6 +91,7 @@ trait SparkLauncher {
     val src = Path.of(home, "livy-client.template.conf")
     val preparedConfPath = createFromTemplate(src.toFile) { content =>
       content
+        .replaceAll("\\$LIVY_ADDRESS", ytHostnameOrIpAddress)
         .replaceAll("\\$DRIVER_CORES", driverCores.toString)
         .replaceAll("\\$DRIVER_MEMORY", driverMemory)
         .replaceAll("\\$EXTRA_SPARK_CONF", getLivyClientSparkConf().mkString("\n"))

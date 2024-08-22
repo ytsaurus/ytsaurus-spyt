@@ -1,5 +1,7 @@
 package tech.ytsaurus.spyt.format
 
+import org.apache.spark.TaskContext
+import org.apache.spark.executor.TaskMetricUpdater
 import org.apache.spark.metrics.yt.YtMetricsRegister
 import org.apache.spark.metrics.yt.YtMetricsRegister.ytMetricsSource._
 import org.apache.spark.sql.catalyst.InternalRow
@@ -45,7 +47,22 @@ class YtOutputWriter(richPath: YPathEnriched,
   private var count = 0L
   private var batchCount = 0L
 
+  private val taskContext = TaskContext.get()
+
   val path: String = richPath.toStringPath
+
+  private val reportBytesWritten: TableWriter[_] => Unit = {
+    val streamWriterImpl = Class.forName("tech.ytsaurus.client.StreamWriterImpl")
+    val field = streamWriterImpl.getDeclaredField("writePosition")
+    writer => {
+      if (streamWriterImpl.isInstance(writer)) {
+        field.setAccessible(true)
+        val result = field.get(streamWriterImpl.cast(writer)).asInstanceOf[Long]
+        field.setAccessible(false)
+        TaskMetricUpdater.reportBytesWritten(taskContext, result)
+      }
+    }
+  }
 
   initialize()
 
@@ -80,7 +97,9 @@ class YtOutputWriter(richPath: YPathEnriched,
     val closePrev = prevFuture.map(f => Try(Await.result(f, timeout)))
     val currentWriter = writers.head
     writeFutures = currentWriter.readyEvent().thenComposeAsync((unused) => {
-      currentWriter.close().thenAccept(unused => null)
+      currentWriter.close().thenAccept(unused =>
+        reportBytesWritten(currentWriter)
+      )
     }) +: writeFutures
     closePrev.foreach {
       case Failure(exception) =>

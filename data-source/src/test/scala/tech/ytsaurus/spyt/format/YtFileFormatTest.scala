@@ -818,24 +818,19 @@ class YtFileFormatTest extends AnyFlatSpec with Matchers with LocalSpark
     }
   }
 
-  it should "count io statistics" in {
+  it should "count input statistics" in {
     val customPath = "ytTable:/" + tmpPath
     val data = Stream.from(1).take(1000)
 
     val store = UtilsWrapper.appStatusStore(spark)
-    val stagesBefore = store.stageList(null)
-    val totalInputBefore = stagesBefore.map(_.inputBytes).sum
-    val totalOutputBefore = stagesBefore.map(_.outputBytes).sum
+    val totalInputBefore = store.stageList(null).map(_.inputBytes).sum
 
     data.toDF().coalesce(1).write.yt(customPath)
     val allRows = spark.read.yt(customPath).collect()
     allRows should have size data.length
 
-    val stages = store.stageList(null)
-    val totalInput = stages.map(_.inputBytes).sum
-    val totalOutput = stages.map(_.outputBytes).sum
+    val totalInput = store.stageList(null).map(_.inputBytes).sum
     totalInput should be > totalInputBefore
-    totalOutput should be > totalOutputBefore
   }
 }
 

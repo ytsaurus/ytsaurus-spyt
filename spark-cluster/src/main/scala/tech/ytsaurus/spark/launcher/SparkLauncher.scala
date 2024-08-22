@@ -221,8 +221,8 @@ trait SparkLauncher {
     BasicService("Livy Server", address, thread)
   }
 
-  def readAddressOrDie(name: String, timeout: Duration, thread: Thread): Address = {
-    Try(readAddress(name, timeout)) match {
+  private def readAddressOrDie(name: String, timeout: Duration, thread: Thread): Address = {
+    Try(readAddress(name, timeout, thread)) match {
       case Success(address) => address
       case Failure(exception) =>
         thread.interrupt()
@@ -230,11 +230,14 @@ trait SparkLauncher {
     }
   }
 
-  private def readAddress(name: String, timeout: Duration): Address = {
+  private def readAddress(name: String, timeout: Duration, thread: Thread): Address = {
     val successFlag = new File(s"${name}_address_success")
     val file = new File(s"${name}_address")
-    if (!DiscoveryService.waitFor(successFlag.exists(), timeout, s"spark component address in file $file")) {
-      throw new RuntimeException("Service address is not found")
+    if (!DiscoveryService.waitFor(successFlag.exists() || !thread.isAlive, timeout, s"$name address in file $file")) {
+      throw new RuntimeException(s"The process of $name is stucked")
+    }
+    if (!thread.isAlive) {
+      throw new RuntimeException(s"The process of $name was failed")
     }
     val source = Source.fromFile(file)
     try {

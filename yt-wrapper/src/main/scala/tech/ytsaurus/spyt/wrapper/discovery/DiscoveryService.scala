@@ -97,14 +97,6 @@ object DiscoveryService {
       } else false
     }
   }
-
-  def waitAlive(hostPort: HostAndPort, timeout: Duration): Boolean = {
-    DiscoveryService.waitFor(
-      DiscoveryService.isAlive(hostPort, 0),
-      timeout,
-      s"address available $hostPort"
-    )
-  }
 }
 
 case class OperationInfo(id: GUID, state: OperationStatus)

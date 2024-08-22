@@ -104,6 +104,8 @@ def prepare_launch_config(conf_local_dir: str, client: Client, versions: Version
                           os_release: bool) -> Dict[str, Any]:
     launch_config = copy.deepcopy(LAUNCH_CONFIG)
     launch_config['spark_conf']['spark.yt.version'] = versions.spyt_version.scala
+    launch_config['spark_conf']['spark.shuffle.service.port.interval.start'] = "27050"
+    launch_config['spark_conf']['spark.shuffle.service.port.interval.size'] = "50"
     launch_config['spark_conf']['spark.hadoop.yt.byop.enabled'] = "false"
     launch_config['spark_conf']['spark.hadoop.yt.read.arrow.enabled'] = "true"
     launch_config['spark_conf']['spark.hadoop.yt.preferenceIpv6.enabled'] = "false" if os_release else "true"

@@ -1,5 +1,6 @@
 import logging
 import os
+import random
 import re
 import subprocess
 
@@ -388,6 +389,13 @@ def start_history_server(operation_alias=None, discovery_path=None, pool=None, e
     return run_operation_wrapper(hs_builder, spark_discovery.shs(), client)
 
 
+def set_random_shuffle_service_port(spark_conf):
+    if 'spark.shuffle.service.port' not in spark_conf:
+        start_port = int(spark_conf.get('spark.shuffle.service.port.interval.start', "27050"))
+        interval_size = int(spark_conf.get('spark.shuffle.service.port.interval.size', "50"))
+        spark_conf['spark.shuffle.service.port'] = str(start_port + random.randint(0, interval_size - 1))
+
+
 def start_spark_cluster(worker_cores, worker_memory, worker_num, worker_cores_overhead=None,
                         worker_memory_overhead=SparkDefaultArguments.SPARK_WORKER_MEMORY_OVERHEAD,
                         worker_timeout=SparkDefaultArguments.SPARK_WORKER_TIMEOUT,
@@ -540,6 +548,7 @@ def start_spark_cluster(worker_cores, worker_memory, worker_num, worker_cores_ov
         dynamic_config["ytserver_proxy_path"] = ytserver_proxy_path
     dynamic_config['spark_conf']['spark.dedicated_operation_mode'] = dedicated_operation_mode
     dynamic_config['spark_conf']['spark.shuffle.service.enabled'] = 'true'
+    set_random_shuffle_service_port(dynamic_config['spark_conf'])
     if autoscaler_period:
         dynamic_config['spark_conf']['spark.autoscaler.enabled'] = True
         dynamic_config['spark_conf']['spark.autoscaler.period'] = autoscaler_period

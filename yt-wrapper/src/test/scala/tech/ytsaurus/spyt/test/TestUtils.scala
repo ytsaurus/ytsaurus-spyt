@@ -83,7 +83,7 @@ trait TestUtils {
   def writeTableFromYson(rows: Seq[String], path: String, schema: YTreeNode, physicalSchema: TableSchema,
                          optimizeFor: OptimizeMode, options: Map[String, YTreeNode])
                         (implicit yt: CompoundClient): Unit = {
-    YtWrapper.createTable(path, options ++ Map("schema" -> schema, "optimize_for" -> optimizeFor.node), None)
+    YtWrapper.createTable(path, options ++ Map("schema" -> schema, "optimize_for" -> optimizeFor.node), None, false)
     overwriteTableFromYson(rows, path, physicalSchema)
   }
 
@@ -132,7 +132,7 @@ trait TestUtils {
     import scala.collection.JavaConverters._
 
     YtWrapper.createTable(path, options ++ Map("schema" -> physicalSchema.toYTree,
-      "optimize_for" -> optimizeFor.node), None)
+      "optimize_for" -> optimizeFor.node), None, false)
 
     val req = WriteTable.builder[UnversionedRow]()
       .setPath(path)

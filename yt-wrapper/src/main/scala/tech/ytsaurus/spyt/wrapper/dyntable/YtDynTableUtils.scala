@@ -118,7 +118,7 @@ trait YtDynTableUtils {
   }
 
   def isDynamicTable(path: String)(implicit yt: CompoundClient): Boolean = {
-    exists(path) && attribute(path, "dynamic").boolValue()
+    exists(path) && attributes(path, None, Set.empty[String]).get("dynamic").exists(_.boolValue())
   }
 
   def isDynTablePrepared(path: String)(implicit yt: CompoundClient): Boolean = {

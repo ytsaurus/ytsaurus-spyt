@@ -25,10 +25,9 @@ class YtOutputWriterFactory(ytClientConf: YtClientConfiguration,
 
     implicit val ytClient: CompoundClient = YtClientProvider.ytClient(ytClientConf)
     val path = YPathEnriched.fromPath(new Path(f))
-    val normalizedPath = path.toStringPath
 
-    if (YtWrapper.isDynamicTable(normalizedPath)) {
-      new YtDynamicTableWriter(normalizedPath, dataSchema, writeConfiguration, options)
+    if (YtWrapper.isDynamicTable(path.toStringYPath)) {
+      new YtDynamicTableWriter(path, dataSchema, writeConfiguration, options)
     } else {
       val transaction = YtOutputCommitter.getWriteTransaction(context.getConfiguration)
       val richPath = path.withTransaction(transaction)

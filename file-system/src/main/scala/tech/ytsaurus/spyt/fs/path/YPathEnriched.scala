@@ -44,6 +44,10 @@ case class YPathEnriched(path: Path, attributes: Map[String, String] = Map.empty
 
   def parent: YPathEnriched = YPathEnriched(path.getParent, attributes)
 
+  def name: String = path.getName
+
+  def withName(newName: String): YPathEnriched = parent.child(newName)
+
   def child(name: String): YPathEnriched = YPathEnriched(path.child(name), attributes)
 
   def withAttr(key: String, value: String): YPathEnriched = YPathEnriched(path, attributes + (key -> value))
@@ -61,6 +65,11 @@ case class YPathEnriched(path: Path, attributes: Map[String, String] = Map.empty
   def lock()(implicit yt: CompoundClient): YPathEnriched = transaction match {
     case Some(tId) if node.isEmpty => withAttr(NODE_KEY, YtWrapper.lockNode(toYPath, tId))
     case _ => this
+  }
+
+  override def equals(obj: Any): Boolean = obj match {
+    case value: YPathEnriched => path.equals(value.path) && attributes.equals(value.attributes)
+    case _ => false
   }
 
   override def toString: String = toStringPath

@@ -27,13 +27,14 @@ trait YtTableUtils {
 
   def createTable(path: String,
                   settings: YtTableSettings,
-                  transaction: Option[String] = None)
+                  transaction: Option[String] = None,
+                  ignoreExisting: Boolean = false)
                  (implicit yt: CompoundClient): Unit = {
     val parent = Paths.get(path).getParent
     if (parent != null) {
       createDir(parent.toString, transaction, ignoreExisting = true)
     }
-    createTable(path, settings.options, transaction)
+    createTable(path, settings.options, transaction, ignoreExisting = ignoreExisting)
   }
 
   def createTable(path: String,
@@ -44,7 +45,8 @@ trait YtTableUtils {
 
   def createTable(path: String,
                   options: Map[String, YTreeNode],
-                  transaction: Option[String])
+                  transaction: Option[String],
+                  ignoreExisting: Boolean)
                  (implicit yt: CompoundClient): Unit = {
     log.debug(s"Create table: $path, transaction: $transaction")
     import scala.collection.JavaConverters._
@@ -52,6 +54,7 @@ trait YtTableUtils {
       .setPath(YPath.simple(formatPath(path)))
       .setType(CypressNodeType.TABLE)
       .setAttributes(options.asJava)
+      .setIgnoreExisting(ignoreExisting)
       .optionalTransaction(transaction)
     yt.createNode(request).join()
   }

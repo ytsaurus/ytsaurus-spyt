@@ -698,7 +698,8 @@ class YtFileFormatTest extends AnyFlatSpec with Matchers with LocalSpark
         "schema" -> newSchema.toYTree,
         "optimize_for" -> YTree.stringNode(OptimizeMode.Scan.name)
       ),
-      transaction = None
+      transaction = None,
+      ignoreExisting = false
     )
     YtWrapper.mergeTables(tmpPath, s"$tmpPath/out", sorted = false)
 

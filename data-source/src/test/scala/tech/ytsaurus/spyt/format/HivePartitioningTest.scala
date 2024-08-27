@@ -1,19 +1,17 @@
 package tech.ytsaurus.spyt.format
 
-import org.apache.spark.sql.DataFrame
+import org.apache.spark.sql.{Row, SaveMode}
 import org.apache.spark.sql.types.{IntegerType, LongType, StringType, StructField, StructType}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import tech.ytsaurus.core.tables.{ColumnValueType, TableSchema}
+import tech.ytsaurus.spyt._
 import tech.ytsaurus.spyt.test.{LocalSpark, TestUtils, TmpDir}
 import tech.ytsaurus.spyt.wrapper.YtWrapper
 
-class HivePartitioningTest extends AnyFlatSpec with TmpDir with LocalSpark with Matchers with TestUtils {
 
-  override def beforeEach(): Unit = {
-    super.beforeEach()
-    createHivePartitionedTable()
-  }
+class HivePartitioningTest extends AnyFlatSpec with TmpDir with LocalSpark with Matchers with TestUtils {
+  import spark.implicits._
 
   private val ytSchema = TableSchema.builder()
     .setUniqueKeys(false)
@@ -30,9 +28,8 @@ class HivePartitioningTest extends AnyFlatSpec with TmpDir with LocalSpark with 
     .add(StructField("external", IntegerType))
     .add(StructField("internal", IntegerType))
 
-  "spark.read.yt" should "read partitioned data with recursiveFileLookup option set to false" in {
-    import tech.ytsaurus.spyt._
-    import spark.implicits._
+  it should "read partitioned data with recursiveFileLookup option set to false" in {
+    createHivePartitionedTable()
 
     val df = spark.read.option("recursiveFileLookup", "false").yt(tmpPath)
 
@@ -47,7 +44,8 @@ class HivePartitioningTest extends AnyFlatSpec with TmpDir with LocalSpark with 
   }
 
   it should "read partitioned data with recursiveFileLookup option set to true" in {
-    import tech.ytsaurus.spyt._
+    createHivePartitionedTable()
+
     val df = spark.read.option("recursiveFileLookup", "true").yt(tmpPath)
 
     df.count() shouldBe 500L
@@ -55,12 +53,71 @@ class HivePartitioningTest extends AnyFlatSpec with TmpDir with LocalSpark with 
   }
 
   it should "read hive partitioned data with basePath" in {
-    import tech.ytsaurus.spyt._
+    createHivePartitionedTable()
+
     val df = spark.read.option("recursiveFileLookup", "false")
       .option("basePath", "ytTable:/" + tmpPath).yt(tmpPath + "/external=1")
 
     df.count() shouldBe 50L
     df.schema.toDDL shouldEqual partitionedSparkSchema.toDDL
+  }
+
+  it should "write hive partitioned data" in {
+    val originDF = Seq(("alice", 1L), ("bob", 2L), ("alice", 3L)).toDF("name", "value")
+    originDF.write.partitionBy("name").yt(tmpPath)
+
+    val partitions = YtWrapper.listDir(tmpPath)
+    partitions should contain theSameElementsAs Seq("name=alice", "name=bob")
+
+    val df1 = spark.read.yt(tmpPath + "/name=alice")
+    df1.collect() should contain theSameElementsAs Seq(Row(1L), Row(3L))
+
+    val df2 = spark.read.yt(tmpPath + "/name=bob")
+    df2.collect() should contain theSameElementsAs Seq(Row(2L))
+
+    val df3 = spark.read.option("recursiveFileLookup", "false").yt(tmpPath)
+    df3.collect() should contain theSameElementsAs Seq(Row(1L, "alice"), Row(2L, "bob"), Row(3L, "alice"))
+  }
+
+  it should "partition by few columns" in {
+    val originDF = Seq(("alice", "s1", 1L), ("bob", "s1", 4L), ("bob", "s2", 2L), ("alice", "s3", 3L))
+      .toDF("name", "surname", "value")
+    originDF.write.partitionBy("surname", "name").yt(tmpPath)
+
+    val partitions = YtWrapper.listDir(tmpPath)
+    partitions should contain theSameElementsAs Seq("surname=s1", "surname=s2", "surname=s3")
+
+    val partitionsS1 = YtWrapper.listDir(tmpPath + "/surname=s1")
+    partitionsS1 should contain theSameElementsAs Seq("name=alice", "name=bob")
+
+    val df1 = spark.read.option("recursiveFileLookup", "false").yt(tmpPath)
+    df1.count() shouldBe 4
+
+    val df2 = spark.read.option("recursiveFileLookup", "false").option("basePath", "ytTable:/" + tmpPath)
+      .yt(tmpPath + "/surname=s2")
+    df2.collect() should contain theSameElementsAs Seq(Row(2L, "s2", "bob"))
+  }
+
+  it should "support static partition overwrite" in {
+    val df = Seq((1L, 1000), (2L, 2000), (2L, 1500), (2L, 2500)).toDF("id", "price")
+    df.write.partitionBy("id").yt(tmpPath)
+
+    val df2 = Seq((2L, 3000), (2L, 3500), (4L, 100)).toDF("id", "price")
+    df2.write.mode(SaveMode.Overwrite).option("partitionOverwriteMode", "static").partitionBy("id").yt(tmpPath)
+
+    val res = spark.read.option("recursiveFileLookup", "false").yt(tmpPath)
+    res.collect() should contain theSameElementsAs Seq(Row(3000, 2L), Row(3500, 2L), Row(100, 4L))
+  }
+
+  it should "support dynamic partition overwrite" in {
+    val df = Seq((1L, "11"), (2L, "14")).toDF("id", "place")
+    df.write.partitionBy("id").yt(tmpPath)
+
+    val df2 = Seq((2L, "15"), (2L, "16"), (0L, "17")).toDF("id", "place")
+    df2.write.mode(SaveMode.Overwrite).option("partitionOverwriteMode", "dynamic").partitionBy("id").yt(tmpPath)
+
+    val res = spark.read.option("recursiveFileLookup", "false").yt(tmpPath)
+    res.collect() should contain theSameElementsAs Seq(Row("11", 1L), Row("15", 2L), Row("16", 2L), Row("17", 0L))
   }
 
   private def createHivePartitionedTable(): Unit = {

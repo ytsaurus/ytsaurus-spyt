@@ -12,19 +12,21 @@ import tech.ytsaurus.client.request.ModifyRowsRequest
 import tech.ytsaurus.spyt.format.conf.SparkYtWriteConfiguration
 import tech.ytsaurus.spyt.format.conf.YtTableSparkSettings.{WriteSchemaHint, WriteTypeV3}
 import tech.ytsaurus.spyt.fs.conf._
+import tech.ytsaurus.spyt.fs.path.YPathEnriched
 import tech.ytsaurus.spyt.serializers.SchemaConverter
 import tech.ytsaurus.spyt.serializers.SchemaConverter.Unordered
 import tech.ytsaurus.spyt.wrapper.YtWrapper
-import tech.ytsaurus.spyt.wrapper.client.{YtClientConfiguration, YtClientProvider}
 
 import scala.collection.JavaConverters._
 
-class YtDynamicTableWriter(val path: String,
+class YtDynamicTableWriter(richPath: YPathEnriched,
                            schema: StructType,
                            wConfig: SparkYtWriteConfiguration,
                            options: Map[String, String])
                           (implicit ytClient: CompoundClient) extends OutputWriter {
   import YtDynamicTableWriter._
+
+  override val path: String = richPath.toStringPath
 
   private val schemaHint = options.ytConf(WriteSchemaHint)
   private val typeV3Format = options.ytConf(WriteTypeV3)
@@ -53,7 +55,7 @@ class YtDynamicTableWriter(val path: String,
   }
 
   private def initBatch(): Unit = {
-    modifyRowsRequestBuilder = ModifyRowsRequest.builder().setPath(YtWrapper.formatPath(path)).setSchema(tableSchema)
+    modifyRowsRequestBuilder = ModifyRowsRequest.builder().setPath(richPath.toStringYPath).setSchema(tableSchema)
     count = 0
   }
 

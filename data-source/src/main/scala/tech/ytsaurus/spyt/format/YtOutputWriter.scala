@@ -16,7 +16,6 @@ import tech.ytsaurus.spyt.wrapper.LogLazy
 import tech.ytsaurus.client.request.{TransactionalOptions, WriteSerializationContext, WriteTable}
 import tech.ytsaurus.client.{CompoundClient, TableWriter}
 import tech.ytsaurus.core.GUID
-import tech.ytsaurus.core.cypress.YPath
 import tech.ytsaurus.spyt.format.conf.SparkYtWriteConfiguration
 
 import java.util

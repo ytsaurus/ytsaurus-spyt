@@ -1,11 +1,13 @@
 package tech.ytsaurus.spyt.streaming
 
+import org.apache.hadoop.fs.Path
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.execution.streaming.Sink
 import org.apache.spark.sql.{DataFrame, SQLContext}
 import tech.ytsaurus.spyt.format.YtDynamicTableWriter
 import tech.ytsaurus.spyt.format.conf.SparkYtWriteConfiguration
 import tech.ytsaurus.spyt.fs.YtClientConfigurationConverter.ytClientConfiguration
+import tech.ytsaurus.spyt.fs.path.YPathEnriched
 import tech.ytsaurus.spyt.wrapper.client.YtClientProvider
 
 import java.util.UUID
@@ -28,7 +30,8 @@ class YtStreamingSink(sqlContext: SQLContext,
       logInfo(s"Skipping already committed batch $batchId")
     } else {
       val rows = data.collect()
-      val dynamicTableWriter = new YtDynamicTableWriter(queuePath, data.schema, wConfig, parameters)(yt)
+      val path = YPathEnriched.fromPath(new Path(queuePath))
+      val dynamicTableWriter = new YtDynamicTableWriter(path, data.schema, wConfig, parameters)(yt)
       rows.foreach(row => dynamicTableWriter.write(row.toSeq))
       dynamicTableWriter.close()  // Atomic flush all rows.
       log.debug("Wrote " + rows.length + " records")

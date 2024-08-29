@@ -7,7 +7,7 @@ import org.apache.spark.deploy.SparkApplication
 import org.apache.spark.deploy.ytsaurus.Config.YTSAURUS_DRIVER_OPERATION_DUMP_PATH
 import org.apache.spark.internal.Logging
 import org.apache.spark.scheduler.cluster.ytsaurus.YTsaurusOperationManager
-import org.apache.spark.scheduler.cluster.ytsaurus.YTsaurusOperationManager.{getOperationState, getWebUIAddress}
+import org.apache.spark.scheduler.cluster.ytsaurus.YTsaurusOperationManager.{getOperationState, getWebUIAddress, isCompletedState}
 
 import scala.reflect.io.File
 
@@ -47,6 +47,9 @@ private[spark] class YTsaurusClusterApplication extends SparkApplication with Lo
           webUIAddress = currentWebUiAddress
           webUIAddress.foreach(addr => logInfo(s"Web UI: $addr"))
         }
+      }
+      if (!isCompletedState(currentState)) {
+        throw new IllegalStateException(s"Unsuccessful operation state: $currentState")  // For non-zero exit code
       }
     } finally {
       operationManager.close()

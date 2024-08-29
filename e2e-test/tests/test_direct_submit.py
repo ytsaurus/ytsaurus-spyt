@@ -69,7 +69,8 @@ def test_cluster_mode(yt_client, tmp_dir, direct_submitter):
     yt_client.write_table(table_in, rows)
 
     upload_file(yt_client, 'jobs/spark_id.py', f'{tmp_dir}/spark_id.py')
-    direct_submitter.submit(f'yt:/{tmp_dir}/spark_id.py', job_args=[table_in, table_out])
+    code = direct_submitter.submit(f'yt:/{tmp_dir}/spark_id.py', job_args=[table_in, table_out])
+    assert code == 0
 
     assert_items_equal(yt_client.read_table(table_out), rows)
 

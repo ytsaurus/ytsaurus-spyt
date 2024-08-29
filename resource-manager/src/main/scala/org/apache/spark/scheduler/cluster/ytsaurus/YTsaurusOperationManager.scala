@@ -494,6 +494,8 @@ private[spark] object YTsaurusOperationManager extends Logging {
     operation.mapNode().getStringO("state").orElse("undefined")
   }
 
+  def isCompletedState(currentState: String): Boolean = currentState == "completed"
+
   def isFinalState(currentState: String): Boolean = {
     finalStates.contains(currentState)
   }

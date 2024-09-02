@@ -1,6 +1,6 @@
 import spyt
 
-from common.cluster import DirectSubmitter, HistoryServer, SpytCluster, direct_spark_session
+from common.cluster import DirectSubmitter, HistoryServer, LivyServer, SpytCluster, direct_spark_session
 from common.cluster_utils import default_conf
 import logging
 import os
@@ -14,7 +14,8 @@ from yt.wrapper import YtClient
 
 
 def test_directory(request):
-    dir_path = os.path.join(os.getcwd(), "test-results", request.node.parent.name + "__" + request.node.name)
+    dir_path = os.path.join(os.getcwd(), "test-results",
+                            os.environ['TOX_ENV_NAME'], request.node.parent.name + "__" + request.node.name)
     shutil.rmtree(dir_path, ignore_errors=True)
     os.makedirs(dir_path)
     return dir_path
@@ -36,6 +37,12 @@ def spyt_cluster(request):
 @pytest.fixture(scope="function")
 def history_server():
     with HistoryServer(proxy=YT_PROXY) as server:
+        yield server
+
+
+@pytest.fixture(scope="function")
+def livy_server(request):
+    with LivyServer(proxy=YT_PROXY, master_address="ytsaurus://" + YT_PROXY, dump_dir=test_directory(request)) as server:
         yield server
 
 

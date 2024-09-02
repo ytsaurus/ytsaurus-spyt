@@ -50,12 +50,13 @@ class ClusterBase(object):
 
     def wait_component_startup(self, name):
         logger.debug("Waiting component startup")
-        while True:
+        for _ in range(20):
             url = self.get_component_url(name)
             if is_accessible(url):
                 logger.info(f"{name} address: {url}")
-                break
+                return
             time.sleep(2)
+        raise RuntimeError(f"{name} is not started successfully")
 
     def finish(self, exc_type, exc_val):
         try:
@@ -142,6 +143,9 @@ class LivyServer(ClusterBase):
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.finish(exc_type, exc_val)
+
+    def rest(self):
+        return self.get_component_url('livy_url')
 
 
 @contextmanager

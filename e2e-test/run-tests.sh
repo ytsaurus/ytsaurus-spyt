@@ -72,7 +72,7 @@ fi;
 if [ "$start_yt_local" = "true" ]; then
     # Run YTsaurus local with 3 nodes
     $yt_local_runner_path --rpc-proxy-count 1 --node-count 3 --proxy-port 8000 --yt-version spyt-testing \
-                          --yt-skip-pull true --extra-yt-docker-opts "-p 27001-27007:27001-27007"
+                          --yt-skip-pull true --extra-yt-docker-opts "-p 27001-27150:27001-27150"
     trap "echo 'Stopping YT local' && $yt_local_runner_path --stop" EXIT
 fi;
 

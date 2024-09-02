@@ -249,6 +249,7 @@
   "e2e-test/tests/test_cluster.py":"yt/spark/spark-over-yt/e2e-test/tests/test_cluster.py",
   "e2e-test/tests/test_data_types.py":"yt/spark/spark-over-yt/e2e-test/tests/test_data_types.py",
   "e2e-test/tests/test_direct_submit.py":"yt/spark/spark-over-yt/e2e-test/tests/test_direct_submit.py",
+  "e2e-test/tests/test_livy.py":"yt/spark/spark-over-yt/e2e-test/tests/test_livy.py",
   "e2e-test/tests/test_spec.py":"yt/spark/spark-over-yt/e2e-test/tests/test_spec.py",
   "e2e-test/tests/utils.py":"yt/spark/spark-over-yt/e2e-test/tests/utils.py",
   "e2e-test/tests/yt_patch.py":"yt/spark/spark-over-yt/e2e-test/tests/yt_patch.py",

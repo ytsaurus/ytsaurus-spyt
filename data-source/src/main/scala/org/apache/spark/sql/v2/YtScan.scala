@@ -13,6 +13,7 @@ import org.apache.spark.sql.sources.Filter
 import org.apache.spark.sql.types.StructType
 import org.apache.spark.sql.util.CaseInsensitiveStringMap
 import org.apache.spark.sql.v2.YtFilePartition.tryGetKeyPartitions
+import org.apache.spark.sql.v2.YtScan.YtScanPartitioning
 import org.apache.spark.sql.{AnalysisException, SparkSession}
 import org.apache.spark.util.SerializableConfiguration
 import tech.ytsaurus.spyt.common.utils.SegmentSet
@@ -148,11 +149,7 @@ case class YtScan(sparkSession: SparkSession,
     }
   }
 
-  override def outputPartitioning(): Partitioning = new Partitioning {
-    override def numPartitions(): Int = partitions.length
-
-    override def satisfy(distribution: Distribution): Boolean = false
-  }
+  override def outputPartitioning(): Partitioning = YtScanPartitioning(partitions.length)
 
   override def estimateStatistics(): Statistics = new Statistics {
     override val sizeInBytes: OptionalLong = OptionalLong.of(fileIndex.sizeInBytes)
@@ -174,6 +171,12 @@ case class YtScan(sparkSession: SparkSession,
 }
 
 object YtScan {
+  case class YtScanPartitioning(partitionsCount: Int) extends Partitioning with Serializable {
+    override def numPartitions(): Int = partitionsCount
+
+    override def satisfy(distribution: Distribution): Boolean = false
+  }
+
   type ScanDescription = (YtScan, Seq[String])
 
   def trySyncKeyPartitioning(leftScanDescO: Option[ScanDescription], rightScanDescO: Option[ScanDescription]

@@ -28,3 +28,4 @@ org/apache/spark/scheduler/cluster/StandaloneSchedulerBackendDecorators
 org/apache/spark/deploy/master/MasterDecorators
 org/apache/spark/deploy/PythonRunnerDecorators$
 org/apache/spark/sql/execution/datasources/BasicWriteTaskStatsTrackerSpyt
+org/apache/spark/sql/execution/datasources/v2/DataSourcePartitioningDecorator

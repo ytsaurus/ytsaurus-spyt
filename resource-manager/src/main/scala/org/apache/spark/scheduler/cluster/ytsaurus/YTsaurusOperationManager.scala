@@ -381,19 +381,27 @@ private[spark] object YTsaurusOperationManager extends Logging {
   }
 
   private[ytsaurus] def getPortoLayers(conf: SparkConf, defaultLayers: YTreeListNode): YTreeNode = {
-    val layers = conf.get(YTSAURUS_PORTO_LAYER_PATHS).map(layers => {
-      val builder = YTree.listBuilder()
-      layers.split(',').foreach(layer => {
-        builder.value(YTree.stringNode(layer))
-      })
-      builder.buildList()
-    }).getOrElse(defaultLayers)
+    val portoLayers = YTree.listBuilder().buildList()
+
     conf.get(YTSAURUS_EXTRA_PORTO_LAYER_PATHS).foreach(extraPortoLayers => {
       extraPortoLayers.split(',').foreach(layer => {
-        layers.add(YTree.stringNode(layer))
+        portoLayers.add(YTree.stringNode(layer))
       })
     })
-    layers
+
+    if (conf.contains(YTSAURUS_PORTO_LAYER_PATHS)){
+      conf.get(YTSAURUS_PORTO_LAYER_PATHS).foreach(layers => {
+        layers.split(',').foreach(layer => {
+          portoLayers.add(YTree.stringNode(layer))
+        })
+      })
+    } else {
+      defaultLayers.forEach(layer => {
+        portoLayers.add(YTree.stringNode(layer.stringValue()))
+      })
+    }
+
+    portoLayers
   }
 
   private[ytsaurus] def getDocument(ytClient: YTsaurusClient, path: String): YTreeMapNode = {

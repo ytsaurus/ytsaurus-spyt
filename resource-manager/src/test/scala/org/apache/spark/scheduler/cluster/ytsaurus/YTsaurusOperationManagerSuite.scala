@@ -83,16 +83,33 @@ class YTsaurusOperationManagerSuite extends SparkFunSuite with BeforeAndAfter wi
   test("Test layer_paths override + extra layers") {
     val conf = new SparkConf()
     conf.set(SPARK_PRIMARY_RESOURCE, "spark-shell")
+    val defaultLayers: YTreeListNode = YTree.listBuilder().value("//path/to/default_layers/1").value("//path/to/default_layers/2").buildList()
     conf.set(YTSAURUS_PORTO_LAYER_PATHS, "//path/to/layers/1,//path/to/layers/2")
-    conf.set(YTSAURUS_EXTRA_PORTO_LAYER_PATHS, "//path/to/layers/3,//path/to/layers/4")
+    conf.set(YTSAURUS_EXTRA_PORTO_LAYER_PATHS, "//path/to/extra_layers/3,//path/to/extra_layers/4")
 
-    val result = YTsaurusOperationManager.getPortoLayers(conf, YTree.listBuilder().buildList()).asList().asScala.map(x => x.stringValue())
+    val result = YTsaurusOperationManager.getPortoLayers(conf, defaultLayers).asList().asScala.map(x => x.stringValue())
 
     result should contain theSameElementsAs Seq(
+      "//path/to/extra_layers/3",
+      "//path/to/extra_layers/4",
       "//path/to/layers/1",
       "//path/to/layers/2",
-      "//path/to/layers/3",
-      "//path/to/layers/4",
+    )
+  }
+
+  test("Test layer_paths only by default & extra layers") {
+    val conf = new SparkConf()
+    conf.set(SPARK_PRIMARY_RESOURCE, "spark-shell")
+    conf.set(YTSAURUS_EXTRA_PORTO_LAYER_PATHS, "//path/to/extra_layers/3,//path/to/extra_layers/4")
+
+    val defaultLayers: YTreeListNode = YTree.listBuilder().value("//path/to/default_layers/1").value("//path/to/default_layers/2").buildList()
+    val result = YTsaurusOperationManager.getPortoLayers(conf, defaultLayers).asList().asScala.map(x => x.stringValue())
+
+    result should contain theSameElementsAs Seq(
+      "//path/to/extra_layers/3",
+      "//path/to/extra_layers/4",
+      "//path/to/default_layers/1",
+      "//path/to/default_layers/2",
     )
   }
 

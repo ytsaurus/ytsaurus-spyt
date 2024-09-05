@@ -1,10 +1,12 @@
 package tech.ytsaurus.spyt.format.types
 
-import org.apache.spark.sql.Row
+import org.apache.spark.sql.{DataFrame, Row}
 import org.apache.spark.sql.functions._
 import org.apache.spark.sql.types.{LongType, Metadata, StringType, StructField, StructType}
 import org.apache.spark.sql.spyt.types.UInt64Long.{fromStringUdf, toStringUdf}
 import org.apache.spark.sql.spyt.types.{UInt64Long, UInt64Type}
+import org.apache.spark.storage.StorageLevel
+import org.apache.spark.storage.StorageLevel._
 import org.scalatest.{FlatSpec, Matchers}
 import tech.ytsaurus.spyt._
 import tech.ytsaurus.spyt.test.{LocalSpark, TestUtils, TmpDir}
@@ -16,7 +18,7 @@ class UInt64Test extends FlatSpec with Matchers with LocalSpark with TmpDir with
 
   import spark.implicits._
 
-  it should "read a table with uint64 column" in {
+  private def readTestTemplate(dfTransformer: DataFrame => DataFrame): Unit = {
     val tableSchema = TableSchema.builder()
       .addValue("id", ColumnValueType.UINT64)
       .addValue("value", ColumnValueType.STRING)
@@ -31,7 +33,7 @@ class UInt64Test extends FlatSpec with Matchers with LocalSpark with TmpDir with
       """{id = 18446744073709551615u; value = "value 6"}""" // 2^64 - 1
     ), tmpPath, tableSchema)
 
-    val df = spark.read.yt(tmpPath)
+    val df = dfTransformer(spark.read.yt(tmpPath))
     df.schema.fields.map(_.copy(metadata = Metadata.empty)) should contain theSameElementsInOrderAs Seq(
       StructField("id", UInt64Type),
       StructField("value", StringType)
@@ -40,6 +42,24 @@ class UInt64Test extends FlatSpec with Matchers with LocalSpark with TmpDir with
       UInt64Long(1L), UInt64Long(2L), UInt64Long(3L), UInt64Long("9223372036854775813"),
       UInt64Long("9223372036854775816"), UInt64Long("18446744073709551615")
     )
+  }
+
+  it should "read a table with uint64 column" in {
+    readTestTemplate(identity)
+  }
+
+  it should "work correctly with caching dataframes containing uint64 columns" in {
+    readTestTemplate(_.cache())
+  }
+
+  private val storageLevels = List("NONE", "DISK_ONLY", "DISK_ONLY_2", "DISK_ONLY_3", "MEMORY_ONLY", "MEMORY_ONLY_2",
+    "MEMORY_ONLY_SER", "MEMORY_ONLY_SER_2", "MEMORY_AND_DISK", "MEMORY_AND_DISK_2", "MEMORY_AND_DISK_SER",
+    "MEMORY_AND_DISK_SER_2", "OFF_HEAP")
+
+  storageLevels.foreach { storageLevel =>
+    it should s"work correctly with persisting dataframes containing uint64 columns using $storageLevel StorageLevel" in {
+      readTestTemplate(_.persist(StorageLevel.fromString(storageLevel)))
+    }
   }
 
   it should "write to a table with uint64 column" in {
@@ -223,5 +243,4 @@ class UInt64Test extends FlatSpec with Matchers with LocalSpark with TmpDir with
       Row(UInt64Long(3L), "c", 1)
     )
   }
-
 }

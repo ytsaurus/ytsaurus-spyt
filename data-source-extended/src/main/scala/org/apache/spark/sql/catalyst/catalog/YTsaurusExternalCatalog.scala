@@ -8,13 +8,16 @@ import org.apache.spark.sql.catalyst.analysis.NoSuchTableException
 import org.apache.spark.sql.types.StructType
 import tech.ytsaurus.spyt.fs.YtClientConfigurationConverter.ytClientConfiguration
 import tech.ytsaurus.spyt.fs.path.YPathEnriched
+import tech.ytsaurus.spyt.serializers.SchemaConverter.{Sorted, Unordered}
 import tech.ytsaurus.spyt.serializers.{SchemaConverter, SchemaConverterConfig}
 import tech.ytsaurus.spyt.wrapper.YtWrapper
 import tech.ytsaurus.spyt.wrapper.client.YtClientProvider
 import tech.ytsaurus.spyt.wrapper.table.BaseYtTableSettings
+import tech.ytsaurus.ysontree.{YTreeNode, YTreeTextSerializer}
 
 import java.net.URI
 import java.util.UUID
+import java.util.stream.Collectors
 
 class YTsaurusExternalCatalog(conf: SparkConf, hadoopConf: Configuration)
   extends InMemoryCatalog(conf, hadoopConf) with Logging {
@@ -47,13 +50,26 @@ class YTsaurusExternalCatalog(conf: SparkConf, hadoopConf: Configuration)
     }
   }
 
+  private val excludeKeys = Set("key_columns", "unique_keys")
+
+  private def getSortOption(extraProperties: Map[String, YTreeNode]): SchemaConverter.SortOption = {
+    import scala.collection.JavaConverters._
+    val keyColumns = extraProperties.get("key_columns").map(_.asList().asScala.map(_.stringValue())).getOrElse(Seq())
+    if (keyColumns.nonEmpty) {
+      Sorted(keyColumns, extraProperties.get("unique_keys").exists(_.boolValue()))
+    } else {
+      Unordered
+    }
+  }
+
   override def createTable(tableDefinition: CatalogTable, ignoreIfExists: Boolean): Unit = synchronized {
     if (isYtDatabase(tableDefinition.identifier.database)) {
       val path = YPathEnriched.fromString(tableDefinition.identifier.table)
       val yt = YtClientProvider.ytClientWithProxy(ytConf, path.cluster, idPrefix)
       if (!YtWrapper.exists(path.toStringYPath)(yt)) {
-        val tableSchema = SchemaConverter.tableSchema(tableDefinition.schema)
-        val settings = new BaseYtTableSettings(tableSchema)
+        val extraProperties = tableDefinition.properties.mapValues(YTreeTextSerializer.deserialize)
+        val tableSchema = SchemaConverter.tableSchema(tableDefinition.schema, getSortOption(extraProperties))
+        val settings = new BaseYtTableSettings(tableSchema, extraProperties.filterKeys(!excludeKeys.contains(_)))
         YtWrapper.createTable(path.toStringYPath, settings)(yt)
       } else {
         logWarning("Table is created twice. Ignoring new query")

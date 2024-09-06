@@ -7,12 +7,14 @@ import org.apache.spark.test.UtilsWrapper
 import org.mockito.scalatest.MockitoSugar
 import org.scalatest.prop.TableDrivenPropertyChecks
 import org.scalatest.{FlatSpec, Matchers}
+import tech.ytsaurus.core.cypress.YPath
 import tech.ytsaurus.core.tables.{ColumnValueType, TableSchema}
 import tech.ytsaurus.spyt._
 import tech.ytsaurus.spyt.serialization.YsonEncoder
 import tech.ytsaurus.spyt.test.{DynTableTestUtils, LocalSpark, LocalYt, TestRow, TestUtils, TmpDir}
 import tech.ytsaurus.spyt.wrapper.YtWrapper
 import tech.ytsaurus.spyt.wrapper.table.OptimizeMode
+import tech.ytsaurus.ysontree.YTree
 
 import scala.language.postfixOps
 
@@ -255,6 +257,17 @@ class YtSparkSQLTest extends FlatSpec with Matchers with LocalSpark with TmpDir
     a[AnalysisException] shouldBe thrownBy {
       spark.sql(s"CREATE TABLE yt.`ytTable:/$tmpPath` (id INT, name STRING, age INT) USING yt")
     }
+  }
+
+  it should "create table with custom attributes" in {
+    spark.sql(s"CREATE TABLE yt.`ytTable:/$tmpPath` (id INT, name STRING, age INT) " +
+      s"USING yt TBLPROPERTIES ('custom1'='value1','custom2'='4','key_columns'='[id]')")
+
+    val attrs = YtWrapper.attributes(YPath.simple(tmpPath))
+    attrs("custom1") shouldBe YTree.stringNode("value1")
+    attrs("custom2") shouldBe YTree.integerNode(4)
+    attrs("schema").getAttribute("unique_keys").get() shouldBe YTree.booleanNode(false)
+    attrs("sorted_by") shouldBe YTree.listBuilder().value(YTree.stringNode("id")).endList().build()
   }
 
   it should "create table as select" in {

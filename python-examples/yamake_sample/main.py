@@ -22,13 +22,13 @@ def run_job(proxy, discovery_path):
 
         status = submission_client.wait_final(app_id)
         logging.info(f"Final status: {status}")
-    clean_extracted(find_all=True)
+    clean_extracted()
 
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('proxy', required=True)
-    parser.add_argument('discovery_path', required=True)
+    parser.add_argument('proxy')
+    parser.add_argument('discovery_path')
     args, _ = parser.parse_known_args()
     run_job(args.proxy, args.discovery_path)
 

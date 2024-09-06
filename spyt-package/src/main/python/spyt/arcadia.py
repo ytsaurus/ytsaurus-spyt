@@ -54,8 +54,29 @@ def _spark_tar_members(tar_file, ):
             yield member
 
 
+# Return true if a PID found and  a process is alive
+def _check_pid_in_dir(dir: str) -> bool:
+    pid_file = os.path.join(dir, '.pid')
+    if not os.path.exists(pid_file):
+        return False
+    try:
+        with open(pid_file, 'r') as f:
+            pid = int(f.read())
+        os.kill(pid, 0)  # 0 - check signal. If it didn't fail (OSError) then the process is alive
+        return True
+    except Exception:
+        return False
+
+
+def _create_tmpdir_with_pid(prefix: str):
+    temp_dir = TemporaryDirectory(prefix=prefix, ignore_cleanup_errors=True)
+    with open(os.path.join(temp_dir.name, '.pid'), 'w') as f:
+        f.write(str(os.getpid()))
+    return temp_dir
+
+
 def _extract_spark():
-    temp_dir = TemporaryDirectory(prefix="spark_yamake_", ignore_cleanup_errors=True)
+    temp_dir = _create_tmpdir_with_pid("spark_yamake_")
     logger.info(f"Created Spark temp dir {temp_dir}")
     files = _extract_resources(spark_distrib_dir, spark_distrib_dir, temp_dir.name)
     with tarfile.open(files[0], 'r:gz') as tar_file:
@@ -65,7 +86,7 @@ def _extract_spark():
 
 
 def _extract_spyt():
-    temp_dir = TemporaryDirectory(prefix="spyt_yamake_", ignore_cleanup_errors=True)
+    temp_dir = _create_tmpdir_with_pid("spyt_yamake_")
     logger.info(f"Created Spyt temp dir {temp_dir}")
     spyt_original_dir = "yt/spark/spark-over-yt/spyt-package/src/main/spyt_cluster/"
     build_dir = temp_dir.name
@@ -104,14 +125,15 @@ def checked_extract_spark() -> Optional[str]:
     return extracted_spark_dir.name
 
 
-def _remove_from_tempdir(prefix: str):
+def _remove_from_tempdir(prefix: str, only_dead: bool):
     tempdir = gettempdir()
     for old_tempdir in glob.glob(os.path.join(tempdir, prefix + "*")):
-        logger.info(f"Removing temp dir {old_tempdir}")
-        shutil.rmtree(old_tempdir)
+        if not only_dead or not _check_pid_in_dir(old_tempdir):
+            logger.info(f"Removing temp dir {old_tempdir}")
+            shutil.rmtree(old_tempdir)
 
 
-def clean_extracted(find_all=False):
+def clean_extracted():
     global extracted_spark_dir, extracted_spyt_dir
     if extracted_spark_dir:
         extracted_spark_dir.cleanup()
@@ -119,6 +141,8 @@ def clean_extracted(find_all=False):
     if extracted_spyt_dir:
         extracted_spyt_dir.cleanup()
         extracted_spyt_dir = None
-    if find_all:
-        _remove_from_tempdir("spark_yamake_")
-        _remove_from_tempdir("spyt_yamake_")
+
+
+def remove_all_temp_files(only_dead=True):
+    _remove_from_tempdir("spark_yamake_", only_dead)
+    _remove_from_tempdir("spyt_yamake_", only_dead)

@@ -8,7 +8,7 @@ import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.internal.SQLConf._
 import org.apache.spark.sql.types._
 import org.apache.spark.sql.spyt.types.Datetime
-import org.apache.spark.sql.{AnalysisException, DataFrameReader, Row, SaveMode}
+import org.apache.spark.sql.{AnalysisException, DataFrame, DataFrameReader, Row, SaveMode}
 import org.apache.spark.test.UtilsWrapper
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -527,6 +527,14 @@ class YtFileFormatTest extends AnyFlatSpec with Matchers with LocalSpark
     )
   }
 
+  private def isBatchEnabled(df: DataFrame): Boolean = {
+    val plan = physicalPlan(df)
+
+    nodes(plan).collectFirst {
+      case scan: InputAdapter => scan.supportsColumnar
+    }.get
+  }
+
   it should "enable/disable batch reading" in {
     import OptimizeMode._
     spark.conf.set(SQLConf.PARALLEL_PARTITION_DISCOVERY_THRESHOLD.key, "3")
@@ -550,13 +558,8 @@ class YtFileFormatTest extends AnyFlatSpec with Matchers with LocalSpark
           optimizeFor
         )
       }
-      val plan = physicalPlan(spark.read.enableArrow(enableArrow).yt(tables.map(_._1): _*))
 
-      val batchEnabled = nodes(plan).collectFirst {
-        case scan: InputAdapter => scan.supportsColumnar
-      }.get
-
-      batchEnabled shouldEqual expected
+      isBatchEnabled(spark.read.enableArrow(enableArrow).yt(tables.map(_._1): _*)) shouldEqual expected
     }
   }
 
@@ -795,26 +798,26 @@ class YtFileFormatTest extends AnyFlatSpec with Matchers with LocalSpark
       .build())
 
     forAll(Table("arrow_enabled", true, false)) { arrow =>
-      val metadata =
-        if (arrow) new MetadataBuilder().putBoolean("arrow_supported", value = true).build()
-        else Metadata.empty
 
-      val df1 = spark.read.schema(StructType(Seq(
-          StructField("a", StringType, metadata = metadata), StructField("b", DoubleType, metadata = metadata),
-          StructField("c", LongType, metadata = metadata), StructField("d", StringType, metadata = metadata),
+      val df1 = spark.read.enableArrow(arrow).schema(StructType(Seq(
+          StructField("a", StringType), StructField("b", DoubleType),
+          StructField("c", LongType), StructField("d", StringType),
       ))).yt(tmpPath)
+      isBatchEnabled(df1) shouldBe arrow
       df1.collect() should contain theSameElementsAs Seq(Row("1", 5.0, 0, "true"), Row("2", 6.0, 1, "false"))
 
-      val df2 = spark.read.schema(StructType(Seq(
-        StructField("a", LongType, metadata = metadata), StructField("b", StringType, metadata = metadata),
-        StructField("c", DoubleType, metadata = metadata), StructField("d", BooleanType, metadata = metadata),
+      val df2 = spark.read.enableArrow(arrow).schema(StructType(Seq(
+        StructField("a", LongType), StructField("b", StringType),
+        StructField("c", DoubleType), StructField("d", BooleanType),
       ))).yt(tmpPath)
+      isBatchEnabled(df2) shouldBe arrow
       df2.collect() should contain theSameElementsAs Seq(Row(1, "5", 0.3, true), Row(2, "6", 1.5, false))
 
-      val df3 = spark.read.schema(StructType(Seq(
-        StructField("a", DoubleType, metadata = metadata), StructField("b", LongType, metadata = metadata),
-        StructField("c", StringType, metadata = metadata), StructField("d", LongType, metadata = metadata),
+      val df3 = spark.read.enableArrow(arrow).schema(StructType(Seq(
+        StructField("a", DoubleType), StructField("b", LongType),
+        StructField("c", StringType), StructField("d", LongType),
       ))).yt(tmpPath)
+      isBatchEnabled(df3) shouldBe arrow
       df3.collect() should contain theSameElementsAs Seq(Row(1.0, 5, "0.3", 1), Row(2.0, 6, "1.5", 0))
     }
   }

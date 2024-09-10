@@ -11,6 +11,7 @@ import org.apache.spark.sql.types._
 import org.apache.spark.sql.util.CaseInsensitiveStringMap
 import tech.ytsaurus.spyt.format.conf.SparkYtConfiguration.Schema.ForcingNullableIfNoMetadata
 import tech.ytsaurus.spyt.fs.conf.SparkYtSparkSession
+import tech.ytsaurus.spyt.serializers.SchemaConverter
 import tech.ytsaurus.spyt.types.YTsaurusTypes
 
 import scala.annotation.tailrec
@@ -20,9 +21,13 @@ case class YtTable(name: String,
                    sparkSession: SparkSession,
                    options: CaseInsensitiveStringMap,
                    paths: Seq[String],
-                   userSpecifiedSchema: Option[StructType],
+                   userSpecifiedSchemaProvided: Option[StructType],
                    fallbackFileFormat: Class[_ <: FileFormat])
-  extends FileTable(sparkSession, options, paths, userSpecifiedSchema) {
+  extends FileTable(sparkSession, options, paths, userSpecifiedSchemaProvided) {
+
+  private val userSpecifiedSchema = userSpecifiedSchemaProvided.map { schema =>
+    SchemaConverter.enrichUserProvidedSchema(schema)
+  }
 
   override lazy val fileIndex: YtInMemoryFileIndex = {
     val caseSensitiveMap = options.asCaseSensitiveMap.asScala.toMap

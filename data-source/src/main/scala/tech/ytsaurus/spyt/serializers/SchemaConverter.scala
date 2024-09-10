@@ -77,6 +77,23 @@ object SchemaConverter {
     })
   }
 
+  def enrichUserProvidedSchema(schema: StructType): StructType = {
+    val enrichedFields = schema.fields.map { field =>
+      val ytType = ytLogicalTypeV3(field.dataType)
+      // There may be a bug when user explicitly specifies schema for YTsaurus Interval type, which doesn't support
+      // arrow yet, in this case we can suggest to use spark.read.disableArrow option
+      if (ytType.arrowSupported) {
+        val metadataBuilder = new MetadataBuilder()
+        metadataBuilder.withMetadata(field.metadata)
+        metadataBuilder.putBoolean(MetadataFields.ARROW_SUPPORTED, ytType.arrowSupported)
+        field.copy(metadata = metadataBuilder.build())
+      } else {
+        field
+      }
+    }
+    StructType(enrichedFields)
+  }
+
   def prefixKeys(schema: StructType): Seq[String] = {
     keys(schema).takeWhile(_.isDefined).map(_.get)
   }

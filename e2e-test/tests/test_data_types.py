@@ -1,7 +1,50 @@
-import spyt
+from datetime import datetime, timedelta, timezone
 
 from common.helpers import assert_items_equal
 from pyspark.sql import Row
+from pyspark.sql.types import StructField, StructType
+from spyt.types import Date32, Datetime64, Timestamp64, Interval64, Date32Type, Datetime64Type, Timestamp64Type, \
+    Interval64Type, Datetime, DatetimeType, MIN_DATE32, MIN_DATETIME64, MIN_TIMESTAMP64, MIN_INTERVAL64, MAX_DATE32, \
+    MAX_DATETIME64, MAX_TIMESTAMP64, MAX_INTERVAL64
+
+
+def seconds_to_datetime(seconds):
+    if seconds is None:
+        return None
+    return (datetime(1970, 1, 1, tzinfo=timezone.utc) + timedelta(seconds=seconds)) \
+        .astimezone(timezone.utc).replace(tzinfo=None)
+
+
+yt_wide_types_rows = [
+    {"date32": MIN_DATE32, "datetime64": MIN_DATETIME64, "timestamp64": MIN_TIMESTAMP64,
+     "interval64": MIN_INTERVAL64},
+    {"date32": 0, "datetime64": 0, "timestamp64": 0, "interval64": 0},
+    {"date32": MAX_DATE32, "datetime64": MAX_DATETIME64, "timestamp64": MAX_TIMESTAMP64,
+     "interval64": MAX_INTERVAL64},
+    {"date32": None, "datetime64": None, "timestamp64": None, "interval64": None}
+]
+
+spark_wide_types_rows = [
+    Row(date32=Date32(MIN_DATE32), datetime64=Datetime64(MIN_DATETIME64), timestamp64=Timestamp64(MIN_TIMESTAMP64),
+        interval64=Interval64(MIN_INTERVAL64)),
+    Row(date32=Date32(0), datetime64=Datetime64(0), timestamp64=Timestamp64(0), interval64=Interval64(0)),
+    Row(date32=Date32(MAX_DATE32), datetime64=Datetime64(MAX_DATETIME64), timestamp64=Timestamp64(MAX_TIMESTAMP64),
+        interval64=Interval64(MAX_INTERVAL64)),
+    Row(date32=None, datetime64=None, timestamp64=None, interval64=None)
+]
+
+yt_datetime_type_rows = [
+    {"datetime": 8640000},
+    {"datetime": 1549719671},
+    {"datetime": 0},
+    {"datetime": None},
+]
+spark_datetime_type_rows = [
+    Row(datetime=Datetime(seconds_to_datetime(8640000))),
+    Row(datetime=Datetime(seconds_to_datetime(1549719671))),
+    Row(datetime=Datetime(seconds_to_datetime(0))),
+    Row(datetime=None)
+]
 
 
 def test_read_uint64_type(yt_client, tmp_dir, local_session):
@@ -120,3 +163,57 @@ def test_write_uint64_type(yt_client, tmp_dir, local_session):
         {"id": 7, "value": None}
     ]
     assert_items_equal(result, rows_result)
+
+
+def test_read_wide_types(yt_client, tmp_dir, local_session):
+    table_path = f"{tmp_dir}/wide_types_table_in"
+    yt_client.create("table", table_path, attributes={"schema": [
+        {"name": "date32", "type": "date32", "nullable": True},
+        {"name": "datetime64", "type": "datetime64", "nullable": True},
+        {"name": "timestamp64", "type": "timestamp64", "nullable": True},
+        {"name": "interval64", "type": "interval64", "nullable": True},
+    ]})
+    yt_client.write_table(table_path, yt_wide_types_rows)
+
+    df = local_session.read.yt(table_path)
+    result = df.collect()
+    assert_items_equal(result, spark_wide_types_rows)
+
+
+def test_write_wide_types(yt_client, tmp_dir, local_session):
+    table_path = f"{tmp_dir}/wide_types_table_out"
+    schema = StructType([
+        StructField("date32", Date32Type(), True),
+        StructField("datetime64", Datetime64Type(), True),
+        StructField("timestamp64", Timestamp64Type(), True),
+        StructField("interval64", Interval64Type(), True)
+    ])
+    df = local_session.createDataFrame(data=spark_wide_types_rows, schema=schema)
+    df.write.mode("overwrite").optimize_for("scan").yt(table_path)
+
+    result = yt_client.read_table(table_path)
+    assert_items_equal(result, yt_wide_types_rows)
+
+
+def test_read_datetime_type(yt_client, tmp_dir, local_session):
+    table_path = f"{tmp_dir}/datetime_type_table_in"
+    yt_client.create("table", table_path, attributes={"schema": [
+        {"name": "datetime", "type": "datetime", "nullable": True},
+    ]})
+    yt_client.write_table(table_path, yt_datetime_type_rows)
+
+    df = local_session.read.yt(table_path)
+    result = df.collect()
+    assert_items_equal(result, spark_datetime_type_rows)
+
+
+def test_write_datetime_type(yt_client, tmp_dir, local_session):
+    table_path = f"{tmp_dir}/datetime_type_table_out"
+    schema = StructType([
+        StructField("datetime", DatetimeType(), True),
+    ])
+    df = local_session.createDataFrame(data=spark_datetime_type_rows, schema=schema)
+    df.write.mode("overwrite").optimize_for("scan").yt(table_path)
+
+    result = yt_client.read_table(table_path)
+    assert_items_equal(result, yt_datetime_type_rows)

@@ -1,6 +1,6 @@
 package tech.ytsaurus.spyt.serializers
 
-import org.apache.spark.sql.spyt.types.DatetimeType
+import org.apache.spark.sql.spyt.types._
 import org.apache.spark.sql.types._
 import org.apache.spark.sql.{DataFrame, Row}
 import tech.ytsaurus.client.rows.{UnversionedRow, UnversionedValue, WireProtocolWriter}
@@ -41,6 +41,10 @@ class GenericRowSerializer(schema: StructType) {
         case DateType => boxValue(i, row.getLong(i))
         case _: DatetimeType => boxValue(i, row.getLong(i))
         case TimestampType => boxValue(i, row.getLong(i))
+        case _: Date32Type => boxValue(i, row.getInt(i))
+        case _: Datetime64Type => boxValue(i, row.getLong(i))
+        case _: Timestamp64Type => boxValue(i, row.getLong(i))
+        case _: Interval64Type => boxValue(i, row.getLong(i))
         case otherType => YTsaurusTypes.instance.serializeValue(otherType, row, i, boxValue)
       }
     }

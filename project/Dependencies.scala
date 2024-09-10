@@ -1,4 +1,3 @@
-import CommonPlugin.autoImport.CompileOnly
 import sbt._
 
 object Dependencies {
@@ -6,7 +5,7 @@ object Dependencies {
   lazy val circeYamlVersion = "0.12.0"
   lazy val scalatestVersion = "3.1.0"
   lazy val livyVersion = "0.8.0-incubating"
-  lazy val ytsaurusClientVersion = "1.2.4"
+  lazy val ytsaurusClientVersion = "1.2.6"
   lazy val scalatraVersion = "2.7.0"
   lazy val mockitoVersion = "1.14.4"
   lazy val arrowVersion = "0.17.1"
@@ -34,7 +33,7 @@ object Dependencies {
   ) ++ mockito
 
   lazy val spark = Seq("spark-core", "spark-sql").flatMap { module => Seq(
-    "org.apache.spark" %% module % sparkCompileVersion % CompileOnly,
+    "org.apache.spark" %% module % sparkCompileVersion % Provided,
     "org.apache.spark" %% module % sparkTestVersion % Test
   )}
 

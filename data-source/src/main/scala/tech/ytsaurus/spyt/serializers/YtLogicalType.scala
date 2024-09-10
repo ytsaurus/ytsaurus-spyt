@@ -1,6 +1,6 @@
 package tech.ytsaurus.spyt.serializers
 
-import org.apache.spark.sql.spyt.types.DatetimeType
+import org.apache.spark.sql.spyt.types._
 import org.apache.spark.sql.types._
 import tech.ytsaurus.core.tables.ColumnValueType
 import tech.ytsaurus.spyt.serializers.SchemaConverter.MetadataFields
@@ -115,6 +115,12 @@ object YtLogicalType {
   case object Interval extends AtomicYtLogicalType("interval", 0x100b, ColumnValueType.INT64, TiType.interval(), LongType, arrowSupported = false)
 
   case object Void extends AtomicYtLogicalType("void", 0x100c, ColumnValueType.NULL, TiType.voidType(), NullType) //?
+
+  case object Date32 extends AtomicYtLogicalType("date32", 0x1018, ColumnValueType.INT64, TiType.date32(), new Date32Type(), arrowSupported = false)
+  case object Datetime64 extends AtomicYtLogicalType("datetime64", 0x1019, ColumnValueType.INT64, TiType.datetime64(), new Datetime64Type(), arrowSupported = false)
+  case object Timestamp64 extends AtomicYtLogicalType("timestamp64", 0x101a, ColumnValueType.INT64, TiType.timestamp64(), new Timestamp64Type(), arrowSupported = false)
+  case object Interval64 extends AtomicYtLogicalType("interval64", 0x101b, ColumnValueType.INT64, TiType.interval64(), new Interval64Type(), arrowSupported = false)
+
 
   case class Decimal(precision: Int, scale: Int) extends CompositeYtLogicalType {
     override def sparkType: DataType = DecimalType(precision, scale)
@@ -231,7 +237,8 @@ object YtLogicalType {
   case object Variant extends CompositeYtLogicalTypeAlias(TypeName.Variant.getWireName)
 
   private lazy val atomicTypes = Seq(Null, Int64, Uint64, Float, Double, Boolean, String, Binary, Any,
-    Int8, Uint8, Int16, Uint16, Int32, Uint32, Utf8, Date, Datetime, Timestamp, Interval, Void)
+    Int8, Uint8, Int16, Uint16, Int32, Uint32, Utf8, Date, Datetime, Timestamp, Interval, Date32, Datetime64,
+    Timestamp64, Interval64, Void)
 
   private lazy val compositeTypes = Seq(Optional, Dict, Array, Struct, Tuple,
     Tagged, Variant, Decimal)

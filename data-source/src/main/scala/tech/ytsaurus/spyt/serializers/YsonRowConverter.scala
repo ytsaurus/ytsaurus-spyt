@@ -4,7 +4,7 @@ import org.apache.spark.sql.Row
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.{GenericRowWithSchema, UnsafeArrayData, UnsafeMapData, UnsafeRow}
 import org.apache.spark.sql.catalyst.util.MapData
-import org.apache.spark.sql.spyt.types.DatetimeType
+import org.apache.spark.sql.spyt.types._
 import org.apache.spark.sql.types._
 import org.apache.spark.unsafe.types.UTF8String
 import tech.ytsaurus.client.TableWriter
@@ -266,6 +266,10 @@ object YsonRowConverter {
           serializeMap(value, map, ytType, config, consumer)
         case _: DatetimeType => consumer.onInteger(value.asInstanceOf[Long])
         case TimestampType => consumer.onInteger(value.asInstanceOf[Long])
+        case _: Date32Type => consumer.onInteger(value.asInstanceOf[Int])
+        case _: Datetime64Type => consumer.onInteger(value.asInstanceOf[Long])
+        case _: Timestamp64Type => consumer.onInteger(value.asInstanceOf[Long])
+        case _: Interval64Type => consumer.onInteger(value.asInstanceOf[Long])
         case otherType => YTsaurusTypes.instance.toYsonField(otherType, value, consumer)
       }
     }

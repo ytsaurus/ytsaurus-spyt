@@ -1,6 +1,6 @@
 package tech.ytsaurus.spyt.serializers
 
-import org.apache.spark.sql.spyt.types.DatetimeType
+import org.apache.spark.sql.spyt.types._
 import org.apache.spark.sql.types._
 import org.apache.spark.sql.v2.YtTable
 import tech.ytsaurus.core.common.Decimal.textToBinary
@@ -222,6 +222,10 @@ object SchemaConverter {
     case DateType => YtLogicalType.Date
     case _: DatetimeType => YtLogicalType.Datetime
     case TimestampType => YtLogicalType.Timestamp
+    case _: Date32Type => YtLogicalType.Date32
+    case _: Datetime64Type => YtLogicalType.Datetime64
+    case _: Timestamp64Type => YtLogicalType.Timestamp64
+    case _: Interval64Type => YtLogicalType.Interval64
     case otherType => YTsaurusTypes.instance.ytLogicalTypeV3(otherType)
   }
 

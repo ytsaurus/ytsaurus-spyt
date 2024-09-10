@@ -4,7 +4,7 @@ import org.apache.spark.metrics.yt.YtMetricsRegister
 import org.apache.spark.metrics.yt.YtMetricsRegister.ytMetricsSource._
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.sources.Filter
-import org.apache.spark.sql.spyt.types.DatetimeType
+import org.apache.spark.sql.spyt.types._
 import org.apache.spark.sql.types._
 import org.slf4j.LoggerFactory
 import tech.ytsaurus.client.TableWriter
@@ -118,6 +118,10 @@ class InternalRowSerializer(schema: StructType, schemaHint: Map[String, YtLogica
                 case DateType => writeable.onInteger(row.getLong(i))
                 case _: DatetimeType => writeable.onInteger(row.getLong(i))
                 case TimestampType => writeable.onInteger(row.getLong(i))
+                case _: Date32Type => writeable.onInteger(row.getInt(i))
+                case _: Datetime64Type => writeable.onInteger(row.getLong(i))
+                case _: Timestamp64Type => writeable.onInteger(row.getLong(i))
+                case _: Interval64Type => writeable.onInteger(row.getLong(i))
               }
             }
         }

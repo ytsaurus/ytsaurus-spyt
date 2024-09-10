@@ -1,6 +1,6 @@
 package tech.ytsaurus.spyt.serializers
 
-import org.apache.spark.sql.spyt.types.DatetimeType
+import org.apache.spark.sql.spyt.types._
 import org.apache.spark.sql.types._
 import org.apache.spark.unsafe.types.UTF8String
 import tech.ytsaurus.client.rows.{WireRowDeserializer, WireValueDeserializer}
@@ -63,6 +63,10 @@ abstract class WireDeserializer[T](schema: StructType) extends WireRowDeserializ
             case DateType => addValue(value.toInt)
             case _: DatetimeType => addValue(value)
             case TimestampType => addValue(value)
+            case _: Date32Type => addValue(value.toInt)
+            case _: Datetime64Type => addValue(value)
+            case _: Timestamp64Type => addValue(value)
+            case _: Interval64Type => addValue(value)
             case _: DecimalType => _currentType match {
               case ColumnValueType.INT64 => addValue(Decimal(value))
               case ColumnValueType.UINT64 => addValue(YTsaurusTypes.longToUnsignedDecimal(value))

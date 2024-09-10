@@ -2,7 +2,17 @@ import datetime
 
 from pyspark import SparkContext
 from pyspark.sql.column import _to_java_column, Column
-from pyspark.sql.types import UserDefinedType, BinaryType, IntegralType, LongType
+from pyspark.sql.types import UserDefinedType, BinaryType, IntegralType, LongType, IntegerType
+
+
+MIN_DATE32 = -53375809
+MAX_DATE32 = 53375807
+MIN_DATETIME64 = -4611669897600
+MAX_DATETIME64 = 4611669811199
+MIN_TIMESTAMP64 = -4611669897600000000
+MAX_TIMESTAMP64 = 4611669811199999999
+MAX_INTERVAL64 = MAX_TIMESTAMP64 - MIN_TIMESTAMP64
+MIN_INTERVAL64 = - MAX_INTERVAL64
 
 
 class DatetimeType(UserDefinedType):
@@ -20,7 +30,7 @@ class DatetimeType(UserDefinedType):
 
     def deserialize(self, ts):
         if ts is not None:
-            return Datetime(datetime.datetime.fromtimestamp(ts).replace(microsecond=0))
+            return Datetime(datetime.datetime.fromtimestamp(ts, datetime.timezone.utc).replace(microsecond=0, tzinfo=None))
 
     @classmethod
     def typeName(cls):
@@ -43,7 +53,6 @@ class DatetimeType(UserDefinedType):
 
 
 class Datetime:
-
     __UDT__ = DatetimeType()
 
     def __init__(self, value):
@@ -51,6 +60,202 @@ class Datetime:
 
     def __repr__(self):
         return "Datetime(%s)" % self.value
+
+    def __str__(self):
+        return "(%s)" % self.value
+
+    def __eq__(self, other):
+        return isinstance(other, self.__class__) and \
+            other.value == self.value
+
+
+class Date32Type(UserDefinedType):
+
+    def needConversion(self):
+        return True
+
+    def serialize(self, obj):
+        return int(obj.value) if (obj.value is not None) else None
+
+    def deserialize(self, d):
+        if d is not None and MIN_DATE32 <= d <= MAX_DATE32:
+            return Date32(d)
+
+    @classmethod
+    def typeName(cls):
+        return "date32"
+
+    def simpleString(self):
+        return 'date32'
+
+    @classmethod
+    def sqlType(cls):
+        return IntegerType()
+
+    @classmethod
+    def module(cls):
+        return 'spyt.types'
+
+    @classmethod
+    def scalaUDT(cls):
+        return 'org.apache.spark.sql.spyt.types.Date32Type'
+
+
+class Date32:
+    __UDT__ = Date32Type()
+
+    def __init__(self, value):
+        self.value = value
+
+    def __repr__(self):
+        return "Date32(%s)" % self.value
+
+    def __str__(self):
+        return "(%s)" % self.value
+
+    def __eq__(self, other):
+        return isinstance(other, self.__class__) and \
+            other.value == self.value
+
+
+class Datetime64Type(UserDefinedType):
+
+    def needConversion(self):
+        return True
+
+    def serialize(self, obj):
+        return int(obj.value) if (obj.value is not None) else None
+
+    def deserialize(self, d):
+        if d is not None and MIN_DATETIME64 <= d <= MAX_DATETIME64:
+            return Datetime64(d)
+
+    @classmethod
+    def typeName(cls):
+        return "datetime64"
+
+    def simpleString(self):
+        return 'datetime64'
+
+    @classmethod
+    def sqlType(cls):
+        return LongType()
+
+    @classmethod
+    def module(cls):
+        return 'spyt.types'
+
+    @classmethod
+    def scalaUDT(cls):
+        return 'org.apache.spark.sql.spyt.types.Datetime64Type'
+
+
+class Datetime64:
+    __UDT__ = Datetime64Type()
+
+    def __init__(self, value):
+        self.value = value
+
+    def __repr__(self):
+        return "Datetime64(%s)" % self.value
+
+    def __str__(self):
+        return "(%s)" % self.value
+
+    def __eq__(self, other):
+        return isinstance(other, self.__class__) and \
+            other.value == self.value
+
+
+class Timestamp64Type(UserDefinedType):
+
+    def needConversion(self):
+        return True
+
+    def serialize(self, obj):
+        return int(obj.value) if (obj.value is not None) else None
+
+    def deserialize(self, d):
+        if d is not None and MIN_TIMESTAMP64 <= d <= MAX_TIMESTAMP64:
+            return Timestamp64(d)
+
+    @classmethod
+    def typeName(cls):
+        return "timestamp64"
+
+    def simpleString(self):
+        return 'timestamp64'
+
+    @classmethod
+    def sqlType(cls):
+        return LongType()
+
+    @classmethod
+    def module(cls):
+        return 'spyt.types'
+
+    @classmethod
+    def scalaUDT(cls):
+        return 'org.apache.spark.sql.spyt.types.Timestamp64Type'
+
+
+class Timestamp64:
+    __UDT__ = Timestamp64Type()
+
+    def __init__(self, value):
+        self.value = value
+
+    def __repr__(self):
+        return "Timestamp64(%s)" % self.value
+
+    def __str__(self):
+        return "(%s)" % self.value
+
+    def __eq__(self, other):
+        return isinstance(other, self.__class__) and \
+            other.value == self.value
+
+
+class Interval64Type(UserDefinedType):
+
+    def needConversion(self):
+        return True
+
+    def serialize(self, obj):
+        return int(obj.value) if (obj.value is not None) else None
+
+    def deserialize(self, d):
+        if d is not None and MIN_INTERVAL64 <= d <= MAX_INTERVAL64:
+            return Interval64(d)
+
+    @classmethod
+    def typeName(cls):
+        return "interval64"
+
+    def simpleString(self):
+        return 'interval64'
+
+    @classmethod
+    def sqlType(cls):
+        return LongType()
+
+    @classmethod
+    def module(cls):
+        return 'spyt.types'
+
+    @classmethod
+    def scalaUDT(cls):
+        return 'org.apache.spark.sql.spyt.types.Interval64Type'
+
+
+class Interval64:
+    __UDT__ = Interval64Type()
+
+    def __init__(self, value):
+        self.value = value
+
+    def __repr__(self):
+        return "Interval64(%s)" % self.value
 
     def __str__(self):
         return "(%s)" % self.value
@@ -96,6 +301,7 @@ UINT64_MAX = 0xffffffffffffffff
 class UInt64Type(IntegralType):
     """Unsigned 64-bit integer type
     """
+
     def simpleString(self):
         return 'uint64'
 

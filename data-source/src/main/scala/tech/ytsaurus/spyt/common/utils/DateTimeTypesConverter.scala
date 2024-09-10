@@ -25,7 +25,7 @@ object DateTimeTypesConverter {
   }
 
   // Ex: convertDaysToDate(17410) -> Date "2017-08-03"
-  def convertDaysToDate(days: Long): Date = {
+  def daysToDate(days: Long): Date = {
     val localDate = LocalDate.ofEpochDay(days)
     Date.valueOf(localDate)
   }
@@ -45,20 +45,30 @@ object DateTimeTypesConverter {
     dateTime.format(DateTimeFormatter.ISO_DATE_TIME)
   }
 
-  def localDateTimeToLong(localDateTime: LocalDateTime): Long = {
+  def localDateTimeToSeconds(localDateTime: LocalDateTime): Long = {
     val dateTime = localDateTime.atZone(java.time.ZoneOffset.UTC)
     dateTime.toInstant.toEpochMilli / 1000
   }
 
+  // "+148108-01-01T02:59:59Z" -> LocalDatetime("+148108-01-01T02:59:59")
+  def toLocalDatetime(dateTimeString: String): LocalDateTime = {
+    val zonedDateTime = ZonedDateTime.parse(dateTimeString, DateTimeFormatter.ISO_DATE_TIME)
+    zonedDateTime.toLocalDateTime
+  }
+
   /** TIMESTAMP */
 
-  def timestampToLong(timestampStr: String): Long = {
+  def zonedTimestampToLong(timestampStr: String): Long = {
     val formatter = DateTimeFormatter.ISO_DATE_TIME
     val dateTime = ZonedDateTime.parse(timestampStr, formatter).withZoneSameInstant(java.time.ZoneOffset.UTC)
     dateTime.toEpochSecond * 1000000L + dateTime.get(ChronoField.MICRO_OF_SECOND)
   }
 
-  def longToTimestamp(microseconds: Long): String = {
+  def timestampToLong(timestamp: Timestamp): Long = {
+    timestamp.getTime * 1000 + timestamp.getNanos / 1000
+  }
+
+  def longToZonedTimestamp(microseconds: Long): String = {
     val seconds = microseconds / 1000000L
     val microOfSecond = microseconds % 1000000L
     val dateTime = ZonedDateTime.ofInstant(Instant.ofEpochSecond(seconds, 0), java.time.ZoneOffset.UTC)
@@ -66,7 +76,7 @@ object DateTimeTypesConverter {
     formatted.dropRight(1) + f".$microOfSecond%06dZ"
   }
 
-  // Ex: convertUTCtoLocal("2019-02-09T13:41:11Z", 3) -> Timestamp "2019-02-09 16:41:11"
+  // Ex: convertUTCtoLocal("2019-02-09T13:41:11.654321Z", 3) -> Timestamp("2019-02-09 16:41:11.654321")
   def convertUTCtoLocal(str: String, zoneOffsetHour: Int): Timestamp = {
     val instant = Instant.parse(str)
     val offset = ZoneOffset.ofHours(zoneOffsetHour)
@@ -75,7 +85,7 @@ object DateTimeTypesConverter {
     Timestamp.valueOf(zonedDateTime.toLocalDateTime)
   }
 
-  // Ex: convertLocalToUTC(Timestamp "2019-02-09 16:41:11", 3) -> "2019-02-09T13:41:11Z"
+  // Timestamp("2019-02-09 16:41:11", 3) -> "2019-02-09T13:41:11Z"
   def convertLocalToUTC(timestamp: Timestamp, zoneOffset: Int): String = {
     val zoneOffsetAdjusted = ZoneOffset.ofHours(zoneOffset)
     val localDateTime = timestamp.toLocalDateTime.atZone(ZoneId.of(zoneOffsetAdjusted.getId))

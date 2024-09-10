@@ -1,20 +1,26 @@
 package tech.ytsaurus.spyt.format.types
 
+import org.apache.spark.sql.spyt.types.Date32.{MAX_DATE32, MIN_DATE32}
+import org.apache.spark.sql.spyt.types.Datetime64.{MAX_DATETIME64, MIN_DATETIME64}
+import org.apache.spark.sql.spyt.types.Interval64.{MAX_INTERVAL64, MIN_INTERVAL64}
+import org.apache.spark.sql.spyt.types.Timestamp64.{MAX_TIMESTAMP64, MIN_TIMESTAMP64}
+import org.apache.spark.sql.spyt.types._
 import org.apache.spark.sql.types._
-import org.apache.spark.sql.spyt.types.{Datetime, DatetimeType}
+import org.apache.spark.sql.v2.YtUtils
 import org.apache.spark.sql.{DataFrame, Row}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import tech.ytsaurus.core.tables.{ColumnValueType, TableSchema}
 import tech.ytsaurus.spyt.common.utils.DateTimeTypesConverter._
+import tech.ytsaurus.spyt.format.conf.{SparkYtConfiguration, YtTableSparkSettings}
+import tech.ytsaurus.spyt.format.types.DateTimeTypesTest.{rightSparkDataForWideDatetimeTypesTests, rightSparkSchemaForWideDatetimeTypesTests, rightYtDataForWideDatetimeTypesTests, rightYtSchemaForWideDatetimeTypesTests}
 import tech.ytsaurus.spyt.test.{LocalSpark, TestUtils, TmpDir}
 import tech.ytsaurus.spyt.wrapper.YtWrapper
-import tech.ytsaurus.spyt.{YtReader, YtWriter}
+import tech.ytsaurus.spyt.{SchemaTestUtils, YtReader, YtWriter}
 import tech.ytsaurus.typeinfo.TiType
-import tech.ytsaurus.spyt.SchemaTestUtils
 
-import java.sql.Date
-import java.time.LocalDateTime
+import java.sql.{Date, Timestamp}
+import java.time.{LocalDate, LocalDateTime}
 import scala.collection.mutable.ListBuffer
 
 class DateTimeTypesTest extends AnyFlatSpec with Matchers with LocalSpark with TmpDir with TestUtils with SchemaTestUtils {
@@ -43,7 +49,7 @@ class DateTimeTypesTest extends AnyFlatSpec with Matchers with LocalSpark with T
         s"""{id = ${ids(i)};
            |date = ${dateToLong(dateArr(i))};
            |datetime = ${datetimeToLong(datetimeArr(i))};
-           |timestamp = ${timestampToLong(timestampArr(i))};
+           |timestamp = ${zonedTimestampToLong(timestampArr(i))};
            |number = ${numbers(i)}}""".stripMargin
     }
     writeTableFromYson(ysonData, tmpPath, tableSchema)
@@ -129,9 +135,9 @@ class DateTimeTypesTest extends AnyFlatSpec with Matchers with LocalSpark with T
       val map = yson.asMap()
       (
         map.get("id").longValue(),
-        convertDaysToDate(map.get("date").longValue()),
+        daysToDate(map.get("date").longValue()),
         longToDatetime(map.get("datetime").longValue()),
-        longToTimestamp(map.get("timestamp").longValue()),
+        longToZonedTimestamp(map.get("timestamp").longValue()),
         map.get("number").intValue()
       )
     }
@@ -144,4 +150,103 @@ class DateTimeTypesTest extends AnyFlatSpec with Matchers with LocalSpark with T
 
     data should contain theSameElementsAs expectedData
   }
+
+  it should "wide datetime types: write by spark, read by yt" in {
+    withConf(SparkYtConfiguration.Schema.ForcingNullableIfNoMetadata, false) {
+      val df_0 = spark.createDataFrame(
+        spark.sparkContext.parallelize(rightSparkDataForWideDatetimeTypesTests),
+        rightSparkSchemaForWideDatetimeTypesTests)
+
+      df_0.write
+        .option(YtTableSparkSettings.WriteTypeV3.name, value = true)
+        .option(YtTableSparkSettings.NullTypeAllowed.name, value = false)
+        .option(YtUtils.Options.PARSING_TYPE_V3, value = true)
+        .yt(tmpPath)
+
+      val schema = TableSchema.fromYTree(YtWrapper.attribute(tmpPath, "schema"))
+
+      schema shouldEqual rightYtSchemaForWideDatetimeTypesTests
+
+      val data = readTableAsYson(tmpPath).map { yson =>
+        val map = yson.asMap()
+        (
+          Date32(map.get("date32").intValue()),
+          Datetime64(map.get("datetime64").longValue()),
+          Timestamp64(map.get("timestamp64").longValue()),
+          Interval64(map.get("interval64").longValue())
+        )
+      }
+
+      data should contain theSameElementsAs rightYtDataForWideDatetimeTypesTests
+    }
+  }
+
+  it should "wide datetime types: write by yt, read by spark" in {
+    withConf(SparkYtConfiguration.Schema.ForcingNullableIfNoMetadata, false) {
+      val ysonData = ListBuffer[String]()
+      for (i <- rightYtDataForWideDatetimeTypesTests.indices){
+        ysonData +=
+          s"""{date32 = ${rightYtDataForWideDatetimeTypesTests(i)._1.toInt};
+             |datetime64 = ${rightYtDataForWideDatetimeTypesTests(i)._2.toLong};
+             |timestamp64 = ${rightYtDataForWideDatetimeTypesTests(i)._3.toLong};
+             |interval64 = ${rightYtDataForWideDatetimeTypesTests(i)._4.toLong};}""".stripMargin
+      }
+      writeTableFromYson(ysonData, tmpPath, rightYtSchemaForWideDatetimeTypesTests)
+
+      val df_1 = spark.read
+        .option(YtTableSparkSettings.NullTypeAllowed.name, value = false)
+        .option(YtUtils.Options.PARSING_TYPE_V3, value = true)
+        .yt(tmpPath)
+
+      df_1.schema.fields.map(_.copy(metadata = Metadata.empty)) should contain theSameElementsInOrderAs
+        rightSparkSchemaForWideDatetimeTypesTests
+      df_1.collect() should contain theSameElementsAs rightSparkDataForWideDatetimeTypesTests
+    }
+  }
+}
+
+
+object DateTimeTypesTest extends SchemaTestUtils {
+  private val rightSparkSchemaForWideDatetimeTypesTests: StructType = {
+    StructType(Seq(
+      StructField("date32", new Date32Type(), nullable = false),
+      StructField("datetime64", new Datetime64Type(), nullable = false),
+      StructField("timestamp64", new Timestamp64Type(), nullable = false),
+      StructField("interval64", new Interval64Type(), nullable = false),
+    ))
+  }
+
+  private val rightYtSchemaForWideDatetimeTypesTests: TableSchema = TableSchema.builder().setUniqueKeys(false)
+    .addValue("date32", TiType.date32())
+    .addValue("datetime64", TiType.datetime64())
+    .addValue("timestamp64", TiType.timestamp64())
+    .addValue("interval64", TiType.interval64())
+    .build()
+
+  val date32Arr: Seq[Int] = List.apply(MIN_DATE32, 0, MAX_DATE32)
+  val datetime64Arr: Seq[Long] = List.apply(MIN_DATETIME64, 0L, MAX_DATETIME64)
+  val timestamp64Arr: Seq[Long] = List.apply(MIN_TIMESTAMP64, 0L, MAX_TIMESTAMP64)
+  val interval64Arr: Seq[Long] = List.apply(MIN_INTERVAL64, 0L, MAX_INTERVAL64)
+
+  val date32Now: LocalDate = LocalDate.now()
+  val datetime64Now: LocalDateTime = LocalDateTime.now()
+  val timestamp64Now: Timestamp = Timestamp.valueOf("2024-08-29 11:30:45.987654")
+
+  private val rightSparkDataForWideDatetimeTypesTests: Seq[Row] = Seq(
+    Row(Date32(date32Arr.head), Datetime64(datetime64Arr.head), Timestamp64(timestamp64Arr.head),
+      Interval64(interval64Arr.head)),
+    Row(Date32(date32Arr(1)), Datetime64(datetime64Arr(1)), Timestamp64(timestamp64Arr(1)),
+      Interval64(interval64Arr(1))),
+    Row(Date32(date32Arr(2)), Datetime64(datetime64Arr(2)), Timestamp64(timestamp64Arr(2)),
+      Interval64(interval64Arr(2))),
+    Row(Date32(date32Now), Datetime64(datetime64Now), Timestamp64(timestamp64Now), Interval64(1234567890L))
+  )
+
+  private val rightYtDataForWideDatetimeTypesTests: List[(Date32, Datetime64, Timestamp64, Interval64)] = List.apply(
+    (Date32(date32Arr.head), Datetime64(datetime64Arr.head), Timestamp64(timestamp64Arr.head),
+      Interval64(interval64Arr.head)),
+    (Date32(date32Arr(1)), Datetime64(datetime64Arr(1)), Timestamp64(timestamp64Arr(1)), Interval64(interval64Arr(1))),
+    (Date32(date32Arr(2)), Datetime64(datetime64Arr(2)), Timestamp64(timestamp64Arr(2)), Interval64(interval64Arr(2))),
+    (Date32(date32Now), Datetime64(datetime64Now), Timestamp64(timestamp64Now), Interval64(1234567890L))
+  )
 }

@@ -4,7 +4,7 @@ import org.apache.spark.sql.AnalysisException
 import org.apache.spark.sql.types.{DataType, LongType, SQLUserDefinedType, UserDefinedType}
 import org.json4s.JsonAST.JValue
 import org.json4s.JsonDSL._
-import tech.ytsaurus.spyt.common.utils.DateTimeTypesConverter.{localDateTimeToLong, longToDatetime}
+import tech.ytsaurus.spyt.common.utils.DateTimeTypesConverter.{localDateTimeToSeconds, longToDatetime}
 
 import java.time.{LocalDateTime, ZoneId, ZoneOffset}
 
@@ -15,7 +15,7 @@ class DatetimeType extends UserDefinedType[Datetime] {
   override def sqlType: DataType = LongType
 
   override def serialize(d: Datetime): Any = {
-    localDateTimeToLong(d.datetime)
+    localDateTimeToSeconds(d.datetime)
   }
 
   override def deserialize(datum: Any): Datetime = {

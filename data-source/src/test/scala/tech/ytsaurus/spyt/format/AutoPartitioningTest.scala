@@ -134,8 +134,8 @@ class AutoPartitioningTest extends FlatSpec with Matchers with LocalSpark with T
 
   def getPartitionsFiles(partitions: Seq[Partition]): Seq[Seq[TestPartitionedFile]] = {
     partitions.map { part =>
-      part.asInstanceOf[DataSourceRDDPartition]
-        .inputPartition.asInstanceOf[FilePartition]
+      SparkAdapter.instance.getInputPartition(part.asInstanceOf[DataSourceRDDPartition])
+        .asInstanceOf[FilePartition]
         .files.toSeq
         .map(fromPartitionedFile)
     }

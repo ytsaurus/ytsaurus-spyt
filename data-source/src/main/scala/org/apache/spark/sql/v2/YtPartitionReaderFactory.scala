@@ -17,7 +17,8 @@ import org.apache.spark.util.SerializableConfiguration
 import org.slf4j.LoggerFactory
 import tech.ytsaurus.client.CompoundClient
 import tech.ytsaurus.spyt.common.utils.SegmentSet
-import tech.ytsaurus.spyt.format.{YtInputSplit, YtPartitionedFile}
+import tech.ytsaurus.spyt.format.YtInputSplit
+import tech.ytsaurus.spyt.format.YtPartitionedFileDelegate.YtPartitionedFile
 import tech.ytsaurus.spyt.format.conf.FilterPushdownConfig
 import tech.ytsaurus.spyt.format.conf.SparkYtConfiguration.Read.{CountOptimizationEnabled, VectorizedCapacity}
 import tech.ytsaurus.spyt.fs.YtClientConfigurationConverter.ytClientConfiguration
@@ -118,7 +119,7 @@ case class YtPartitionReaderFactory(sqlConf: SQLConf,
     file match {
       case ypf: YtPartitionedFile =>
         val split = createSplit(ypf)
-        splitReader(split, ypf.hadoopPath)
+        splitReader(split, ypf.delegate.hadoopPath)
       case _ =>
         throw new IllegalArgumentException(s"Partitions of type ${file.getClass.getSimpleName} are not supported")
     }

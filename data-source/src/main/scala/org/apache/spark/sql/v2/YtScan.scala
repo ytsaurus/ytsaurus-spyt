@@ -5,17 +5,16 @@ import org.apache.hadoop.fs.Path
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.catalyst.expressions.Expression
 import org.apache.spark.sql.catalyst.expressions.codegen.GenerateUnsafeProjection
-import org.apache.spark.sql.connector.read.partitioning.{Distribution, Partitioning}
+import org.apache.spark.sql.connector.read.partitioning.Partitioning
 import org.apache.spark.sql.connector.read.{PartitionReaderFactory, Statistics, SupportsReportPartitioning}
 import org.apache.spark.sql.execution.datasources.v2.FileScan
 import org.apache.spark.sql.execution.datasources.{FilePartition, PartitionDirectory, PartitionedFile, PartitioningAwareFileIndex}
-import org.apache.spark.sql.sources.Filter
 import org.apache.spark.sql.types.StructType
 import org.apache.spark.sql.util.CaseInsensitiveStringMap
 import org.apache.spark.sql.v2.YtFilePartition.tryGetKeyPartitions
-import org.apache.spark.sql.v2.YtScan.YtScanPartitioning
 import org.apache.spark.sql.{AnalysisException, SparkSession}
 import org.apache.spark.util.SerializableConfiguration
+import tech.ytsaurus.spyt.SparkAdapter
 import tech.ytsaurus.spyt.common.utils.SegmentSet
 import tech.ytsaurus.spyt.format.conf.{FilterPushdownConfig, KeyPartitioningConfig, YtTableSparkSettings}
 import tech.ytsaurus.spyt.fs.YtHadoopPath
@@ -31,14 +30,14 @@ case class YtScan(sparkSession: SparkSession,
                   readDataSchema: StructType,
                   readPartitionSchema: StructType,
                   options: CaseInsensitiveStringMap,
-                  partitionFilters: Seq[Expression] = Seq.empty,
-                  dataFilters: Seq[Expression] = Seq.empty,
+                  partitionFilters: Seq[Expression],
+                  dataFilters: Seq[Expression],
                   pushedFilterSegments: SegmentSet = SegmentSet(),
-                  pushedFilters: Seq[Filter] = Nil,
                   keyPartitionsHint: Option[Seq[FilePartition]] = None) extends FileScan
   with SupportsReportPartitioning with Logging {
   private val filterPushdownConf = FilterPushdownConfig(sparkSession)
   private val keyPartitioningConf = KeyPartitioningConfig(sparkSession)
+  private val pushedFiltersStr: String = pushedFilterSegments.toFilters.mkString("[", ", ", "]")
 
   def supportsKeyPartitioning: Boolean = {
     keyPartitionsHint.isDefined
@@ -67,13 +66,15 @@ case class YtScan(sparkSession: SparkSession,
 
   override def description(): String = {
     super.description() +
-      ", PushedFilters: " + seqToString(pushedFilters) +
+      ", PushedFilters: " + pushedFiltersStr +
       ", filter pushdown enabled: " + filterPushdownConf.enabled +
       ", key partitioned: " + supportsKeyPartitioning
   }
 
-  override def withFilters(partitionFilters: Seq[Expression], dataFilters: Seq[Expression]): FileScan =
+  // Left for backward compatibility with Spark 3.2.x
+  def withFilters(partitionFilters: Seq[Expression], dataFilters: Seq[Expression]): FileScan = {
     this.copy(partitionFilters = partitionFilters, dataFilters = dataFilters)
+  }
 
   private val maybeReadParallelism = Option(options.get("readParallelism")).map(_.toInt)
 
@@ -149,7 +150,10 @@ case class YtScan(sparkSession: SparkSession,
     }
   }
 
-  override def outputPartitioning(): Partitioning = YtScanPartitioning(partitions.length)
+  // This method is intended to support YTsaurus native partitioning and should help to avoid shuffle at spark side
+  override def outputPartitioning(): Partitioning = {
+    SparkAdapter.instance.createYtScanOutputPartitioning(partitions.length)
+  }
 
   override def estimateStatistics(): Statistics = new Statistics {
     override val sizeInBytes: OptionalLong = OptionalLong.of(fileIndex.sizeInBytes)
@@ -171,12 +175,6 @@ case class YtScan(sparkSession: SparkSession,
 }
 
 object YtScan {
-  case class YtScanPartitioning(partitionsCount: Int) extends Partitioning with Serializable {
-    override def numPartitions(): Int = partitionsCount
-
-    override def satisfy(distribution: Distribution): Boolean = false
-  }
-
   type ScanDescription = (YtScan, Seq[String])
 
   def trySyncKeyPartitioning(leftScanDescO: Option[ScanDescription], rightScanDescO: Option[ScanDescription]

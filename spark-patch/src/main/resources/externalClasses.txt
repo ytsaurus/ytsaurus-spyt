@@ -11,7 +11,7 @@ org/apache/spark/sql/catalyst/expressions/CastDecorators$
 org/apache/spark/deploy/rest/spyt/patch/StandaloneRestServer
 org/apache/spark/deploy/rest/RestSubmissionClientAppSpyt
 org/apache/spark/sql/SparkSessionBuilderDecorators
-org/apache/spark/sql/catalyst/catalog/SessionCatalogSpyt
+org/apache/spark/sql/catalyst/catalog/SessionCatalogDecorators
 org/apache/spark/sql/internal/SharedStateDecorators$
 org/apache/spark/deploy/SparkSubmitSpyt
 org/apache/spark/sql/catalyst/parser/AstBuilderSpyt
@@ -27,6 +27,8 @@ org/apache/spark/deploy/worker/DriverRunnerDecorators
 org/apache/spark/scheduler/cluster/StandaloneSchedulerBackendDecorators
 org/apache/spark/deploy/master/MasterDecorators
 org/apache/spark/deploy/PythonRunnerDecorators$
+org/apache/spark/sql/execution/PartitionedFileUtilDecorators$
+org/apache/spark/sql/execution/datasources/FilePartitionDecorators$
 org/apache/spark/sql/execution/datasources/BasicWriteTaskStatsTrackerSpyt
 org/apache/spark/sql/execution/datasources/v2/DataSourcePartitioningDecorator
 org/apache/spark/sql/execution/columnar/ColumnBuilderDecorators$

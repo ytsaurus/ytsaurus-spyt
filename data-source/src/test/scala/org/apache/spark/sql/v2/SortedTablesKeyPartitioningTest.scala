@@ -16,7 +16,7 @@ import tech.ytsaurus.spyt.serializers.PivotKeysConverter
 import tech.ytsaurus.spyt.test.{DynTableTestUtils, LocalSpark, TmpDir}
 import tech.ytsaurus.spyt.{YtReader, YtWriter}
 import tech.ytsaurus.spyt.common.utils.{MInfinity, PInfinity, RealValue}
-import tech.ytsaurus.spyt.format.YtPartitionedFile
+import tech.ytsaurus.spyt.format.YtPartitionedFileDelegate
 
 import java.sql.{Date, Timestamp}
 import java.time.LocalDate
@@ -252,10 +252,10 @@ class SortedTablesKeyPartitioningTest extends FlatSpec with Matchers with LocalS
 
     val schema = StructType(Seq(StructField("a", StringType)))
     val files = Seq(
-      YtPartitionedFile.static(tmpPath, 0, 1, 0),
-      YtPartitionedFile.static(tmpPath, 2, 3, 0),
-      YtPartitionedFile.static(tmpPath, 3, 4, 0),
-      YtPartitionedFile.static(tmpPath, 5, 6, 0),
+      YtPartitionedFileDelegate.static(tmpPath, 0, 1, 0),
+      YtPartitionedFileDelegate.static(tmpPath, 2, 3, 0),
+      YtPartitionedFileDelegate.static(tmpPath, 3, 4, 0),
+      YtPartitionedFileDelegate.static(tmpPath, 5, 6, 0),
     )
 
     val res = YtFilePartition.getPivotKeys(schema, Seq("a"), files)
@@ -275,10 +275,10 @@ class SortedTablesKeyPartitioningTest extends FlatSpec with Matchers with LocalS
       TuplePoint(Seq(PInfinity()))
     )
     val files = Seq(
-      YtPartitionedFile.static(tmpPath, 0, 1, 0, null),
-      YtPartitionedFile.static(tmpPath, 2, 3, 0, null),
-      YtPartitionedFile.static(tmpPath, 3, 4, 0, null),
-      YtPartitionedFile.static(tmpPath, 5, 6, 0, null)
+      YtPartitionedFileDelegate.static(tmpPath, 0, 1, 0, null),
+      YtPartitionedFileDelegate.static(tmpPath, 2, 3, 0, null),
+      YtPartitionedFileDelegate.static(tmpPath, 3, 4, 0, null),
+      YtPartitionedFileDelegate.static(tmpPath, 5, 6, 0, null)
     )
     val filesGroupedByPoint = Seq(
       (pivotKeys(0), Seq(files(0))),

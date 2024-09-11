@@ -9,10 +9,8 @@ object Dependencies {
   lazy val scalatraVersion = "2.7.0"
   lazy val mockitoVersion = "1.14.4"
   lazy val arrowVersion = "0.17.1"
-  lazy val nettyVersion = "4.1.68.Final"
 
-  lazy val sparkCompileVersion = "3.2.2"
-  lazy val sparkTestVersion = System.getProperty("sparkTestVersion", sparkCompileVersion)
+  lazy val defaultSparkVersion = System.getProperty("sparkVersion", "3.2.2")
 
   lazy val circe = ("io.circe" %% "circe-yaml" % circeYamlVersion) +: Seq(
     "io.circe" %% "circe-core",
@@ -32,14 +30,17 @@ object Dependencies {
     "org.scalatestplus" %% "scalacheck-1-14" % "3.1.0.0" % Test
   ) ++ mockito
 
-  lazy val spark = Seq("spark-core", "spark-sql").flatMap { module => Seq(
-    "org.apache.spark" %% module % sparkCompileVersion % Provided,
-    "org.apache.spark" %% module % sparkTestVersion % Test
+  def spark(sparkVersion: String) = Seq("spark-core", "spark-sql").flatMap { module => Seq(
+    "org.apache.spark" %% module % sparkVersion % Provided
   )}
 
-  lazy val sparkTest = Seq(
-    "org.apache.spark" %% "spark-core" % sparkTestVersion % Test classifier "tests"
+  def sparkTest(sparkVersion: String) = Seq(
+    "org.apache.spark" %% "spark-core" % sparkVersion % Test classifier "tests"
   )
+
+  lazy val defaultSpark = spark(defaultSparkVersion)
+
+  lazy val defaultSparkTest = sparkTest(defaultSparkVersion)
 
   lazy val ytsaurusClient = Seq(
     "tech.ytsaurus" % "ytsaurus-client" % ytsaurusClientVersion excludeAll(

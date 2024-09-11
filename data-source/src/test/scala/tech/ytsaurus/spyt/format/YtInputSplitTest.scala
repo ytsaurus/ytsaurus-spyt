@@ -1,6 +1,9 @@
 package tech.ytsaurus.spyt.format
 
-import org.apache.spark.sql.execution.datasources.v2.BatchScanExec
+import org.apache.spark.sql.catalyst.expressions.{AttributeReference, Expression, PredicateHelper, SubqueryExpression}
+import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
+import org.apache.spark.sql.execution.datasources.v2.DataSourceV2Implicits.TableHelper
+import org.apache.spark.sql.execution.datasources.v2.{BatchScanExec, DataSourceV2Relation, PushDownUtils}
 import org.apache.spark.sql.functions.col
 import org.apache.spark.sql.sources._
 import org.apache.spark.sql.{Column, DataFrame, Row}
@@ -77,13 +80,13 @@ class YtInputSplitTest extends FlatSpec with Matchers with LocalSpark with DynTa
       (
         df("a").isin(1L, 2L, 3L) && df("c") === 1L,
         Seq(
-          In("a", Array(1, 2, 3)),
-          In("c", Array(1))
+          In("a", Array(1L, 2L, 3L)),
+          In("c", Array(1L))
         )
       ), (
         df("a") === 1L || df("a") === 4L || df("a") < 3L,
         Seq(
-          Or(In("a", Array(4)), LessThanOrEqual("a", 3))
+          Or(In("a", Array(4L)), LessThanOrEqual("a", 3L))
         )
       ), (
         df("a") === 1L || df("c") === 2L,
@@ -97,8 +100,7 @@ class YtInputSplitTest extends FlatSpec with Matchers with LocalSpark with DynTa
 
         val plan = query.queryExecution.logical
 
-        val res = getPushedFilters(plan)
-        res should contain theSameElementsAs output
+        checkPushedFilters(plan, output)
     }
   }
 
@@ -323,8 +325,8 @@ class YtInputSplitTest extends FlatSpec with Matchers with LocalSpark with DynTa
 
   it should "get ypath" in {
     val keyColumns = List("a", "b")
-    val file = YtPartitionedFile.static("//dir/path", 2, 5, 10)
-    val baseYPath = file.ypath.withColumns(keyColumns: _*)
+    val file = YtPartitionedFileDelegate.static("//dir/path", 2, 5, 10)
+    val baseYPath = file.delegate.ypath.withColumns(keyColumns: _*)
     val config = FilterPushdownConfig(enabled = true, unionEnabled = true, ytPathCountLimit = 5)
     pushdownFiltersToYPath(single = false, exampleSet1, keyColumns.map(Some(_)), config, baseYPath).toString shouldBe
       """<"ranges"=
@@ -366,8 +368,7 @@ class YtInputSplitTest extends FlatSpec with Matchers with LocalSpark with DynTa
 
     val plan = query.queryExecution.logical
 
-    val res = getPushedFilters(plan)
-    res should contain theSameElementsAs Seq(GreaterThanOrEqual("a", 2))
+    checkPushedFilters(plan, Seq(GreaterThanOrEqual("a", 2L)))
 
     query.collect() should contain theSameElementsAs Seq(
       Row(2, "b", 0.5),
@@ -463,8 +464,35 @@ class YtInputSplitTest extends FlatSpec with Matchers with LocalSpark with DynTa
     val query = res.filter(filter)
     query.collect()
     query.queryExecution.executedPlan.collectFirst {
-      case b@BatchScanExec(_, _, _) => b.metrics("numOutputRows").value
+      case b: BatchScanExec => b.metrics("numOutputRows").value
     }.get
+  }
+
+  private def checkPushedFilters(plan: LogicalPlan, expected: Seq[Filter]) = {
+    val (actualFilters, expectedFilters) = (plan collectFirst {
+      case org.apache.spark.sql.catalyst.plans.logical.Filter(condition, relation: DataSourceV2Relation) =>
+        val scanBuilder = relation.table.asReadable.newScanBuilder(relation.options)
+
+        val filters = predicateHelper.splitConditions(condition)
+
+        val normalizedFilters = filters.map { e =>
+          e transform {
+            case a: AttributeReference =>
+              a.withName( relation.output.find(_.semanticEquals(a)).getOrElse(a).name)
+          }
+        }
+        val (_, normalizedFiltersWithoutSubquery) = normalizedFilters.partition(SubqueryExpression.hasSubquery)
+
+        SparkAdapter.instance.checkPushedFilters(scanBuilder, normalizedFiltersWithoutSubquery, expected)
+    }).getOrElse(Nil -> Nil)
+
+    actualFilters should contain theSameElementsAs expectedFilters
+  }
+
+  private object predicateHelper extends PredicateHelper {
+    def splitConditions(condition: Expression): Seq[Expression] = {
+      splitConjunctivePredicates(condition)
+    }
   }
 }
 

@@ -59,21 +59,22 @@ class YtSortedTableMarkerRule(spark: SparkSession) extends Rule[LogicalPlan] {
         s"Left: ${leftNewScanDescO.isDefined}, right: ${rightNewScanDescO.isDefined}")
     (leftNewScanDescO, rightNewScanDescO) match {
       case (Some((leftNewScan, leftVars)), Some((rightNewScan, rightVars))) =>
+        val pivots = YtFilePartition.getPivotFromHintFiles(leftVars, leftNewScan.keyPartitionsHint.get)
         join.copy(
-          left = LogicalHashedMarker(leftVars, replaceYtScan(join.left, leftNewScan)),
-          right = LogicalHashedMarker(rightVars, replaceYtScan(join.right, rightNewScan))
+          left = LogicalHashedMarker(leftVars, pivots, replaceYtScan(join.left, leftNewScan)),
+          right = LogicalHashedMarker(rightVars, pivots, replaceYtScan(join.right, rightNewScan))
         )
       case (Some((leftNewScan, leftVars)), None) =>
         val leftPivots = YtFilePartition.getPivotFromHintFiles(leftVars, leftNewScan.keyPartitionsHint.get)
         join.copy(
-          left = LogicalHashedMarker(leftVars, replaceYtScan(join.left, leftNewScan)),
+          left = LogicalHashedMarker(leftVars, leftPivots, replaceYtScan(join.left, leftNewScan)),
           right = LogicalDependentHashMarker(attributesR, leftPivots, join.right)
         )
       case (None, Some((rightNewScan, rightVars))) =>
         val rightPivots = YtFilePartition.getPivotFromHintFiles(rightVars, rightNewScan.keyPartitionsHint.get)
         join.copy(
           left = LogicalDependentHashMarker(attributesL, rightPivots, join.left),
-          right = LogicalHashedMarker(rightVars, replaceYtScan(join.right, rightNewScan))
+          right = LogicalHashedMarker(rightVars, rightPivots, replaceYtScan(join.right, rightNewScan))
         )
       case (None, None) =>
         join
@@ -136,7 +137,7 @@ object YtSortedTableMarkerRule {
     node match {
       case Project(_, child) => getYtScan(child)
       case Filter(_, child) => getYtScan(child)
-      case DataSourceV2ScanRelation(_, scan: YtScan, _) => Some(scan)
+      case rel: DataSourceV2ScanRelation if rel.scan.isInstanceOf[YtScan] => Some(rel.scan.asInstanceOf[YtScan])
       case _ => None
     }
   }
@@ -145,7 +146,7 @@ object YtSortedTableMarkerRule {
     node match {
       case p@Project(_, child) => p.copy(child = replaceYtScan(child, newYtScan))
       case f@Filter(_, child) => f.copy(child = replaceYtScan(child, newYtScan))
-      case r@DataSourceV2ScanRelation(_, _: YtScan, _) => r.copy(scan = newYtScan)
+      case r: DataSourceV2ScanRelation if r.scan.isInstanceOf[YtScan] => r.copy(scan = newYtScan)
       case _ => throw new IllegalArgumentException("Couldn't replace yt scan, optimization broke execution plan")
     }
   }

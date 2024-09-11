@@ -4,9 +4,9 @@ import net.logstash.log4j.JSONEventLayoutV1
 import org.apache.commons.io.FileUtils
 import org.apache.log4j.spi.{LoggingEvent, RootLogger}
 import org.apache.log4j.{FileAppender, Level}
-import org.scalacheck.Prop.True
 import org.scalatest.{FlatSpec, Matchers}
 import tech.ytsaurus.spark.launcher.WorkerLogLauncher.WorkerLogConfig
+import tech.ytsaurus.spyt.SparkAdapter
 import tech.ytsaurus.spyt.test.{LocalYtClient, TmpDir}
 import tech.ytsaurus.spyt.wrapper.YtWrapper
 import tech.ytsaurus.spyt.wrapper.model.{WorkerLogBlock, WorkerLogMeta}
@@ -100,8 +100,8 @@ class WorkerLogLauncherTest extends FlatSpec with LocalYtClient with Matchers wi
                                      message: String,
                                      throwable: Option[String] = None) {
     def toEvent: LoggingEvent = {
-      new LoggingEvent(
-        "class",
+      SparkAdapter.instance.createLoggingEvent(
+        this.getClass.getName,
         new RootLogger(Level.ALL),
         timestamp,
         level.map(Level.toLevel)
@@ -149,7 +149,7 @@ class WorkerLogLauncherTest extends FlatSpec with LocalYtClient with Matchers wi
   }
 
   private def writeToLog(filePath: String, events: Seq[TestEventHolder]): Unit = {
-    val stream = new FileAppender(new JSONEventLayoutV1, filePath)
+    val stream = new FileAppender(new JSONEventLayoutV1(false), filePath)
     try {
       events.foreach(e => stream.append(e.toEvent))
     } finally {
@@ -328,7 +328,7 @@ class WorkerLogLauncherTest extends FlatSpec with LocalYtClient with Matchers wi
 
   it should "not parse json when option disabled" in {
     val nonJsonLog = "{Test}"
-    val simpleLogEventJson = new JSONEventLayoutV1().format(simpleInfoEvent.toEvent).strip()
+    val simpleLogEventJson = new JSONEventLayoutV1(false).format(simpleInfoEvent.toEvent).strip()
 
     val app = "example"
     createApp(app)
@@ -416,7 +416,7 @@ class WorkerLogLauncherTest extends FlatSpec with LocalYtClient with Matchers wi
     workerLogService.uploadLogs()
     val allLogsBefore = getAllLogs
 
-    val (sL1, sL2) = new JSONEventLayoutV1().format(simpleInfoEvent2.toEvent).splitAt(2)
+    val (sL1, sL2) = new JSONEventLayoutV1(false).format(simpleInfoEvent2.toEvent).splitAt(2)
     rawWriteToLog(getDriverFileLog(driver, STDOUT), sL1)
     (0 until attemptCnt).foreach(_ => workerLogService.uploadLogs())
     val allLogsAfterReadAttempts = getAllLogs
@@ -443,7 +443,7 @@ class WorkerLogLauncherTest extends FlatSpec with LocalYtClient with Matchers wi
 
     val eventCnt = 100
     val groupCnt = 10
-    val events = (0 until eventCnt).map(x => TestEventHolder(x, Some(Level.INFO.toString), ""))
+    val events = (1 to eventCnt).map(x => TestEventHolder(x, Some(Level.INFO.toString), ""))
     val logSnaps = new ArrayBuffer[LogArray](groupCnt)
 
     val workerLogService = new LogServiceRunnable(config)
@@ -469,7 +469,7 @@ class WorkerLogLauncherTest extends FlatSpec with LocalYtClient with Matchers wi
         logSnap.foreach {
           seq =>
             seq.zipWithIndex.forall {
-              case (event, i) => event.timestamp == i
+              case (event, i) => event.timestamp == i + 1
             } shouldBe true
         }
     }

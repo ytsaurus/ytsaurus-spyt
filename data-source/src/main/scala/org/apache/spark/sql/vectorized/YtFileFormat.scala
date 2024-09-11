@@ -20,6 +20,7 @@ import org.apache.spark.util.SerializableConfiguration
 import org.slf4j.LoggerFactory
 import tech.ytsaurus.client.CompoundClient
 import tech.ytsaurus.core.cypress.{RichYPath, YPath}
+import tech.ytsaurus.spyt.format.YtPartitionedFileDelegate.YtPartitionedFile
 import tech.ytsaurus.spyt.format._
 import tech.ytsaurus.spyt.format.conf.SparkYtConfiguration.Read._
 import tech.ytsaurus.spyt.format.conf.{FilterPushdownConfig, SparkYtWriteConfiguration}
@@ -81,7 +82,8 @@ class YtFileFormat extends FileFormat with DataSourceRegister with StreamSourceP
     {
       case ypf: YtPartitionedFile =>
         val log = LoggerFactory.getLogger(getClass)
-        implicit val yt: CompoundClient = YtClientProvider.ytClientWithProxy(ytClientConf, ypf.cluster, idPrefix)
+        implicit val yt: CompoundClient =
+          YtClientProvider.ytClientWithProxy(ytClientConf, ypf.delegate.cluster, idPrefix)
         val split = YtInputSplit(ypf, requiredSchema, filterPushdownConfig = filterPushdownConfig,
           ytLoggerConfig = ytLoggerConfig)
         log.info(s"Reading ${split.ytPathWithFilters}")
@@ -95,7 +97,7 @@ class YtFileFormat extends FileFormat with DataSourceRegister with StreamSourceP
             timeout = ytClientConf.timeout,
             reportBytesRead = bytesReadReporter(broadcastedConf),
             countOptimizationEnabled = countOptimizationEnabled,
-            hadoopPath = ypf.hadoopPath
+            hadoopPath = ypf.delegate.hadoopPath
           )
           val iter = new RecordReaderIterator(ytVectorizedReader)
           Option(TaskContext.get()).foreach(_.addTaskCompletionListener[Unit](_ => iter.close()))

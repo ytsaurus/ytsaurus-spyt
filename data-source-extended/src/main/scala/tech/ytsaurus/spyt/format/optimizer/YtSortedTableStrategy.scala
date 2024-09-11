@@ -18,7 +18,7 @@ case class YtSortedTableStrategy(spark: SparkSession) extends Strategy {
         logInfo(s"Fake sort shuffle inserted to plan")
         new FakeSortShuffleExchangeExec(sortOrders, planLater(inner)) :: Nil
       }
-    case LogicalHashedMarker(keys, inner) =>
+    case LogicalHashedMarker(keys, pivots, inner) =>
       // join
       val plannedLater = planLater(inner)
       val attributes = getAttributes(keys, inner.output)
@@ -27,7 +27,7 @@ case class YtSortedTableStrategy(spark: SparkSession) extends Strategy {
         plannedLater :: Nil
       } else {
         logInfo(s"Fake hash shuffle inserted to plan")
-        new FakeHashShuffleExchangeExec(attributes, plannedLater) :: Nil
+        new FakeHashShuffleExchangeExec(attributes, pivots, plannedLater) :: Nil
       }
     case LogicalDependentHashMarker(condition, pivots, inner) =>
       // one side join

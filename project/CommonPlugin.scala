@@ -15,9 +15,6 @@ object CommonPlugin extends AutoPlugin {
 
   object autoImport {
     lazy val printTestClasspath = taskKey[Unit]("")
-
-    lazy val CompileOnly = config("compileonly").describedAs("Compile time only dependency that is not visible in tests and not included into distributive")
-    lazy val NewCompileInternal = config("compile-internal").extend(Compile, Optional, Provided, CompileOnly)
   }
 
   import autoImport._
@@ -60,7 +57,6 @@ object CommonPlugin extends AutoPlugin {
     printTestClasspath := {
       (Test / dependencyClasspath).value.files.foreach(f => println(f.getAbsolutePath))
     },
-    Global / pgpPassphrase := gpgPassphrase.map(_.toCharArray),
-    ivyConfigurations := overrideConfigs(CompileOnly, NewCompileInternal)(ivyConfigurations.value),
+    Global / pgpPassphrase := gpgPassphrase.map(_.toCharArray)
   )
 }

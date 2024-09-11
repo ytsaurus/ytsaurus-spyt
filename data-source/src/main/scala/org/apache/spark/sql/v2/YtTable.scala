@@ -2,13 +2,14 @@ package org.apache.spark.sql.v2
 
 import org.apache.hadoop.fs.FileStatus
 import org.apache.spark.sql.SparkSession
+import org.apache.spark.sql.connector.read.ScanBuilder
 import org.apache.spark.sql.connector.write.{LogicalWriteInfo, Write, WriteBuilder}
 import org.apache.spark.sql.errors.QueryCompilationErrors
 import org.apache.spark.sql.execution.datasources._
 import org.apache.spark.sql.execution.datasources.v2.FileTable
-import org.apache.spark.sql.execution.streaming.MetadataLogFileIndex
 import org.apache.spark.sql.types._
 import org.apache.spark.sql.util.CaseInsensitiveStringMap
+import tech.ytsaurus.spyt.SparkAdapter
 import tech.ytsaurus.spyt.format.conf.SparkYtConfiguration.Schema.ForcingNullableIfNoMetadata
 import tech.ytsaurus.spyt.fs.conf.SparkYtSparkSession
 import tech.ytsaurus.spyt.serializers.SchemaConverter
@@ -57,8 +58,10 @@ case class YtTable(name: String,
     }
   }
 
-  override def newScanBuilder(options: CaseInsensitiveStringMap): YtScanBuilder =
-    YtScanBuilder(sparkSession, fileIndex, schema, dataSchema, options)
+  override def newScanBuilder(options: CaseInsensitiveStringMap): ScanBuilder = {
+    val ytScanBuilderAdapter = YtScanBuilderAdapter(sparkSession, fileIndex, schema, dataSchema, options)
+    SparkAdapter.instance.createYtScanBuilder(ytScanBuilderAdapter)
+  }
 
   override def inferSchema(files: Seq[FileStatus]): Option[StructType] =
     YtUtils.inferSchema(sparkSession, options.asScala.toMap, files)

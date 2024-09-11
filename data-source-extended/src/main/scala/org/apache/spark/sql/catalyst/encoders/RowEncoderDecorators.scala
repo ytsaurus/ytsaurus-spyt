@@ -3,7 +3,7 @@ package org.apache.spark.sql.catalyst.encoders
 import org.apache.spark.sql.catalyst.expressions.Expression
 import org.apache.spark.sql.types.{DataType, ObjectType}
 import org.apache.spark.sql.spyt.types.{UInt64Long, UInt64Type}
-import tech.ytsaurus.spyt.patch.annotations.{Decorate, DecoratedMethod, OriginClass}
+import tech.ytsaurus.spyt.patch.annotations.{Applicability, Decorate, DecoratedMethod, OriginClass}
 
 @Decorate
 @OriginClass("org.apache.spark.sql.catalyst.encoders.RowEncoder")
@@ -18,11 +18,22 @@ object RowEncoderDecorators {
   def __externalDataTypeFor(dt: DataType): DataType = ???
 
   @DecoratedMethod
+  @Applicability(to = "3.2.4")
   private def serializerFor(inputObject: Expression, inputType: DataType): Expression = inputType match {
     case UInt64Type => UInt64Long.createSerializer(inputObject)
     case _ => __serializerFor(inputObject, inputType)
   }
   private def __serializerFor(inputObject: Expression, inputType: DataType): Expression = ???
+
+  @DecoratedMethod
+  @Applicability(from = "3.3.0")
+  private def serializerFor(inputObject: Expression, inputType: DataType, lenient: Boolean): Expression =
+    inputType match {
+      case UInt64Type => UInt64Long.createSerializer(inputObject)
+      case _ => __serializerFor(inputObject, inputType, lenient)
+    }
+
+  private def __serializerFor(inputObject: Expression, inputType: DataType, lenient: Boolean): Expression = ???
 
   @DecoratedMethod(
     signature = "(Lorg/apache/spark/sql/catalyst/expressions/Expression;Lorg/apache/spark/sql/types/DataType;)Lorg/apache/spark/sql/catalyst/expressions/Expression;"

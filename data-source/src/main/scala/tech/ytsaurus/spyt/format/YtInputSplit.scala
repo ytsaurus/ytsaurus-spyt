@@ -15,6 +15,7 @@ import tech.ytsaurus.spyt.serializers.PivotKeysConverter.{prepareKey, toList, to
 import tech.ytsaurus.spyt.serializers.SchemaConverter.MetadataFields
 import tech.ytsaurus.core.cypress.{RangeLimit, YPath}
 import tech.ytsaurus.spyt.common.utils.{AbstractSegment, ExpressionTransformer, MInfinity, PInfinity, Point, RealValue, SegmentSet}
+import tech.ytsaurus.spyt.format.YtPartitionedFileDelegate.YtPartitionedFile
 import tech.ytsaurus.spyt.format.conf.FilterPushdownConfig
 import tech.ytsaurus.spyt.logger.{YtDynTableLogger, YtDynTableLoggerConfig}
 import tech.ytsaurus.spyt.serializers.SchemaConverter
@@ -37,7 +38,7 @@ case class YtInputSplit(file: YtPartitionedFile, schema: StructType,
 
   override def getLocations: Array[String] = Array.empty
 
-  private val basePath: YPath = addColumnsList(file.ypath, schema)
+  private val basePath: YPath = addColumnsList(file.delegate.ypath, schema)
 
   lazy val ytPath: YPath = calculateYtPath(pushing = false)
   lazy val ytPathWithFiltersDetailed: YPath = calculateYtPath(pushing = true, union = false)
@@ -54,8 +55,10 @@ case class YtInputSplit(file: YtPartitionedFile, schema: StructType,
           Map("union" -> filterPushdownConfig.unionEnabled.toString, "ypath" -> res.toString))
       }
       if (pushedFilters.map.nonEmpty) {
-        ytLog.logYt("YtInputSplit pushed filters to ypath", logMessageInfo ++
-          Map("union" -> union.toString, "ypath" -> res.toString), level = if (file.isDynamic) Level.WARN else Level.INFO)
+        ytLog.logYt("YtInputSplit pushed filters to ypath",
+          logMessageInfo ++ Map("union" -> union.toString, "ypath" -> res.toString),
+          level = if (file.delegate.isDynamic) Level.WARN else Level.INFO
+        )
       }
       res
     } else {

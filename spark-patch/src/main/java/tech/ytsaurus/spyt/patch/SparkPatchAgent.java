@@ -7,6 +7,7 @@ import org.apache.commons.io.IOUtils;
 import org.apache.hadoop.shaded.com.google.common.collect.Streams;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import tech.ytsaurus.spyt.SparkVersionUtils;
 import tech.ytsaurus.spyt.patch.annotations.*;
 
 import java.io.*;
@@ -97,7 +98,9 @@ class SparkPatchClassTransformer implements ClassFileTransformer {
             ClassFile classFile = optClassFile.get();
             CtClass ctClass = ClassPool.getDefault().makeClass(classFile);
             String originClass = getOriginClass(ctClass);
-            if (originClass != null) {
+            boolean isApplicable = !ctClass.hasAnnotation(Applicability.class) ||
+                    checkApplicability((Applicability) ctClass.getAnnotation(Applicability.class));
+            if (originClass != null && isApplicable) {
                 return Optional.of(new String[] {patchClassName, originClass.replace('.', File.separatorChar)});
             }
             return Optional.empty();
@@ -211,7 +214,7 @@ class SparkPatchClassTransformer implements ClassFileTransformer {
                 ClassFile baseCf = loadClassFile(baseClassBytes);
                 CtClass baseCtClass = ClassPool.getDefault().makeClass(baseCf);
                 for (CtMethod method : ctClass.getDeclaredMethods()) {
-                    if (method.hasAnnotation(DecoratedMethod.class)) {
+                    if (checkDecoratedMethod(method)) {
                         DecoratedMethod dmAnnotation = (DecoratedMethod) method.getAnnotation(DecoratedMethod.class);
                         String methodName = dmAnnotation.name().isEmpty() ? method.getName() : dmAnnotation.name();
                         String methodSignature = dmAnnotation.signature();
@@ -237,5 +240,19 @@ class SparkPatchClassTransformer implements ClassFileTransformer {
         }
 
         return processedClassFile;
+    }
+
+    private static boolean checkDecoratedMethod(CtMethod method) throws Exception {
+        return method.hasAnnotation(DecoratedMethod.class) &&
+                (!method.hasAnnotation(Applicability.class) ||
+                        checkApplicability((Applicability) method.getAnnotation(Applicability.class)));
+    }
+
+    private static boolean checkApplicability(Applicability applicability) {
+        var ordering = SparkVersionUtils.ordering();
+        String currentVersion = SparkVersionUtils.currentVersion();
+
+        return (applicability.from().isEmpty() || ordering.gteq(currentVersion, applicability.from())) &&
+                (applicability.to().isEmpty() || ordering.lteq(currentVersion, applicability.to()));
     }
 }

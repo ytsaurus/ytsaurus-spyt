@@ -45,7 +45,8 @@ class YtMaster(rpcEnv: RpcEnv,
   override def onStart(): Unit = {
     super.onStart()
     val webUi = getBaseClassFieldValue(WebUiField)
-    val masterPublicAddress = getBaseClassFieldValue(MasterPublicAddressField)
+    val envVar = conf.getenv("SPARK_PUBLIC_DNS")
+    val masterPublicAddress = if (envVar != null) envVar else address.host
     val restServerBoundPort = getBaseClassFieldValue(RestServerBoundPortField)
     val masterWebUiUrl = s"${webUi.scheme}${Utils.addBracketsIfIpV6Host(masterPublicAddress)}" +
       s":${webUi.boundPort}"
@@ -143,7 +144,6 @@ object YtMaster extends Logging {
   private case object WebUiField extends BaseField[MasterWebUI] {
     val name = "org$apache$spark$deploy$master$Master$$webUi"
   }
-  private case object MasterPublicAddressField extends BaseField[String] { val name = "masterPublicAddress" }
   private case object RestServerBoundPortField extends BaseField[Option[Int]] {
     val name = "org$apache$spark$deploy$master$Master$$restServerBoundPort"
   }

@@ -6,7 +6,7 @@ import org.apache.spark.sql.execution.datasources.PartitionedFile
 import org.apache.spark.sql.execution.datasources.v2.BatchScanExec
 import org.apache.spark.sql.{Column, DataFrame}
 import tech.ytsaurus.spyt.common.utils.TuplePoint
-import tech.ytsaurus.spyt.format.YtPartitionedFile
+import tech.ytsaurus.spyt.format.YtPartitionedFileDelegate.YtPartitionedFileExt
 
 
 object Utils {
@@ -32,14 +32,15 @@ object Utils {
 
   def extractRawKeys(files: Seq[PartitionedFile]): Seq[(Option[TuplePoint], Option[TuplePoint])] = {
     files.map {
-      case file: YtPartitionedFile =>
-        (file.beginPoint, file.endPoint)
+      case file: YtPartitionedFileExt =>
+        (file.delegate.beginPoint, file.delegate.endPoint)
+      case _: PartitionedFile => throw new AssertionError("PartitionedFile shouldn't appear here")
     }
   }
 
   def extractYtScan(plan: SparkPlan): YtScan = {
     plan.collectFirst {
-      case BatchScanExec(_, scan: YtScan, _) => scan
+      case bse: BatchScanExec if bse.scan.isInstanceOf[YtScan] => bse.scan.asInstanceOf[YtScan]
     }.get
   }
 }

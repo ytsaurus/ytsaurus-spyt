@@ -5,7 +5,7 @@ sbtPlugin := true
 organization := "tech.ytsaurus.spyt"
 
 name := "YtPublishPlugin"
-version := "2.3.0-SNAPSHOT"
+version := "2.4.0-SNAPSHOT"
 
 libraryDependencies ++= Seq(
   "tech.ytsaurus" % "ytsaurus-client" % "1.2.3" excludeAll (

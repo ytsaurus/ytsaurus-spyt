@@ -219,7 +219,7 @@ def scala_buffer_to_list(buffer):
 
 
 def default_user(client=None):
-    return os.getenv("YT_USER") or (get_user_name(client=client) if client else None) or getpass.getuser()
+    return os.getenv("YT_USER") or get_user_name(client=client)
 
 
 def default_token():

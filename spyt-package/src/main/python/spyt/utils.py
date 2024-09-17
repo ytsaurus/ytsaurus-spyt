@@ -218,8 +218,8 @@ def scala_buffer_to_list(buffer):
     return [buffer.apply(i) for i in range(buffer.length())]
 
 
-def default_user():
-    return os.getenv("YT_USER") or getpass.getuser()
+def default_user(client=None):
+    return os.getenv("YT_USER") or (get_user_name(client=client) if client else None) or getpass.getuser()
 
 
 def default_token():
@@ -262,8 +262,9 @@ def set_conf(conf, dict_conf):
             conf.set(key, value)
 
 
-def default_discovery_dir():
-    return os.getenv("SPARK_YT_DISCOVERY_DIR") or YPath("//home").join(os.getenv("USER")).join("spark-tmp")
+def default_discovery_dir(client=None):
+    return os.getenv("SPARK_YT_DISCOVERY_DIR") \
+        or YPath("//home").join(default_user(client=client)).join("spark-tmp")
 
 
 def default_proxy():
@@ -287,11 +288,11 @@ def get_default_arg_parser(**kwargs):
     return parser
 
 
-def parse_args(parser=None, parser_arguments=None, raw_args=None):
+def parse_args(parser=None, parser_arguments=None, raw_args=None, client=None):
     parser_arguments = parser_arguments or {}
     parser = parser or get_default_arg_parser(**parser_arguments)
     args, unknown_args = parser.parse_known_args(args=raw_args)
-    args.discovery_path = args.discovery_path or args.discovery_dir or default_discovery_dir()
+    args.discovery_path = args.discovery_path or args.discovery_dir or default_discovery_dir(client=client)
     return args, unknown_args
 
 

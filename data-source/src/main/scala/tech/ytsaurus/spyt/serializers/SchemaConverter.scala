@@ -154,9 +154,9 @@ object SchemaConverter {
   }
 
   def schemaHint(options: Map[String, String]): Option[StructType] = {
-    val fields = options.collect { case (key, value) if key.contains("_hint") =>
-      val name = key.dropRight("_hint".length)
-      StructField(name, stringToSparkType(value))
+    val fields = options.flatMap { case (key, value) =>
+      val name = key.stripSuffix("_hint")
+      if (name != key) Some(StructField(name, DataType.fromJson(value))) else None
     }
 
     if (fields.nonEmpty) {
@@ -167,9 +167,7 @@ object SchemaConverter {
   }
 
   def serializeSchemaHint(schema: StructType): Map[String, String] = {
-    schema.foldLeft(Seq.empty[(String, String)]) { case (result, f) =>
-      (s"${f.name}_hint", sparkTypeToString(f.dataType)) +: result
-    }.toMap
+    schema.map(f => (s"${f.name}_hint", f.dataType.json)).toMap
   }
 
   private def wrapSparkAttributes(inner: YtLogicalType, flag: Boolean,

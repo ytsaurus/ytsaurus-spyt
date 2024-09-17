@@ -264,7 +264,7 @@ def set_conf(conf, dict_conf):
 
 def default_discovery_dir(client=None):
     return os.getenv("SPARK_YT_DISCOVERY_DIR") \
-        or YPath("//home").join(default_user(client=client)).join("spark-tmp")
+        or YPath("//tmp").join(default_user(client=client)).join("spark-tmp")
 
 
 def default_proxy():

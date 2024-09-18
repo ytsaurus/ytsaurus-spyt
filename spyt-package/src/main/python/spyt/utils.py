@@ -11,7 +11,7 @@ require_yt_client()
 from yt.wrapper import YPath  # noqa: E402
 from yt.wrapper.cypress_commands import list as yt_list, create, exists  # noqa: E402
 from yt.wrapper.errors import YtHttpResponseError  # noqa: E402
-from yt.wrapper.http_helpers import get_user_name  # noqa: E402
+from yt.wrapper.http_helpers import get_user_name, get_token  # noqa: E402
 from yt.wrapper.operation_commands import get_operation_url  # noqa: E402
 from yt.yson.convert import yson_to_json  # noqa: E402
 from .arcadia import checked_extract_spark, checked_extract_spyt  # noqa: E402
@@ -223,13 +223,7 @@ def default_user():
 
 
 def default_token():
-    token = os.getenv("YT_TOKEN")
-    if token is None:
-        token_file = os.path.join(os.getenv("HOME"), ".yt", "token")
-        if os.path.exists(token_file):
-            with open(token_file) as f:
-                token = f.readline().strip()
-    return token
+    return get_token()
 
 
 def base_spark_conf(client, discovery):

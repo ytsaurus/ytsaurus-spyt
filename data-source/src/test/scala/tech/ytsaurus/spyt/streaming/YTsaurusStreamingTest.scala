@@ -4,7 +4,7 @@ import org.apache.spark.sql.functions._
 import org.apache.spark.sql.streaming.Trigger.ProcessingTime
 import org.apache.spark.sql.{DataFrame, SaveMode}
 import org.scalatest.{FlatSpec, Matchers}
-import tech.ytsaurus.spyt.serializers.SchemaConverter
+import tech.ytsaurus.spyt.serializers.{SchemaConverter, WriteSchemaConverter}
 import tech.ytsaurus.spyt.test._
 import tech.ytsaurus.spyt.wrapper.YtWrapper
 
@@ -72,7 +72,7 @@ class YTsaurusStreamingTest extends FlatSpec with Matchers with LocalSpark with 
       .load()
       .select(floor(rand() * 10).as("num"))
 
-    prepareOrderedTestTable(path, SchemaConverter.tableSchema(numbers.schema), enableDynamicStoreRead = true)
+    prepareOrderedTestTable(path, WriteSchemaConverter().tableSchema(numbers.schema), enableDynamicStoreRead = true)
 
     val job = numbers
       .writeStream
@@ -152,7 +152,7 @@ class YTsaurusStreamingTest extends FlatSpec with Matchers with LocalSpark with 
       .option("consumer_path", consumerPath)
       .load(queuePath)
 
-    prepareOrderedTestTable(resultPath, SchemaConverter.tableSchema(numbers.schema), enableDynamicStoreRead = true)
+    prepareOrderedTestTable(resultPath, WriteSchemaConverter().tableSchema(numbers.schema), enableDynamicStoreRead = true)
 
     val job = numbers
       .writeStream

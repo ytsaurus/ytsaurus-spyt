@@ -10,7 +10,7 @@ import tech.ytsaurus.client.rows.{UnversionedRow, UnversionedValue}
 import tech.ytsaurus.core.tables.{ColumnValueType, TableSchema}
 import tech.ytsaurus.spyt.format.conf.SparkYtConfiguration.Read.TypeV3
 import tech.ytsaurus.spyt.format.conf.{SparkYtConfiguration, YtTableSparkSettings}
-import tech.ytsaurus.spyt.serializers.SchemaConverter.{MetadataFields, Unordered, ytLogicalSchema}
+import tech.ytsaurus.spyt.serializers.SchemaConverter.{MetadataFields, Unordered}
 import tech.ytsaurus.spyt.test.{LocalSpark, TestUtils, TmpDir}
 import tech.ytsaurus.spyt.types.YTsaurusTypes
 import tech.ytsaurus.spyt.wrapper.YtWrapper
@@ -145,7 +145,7 @@ class SchemaConverterTest extends AnyFlatSpec with Matchers
   }
 
   it should "convert spark schema to yt one with parsing type v3" in {
-    val res = TableSchema.fromYTree(ytLogicalSchema(sparkSchema, Unordered, Map.empty, typeV3Format = true))
+    val res = TableSchema.fromYTree(WriteSchemaConverter(Map.empty, typeV3Format = true).ytLogicalSchema(sparkSchema, Unordered))
     res shouldBe TableSchema.builder().setUniqueKeys(false)
       .addValue("Null", TiType.nullType())
       .addValue("Long", TiType.int64())
@@ -178,7 +178,7 @@ class SchemaConverterTest extends AnyFlatSpec with Matchers
         .key("required").value(false).buildMap
     }
 
-    val res = ytLogicalSchema(sparkSchema, Unordered, Map.empty, typeV3Format = false)
+    val res = WriteSchemaConverter(Map.empty, typeV3Format = false).ytLogicalSchema(sparkSchema, Unordered)
     res shouldBe YTree.builder
       .beginAttributes
       .key("strict").value(true)
@@ -270,6 +270,72 @@ class SchemaConverterTest extends AnyFlatSpec with Matchers
       data should contain theSameElementsAs rightYtDataForByteAndShortTests
     }
 
+  }
+
+  it should "write string by default" in {
+    withConf(SparkYtConfiguration.Schema.ForcingNullableIfNoMetadata, false){
+      val df_0 = spark.createDataFrame(
+        spark.sparkContext.parallelize(Seq(Row("string", "binary".getBytes))),
+        StructType(Seq(
+          StructField("string", StringType, nullable = false),
+          StructField("binary", BinaryType, nullable = false),
+        ))
+      )
+      df_0.write.yt(tmpPath)
+
+      val schema = TableSchema.fromYTree(YtWrapper.attribute(tmpPath, "schema"))
+
+      schema shouldEqual TableSchema.builder().setUniqueKeys(false)
+        .addValue("string", TiType.optional(TiType.string()))
+        .addValue("binary", TiType.optional(TiType.string()))
+        .build()
+
+      val data = readTableAsYson(tmpPath).map { row =>
+        val yson = row.asMap()
+        (
+          yson.get("string").stringValue(),
+          new String(yson.get("binary").bytesValue()),
+        )
+      }
+
+      data should contain theSameElementsAs ListBuffer[(String, String)](
+        ("string", "binary"),
+      )
+    }
+  }
+
+  it should "write utf8 when the option is enabled" in {
+    withConf(SparkYtConfiguration.Schema.ForcingNullableIfNoMetadata, false){
+      val df_0 = spark.createDataFrame(
+        spark.sparkContext.parallelize(Seq(Row("string", "binary".getBytes))),
+        StructType(Seq(
+          StructField("string", StringType, nullable = false),
+          StructField("binary", BinaryType, nullable = false),
+        ))
+      )
+      df_0.write
+        .option(YtTableSparkSettings.StringToUtf8.name, value = true)
+        .yt(tmpPath)
+
+      val schema = TableSchema.fromYTree(YtWrapper.attribute(tmpPath, "schema"))
+
+      schema shouldEqual TableSchema.builder().setUniqueKeys(false)
+        .addValue("string", TiType.optional(TiType.utf8()))
+        .addValue("binary", TiType.optional(TiType.string()))
+        .build()
+
+      val data = readTableAsYson(tmpPath).map { row =>
+        val yson = row.asMap()
+        (
+          yson.get("string").stringValue(),
+          new String(yson.get("binary").bytesValue()),
+        )
+      }
+
+      data should contain theSameElementsAs ListBuffer[(String, String)](
+        ("string", "binary"),
+      )
+    }
   }
 
   it should "correctly read byte and short" in {

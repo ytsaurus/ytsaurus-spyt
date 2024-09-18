@@ -173,7 +173,7 @@ object YtLogicalType {
   case object Array extends CompositeYtLogicalTypeAlias(TypeName.List.getWireName)
 
   case class Struct(fields: Seq[(String, YtLogicalType, Metadata)]) extends CompositeYtLogicalType {
-    override def sparkType: DataType = StructType(fields
+    override def sparkType: StructType = StructType(fields
       .map { case (name, ytType, meta) => getStructField(name, ytType, meta) })
 
     import scala.collection.JavaConverters._

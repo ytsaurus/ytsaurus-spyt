@@ -9,7 +9,7 @@ import org.slf4j.LoggerFactory
 import tech.ytsaurus.client.CompoundClient
 import tech.ytsaurus.spyt.format.conf.{SparkYtWriteConfiguration, YtTableSparkSettings}
 import tech.ytsaurus.spyt.fs.path.YPathEnriched
-import tech.ytsaurus.spyt.serializers.SchemaConverter
+import tech.ytsaurus.spyt.serializers.{SchemaConverter, WriteSchemaConverter}
 import tech.ytsaurus.spyt.wrapper.YtWrapper
 import tech.ytsaurus.spyt.wrapper.client.{YtClientConfiguration, YtClientProvider}
 
@@ -47,7 +47,9 @@ object YtOutputWriterFactory {
     SchemaConverter.checkSchema(dataSchema, options)
 
     val updatedOptions = addWriteOptions(options, writeConfiguration)
-    YtTableSparkSettings.serialize(updatedOptions, dataSchema, jobConfiguration)
+    YtTableSparkSettings.serialize(
+      updatedOptions, new WriteSchemaConverter(updatedOptions).ytLogicalTypeStruct(dataSchema), jobConfiguration
+    )
 
     new YtOutputWriterFactory(ytClientConf, writeConfiguration, updatedOptions)
   }

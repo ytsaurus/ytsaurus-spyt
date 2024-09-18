@@ -11,7 +11,7 @@ import org.slf4j.LoggerFactory
 import tech.ytsaurus.spyt.format.conf.YtTableSparkSettings._
 import tech.ytsaurus.spyt.fs.conf._
 import tech.ytsaurus.spyt.fs.path.YPathEnriched
-import tech.ytsaurus.spyt.serializers.InternalRowSerializer
+import tech.ytsaurus.spyt.serializers.{InternalRowSerializer, WriteSchemaConverter}
 import tech.ytsaurus.spyt.wrapper.LogLazy
 import tech.ytsaurus.client.request.{TransactionalOptions, WriteSerializationContext, WriteTable}
 import tech.ytsaurus.client.{CompoundClient, TableWriter}
@@ -32,9 +32,6 @@ class YtOutputWriter(richPath: YPathEnriched,
   import writeConfiguration._
 
   private val log = LoggerFactory.getLogger(getClass)
-
-  private val schemaHint = options.ytConf(WriteSchemaHint)
-  private val typeV3Format = options.ytConf(WriteTypeV3)
 
   private val splitPartitions = options.ytConf(SortColumns).isEmpty
 
@@ -156,7 +153,7 @@ class YtOutputWriter(richPath: YPathEnriched,
     log.debugLazy(s"Initialize new write: $appendPath, transaction: $transactionGuid")
     val request = WriteTable.builder[InternalRow]()
       .setPath(appendPath)
-      .setSerializationContext(new WriteSerializationContext(new InternalRowSerializer(schema, schemaHint, typeV3Format)))
+      .setSerializationContext(new WriteSerializationContext(new InternalRowSerializer(schema, new WriteSchemaConverter(options))))
       .setTransactionalOptions(new TransactionalOptions(GUID.valueOf(transactionGuid)))
       .setNeedRetries(false)
       .build()

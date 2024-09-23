@@ -127,9 +127,9 @@ def _create_spark_session(do_create_spark_session):
             stop(spark, exception)
 
 
-def get_spark_discovery(discovery_path, conf):
+def get_spark_discovery(discovery_path, conf, client=None):
     discovery_path = discovery_path or conf.get("discovery_path") or conf.get(
-        "discovery_dir") or default_discovery_dir()
+        "discovery_dir") or default_discovery_dir(client=client)
     return SparkDiscovery(discovery_path=discovery_path)
 
 
@@ -150,7 +150,7 @@ def _configure_client_mode(spark_conf,
                            local_conf,
                            client=None,
                            spyt_version=None):
-    discovery = get_spark_discovery(discovery_path, local_conf)
+    discovery = get_spark_discovery(discovery_path, local_conf, client=client)
     master = get_spark_master(discovery, rest=False, yt_client=client)
     set_conf(spark_conf, base_spark_conf(client=client, discovery=discovery))
     spark_conf.set("spark.master", master)

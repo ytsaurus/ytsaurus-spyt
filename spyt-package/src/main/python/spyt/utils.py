@@ -1,5 +1,4 @@
 import argparse
-import getpass
 import logging
 import os
 import re

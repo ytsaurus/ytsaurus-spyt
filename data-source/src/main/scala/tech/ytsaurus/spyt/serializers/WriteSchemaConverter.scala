@@ -21,28 +21,38 @@ class WriteSchemaConverter(
     if (isVariantOverTuple(struct)) {
       YtLogicalType.VariantOverTuple {
         struct.fields.map(tF =>
-          (wrapSparkAttributes(ytLogicalTypeV3(tF.dataType), tF.nullable, Some(tF.metadata)), tF.metadata))
+          (wrapSparkAttributes(ytLogicalTypeV3(tF), tF.nullable, Some(tF.metadata)), tF.metadata))
       }
     } else {
       YtLogicalType.VariantOverStruct {
         struct.fields.map(sf => (sf.name.drop(2),
-          wrapSparkAttributes(ytLogicalTypeV3(sf.dataType), sf.nullable, Some(sf.metadata)), sf.metadata))
+          wrapSparkAttributes(ytLogicalTypeV3(sf), sf.nullable, Some(sf.metadata)), sf.metadata))
       }
     }
   }
 
   def ytLogicalTypeStruct(structType: StructType): YtLogicalType.Struct = YtLogicalType.Struct {
     structType.fields.map(sf => (sf.name,
-      wrapSparkAttributes(ytLogicalTypeV3(sf.dataType), sf.nullable, Some(sf.metadata)), sf.metadata))
+      wrapSparkAttributes(ytLogicalTypeV3(sf), sf.nullable, Some(sf.metadata)), sf.metadata))
   }
 
-  def ytLogicalTypeV3(sparkType: DataType): YtLogicalType = sparkType match {
+  def ytLogicalTypeV3(structField: StructField): YtLogicalType =
+    ytLogicalTypeV3(structField.dataType, hint.getOrElse(structField.name, null))
+
+  def ytLogicalTypeV3(sparkType: DataType, hint: YtLogicalType = null): YtLogicalType = sparkType match {
     case NullType => YtLogicalType.Null
     case ByteType => YtLogicalType.Int8
     case ShortType => YtLogicalType.Int16
     case IntegerType => YtLogicalType.Int32
     case LongType => YtLogicalType.Int64
-    case StringType => if (stringToUtf8) YtLogicalType.Utf8 else YtLogicalType.String
+    case StringType =>
+      if (hint != null) {
+        if (hint != YtLogicalType.Utf8 && hint != YtLogicalType.String) {
+          throw new IllegalArgumentException(s"casting from $sparkType to $hint is not supported")
+        }
+        hint
+      } else
+        if (stringToUtf8) YtLogicalType.Utf8 else YtLogicalType.String
     case FloatType => YtLogicalType.Float
     case DoubleType => YtLogicalType.Double
     case BooleanType => YtLogicalType.Boolean
@@ -83,7 +93,7 @@ class WriteSchemaConverter(
         .beginMap
         .key("name").value(field.name)
       val fieldType = hint.getOrElse(field.name,
-        wrapSparkAttributes(ytLogicalTypeV3(field.dataType), field.nullable, Some(field.metadata)))
+        wrapSparkAttributes(ytLogicalTypeV3(field), field.nullable, Some(field.metadata)))
       if (typeV3Format) {
         builder
           .key("type_v3").value(serializeTypeV3(fieldType))

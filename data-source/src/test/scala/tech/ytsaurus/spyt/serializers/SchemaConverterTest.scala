@@ -305,15 +305,47 @@ class SchemaConverterTest extends AnyFlatSpec with Matchers
 
   it should "write utf8 when the option is enabled" in {
     withConf(SparkYtConfiguration.Schema.ForcingNullableIfNoMetadata, false){
-      val df_0 = spark.createDataFrame(
+      spark.createDataFrame(
         spark.sparkContext.parallelize(Seq(Row("string", "binary".getBytes))),
         StructType(Seq(
           StructField("string", StringType, nullable = false),
           StructField("binary", BinaryType, nullable = false),
         ))
-      )
-      df_0.write
+      ).write
         .option(YtTableSparkSettings.StringToUtf8.name, value = true)
+        .yt(tmpPath)
+
+      val schema = TableSchema.fromYTree(YtWrapper.attribute(tmpPath, "schema"))
+
+      schema shouldEqual TableSchema.builder().setUniqueKeys(false)
+        .addValue("string", TiType.optional(TiType.utf8()))
+        .addValue("binary", TiType.optional(TiType.string()))
+        .build()
+
+      val data = readTableAsYson(tmpPath).map { row =>
+        val yson = row.asMap()
+        (
+          yson.get("string").stringValue(),
+          new String(yson.get("binary").bytesValue()),
+        )
+      }
+
+      data should contain theSameElementsAs ListBuffer[(String, String)](
+        ("string", "binary"),
+      )
+    }
+  }
+
+  it should "write utf8 when the hint is enabled" in {
+    withConf(SparkYtConfiguration.Schema.ForcingNullableIfNoMetadata, false){
+      spark.createDataFrame(
+        spark.sparkContext.parallelize(Seq(Row("string", "binary".getBytes))),
+        StructType(Seq(
+          StructField("string", StringType, nullable = false),
+          StructField("binary", BinaryType, nullable = false),
+        ))
+      ).write
+        .schemaHint(("string", YtLogicalType.Utf8))
         .yt(tmpPath)
 
       val schema = TableSchema.fromYTree(YtWrapper.attribute(tmpPath, "schema"))

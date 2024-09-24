@@ -240,10 +240,10 @@ class SchemaConverterTest extends AnyFlatSpec with Matchers
 
   it should "correctly write byte and short" in {
     withConf(SparkYtConfiguration.Schema.ForcingNullableIfNoMetadata, false){
-      val df_0 = spark.createDataFrame(
+      spark.createDataFrame(
         spark.sparkContext.parallelize(rightSparkDataForByteAndShortTests),
-        rightSparkSchemaForByteAndShortTests)
-      df_0.write
+        rightSparkSchemaForByteAndShortTests,
+      ).write
         .option(YtTableSparkSettings.WriteTypeV3.name, value = true)
         .option(YtTableSparkSettings.NullTypeAllowed.name, value = false)
         .option(YtUtils.Options.PARSING_TYPE_V3, value = true)
@@ -274,14 +274,13 @@ class SchemaConverterTest extends AnyFlatSpec with Matchers
 
   it should "write string by default" in {
     withConf(SparkYtConfiguration.Schema.ForcingNullableIfNoMetadata, false){
-      val df_0 = spark.createDataFrame(
+      spark.createDataFrame(
         spark.sparkContext.parallelize(Seq(Row("string", "binary".getBytes))),
         StructType(Seq(
           StructField("string", StringType, nullable = false),
           StructField("binary", BinaryType, nullable = false),
         ))
-      )
-      df_0.write.yt(tmpPath)
+      ).write.yt(tmpPath)
 
       val schema = TableSchema.fromYTree(YtWrapper.attribute(tmpPath, "schema"))
 

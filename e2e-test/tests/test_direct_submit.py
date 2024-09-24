@@ -2,7 +2,7 @@ import spyt
 
 from common.helpers import assert_items_equal
 from pyspark.conf import SparkConf
-from pyspark.sql.types import IntegerType
+from pyspark.sql.types import IntegerType, StringType, StructType, StructField, Row
 from pyspark.sql.functions import col, udf
 import requests
 from utils import SPARK_CONF, YT_PROXY, upload_file
@@ -109,3 +109,51 @@ def test_archives(yt_client, tmp_dir, direct_submitter):
 
     result_rows = [{"_1": "Sp4rK", "_2": "YTsaaaurus"}]
     assert_items_equal(yt_client.read_table(table_out), result_rows)
+
+
+csv_data = """id,name,value
+1,Name 1,10
+2,Name 2,20
+3,Name 3,30
+4,Name 4,40
+5,Name 5,50
+6,Name 6,60
+"""
+
+csv_schema = [
+    StructField('id', IntegerType(), True),
+    StructField('name', StringType(), True),
+    StructField('value', IntegerType(), True)
+]
+
+csv_rows = [
+    Row(id=1, name='Name 1', value=10),
+    Row(id=2, name='Name 2', value=20),
+    Row(id=3, name='Name 3', value=30),
+    Row(id=4, name='Name 4', value=40),
+    Row(id=5, name='Name 5', value=50),
+    Row(id=6, name='Name 6', value=60)
+]
+
+
+def test_reading_csv_file(yt_client, tmp_dir, direct_session):
+    csv_file_in = f"{tmp_dir}/data.csv"
+    yt_client.write_file(csv_file_in, csv_data.encode("utf-8"))
+
+    df = direct_session.read.format("csv")\
+        .option("header", "true")\
+        .option("inferSchema", "true")\
+        .load(f"yt:/{csv_file_in}")
+
+    assert_items_equal(df.schema.fields, csv_schema)
+    assert_items_equal(df.collect(), csv_rows)
+
+
+def test_writing_csv_file(yt_client, tmp_dir, direct_session):
+    df = direct_session.createDataFrame(data=csv_rows, schema=StructType(csv_schema))
+    csv_dir_out = f"{tmp_dir}/result.csv"
+    df.coalesce(1).write.format("csv").option("header", "true").save(f"yt:/{csv_dir_out}")
+
+    result_file = yt_client.list(csv_dir_out)[0]
+    result_csv = yt_client.read_file(f"{csv_dir_out}/{result_file}").read().decode("utf-8")
+    assert result_csv == csv_data

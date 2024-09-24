@@ -16,6 +16,7 @@ import tech.ytsaurus.spyt.serializers.{InternalRowDeserializer, PivotKeysConvert
 import tech.ytsaurus.spyt.wrapper.YtWrapper
 import tech.ytsaurus.client.CompoundClient
 import tech.ytsaurus.core.cypress.RangeLimit
+import tech.ytsaurus.spyt.SparkAdapter
 import tech.ytsaurus.spyt.common.utils.{ExpressionTransformer, MInfinity, PInfinity}
 import tech.ytsaurus.spyt.format.YtPartitionedFileDelegate.{YtPartitionedFile, YtPartitionedFileExt}
 import tech.ytsaurus.spyt.format.conf.{KeyPartitioningConfig, SparkYtConfiguration}
@@ -141,7 +142,7 @@ object YtFilePartition {
           }
         }
       case _ =>
-        Seq(PartitionedFile(partitionValues, filePath.toUri.toString, 0, file.getLen, Array.empty))
+        Seq(SparkAdapter.instance.createPartitionedFile(partitionValues, filePath.toUri.toString, 0, file.getLen))
     }
   }
 

@@ -13,6 +13,7 @@ import org.apache.spark.sql.v2.{ScanBuilderAdapter, YtScanBuilder330}
 import org.apache.spark.sql.Utils330
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.parser.ParserUtils
+import org.apache.spark.sql.execution.datasources.PartitionedFile
 import tech.ytsaurus.spyt.format.YtPartitioningSupport.YtPartitionedFileBase
 import tech.ytsaurus.spyt.format.{YtPartitionedFile330, YtPartitioningDelegate}
 
@@ -40,6 +41,11 @@ class SparkAdapter330 extends SparkAdapter {
   }
 
   override def executorBackendFactory: ExecutorBackendFactory = ExecutorBackendFactory330
+
+  override def createPartitionedFile(partitionValues: InternalRow, filePath: String,
+                                     start: Long, length: Long): PartitionedFile = {
+    PartitionedFile(partitionValues, filePath, start, length)
+  }
 
   override def createYtPartitionedFile[T <: YtPartitioningDelegate](delegate: T): YtPartitionedFileBase[T] = {
     new YtPartitionedFile330(delegate)

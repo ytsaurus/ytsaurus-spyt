@@ -9,6 +9,7 @@ import org.apache.spark.sql.catalyst.expressions.Expression
 import org.apache.spark.sql.catalyst.parser.ParserUtils
 import org.apache.spark.sql.connector.read.{InputPartition, ScanBuilder}
 import org.apache.spark.sql.connector.read.partitioning.{Distribution, Partitioning}
+import org.apache.spark.sql.execution.datasources.PartitionedFile
 import org.apache.spark.sql.execution.datasources.v2.{DataSourceRDDPartition, FileScanBuilder, PushDownUtils}
 import org.apache.spark.sql.sources.Filter
 import org.apache.spark.sql.v2.{ScanBuilderAdapter, YtScanBuilder322, YtScanPartitioning}
@@ -26,6 +27,11 @@ class SparkAdapter322 extends SparkAdapter {
   }
 
   override def executorBackendFactory: ExecutorBackendFactory = ExecutorBackendFactory322
+
+  override def createPartitionedFile(partitionValues: InternalRow, filePath: String,
+                                     start: Long, length: Long): PartitionedFile = {
+    PartitionedFile(partitionValues, filePath, start, length)
+  }
 
   override def createYtPartitionedFile[T <: YtPartitioningDelegate](delegate: T): YtPartitionedFileBase[T] = {
     new YtPartitionedFile322(delegate)

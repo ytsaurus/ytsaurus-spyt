@@ -8,6 +8,7 @@ import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.Expression
 import org.apache.spark.sql.connector.read.{InputPartition, ScanBuilder}
 import org.apache.spark.sql.connector.read.partitioning.Partitioning
+import org.apache.spark.sql.execution.datasources.PartitionedFile
 import org.apache.spark.sql.execution.datasources.v2.{DataSourceRDDPartition, FileScanBuilder}
 import org.apache.spark.sql.sources
 import org.apache.spark.sql.v2.ScanBuilderAdapter
@@ -23,6 +24,7 @@ trait SparkAdapter {
   def createYtScanOutputPartitioning(numPartitions: Int): Partitioning
   def createYtScanBuilder(scanBuilderAdapter: ScanBuilderAdapter): FileScanBuilder
   def executorBackendFactory: ExecutorBackendFactory
+  def createPartitionedFile(partitionValues: InternalRow, filePath: String, start: Long, length: Long): PartitionedFile
   def createYtPartitionedFile[T <: YtPartitioningDelegate](delegate: T): YtPartitionedFileBase[T]
   def parserUtilsWithOrigin[T](ctx: ParserRuleContext)(f: => T): T
 

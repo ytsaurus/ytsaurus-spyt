@@ -145,7 +145,7 @@ class SchemaConverterTest extends AnyFlatSpec with Matchers
   }
 
   it should "convert spark schema to yt one with parsing type v3" in {
-    val res = TableSchema.fromYTree(WriteSchemaConverter(Map.empty, typeV3Format = true).ytLogicalSchema(sparkSchema, Unordered))
+    val res = TableSchema.fromYTree(new WriteSchemaConverter(Map.empty, typeV3Format = true).ytLogicalSchema(sparkSchema, Unordered))
     res shouldBe TableSchema.builder().setUniqueKeys(false)
       .addValue("Null", TiType.nullType())
       .addValue("Long", TiType.int64())
@@ -178,7 +178,7 @@ class SchemaConverterTest extends AnyFlatSpec with Matchers
         .key("required").value(false).buildMap
     }
 
-    val res = WriteSchemaConverter(Map.empty, typeV3Format = false).ytLogicalSchema(sparkSchema, Unordered)
+    val res = new WriteSchemaConverter(Map.empty, typeV3Format = false).ytLogicalSchema(sparkSchema, Unordered)
     res shouldBe YTree.builder
       .beginAttributes
       .key("strict").value(true)

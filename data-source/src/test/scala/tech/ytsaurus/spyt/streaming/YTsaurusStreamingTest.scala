@@ -72,7 +72,7 @@ class YTsaurusStreamingTest extends FlatSpec with Matchers with LocalSpark with 
       .load()
       .select(floor(rand() * 10).as("num"))
 
-    prepareOrderedTestTable(path, WriteSchemaConverter().tableSchema(numbers.schema), enableDynamicStoreRead = true)
+    prepareOrderedTestTable(path, new WriteSchemaConverter().tableSchema(numbers.schema), enableDynamicStoreRead = true)
 
     val job = numbers
       .writeStream
@@ -152,7 +152,7 @@ class YTsaurusStreamingTest extends FlatSpec with Matchers with LocalSpark with 
       .option("consumer_path", consumerPath)
       .load(queuePath)
 
-    prepareOrderedTestTable(resultPath, WriteSchemaConverter().tableSchema(numbers.schema), enableDynamicStoreRead = true)
+    prepareOrderedTestTable(resultPath, new WriteSchemaConverter().tableSchema(numbers.schema), enableDynamicStoreRead = true)
 
     val job = numbers
       .writeStream

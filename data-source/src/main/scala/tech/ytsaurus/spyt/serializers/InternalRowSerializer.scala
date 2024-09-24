@@ -138,7 +138,7 @@ object InternalRowSerializer {
                   schemaHint: Map[String, YtLogicalType],
                   filters: Array[Filter] = Array.empty,
                   typeV3Format: Boolean = false): InternalRowSerializer = {
-    deserializers.get().getOrElseUpdate(schema, new InternalRowSerializer(schema, WriteSchemaConverter(schemaHint, typeV3Format)))
+    deserializers.get().getOrElseUpdate(schema, new InternalRowSerializer(schema, new WriteSchemaConverter(schemaHint, typeV3Format)))
   }
 
   final def writeRows(writer: TableWriter[InternalRow],

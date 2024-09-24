@@ -109,7 +109,7 @@ class YtDynamicTableWriterTest extends AnyFlatSpec with TmpDir with LocalSpark w
 
       if (createNewTable) {
         val tableSchema = if (externalTableSchema.isEmpty) {
-          schemaModifier(WriteSchemaConverter(Map.empty).tableSchema(df.schema, Unordered))
+          schemaModifier(new WriteSchemaConverter(Map.empty).tableSchema(df.schema, Unordered))
         } else {
           externalTableSchema.get
         }

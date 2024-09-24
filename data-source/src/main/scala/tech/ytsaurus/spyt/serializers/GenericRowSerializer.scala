@@ -13,7 +13,7 @@ import java.util.Base64
 
 // TODO(alex-shishkin): Supported type v1 only
 class GenericRowSerializer(schema: StructType) {
-  private val tableSchema = WriteSchemaConverter(hint = Map.empty).tableSchema(schema, Unordered)
+  private val tableSchema = new WriteSchemaConverter(hint = Map.empty).tableSchema(schema, Unordered)
 
   private def boxValue(i: Int, value: Any): UnversionedValue = {
     new UnversionedValue(i, tableSchema.getColumnType(i), false, value)

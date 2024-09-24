@@ -78,7 +78,7 @@ object SchemaConverter {
     val enrichedFields = schema.fields.map { field =>
       // There may be a bug when user explicitly specifies schema for YTsaurus Interval type, which doesn't support
       // arrow yet, in this case we can suggest to use spark.read.disableArrow option
-      if (WriteSchemaConverter().ytLogicalTypeV3(field.dataType).arrowSupported) {
+      if (new WriteSchemaConverter().ytLogicalTypeV3(field.dataType).arrowSupported) {
         val metadataBuilder = new MetadataBuilder()
         metadataBuilder.withMetadata(field.metadata)
         metadataBuilder.putBoolean(MetadataFields.ARROW_SUPPORTED, value = true)

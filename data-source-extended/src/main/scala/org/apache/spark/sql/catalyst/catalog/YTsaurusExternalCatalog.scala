@@ -68,7 +68,7 @@ class YTsaurusExternalCatalog(conf: SparkConf, hadoopConf: Configuration)
       val yt = YtClientProvider.ytClientWithProxy(ytConf, path.cluster, idPrefix)
       if (!YtWrapper.exists(path.toStringYPath)(yt)) {
         val extraProperties = tableDefinition.properties.mapValues(YTreeTextSerializer.deserialize)
-        val tableSchema = WriteSchemaConverter().tableSchema(tableDefinition.schema, getSortOption(extraProperties))
+        val tableSchema = new WriteSchemaConverter().tableSchema(tableDefinition.schema, getSortOption(extraProperties))
         val settings = new BaseYtTableSettings(tableSchema, extraProperties.filterKeys(!excludeKeys.contains(_)))
         YtWrapper.createTable(path.toStringYPath, settings)(yt)
       } else {

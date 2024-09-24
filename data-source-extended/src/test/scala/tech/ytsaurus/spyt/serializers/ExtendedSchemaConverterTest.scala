@@ -162,7 +162,7 @@ class ExtendedSchemaConverterTest extends AnyFlatSpec with Matchers
       YTree.builder.beginMap.key("name").value(name).key("type").value(t)
         .key("required").value(false).buildMap
     }
-    val res = WriteSchemaConverter(Map.empty, typeV3Format = false).ytLogicalSchema(extendedSparkSchema, Unordered)
+    val res = new WriteSchemaConverter(Map.empty, typeV3Format = false).ytLogicalSchema(extendedSparkSchema, Unordered)
     res shouldBe YTree.builder
       .beginAttributes
       .key("strict").value(true)

@@ -12,7 +12,7 @@ import tech.ytsaurus.spyt.serializers.YtLogicalTypeSerializer.{serializeType, se
 import tech.ytsaurus.spyt.types.YTsaurusTypes
 import tech.ytsaurus.ysontree.{YTree, YTreeNode}
 
-case class WriteSchemaConverter(
+class WriteSchemaConverter(
   hint: Map[String, YtLogicalType] = Map.empty,
   typeV3Format: Boolean = false,
   stringToUtf8: Boolean = false,

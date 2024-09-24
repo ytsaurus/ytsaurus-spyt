@@ -8,8 +8,7 @@ import org.scalatest.matchers.should.Matchers
 import tech.ytsaurus.core.tables.{ColumnValueType, TableSchema}
 import tech.ytsaurus.spyt.{SchemaTestUtils, YtReader}
 import tech.ytsaurus.spyt.format.conf.SparkYtConfiguration.Read.TypeV3
-import tech.ytsaurus.spyt.serializers.SchemaConverter.{Unordered, ytLogicalSchema}
-import tech.ytsaurus.spyt.serializers.SchemaConverterTest.structField
+import tech.ytsaurus.spyt.serializers.SchemaConverter.Unordered
 import tech.ytsaurus.spyt.test.{LocalSpark, TestUtils, TmpDir}
 import tech.ytsaurus.typeinfo.StructType.Member
 import tech.ytsaurus.typeinfo.TiType
@@ -128,7 +127,7 @@ class ExtendedSchemaConverterTest extends AnyFlatSpec with Matchers
   }
 
   it should "convert spark schema to yt one with parsing type v3" in {
-    val res = TableSchema.fromYTree(ytLogicalSchema(extendedSparkSchema, Unordered, Map.empty, typeV3Format = true))
+    val res = TableSchema.fromYTree(new WriteSchemaConverter(typeV3Format = true).ytLogicalSchema(extendedSparkSchema, Unordered))
     res shouldBe TableSchema.builder().setUniqueKeys(false)
       .addValue("Null", TiType.nullType())
       .addValue("Long", TiType.int64())
@@ -163,7 +162,7 @@ class ExtendedSchemaConverterTest extends AnyFlatSpec with Matchers
       YTree.builder.beginMap.key("name").value(name).key("type").value(t)
         .key("required").value(false).buildMap
     }
-    val res = ytLogicalSchema(extendedSparkSchema, Unordered, Map.empty, typeV3Format = false)
+    val res = new WriteSchemaConverter().ytLogicalSchema(extendedSparkSchema, Unordered)
     res shouldBe YTree.builder
       .beginAttributes
       .key("strict").value(true)

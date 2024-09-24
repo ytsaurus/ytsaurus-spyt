@@ -169,6 +169,7 @@
   "data-source/src/main/scala/tech/ytsaurus/spyt/serializers/SchemaConverterConfig.scala":"yt/spark/spark-over-yt/data-source/src/main/scala/tech/ytsaurus/spyt/serializers/SchemaConverterConfig.scala",
   "data-source/src/main/scala/tech/ytsaurus/spyt/serializers/UnversionedRowsetDeserializer.scala":"yt/spark/spark-over-yt/data-source/src/main/scala/tech/ytsaurus/spyt/serializers/UnversionedRowsetDeserializer.scala",
   "data-source/src/main/scala/tech/ytsaurus/spyt/serializers/WireDeserializer.scala":"yt/spark/spark-over-yt/data-source/src/main/scala/tech/ytsaurus/spyt/serializers/WireDeserializer.scala",
+  "data-source/src/main/scala/tech/ytsaurus/spyt/serializers/WriteSchemaConverter.scala":"yt/spark/spark-over-yt/data-source/src/main/scala/tech/ytsaurus/spyt/serializers/WriteSchemaConverter.scala",
   "data-source/src/main/scala/tech/ytsaurus/spyt/serializers/YsonRowConverter.scala":"yt/spark/spark-over-yt/data-source/src/main/scala/tech/ytsaurus/spyt/serializers/YsonRowConverter.scala",
   "data-source/src/main/scala/tech/ytsaurus/spyt/serializers/YtLogicalType.scala":"yt/spark/spark-over-yt/data-source/src/main/scala/tech/ytsaurus/spyt/serializers/YtLogicalType.scala",
   "data-source/src/main/scala/tech/ytsaurus/spyt/serializers/YtLogicalTypeSerializer.scala":"yt/spark/spark-over-yt/data-source/src/main/scala/tech/ytsaurus/spyt/serializers/YtLogicalTypeSerializer.scala",

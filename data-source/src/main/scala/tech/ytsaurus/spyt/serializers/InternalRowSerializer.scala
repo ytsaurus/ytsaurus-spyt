@@ -10,6 +10,7 @@ import org.slf4j.LoggerFactory
 import tech.ytsaurus.client.TableWriter
 import tech.ytsaurus.client.rows.{WireProtocolWriteable, WireRowSerializer}
 import tech.ytsaurus.core.tables.{ColumnValueType, TableSchema}
+import tech.ytsaurus.spyt.format.conf.YtTableSparkSettings.{WriteSchemaHint, WriteTypeV3}
 import tech.ytsaurus.spyt.serialization.YsonEncoder
 import tech.ytsaurus.spyt.serializers.InternalRowSerializer._
 import tech.ytsaurus.spyt.serializers.SchemaConverter.{Unordered, decimalToBinary}
@@ -23,19 +24,18 @@ import scala.collection.mutable
 import scala.concurrent.duration.Duration
 import scala.concurrent.{ExecutionContext, Future}
 
-class InternalRowSerializer(schema: StructType, schemaHint: Map[String, YtLogicalType],
-                            typeV3Format: Boolean = false) extends WireRowSerializer[InternalRow] with LogLazy {
+class InternalRowSerializer(schema: StructType, writeSchemaConverter: WriteSchemaConverter) extends WireRowSerializer[InternalRow] with LogLazy {
 
   private val log = LoggerFactory.getLogger(getClass)
 
-  private val tableSchema = SchemaConverter.tableSchema(schema, Unordered, schemaHint, typeV3Format)
+  private val tableSchema = writeSchemaConverter.tableSchema(schema, Unordered)
 
   override def getSchema: TableSchema = tableSchema
 
   private def getColumnType(i: Int): ColumnValueType = {
     def isComposite(t: TiType): Boolean = t.isList || t.isDict || t.isStruct || t.isTuple || t.isVariant
 
-    if (typeV3Format) {
+    if (writeSchemaConverter.typeV3Format) {
       val column = tableSchema.getColumnSchema(i)
       val t = column.getTypeV3
       if (t.isOptional) {
@@ -68,7 +68,7 @@ class InternalRowSerializer(schema: StructType, schemaHint: Map[String, YtLogica
         writeable.writeValueHeader(valueId(i, idMapping), ColumnValueType.NULL, aggregate, 0)
       } else {
         val sparkField = schema(i)
-        val ytFieldHint = if (typeV3Format) Some(tableSchema.getColumnSchema(i).getTypeV3) else None
+        val ytFieldHint = if (writeSchemaConverter.typeV3Format) Some(tableSchema.getColumnSchema(i).getTypeV3) else None
         sparkField.dataType match {
           case BinaryType =>
             writeBytes(writeable, idMapping, aggregate, i, row.getBinary(i), getColumnType)
@@ -76,7 +76,7 @@ class InternalRowSerializer(schema: StructType, schemaHint: Map[String, YtLogica
             writeBytes(writeable, idMapping, aggregate, i, row.getUTF8String(i).getBytes, getColumnType)
           case d: DecimalType =>
             val value = row.getDecimal(i, d.precision, d.scale)
-            if (typeV3Format) {
+            if (writeSchemaConverter.typeV3Format) {
               val binary = decimalToBinary(ytFieldHint, d, value)
               writeBytes(writeable, idMapping, aggregate, i, binary, getColumnType)
             } else {
@@ -99,7 +99,7 @@ class InternalRowSerializer(schema: StructType, schemaHint: Map[String, YtLogica
           case t@(ArrayType(_, _) | StructType(_) | MapType(_, _, _)) =>
             val skipNulls = sparkField.metadata.contains("skipNulls") && sparkField.metadata.getBoolean("skipNulls")
             writeBytes(writeable, idMapping, aggregate, i,
-              YsonEncoder.encode(row.get(i, sparkField.dataType), t, skipNulls, typeV3Format, ytFieldHint),
+              YsonEncoder.encode(row.get(i, sparkField.dataType), t, skipNulls, writeSchemaConverter.typeV3Format, ytFieldHint),
               getColumnType)
           case otherType =>
             val isExtendedType = YTsaurusTypes
@@ -138,7 +138,7 @@ object InternalRowSerializer {
                   schemaHint: Map[String, YtLogicalType],
                   filters: Array[Filter] = Array.empty,
                   typeV3Format: Boolean = false): InternalRowSerializer = {
-    deserializers.get().getOrElseUpdate(schema, new InternalRowSerializer(schema, schemaHint, typeV3Format))
+    deserializers.get().getOrElseUpdate(schema, new InternalRowSerializer(schema, new WriteSchemaConverter(schemaHint, typeV3Format)))
   }
 
   final def writeRows(writer: TableWriter[InternalRow],

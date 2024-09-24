@@ -9,7 +9,7 @@ import org.apache.spark.sql.types.StructType
 import tech.ytsaurus.spyt.fs.YtClientConfigurationConverter.ytClientConfiguration
 import tech.ytsaurus.spyt.fs.path.YPathEnriched
 import tech.ytsaurus.spyt.serializers.SchemaConverter.{Sorted, Unordered}
-import tech.ytsaurus.spyt.serializers.{SchemaConverter, SchemaConverterConfig}
+import tech.ytsaurus.spyt.serializers.{SchemaConverter, SchemaConverterConfig, WriteSchemaConverter}
 import tech.ytsaurus.spyt.wrapper.YtWrapper
 import tech.ytsaurus.spyt.wrapper.client.YtClientProvider
 import tech.ytsaurus.spyt.wrapper.table.BaseYtTableSettings
@@ -68,7 +68,7 @@ class YTsaurusExternalCatalog(conf: SparkConf, hadoopConf: Configuration)
       val yt = YtClientProvider.ytClientWithProxy(ytConf, path.cluster, idPrefix)
       if (!YtWrapper.exists(path.toStringYPath)(yt)) {
         val extraProperties = tableDefinition.properties.mapValues(YTreeTextSerializer.deserialize)
-        val tableSchema = SchemaConverter.tableSchema(tableDefinition.schema, getSortOption(extraProperties))
+        val tableSchema = new WriteSchemaConverter().tableSchema(tableDefinition.schema, getSortOption(extraProperties))
         val settings = new BaseYtTableSettings(tableSchema, extraProperties.filterKeys(!excludeKeys.contains(_)))
         YtWrapper.createTable(path.toStringYPath, settings)(yt)
       } else {

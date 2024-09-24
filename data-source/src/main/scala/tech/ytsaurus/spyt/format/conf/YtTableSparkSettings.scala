@@ -1,14 +1,13 @@
 package tech.ytsaurus.spyt.format.conf
 
 import org.apache.hadoop.conf.Configuration
-import org.apache.spark.sql.types.StructType
+import org.apache.spark.sql.types.{DataType, StructType}
 import tech.ytsaurus.spyt.fs.conf._
 import tech.ytsaurus.spyt.serializers.SchemaConverter.{SortOption, Sorted, Unordered}
-import tech.ytsaurus.spyt.serializers.SchemaConverter
+import tech.ytsaurus.spyt.serializers.{SchemaConverter, WriteSchemaConverter, YtLogicalType}
 import tech.ytsaurus.spyt.wrapper.table.YtTableSettings
 import tech.ytsaurus.spyt.fs.conf.ConfigEntry
 import tech.ytsaurus.spyt.serializers.YtLogicalTypeSerializer.{deserializeTypeV3, serializeTypeV3}
-import tech.ytsaurus.spyt.serializers.YtLogicalType
 import tech.ytsaurus.ysontree.YTreeNode
 import tech.ytsaurus.ysontree.YTreeTextSerializer
 
@@ -25,14 +24,11 @@ case class YtTableSparkSettings(configuration: Configuration) extends YtTableSet
     if (keys.nonEmpty) Sorted(keys, uniqueKeys) else Unordered
   }
 
-  private def writeSchemaHints: Map[String, YtLogicalType] = configuration.ytConf(WriteSchemaHint)
+  private def writeSchemaConverter = WriteSchemaConverter(configuration)
 
-  private def typeV3Format: Boolean = configuration.ytConf(WriteTypeV3)
+  private def schema: StructType = configuration.ytConf(Schema).sparkType
 
-  private def schema: StructType = configuration.ytConf(Schema)
-
-  override def ytSchema: YTreeNode = SchemaConverter.ytLogicalSchema(
-    schema, sortOption, writeSchemaHints, typeV3Format)
+  override def ytSchema: YTreeNode = writeSchemaConverter.ytLogicalSchema(schema, sortOption)
 
   override def optionsAny: Map[String, Any] = {
     val optionsKeys = configuration.ytConf(Options)
@@ -46,10 +42,12 @@ object YtTableSparkSettings {
   import ConfigEntry.implicits._
   import ConfigEntry.{fromJsonTyped, toJsonTyped}
 
-  implicit val structTypeAdapter: ValueAdapter[StructType] = new ValueAdapter[StructType] {
-    override def get(value: String): StructType = SchemaConverter.stringToSparkType(value).asInstanceOf[StructType]
+  implicit val structTypeAdapter: ValueAdapter[YtLogicalType.Struct] = new ValueAdapter[YtLogicalType.Struct] {
+    override def get(value: String): YtLogicalType.Struct =
+      deserializeTypeV3(YTreeTextSerializer.deserialize(value)).asInstanceOf[YtLogicalType.Struct]
 
-    override def set(value: StructType): String = SchemaConverter.sparkTypeToString(value)
+    override def set(value: YtLogicalType.Struct): String =
+      YTreeTextSerializer.serialize(serializeTypeV3(value, innerForm = true))
   }
 
   implicit val logicalTypeMapAdapter: ValueAdapter[Map[String, YtLogicalType]] = new ValueAdapter[Map[String, YtLogicalType]] {
@@ -88,11 +86,13 @@ object YtTableSparkSettings {
 
   case object WriteSchemaHint extends ConfigEntry[Map[String, YtLogicalType]]("write_schema_hint", Some(Map.empty))
 
-  case object Schema extends ConfigEntry[StructType]("schema")
+  case object Schema extends ConfigEntry[YtLogicalType.Struct]("schema")
 
   case object WriteTransaction extends ConfigEntry[String]("write_transaction")
 
   case object WriteTypeV3 extends ConfigEntry[Boolean]("write_type_v3", Some(false))
+
+  case object StringToUtf8 extends ConfigEntry[Boolean]("string_to_utf8", Some(false))
 
   case object NullTypeAllowed extends ConfigEntry[Boolean]("null_type_allowed", Some(false))
 
@@ -130,7 +130,7 @@ object YtTableSparkSettings {
     YtTableSparkSettings(configuration)
   }
 
-  def serialize(options: Map[String, String], schema: StructType, configuration: Configuration): Unit = {
+  def serialize(options: Map[String, String], schema: YtLogicalType.Struct, configuration: Configuration): Unit = {
     options.foreach { case (key, value) =>
       configuration.setYtConf(key, value)
     }

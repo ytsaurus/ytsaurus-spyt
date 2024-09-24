@@ -174,7 +174,7 @@ class YsonRowConverter(schema: StructType, ytSchema: YtTypeHolder,
     }
   }
 
-  private val tableSchema = SchemaConverter.tableSchema(schema, Unordered, Map.empty)
+  private val tableSchema = new WriteSchemaConverter().tableSchema(schema, Unordered)
 
   @tailrec
   final def writeRows(writer: TableWriter[Row], rows: Seq[Row]): Unit = {

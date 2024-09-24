@@ -7,7 +7,7 @@ import org.scalatest.matchers.should.Matchers
 import tech.ytsaurus.core.cypress.YPath
 import tech.ytsaurus.core.tables.{ColumnValueType, TableSchema}
 import tech.ytsaurus.spyt.exceptions._
-import tech.ytsaurus.spyt.serializers.{InternalRowSerializer, SchemaConverter}
+import tech.ytsaurus.spyt.serializers.{InternalRowSerializer, SchemaConverter, WriteSchemaConverter}
 import tech.ytsaurus.spyt.serializers.SchemaConverter.{Sorted, Unordered}
 import tech.ytsaurus.spyt.test.{LocalSpark, TmpDir}
 import tech.ytsaurus.spyt.wrapper.YtWrapper
@@ -109,7 +109,7 @@ class YtDynamicTableWriterTest extends AnyFlatSpec with TmpDir with LocalSpark w
 
       if (createNewTable) {
         val tableSchema = if (externalTableSchema.isEmpty) {
-          schemaModifier(SchemaConverter.tableSchema(df.schema, Unordered, Map.empty))
+          schemaModifier(new WriteSchemaConverter().tableSchema(df.schema, Unordered))
         } else {
           externalTableSchema.get
         }

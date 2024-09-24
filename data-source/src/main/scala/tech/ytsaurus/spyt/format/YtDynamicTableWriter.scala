@@ -10,11 +10,9 @@ import org.slf4j.LoggerFactory
 import tech.ytsaurus.client.CompoundClient
 import tech.ytsaurus.client.request.ModifyRowsRequest
 import tech.ytsaurus.spyt.format.conf.SparkYtWriteConfiguration
-import tech.ytsaurus.spyt.format.conf.YtTableSparkSettings.{WriteSchemaHint, WriteTypeV3}
-import tech.ytsaurus.spyt.fs.conf._
 import tech.ytsaurus.spyt.fs.path.YPathEnriched
-import tech.ytsaurus.spyt.serializers.SchemaConverter
 import tech.ytsaurus.spyt.serializers.SchemaConverter.Unordered
+import tech.ytsaurus.spyt.serializers.WriteSchemaConverter
 import tech.ytsaurus.spyt.wrapper.YtWrapper
 
 import scala.collection.JavaConverters._
@@ -28,10 +26,9 @@ class YtDynamicTableWriter(richPath: YPathEnriched,
 
   override val path: String = richPath.toStringPath
 
-  private val schemaHint = options.ytConf(WriteSchemaHint)
-  private val typeV3Format = options.ytConf(WriteTypeV3)
+  private val writeSchemaConverter = WriteSchemaConverter(options)
 
-  private val tableSchema = SchemaConverter.tableSchema(schema, Unordered, schemaHint, typeV3Format)
+  private val tableSchema = writeSchemaConverter.tableSchema(schema, Unordered)
   private var count = 0
   private var modifyRowsRequestBuilder: ModifyRowsRequest.Builder = _
 

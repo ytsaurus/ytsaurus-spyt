@@ -8,7 +8,7 @@ import tech.ytsaurus.spyt.wrapper.YtWrapper
 import tech.ytsaurus.spyt.wrapper.table.OptimizeMode
 import tech.ytsaurus.spyt.{SchemaTestUtils, YtReader, YtWriter}
 import tech.ytsaurus.core.cypress.YPath
-import tech.ytsaurus.spyt.serializers.SchemaConverter
+import tech.ytsaurus.spyt.serializers.{SchemaConverter, WriteSchemaConverter}
 import tech.ytsaurus.spyt.wrapper.table.YtArrowInputStream
 
 import java.io.InputStream
@@ -26,7 +26,7 @@ class ArrowBatchReaderTest extends FlatSpec with TmpDir with SchemaTestUtils
 
   it should "read old arrow format (< 0.15.0)" in {
     val stream = new TestInputStream(getClass.getResourceAsStream("arrow_old"))
-    val reader = new ArrowBatchReader(stream, schema, SchemaConverter.tableSchema(schema))
+    val reader = new ArrowBatchReader(stream, schema, new WriteSchemaConverter().tableSchema(schema))
     val expected = readExpected("arrow_old_expected", schema)
 
     val rows = readFully(reader, schema, Int.MaxValue)
@@ -35,7 +35,7 @@ class ArrowBatchReaderTest extends FlatSpec with TmpDir with SchemaTestUtils
 
   it should "read new arrow format (>= 0.15.0)" in {
     val stream = new TestInputStream(getClass.getResourceAsStream("arrow_new"))
-    val reader = new ArrowBatchReader(stream, schema, SchemaConverter.tableSchema(schema))
+    val reader = new ArrowBatchReader(stream, schema, new WriteSchemaConverter().tableSchema(schema))
     val expected = readExpected("arrow_new_expected", schema)
 
     val rows = readFully(reader, schema, Int.MaxValue)
@@ -50,7 +50,7 @@ class ArrowBatchReaderTest extends FlatSpec with TmpDir with SchemaTestUtils
     df.write.optimizeFor(OptimizeMode.Scan).yt(tmpPath)
 
     val stream = YtWrapper.readTableArrowStream(YPath.simple(tmpPath))
-    val reader = new ArrowBatchReader(stream, schema, SchemaConverter.tableSchema(schema))
+    val reader = new ArrowBatchReader(stream, schema, new WriteSchemaConverter().tableSchema(schema))
 
     val rows = readFully(reader, schema, Int.MaxValue)
     rows should contain theSameElementsAs data.map(Row(_))
@@ -76,7 +76,7 @@ class ArrowBatchReaderTest extends FlatSpec with TmpDir with SchemaTestUtils
 
     def testSlice(data: Seq[Int], batchSize: Int, lowerRowIndex: Int, upperRowIndex: Int): Unit = {
       val stream = YtWrapper.readTableArrowStream(YPath.simple(tmpPath).withRange(lowerRowIndex, upperRowIndex))
-      val reader = new ArrowBatchReader(stream, schema, SchemaConverter.tableSchema(schema))
+      val reader = new ArrowBatchReader(stream, schema, new WriteSchemaConverter().tableSchema(schema))
 
       val rows = readFully(reader, schema, batchSize)
       val expected = data.slice(lowerRowIndex, upperRowIndex).map(Row(_))

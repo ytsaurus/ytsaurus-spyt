@@ -13,9 +13,9 @@ import tech.ytsaurus.spyt.types.YTsaurusTypes
 import tech.ytsaurus.ysontree.{YTree, YTreeNode}
 
 class WriteSchemaConverter(
-  hint: Map[String, YtLogicalType] = Map.empty,
-  typeV3Format: Boolean = false,
-  stringToUtf8: Boolean = false,
+  val hint: Map[String, YtLogicalType] = Map.empty,
+  val typeV3Format: Boolean = false,
+  val stringToUtf8: Boolean = false,
 ) {
   private def ytLogicalTypeV3Variant(struct: StructType): YtLogicalType = {
     if (isVariantOverTuple(struct)) {

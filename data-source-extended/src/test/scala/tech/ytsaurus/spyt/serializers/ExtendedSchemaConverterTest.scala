@@ -127,7 +127,7 @@ class ExtendedSchemaConverterTest extends AnyFlatSpec with Matchers
   }
 
   it should "convert spark schema to yt one with parsing type v3" in {
-    val res = TableSchema.fromYTree(WriteSchemaConverter(Map.empty, typeV3Format = true).ytLogicalSchema(extendedSparkSchema, Unordered))
+    val res = TableSchema.fromYTree(new WriteSchemaConverter(typeV3Format = true).ytLogicalSchema(extendedSparkSchema, Unordered))
     res shouldBe TableSchema.builder().setUniqueKeys(false)
       .addValue("Null", TiType.nullType())
       .addValue("Long", TiType.int64())

@@ -48,7 +48,7 @@ object YtOutputWriterFactory {
 
     val updatedOptions = addWriteOptions(options, writeConfiguration)
     YtTableSparkSettings.serialize(
-      updatedOptions, new WriteSchemaConverter(updatedOptions).ytLogicalTypeStruct(dataSchema), jobConfiguration
+      updatedOptions, WriteSchemaConverter(updatedOptions).ytLogicalTypeStruct(dataSchema), jobConfiguration
     )
 
     new YtOutputWriterFactory(ytClientConf, writeConfiguration, updatedOptions)

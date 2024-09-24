@@ -17,18 +17,6 @@ class WriteSchemaConverter(
   typeV3Format: Boolean = false,
   stringToUtf8: Boolean = false,
 ) {
-  def this(options: Map[String, String]) = this(
-    options.ytConf(WriteSchemaHint),
-    options.ytConf(WriteTypeV3),
-    options.ytConf(StringToUtf8),
-  )
-
-  def this(configuration: Configuration) = this(
-    configuration.ytConf(WriteSchemaHint),
-    configuration.ytConf(WriteTypeV3),
-    configuration.ytConf(StringToUtf8),
-  )
-
   private def ytLogicalTypeV3Variant(struct: StructType): YtLogicalType = {
     if (isVariantOverTuple(struct)) {
       YtLogicalType.VariantOverTuple {
@@ -134,4 +122,18 @@ class WriteSchemaConverter(
     TableSchema.fromYTree(ytLogicalSchemaImpl(sparkSchema, sortOption,
       isTableSchema = true))
   }
+}
+
+object WriteSchemaConverter {
+  def apply(options: Map[String, String]) = new WriteSchemaConverter(
+    options.ytConf(WriteSchemaHint),
+    options.ytConf(WriteTypeV3),
+    options.ytConf(StringToUtf8),
+  )
+
+  def apply(configuration: Configuration) = new WriteSchemaConverter(
+    configuration.ytConf(WriteSchemaHint),
+    configuration.ytConf(WriteTypeV3),
+    configuration.ytConf(StringToUtf8),
+  )
 }

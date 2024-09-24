@@ -24,7 +24,7 @@ case class YtTableSparkSettings(configuration: Configuration) extends YtTableSet
     if (keys.nonEmpty) Sorted(keys, uniqueKeys) else Unordered
   }
 
-  private def writeSchemaConverter = new WriteSchemaConverter(configuration)
+  private def writeSchemaConverter = WriteSchemaConverter(configuration)
 
   private def schema: StructType = configuration.ytConf(Schema).sparkType
 

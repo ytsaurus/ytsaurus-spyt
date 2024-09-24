@@ -26,7 +26,7 @@ class YtDynamicTableWriter(richPath: YPathEnriched,
 
   override val path: String = richPath.toStringPath
 
-  private val writeSchemaConverter = new WriteSchemaConverter(options)
+  private val writeSchemaConverter = WriteSchemaConverter(options)
 
   private val tableSchema = writeSchemaConverter.tableSchema(schema, Unordered)
   private var count = 0

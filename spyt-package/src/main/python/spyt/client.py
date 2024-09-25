@@ -10,7 +10,7 @@ from spyt.dependency_utils import require_yt_client
 require_yt_client()
 
 from yt.wrapper import YtClient  # noqa: E402
-from yt.wrapper.http_helpers import get_token, get_user_name  # noqa: E402
+from yt.wrapper.http_helpers import get_token, get_user_name, get_proxy_address_netloc  # noqa: E402
 
 from .arcadia import checked_extract_spark  # noqa: E402
 from .utils import default_token, default_discovery_dir, get_spark_master, set_conf, \
@@ -341,7 +341,7 @@ def connect(num_executors=5,
     return spark
 
 
-def connect_direct(yt_proxy: str, conf: SparkConf = None):
+def connect_direct(yt_proxy: str = None, conf: SparkConf = None):
     checked_extract_spark()
     _set_spark_conf_dir()
 
@@ -350,7 +350,9 @@ def connect_direct(yt_proxy: str, conf: SparkConf = None):
         conf.set("spark.ytsaurus.python.version", f"{sys.version_info.major}.{sys.version_info.minor}")
     if conf.contains("spark.executor.resource.gpu.amount"):
         conf.set("spark.executor.resource.gpu.discoveryScript", "./spyt-package/bin/getGpusResources.sh")
-    spark = SparkSession.builder.config(conf=conf).master("ytsaurus://" + yt_proxy).getOrCreate()
+    spark = SparkSession.builder.config(conf=conf).master(
+        "ytsaurus://" + (yt_proxy or get_proxy_address_netloc())
+    ).getOrCreate()
     return spark
 
 

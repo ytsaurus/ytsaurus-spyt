@@ -21,13 +21,12 @@ import scala.util.{Failure, Success, Try}
 
 class SubmissionClient(proxy: String,
                        baseDiscoveryPath: String,
-                       user: String,
                        token: String) {
   private val log = LoggerFactory.getLogger(getClass)
 
   private val eventLogPath = CypressDiscoveryService.eventLogPath(baseDiscoveryPath)
 
-  private val cluster = new AtomicReference[SparkCluster](SparkCluster.get(proxy, baseDiscoveryPath, user, token))
+  private val cluster = new AtomicReference[SparkCluster](SparkCluster.get(proxy, baseDiscoveryPath, token))
 
   private val threadFactory = new ThreadFactory() {
     override def newThread(runnable: Runnable): Thread = {
@@ -51,7 +50,7 @@ class SubmissionClient(proxy: String,
 
   def submit(launcher: InProcessLauncher,
              retryConfig: RetryConfig): Try[String] = {
-    val yt = YtClientProvider.ytClient(YtClientConfiguration.default(proxy, user, token))
+    val yt = YtClientProvider.ytClient(YtClientConfiguration.default(proxy, token))
     val remoteGlobalConfig = parseRemoteConfig(remoteGlobalConfigPath, yt)
     val remoteVersionConfig = parseRemoteConfig(remoteVersionConfigPath(cluster.get().version), yt)
     val remoteClusterConfig = parseRemoteConfig(remoteClusterConfigPath(baseDiscoveryPath), yt)
@@ -187,7 +186,7 @@ class SubmissionClient(proxy: String,
 
   private def updateCluster(): Unit = {
     log.debug(s"Update cluster addresses from $baseDiscoveryPath")
-    cluster.set(SparkCluster.get(proxy, baseDiscoveryPath, user, token))
+    cluster.set(SparkCluster.get(proxy, baseDiscoveryPath, token))
   }
 
   private def forceClusterUpdate(): Unit = {

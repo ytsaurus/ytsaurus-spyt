@@ -62,7 +62,7 @@ object Utils {
             exception.setStackTrace(e.getStackTrace)
             throw exception
           }
-          log.info(s"Service$serviceString could not bind on port $tryPort. " +
+          log.debug(s"Service$serviceString could not bind on port $tryPort. " +
               s"Attempting port ${tryPort + 1}.")
       }
     }

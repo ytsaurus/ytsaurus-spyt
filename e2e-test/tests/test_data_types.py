@@ -2,10 +2,12 @@ from datetime import datetime, timedelta, timezone
 
 from common.helpers import assert_items_equal
 from pyspark.sql import Row
-from pyspark.sql.types import StructField, StructType
+from pyspark.sql.functions import udf
+from pyspark.sql.types import StructType, StructField, StringType
 from spyt.types import Date32, Datetime64, Timestamp64, Interval64, Date32Type, Datetime64Type, Timestamp64Type, \
     Interval64Type, Datetime, DatetimeType, MIN_DATE32, MIN_DATETIME64, MIN_TIMESTAMP64, MIN_INTERVAL64, MAX_DATE32, \
-    MAX_DATETIME64, MAX_TIMESTAMP64, MAX_INTERVAL64
+    MAX_DATETIME64, MAX_TIMESTAMP64, MAX_INTERVAL64, YsonType, Yson
+from yt.wrapper.format import RowsIterator
 
 
 def seconds_to_datetime(seconds):
@@ -23,7 +25,6 @@ yt_wide_types_rows = [
      "interval64": MAX_INTERVAL64},
     {"date32": None, "datetime64": None, "timestamp64": None, "interval64": None}
 ]
-
 spark_wide_types_rows = [
     Row(date32=Date32(MIN_DATE32), datetime64=Datetime64(MIN_DATETIME64), timestamp64=Timestamp64(MIN_TIMESTAMP64),
         interval64=Interval64(MIN_INTERVAL64)),
@@ -45,6 +46,15 @@ spark_datetime_type_rows = [
     Row(datetime=Datetime(seconds_to_datetime(0))),
     Row(datetime=None)
 ]
+
+yt_yson_rows = [
+    {"yson": {"string": "string1", "int": 1234567890}},
+    {"yson": {"string": "string2", "short": 321, "long": 6347568734657887}},
+    {"yson": None}
+]
+spark_yson_type_schema = StructType([
+    StructField("yson", YsonType(), nullable=True)
+])
 
 
 def test_read_uint64_type(yt_client, tmp_dir, local_session):
@@ -217,3 +227,44 @@ def test_write_datetime_type(yt_client, tmp_dir, local_session):
 
     result = yt_client.read_table(table_path)
     assert_items_equal(result, yt_datetime_type_rows)
+
+
+def test_read_yson_type(yt_client, tmp_dir, local_session):
+    table_path = f"{tmp_dir}/yson_table_in"
+    schema = [{"name": "yson", "type_v3": {"type_name": "optional", "item": "yson"}}]
+    yt_client.create("table", table_path, attributes={"schema": schema})
+    yt_client.write_table(table_path, yt_yson_rows)
+
+    def get_string_column(yson):
+        return str(yson["string"]) if yson is not None else None
+
+    get_string_column_udf = udf(get_string_column, StringType())
+
+    df = local_session.read.yt(table_path)
+    parsed_df = df.withColumn('parsed_string', get_string_column_udf('yson')).select("parsed_string")
+    result = parsed_df.collect()
+
+    assert parsed_df.schema == StructType([
+        StructField("parsed_string", StringType(), nullable=True)
+    ])
+
+    assert_items_equal(result, [
+        Row(parsed_string="string1"),
+        Row(parsed_string="string2"),
+        Row(parsed_string=None)
+    ])
+
+
+def test_write_yson_type(yt_client, tmp_dir, local_session):
+    table_path = f"{tmp_dir}/yson_table_out"
+
+    data = [
+        Row(yson=Yson(dict(string="string1", int=1234567890))),
+        Row(yson=Yson(dict(string="string2", short=321, long=6347568734657887))),
+        Row(yson=Yson(None))
+    ]
+    df = local_session.createDataFrame(data=data, schema=spark_yson_type_schema)
+    df.write.mode("overwrite").optimize_for("scan").yt(table_path)
+
+    result: RowsIterator = yt_client.read_table(table_path)
+    assert_items_equal(result, yt_yson_rows)

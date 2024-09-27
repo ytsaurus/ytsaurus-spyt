@@ -42,7 +42,7 @@ def test_spyt_types_in_lambda(yt_client, tmp_dir, direct_session):
     yt_client.write_table(table_in, rows)
 
     df = direct_session.read.yt(table_in)
-    yson_len = udf(lambda yson_bytes: len(yson.loads(bytes(yson_bytes))) if yson_bytes else 0, IntegerType())
+    yson_len = udf(lambda yson_bytes: len(yson_bytes) if yson_bytes else 0, IntegerType())
     df.select("id", yson_len("data").alias("data_length")).write.yt(table_out)
 
     result = yt_client.read_table(table_out)

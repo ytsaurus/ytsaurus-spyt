@@ -1,8 +1,10 @@
 import datetime
-
+import io
+from typing import Union
 from pyspark import SparkContext
 from pyspark.sql.column import _to_java_column, Column
 from pyspark.sql.types import UserDefinedType, BinaryType, IntegralType, LongType, IntegerType
+import yt.yson as yt_yson
 
 
 MIN_DATE32 = -53375809
@@ -266,13 +268,12 @@ class Interval64:
 
 
 class YsonType(UserDefinedType):
+    def needConversion(self):
+        return True
+
     @classmethod
     def typeName(cls):
         return "yson"
-
-    @classmethod
-    def sqlType(cls):
-        return BinaryType()
 
     @classmethod
     def module(cls):
@@ -282,17 +283,38 @@ class YsonType(UserDefinedType):
     def scalaUDT(cls):
         return 'org.apache.spark.sql.spyt.types.YsonType'
 
-    def needConversion(self):
-        return True
-
-    def serialize(self, obj):
-        return obj
-
-    def deserialize(self, datum):
-        return datum
-
     def simpleString(self):
         return 'yson'
+
+    @classmethod
+    def sqlType(cls):
+        return BinaryType()
+
+    def serialize(self, obj):
+        return yt_yson.dumps(obj.value, "binary")
+
+    def fromInternal(self, binary_data: bytearray) -> Union[yt_yson.YsonMap, None]:
+        if binary_data is None:
+            return None
+        yson: yt_yson.YsonMap = yt_yson.load(io.BytesIO(binary_data))
+        return yson
+
+
+class Yson:
+    __UDT__ = YsonType()
+
+    def __init__(self, value):
+        self.value = value
+
+    def __repr__(self):
+        return "Yson(%s)" % self.value
+
+    def __str__(self):
+        return "(%s)" % self.value
+
+    def __eq__(self, other):
+        return isinstance(other, self.__class__) and \
+            other.value == self.value
 
 
 UINT64_MAX = 0xffffffffffffffff

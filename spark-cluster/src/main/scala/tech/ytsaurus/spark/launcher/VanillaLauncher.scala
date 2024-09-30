@@ -27,7 +27,7 @@ trait VanillaLauncher {
     replaceHome(sys.env.getOrElse(name, default))
   }
 
-  def replaceHome(str: String): String = str.replaceAll("\\$HOME", home)
+  def replaceHome(str: String): String = if (str == null) null else str.replaceAll("\\$HOME", home)
 
   def createFromTemplate(src: File)
                         (f: String => String): File = {

@@ -2,6 +2,7 @@
 
 script_name=$0
 
+cd "$(dirname "$0")"
 build_output=../../../build_output
 publish_scripts=../publisher
 image_cr="ghcr.io/"

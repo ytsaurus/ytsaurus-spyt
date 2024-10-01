@@ -23,9 +23,8 @@ except Exception:
     from yt.wrapper.operation_commands \
         import process_operation_unsuccesful_finish_state as process_operation_unsuccessful_finish_state
 
-from .conf import read_remote_conf, validate_cluster_version, \
-    latest_compatible_spyt_version, update_config_inplace, validate_custom_params, validate_mtn_config, \
-    latest_ytserver_proxy_path, read_global_conf, python_bin_path, \
+from .conf import update_config_inplace, validate_custom_params, validate_mtn_config, \
+    python_bin_path, SpytDistributions, \
     worker_num_limit, validate_worker_num, read_cluster_conf, validate_ssd_config, cuda_toolkit_version  # noqa: E402
 from .utils import get_spark_master, base_spark_conf, SparkDiscovery, SparkCluster, call_get_proxy_address_url, \
     parse_bool, _add_conf  # noqa: E402
@@ -147,6 +146,7 @@ def raw_submit(discovery_path, spark_home, spark_args,
             'No permission for reading cluster, actual permission status is ' + str(permission_status))
     discovery = SparkDiscovery(discovery_path=discovery_path)
 
+    spyt_distributions = get_spyt_distributions(client)
     cluster_conf = read_cluster_conf(str(discovery.conf()), client)
     spark_conf = cluster_conf['spark_conf']
     dedicated_driver_op = parse_bool(spark_conf.get('spark.dedicated_operation_mode'))
@@ -155,7 +155,7 @@ def raw_submit(discovery_path, spark_home, spark_args,
     _add_master(discovery, spark_base_args, rest=True, client=client)
     _add_shs_option(discovery, spark_base_args, client=client)
     _add_base_spark_conf(client, discovery, spark_base_args)
-    _add_python_version(python_version, spark_base_args, client)
+    _add_python_version(python_version, spark_base_args, spyt_distributions)
     _add_dedicated_driver_op_conf(spark_base_args, dedicated_driver_op)
     _add_ipv6_preference(ipv6_preference_enabled, spark_base_args)
     spark_env = _create_spark_env(client, spark_home)
@@ -203,10 +203,9 @@ def _add_dedicated_driver_op_conf(spark_args, dedicated_driver_op):
         }, spark_args)
 
 
-def _add_python_version(python_version, spark_args, client):
+def _add_python_version(python_version, spark_args, spyt_distributions: SpytDistributions):
     if python_version is not None:
-        global_conf = read_global_conf(client=client)
-        python_path = python_bin_path(global_conf, python_version)
+        python_path = python_bin_path(spyt_distributions.global_conf, python_version)
         if python_path:
             _add_conf({
                 "spark.pyspark.python": python_path
@@ -273,9 +272,18 @@ def abort_spark_operations(spark_discovery, client):
         raise error
 
 
-def get_base_cluster_config(global_conf, spark_cluster_version, params, base_discovery_path=None, client=None):
+def get_spyt_distributions(client, params=None) -> SpytDistributions:
+    if params is None:
+        params = {}
+    return SpytDistributions(
+        client=client,
+        **params.get('spyt_distributions', SparkDefaultArguments.get_params()['spyt_distributions']),
+    )
+
+
+def get_base_cluster_config(spyt_distributions: SpytDistributions, spark_cluster_version, params, base_discovery_path=None):
     dynamic_config = SparkDefaultArguments.get_params()
-    update_config_inplace(dynamic_config, read_remote_conf(global_conf, spark_cluster_version, client=client))
+    update_config_inplace(dynamic_config, spyt_distributions.read_remote_conf(spark_cluster_version))
     update_config_inplace(dynamic_config, params)
     if base_discovery_path is not None:
         dynamic_config['spark_conf']['spark.base.discovery.path'] = base_discovery_path
@@ -316,15 +324,16 @@ def start_livy_server(operation_alias=None, discovery_path=None, pool=None, enab
                        "If you want use direct submit, "
                        "please provide the option `--spark-master-address ytsaurus://<ytsaurus-proxy>`")
 
-    if spark_cluster_version is None:
-        spark_cluster_version = latest_compatible_spyt_version(__scala_version__, client=client)
+    spyt_distributions = get_spyt_distributions(client, params)
 
-    validate_cluster_version(spark_cluster_version, client=client)
+    if spark_cluster_version is None:
+        spark_cluster_version = spyt_distributions.latest_compatible_spyt_version(__scala_version__)
+
+    spyt_distributions.validate_cluster_version(spark_cluster_version)
     validate_custom_params(params)
     validate_mtn_config(enablers, network_project, tvm_id, tvm_secret)
 
-    global_conf = read_global_conf(client=client)
-    dynamic_config = get_base_cluster_config(global_conf, spark_cluster_version, params, discovery_path, client)
+    dynamic_config = get_base_cluster_config(spyt_distributions, spark_cluster_version, params, discovery_path)
     enablers.apply_config(dynamic_config)
 
     spark_discovery = None
@@ -341,7 +350,7 @@ def start_livy_server(operation_alias=None, discovery_path=None, pool=None, enab
     livy_config = LivyConfig(
         livy_driver_cores, livy_driver_memory, livy_max_sessions, spark_master_address, master_group_id
     )
-    livy_builder = build_spark_operation_spec(config=dynamic_config, client=client, job_types=['livy'],
+    livy_builder = build_spark_operation_spec(config=dynamic_config, spyt_distributions=spyt_distributions, job_types=['livy'],
                                               common_config=common_config, livy_config=livy_config)
     address_path = spark_discovery.livy() if spark_discovery is not None else None
     return run_operation_wrapper(livy_builder, address_path, client)
@@ -360,16 +369,17 @@ def start_history_server(operation_alias=None, discovery_path=None, pool=None, e
 
     spark_discovery = SparkDiscovery(discovery_path=discovery_path)
 
-    global_conf = read_global_conf(client=client)
+    spyt_distributions = get_spyt_distributions(client, params)
     if spark_cluster_version is None:
-        spark_cluster_version = latest_compatible_spyt_version(__scala_version__, client=client)
+        spark_cluster_version = spyt_distributions.latest_compatible_spyt_version(__scala_version__)
 
-    validate_cluster_version(spark_cluster_version, client=client)
+    spyt_distributions.validate_cluster_version(spark_cluster_version)
     validate_custom_params(params)
     validate_mtn_config(enablers, network_project, tvm_id, tvm_secret)
 
-    dynamic_config = get_base_cluster_config(global_conf, spark_cluster_version, params,
-                                             spark_discovery.base_discovery_path, client)
+    dynamic_config = get_base_cluster_config(
+        spyt_distributions, spark_cluster_version, params, spark_discovery.base_discovery_path
+    )
 
     enablers.apply_config(dynamic_config)
 
@@ -384,7 +394,7 @@ def start_history_server(operation_alias=None, discovery_path=None, pool=None, e
         history_server_memory_limit, history_server_cpu_limit, history_server_memory_overhead, shs_location,
         advanced_event_log
     )
-    hs_builder = build_spark_operation_spec(config=dynamic_config, client=client, job_types=['history'],
+    hs_builder = build_spark_operation_spec(config=dynamic_config, spyt_distributions=spyt_distributions, job_types=['history'],
                                             common_config=common_config, hs_config=hs_config)
     return run_operation_wrapper(hs_builder, spark_discovery.shs(), client)
 
@@ -511,10 +521,11 @@ def start_spark_cluster(worker_cores, worker_memory, worker_num, worker_cores_ov
         else:
             raise RuntimeError("This spark cluster is started already, use --abort-existing for auto restarting")
 
-    ytserver_proxy_path = latest_ytserver_proxy_path(spark_cluster_version, client=client)
-    global_conf = read_global_conf(client=client)
+    spyt_distributions = get_spyt_distributions(client, params)
+    ytserver_proxy_path = spyt_distributions.latest_ytserver_proxy_path(spark_cluster_version)
+    global_conf = spyt_distributions.global_conf
     if spark_cluster_version is None:
-        spark_cluster_version = latest_compatible_spyt_version(__scala_version__, client=client)
+        spark_cluster_version = spyt_distributions.latest_compatible_spyt_version(__scala_version__)
     logger.info(f"{spark_cluster_version} cluster version will be launched")
 
     if enable_history_server and not advanced_event_log:
@@ -536,14 +547,15 @@ def start_spark_cluster(worker_cores, worker_memory, worker_num, worker_cores_ov
         else:
             logger.info("Launcher files will be placed to node disk with no guarantees on free space")
 
-    validate_cluster_version(spark_cluster_version, client=client)
+    spyt_distributions.validate_cluster_version(spark_cluster_version)
     validate_custom_params(params)
     validate_mtn_config(enablers, network_project, tvm_id, tvm_secret)
     validate_worker_num(worker_res.num, worker_num_limit(global_conf))
     validate_ssd_config(worker_disk_limit, worker_disk_account)
 
-    dynamic_config = get_base_cluster_config(global_conf, spark_cluster_version, params,
-                                             spark_discovery.base_discovery_path, client)
+    dynamic_config = get_base_cluster_config(
+        spyt_distributions, spark_cluster_version, params, spark_discovery.base_discovery_path
+    )
     if ytserver_proxy_path:
         dynamic_config["ytserver_proxy_path"] = ytserver_proxy_path
     dynamic_config['spark_conf']['spark.dedicated_operation_mode'] = dedicated_operation_mode
@@ -587,16 +599,16 @@ def start_spark_cluster(worker_cores, worker_memory, worker_num, worker_cores_ov
         advanced_event_log
     )
     livy_config = LivyConfig(livy_driver_cores, livy_driver_memory, livy_max_sessions)
-    args = {
-        'config': dynamic_config,
-        'client': client,
-        'job_types': job_types,
-        'common_config': common_config,
-        'master_config': master_config,
-        'worker_config': worker_config,
-        'hs_config': hs_config,
-        'livy_config': livy_config,
-    }
+    args = dict(
+        config=dynamic_config,
+        spyt_distributions=spyt_distributions,
+        job_types=job_types,
+        common_config=common_config,
+        master_config=master_config,
+        worker_config=worker_config,
+        hs_config=hs_config,
+        livy_config=livy_config,
+    )
 
     master_args = args.copy()
     master_builder = build_spark_operation_spec(**master_args)

@@ -12,7 +12,7 @@ from yt.wrapper.common import update_inplace, update  # noqa: E402
 from yt.wrapper.http_helpers import get_token, get_user_name  # noqa: E402
 from yt.wrapper.spec_builders import VanillaSpecBuilder  # noqa: E402
 
-from .conf import ytserver_proxy_attributes, get_spark_distributive  # noqa: E402
+from .conf import ytserver_proxy_attributes, SpytDistributions  # noqa: E402
 from .utils import SparkDiscovery, call_get_proxy_address_url, parse_memory  # noqa: E402
 from .enabler import SpytEnablers  # noqa: E402
 from .version import __version__  # noqa: E402
@@ -43,6 +43,7 @@ class SparkDefaultArguments(object):
     @staticmethod
     def get_params():
         return {
+            "spyt_distributions": { "yt_root": "//home/spark" },
             "operation_spec": {
                 "annotations": {
                     "is_spark": True,
@@ -362,15 +363,16 @@ def build_worker_spec(builder: VanillaSpecBuilder, job_type: str, ytserver_proxy
         .end_task()
 
 
-def build_spark_operation_spec(config: dict, client: YtClient,
+def build_spark_operation_spec(config: dict, spyt_distributions: SpytDistributions,
                                job_types: List[str], common_config: CommonComponentConfig,
                                master_config: MasterConfig = None, worker_config: WorkerConfig = None,
                                hs_config: HistoryServerConfig = None, livy_config: LivyConfig = None):
+    client = spyt_distributions.client
     if job_types == [] or job_types is None:
         job_types = ['master', 'history', 'worker']
 
     spark_home = "./tmpfs" if common_config.enable_tmpfs else "."
-    spark_distributive_tgz, spark_distributive_path = get_spark_distributive(client)
+    spark_distributive_tgz, spark_distributive_path = spyt_distributions.get_spark_distributive()
 
     extra_java_opts = ["-Dlog4j.loglevel={}".format(common_config.cluster_log_level)]
     if common_config.enablers.enable_preference_ipv6:

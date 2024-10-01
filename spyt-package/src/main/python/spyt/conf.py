@@ -3,18 +3,10 @@ import logging
 from spyt.dependency_utils import require_yt_client
 require_yt_client()
 
-from yt.wrapper import get, YPath, list as yt_list, exists  # noqa: E402
+from yt.wrapper import get, YPath, list as yt_list, exists, YtClient  # noqa: E402
 from yt.wrapper.common import update_inplace  # noqa: E402
 from .version import __scala_version__  # noqa: E402
 from pyspark import __version__ as spark_version  # noqa: E402
-
-SPARK_BASE_PATH = YPath("//home/spark")
-
-CONF_BASE_PATH = SPARK_BASE_PATH.join("conf")
-GLOBAL_CONF_PATH = CONF_BASE_PATH.join("global")
-
-SPYT_BASE_PATH = SPARK_BASE_PATH.join("spyt")
-DISTRIB_BASE_PATH = SPARK_BASE_PATH.join("distrib")
 
 RELEASES_SUBDIR = "releases"
 SNAPSHOTS_SUBDIR = "snapshots"
@@ -24,6 +16,71 @@ SELF_VERSION = __scala_version__
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(name)s - %(message)s')
 logger = logging.getLogger(__name__)
+
+
+class SpytDistributions:
+    def __init__(self, client: YtClient, yt_root: str):
+        self.client = client
+        self.yt_root = YPath(yt_root)
+        self.conf_base_path = self.yt_root.join("conf")
+        self.global_conf = client.get(self.conf_base_path.join("global"))
+        self.distrib_base_path = self.yt_root.join("distrib")
+        self.spyt_base_path = self.yt_root.join("spyt")
+
+    def read_remote_conf(self, cluster_version):
+        version_conf = self.client.get(self._get_version_conf_path(cluster_version))
+        version_conf["cluster_version"] = cluster_version
+        return update_inplace(self.global_conf, version_conf)  # TODO(alex-shishkin): Might cause undefined behaviour
+
+    def latest_ytserver_proxy_path(self, cluster_version):
+        if cluster_version:
+            return None
+        global_conf = self.global_conf
+        symlink_path = global_conf.get("ytserver_proxy_path")
+        if symlink_path is None:
+            return None
+        return get("{}&/@target_path".format(symlink_path), client=self.client)
+
+    def validate_cluster_version(self, spark_cluster_version):
+        if not exists(self._get_version_conf_path(spark_cluster_version), client=self.client):
+            raise RuntimeError("Unknown SPYT cluster version: {}. Available release versions are: {}".format(
+                spark_cluster_version, self.get_available_cluster_versions()
+            ))
+        spyt_minor_version = SpytVersion(SELF_VERSION).get_minor()
+        cluster_minor_version = SpytVersion(spark_cluster_version).get_minor()
+        if spyt_minor_version < cluster_minor_version:
+            logger.warning("You required SPYT version {} which is older than your local ytsaurus-spyt version {}."
+                           "Please update your local ytsaurus-spyt".format(spark_cluster_version, SELF_VERSION))
+
+    def get_available_cluster_versions(self):
+        subdirs = yt_list(self.conf_base_path.join(RELEASES_SUBDIR), client=self.client)
+        return [x for x in subdirs if x != "spark-launch-conf"]
+
+    def latest_compatible_spyt_version(self, version):
+        minor_version = SpytVersion(version).get_minor()
+        spyt_versions = self.get_available_spyt_versions()
+        compatible_spyt_versions = [x for x in spyt_versions if SpytVersion(x).get_minor() == minor_version]
+        if not compatible_spyt_versions:
+            raise RuntimeError(f"No compatible SPYT versions found for specified version {version}")
+        return max(compatible_spyt_versions, key=SpytVersion)
+
+    def get_available_spyt_versions(self):
+        return yt_list(self.spyt_base_path.join(RELEASES_SUBDIR), client=self.client)
+
+    def get_spark_distributive(self):
+        distrib_root = self.distrib_base_path.join(spark_version.replace('.', '/'))
+        distrib_root_contents = yt_list(distrib_root, client=self.client)
+        spark_tgz = [x for x in distrib_root_contents if x.endswith('.tgz')]
+        if len(spark_tgz) == 0:
+            raise RuntimeError(f"Spark {spark_version} tgz distributive doesn't exist "
+                               f"at path {distrib_root} on cluster {self.client.config['proxy']['url']}")
+        return (spark_tgz[0], distrib_root.join(spark_tgz[0]))
+
+    def _get_version_conf_path(self, cluster_version):
+        return self.conf_base_path.join(self._version_subdir(cluster_version)).join(cluster_version).join("spark-launch-conf")
+
+    def _version_subdir(self, version):
+        return SNAPSHOTS_SUBDIR if "SNAPSHOT" in version or "beta" in version or "dev" in version else RELEASES_SUBDIR
 
 
 class SpytVersion:
@@ -58,18 +115,6 @@ class SpytVersion:
         return f"{self.major}.{self.minor}.{self.patch}"
 
 
-def validate_cluster_version(spark_cluster_version, client=None):
-    if not check_cluster_version_exists(spark_cluster_version, client=client):
-        raise RuntimeError("Unknown SPYT cluster version: {}. Available release versions are: {}".format(
-            spark_cluster_version, get_available_cluster_versions(client=client)
-        ))
-    spyt_minor_version = SpytVersion(SELF_VERSION).get_minor()
-    cluster_minor_version = SpytVersion(spark_cluster_version).get_minor()
-    if spyt_minor_version < cluster_minor_version:
-        logger.warning("You required SPYT version {} which is older than your local ytsaurus-spyt version {}."
-                       "Please update your local ytsaurus-spyt".format(spark_cluster_version, SELF_VERSION))
-
-
 def validate_versions_compatibility(spyt_version, spark_cluster_version):
     spyt_minor_version = SpytVersion(spyt_version).get_minor()
     spark_cluster_minor_version = SpytVersion(spark_cluster_version).get_minor()
@@ -82,15 +127,6 @@ def validate_versions_compatibility(spyt_version, spark_cluster_version):
 def validate_mtn_config(enablers, network_project, tvm_id, tvm_secret):
     if enablers.enable_mtn and not network_project:
         raise RuntimeError("When using MTN, network_project arg must be set.")
-
-
-def latest_compatible_spyt_version(version, client=None):
-    minor_version = SpytVersion(version).get_minor()
-    spyt_versions = get_available_spyt_versions(client)
-    compatible_spyt_versions = [x for x in spyt_versions if SpytVersion(x).get_minor() == minor_version]
-    if not compatible_spyt_versions:
-        raise RuntimeError(f"No compatible SPYT versions found for specified version {version}")
-    return max(compatible_spyt_versions, key=SpytVersion)
 
 
 def python_bin_path(global_conf, version):
@@ -115,26 +151,6 @@ def validate_ssd_config(disk_limit, disk_account):
         raise RuntimeError("Disk account must be provided to use disk limit, please add --worker-disk-account option")
 
 
-def get_available_cluster_versions(client=None):
-    subdirs = yt_list(CONF_BASE_PATH.join(RELEASES_SUBDIR), client=client)
-    return [x for x in subdirs if x != "spark-launch-conf"]
-
-
-def check_cluster_version_exists(cluster_version, client=None):
-    return exists(_get_version_conf_path(cluster_version), client=client)
-
-
-def read_global_conf(client=None):
-    return client.get(GLOBAL_CONF_PATH)
-
-
-def read_remote_conf(global_conf, cluster_version, client=None):
-    version_conf_path = _get_version_conf_path(cluster_version)
-    version_conf = get(version_conf_path, client=client)
-    version_conf["cluster_version"] = cluster_version
-    return update_inplace(global_conf, version_conf)  # TODO(alex-shishkin): Might cause undefined behaviour
-
-
 def read_cluster_conf(path=None, client=None):
     if path is None:
         return {}
@@ -156,41 +172,9 @@ def validate_custom_params(params):
                            "Use argument 'enablers' instead")
 
 
-def get_available_spyt_versions(client=None):
-    return yt_list(SPYT_BASE_PATH.join(RELEASES_SUBDIR), client=client)
-
-
-def latest_ytserver_proxy_path(cluster_version, client=None):
-    if cluster_version:
-        return None
-    global_conf = read_global_conf(client=client)
-    symlink_path = global_conf.get("ytserver_proxy_path")
-    if symlink_path is None:
-        return None
-    return get("{}&/@target_path".format(symlink_path), client=client)
-
-
 def ytserver_proxy_attributes(path, client=None):
     return get("{}/@user_attributes".format(path), client=client)
 
 
-def get_spark_distributive(client):
-    distrib_root = DISTRIB_BASE_PATH.join(spark_version.replace('.', '/'))
-    distrib_root_contents = yt_list(distrib_root, client=client)
-    spark_tgz = [x for x in distrib_root_contents if x.endswith('.tgz')]
-    if len(spark_tgz) == 0:
-        raise RuntimeError(f"Spark {spark_version} tgz distributive doesn't exist "
-                           f"at path {distrib_root} on cluster {client.config['proxy']['url']}")
-    return (spark_tgz[0], distrib_root.join(spark_tgz[0]))
-
-
 def _get_or_else(d, key, default):
     return d.get(key) or default
-
-
-def _version_subdir(version):
-    return SNAPSHOTS_SUBDIR if "SNAPSHOT" in version or "beta" in version or "dev" in version else RELEASES_SUBDIR
-
-
-def _get_version_conf_path(cluster_version):
-    return CONF_BASE_PATH.join(_version_subdir(cluster_version)).join(cluster_version).join("spark-launch-conf")

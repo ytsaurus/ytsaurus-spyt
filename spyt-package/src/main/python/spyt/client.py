@@ -15,8 +15,9 @@ from yt.wrapper.http_helpers import get_token, get_user_name, get_proxy_address_
 from .arcadia import checked_extract_spark  # noqa: E402
 from .utils import default_token, default_discovery_dir, get_spark_master, set_conf, \
     SparkDiscovery, parse_memory, format_memory, base_spark_conf, parse_bool, get_spyt_home  # noqa: E402
-from .conf import read_remote_conf, read_global_conf, validate_versions_compatibility, \
+from .conf import validate_versions_compatibility, \
     read_cluster_conf, SELF_VERSION  # noqa: E402
+from .standalone import get_spyt_distributions
 
 
 logger = logging.getLogger(__name__)
@@ -269,8 +270,8 @@ def _build_spark_conf(num_executors=None,
                          num_executors, cores_per_executor, executor_memory_per_core,
                          driver_memory, dynamic_allocation)
 
-    global_conf = read_global_conf(client=client)
-    remote_conf = read_remote_conf(global_conf, spark_cluster_version, client=client)
+    spyt_distributions = get_spyt_distributions(client)
+    remote_conf = spyt_distributions.read_remote_conf(spark_cluster_version)
     set_conf(spark_conf, remote_conf["spark_conf"])
 
     if is_client_mode:

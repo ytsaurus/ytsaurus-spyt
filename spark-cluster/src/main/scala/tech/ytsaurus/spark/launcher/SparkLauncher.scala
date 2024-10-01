@@ -172,8 +172,7 @@ trait SparkLauncher {
   }
 
   private def readLivyLogs(): String = {
-    val logsPath = f"$livyHome/logs/livy--server.out"
-    f"cat $logsPath".!!
+    Seq("bash", "-c", """cat "$0"/logs/livy-*-server.out""", livyHome).!!
   }
 
   private def runLivyProcess(log: Logger): Process = {
@@ -195,7 +194,7 @@ trait SparkLauncher {
     val startProcessCode = startProcess.exitValue()
     log.info(f"Server started. Code: $startProcessCode")
     if (startProcessCode == 0) {
-      val pid = (f"cat $livyHome/livy--server.pid".!!).trim
+      val pid = Seq("bash", "-c", """cat "$0"/livy-*-server.pid""", livyHome).!!.trim
       log.info(f"Attaching to livy process with pid $pid...")
       Process("tail", Seq(f"-f", "-n", "0", f"$livyHome/logs/livy--server.out")).run(ProcessLogger(log.info(_)))
       Process("tail", Seq(f"--pid=$pid", "-f", "/dev/null")).run(ProcessLogger(log.info(_)))
@@ -214,8 +213,10 @@ trait SparkLauncher {
       } catch {
         case e: Throwable =>
           log.error(s"Livy failed with error: ${e.getMessage}")
-          process.destroy()
-          log.info("Livy process destroyed")
+          if (process != null) {
+            process.destroy()
+            log.info("Livy process destroyed")
+          }
       }
       log.info("Logs:\n" + readLivyLogs())
     }, "Livy thread")

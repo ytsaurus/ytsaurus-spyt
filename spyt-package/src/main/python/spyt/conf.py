@@ -35,11 +35,10 @@ class SpytDistributions:
     def latest_ytserver_proxy_path(self, cluster_version):
         if cluster_version:
             return None
-        global_conf = self.global_conf
-        symlink_path = global_conf.get("ytserver_proxy_path")
+        symlink_path = self.global_conf.get("ytserver_proxy_path")
         if symlink_path is None:
             return None
-        return get("{}&/@target_path".format(symlink_path), client=self.client)
+        return self.client.get("{}&/@target_path".format(symlink_path))
 
     def validate_cluster_version(self, spark_cluster_version):
         if not exists(self._get_version_conf_path(spark_cluster_version), client=self.client):
@@ -76,11 +75,10 @@ class SpytDistributions:
                                f"at path {distrib_root} on cluster {self.client.config['proxy']['url']}")
         return (spark_tgz[0], distrib_root.join(spark_tgz[0]))
 
-    def _get_version_conf_path(self, cluster_version):
-        return self.conf_base_path.join(self._version_subdir(cluster_version)).join(cluster_version).join("spark-launch-conf")
-
-    def _version_subdir(self, version):
-        return SNAPSHOTS_SUBDIR if "SNAPSHOT" in version or "beta" in version or "dev" in version else RELEASES_SUBDIR
+    def _get_version_conf_path(self, version):
+        return self.conf_base_path.join(
+            SNAPSHOTS_SUBDIR if "SNAPSHOT" in version or "beta" in version or "dev" in version else RELEASES_SUBDIR
+        ).join(version).join("spark-launch-conf")
 
 
 class SpytVersion:

@@ -9,7 +9,7 @@ from .version import __scala_version__  # noqa: E402
 from pyspark import __version__ as spark_version  # noqa: E402
 import os
 
-SPARK_BASE_PATH = YPath(os.getenv('SPYT_YT_HOME_SPARK', default="//home/spark"))
+SPARK_BASE_PATH = YPath(os.getenv('SPYT_ROOT_BASE_PATH', default="//home/spark"))
 
 CONF_BASE_PATH = SPARK_BASE_PATH.join("conf")
 GLOBAL_CONF_PATH = CONF_BASE_PATH.join("global")

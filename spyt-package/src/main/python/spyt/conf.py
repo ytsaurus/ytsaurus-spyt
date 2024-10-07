@@ -1,4 +1,5 @@
 import logging
+import os
 
 from spyt.dependency_utils import require_yt_client
 require_yt_client()
@@ -7,7 +8,6 @@ from yt.wrapper import get, YPath, list as yt_list, exists  # noqa: E402
 from yt.wrapper.common import update_inplace  # noqa: E402
 from .version import __scala_version__  # noqa: E402
 from pyspark import __version__ as spark_version  # noqa: E402
-import os
 
 SPARK_BASE_PATH = YPath(os.getenv('SPYT_ROOT_BASE_PATH', default="//home/spark"))
 

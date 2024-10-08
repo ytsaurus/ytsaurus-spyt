@@ -10,13 +10,14 @@ import org.apache.spark.deploy.worker.YtWorker
 import tech.ytsaurus.spyt.wrapper.Utils.{parseDuration, ytHostnameOrIpAddress}
 import tech.ytsaurus.spyt.wrapper.YtWrapper
 import tech.ytsaurus.spyt.wrapper.client.YtClientConfiguration
-import tech.ytsaurus.spyt.wrapper.discovery.{Address, CompoundDiscoveryService, CypressDiscoveryService, DiscoveryService, DiscoveryServerService}
+import tech.ytsaurus.spyt.wrapper.discovery.{Address, CompoundDiscoveryService, CypressDiscoveryService, DiscoveryServerService, DiscoveryService}
 import tech.ytsaurus.client.CompoundClient
 import tech.ytsaurus.spyt.HostAndPort
 
 import java.io.File
 import java.nio.file.{Files, Path}
 import scala.annotation.tailrec
+import scala.collection.mutable.ArrayBuffer
 import scala.concurrent.duration._
 import scala.io.Source
 import scala.language.postfixOps
@@ -45,8 +46,12 @@ trait SparkLauncher {
     }
   }
 
-  private val livyHome: String = new File(env("LIVY_HOME", "./livy")).getAbsolutePath
-  private val javaHome: String = new File(env("JAVA_HOME", "/opt/jdk11")).getAbsolutePath
+  def absolutePath(string: String) = if (string == null) null else new File(string).getAbsolutePath
+
+  private val livyHome: String = absolutePath(env("LIVY_HOME", "./livy"))
+
+  private val javaHome: String = absolutePath(env("JAVA_HOME", null))
+
   val clusterVersion: String = sys.env("SPYT_CLUSTER_VERSION")
 
   private def prepareSparkConf(): Unit = {
@@ -179,18 +184,19 @@ trait SparkLauncher {
     val livyJavaOpts = s"cat $spytHome/conf/java-opts".!!
     val livyRunner = f"$livyHome/bin/livy-server start"
     log.info(s"Run command: $livyRunner")
-    val startProcess = Process(
-      livyRunner,
-      new File("."),
+    val extraEnv = ArrayBuffer(
       "SPARK_HOME" -> sparkHome,
       "SPARK_CONF_DIR" -> s"$spytHome/conf",
       "LIVY_PID_DIR" -> livyHome,
-      "JAVA_HOME" -> javaHome,
       "PYSPARK_PYTHON" -> "python3",
       "LIVY_SERVER_JAVA_OPTS" -> livyJavaOpts,
       "CLASSPATH" -> s"$sparkHome/jars/*",
-      "PYTHONPATH" -> s"$spytHome/python"
-    ).run(ProcessLogger(log.info(_)))
+      "PYTHONPATH" -> s"$spytHome/python",
+    )
+    if (javaHome != null) {
+      extraEnv += ("JAVA_HOME" -> javaHome)
+    }
+    val startProcess = Process(livyRunner, new File("."), extraEnv: _*).run(ProcessLogger(log.info(_)))
     val startProcessCode = startProcess.exitValue()
     log.info(f"Server started. Code: $startProcessCode")
     if (startProcessCode == 0) {
@@ -295,10 +301,7 @@ trait SparkLauncher {
     val workerLog4j = s"-Dlog4j.configuration=file://$spytHome/conf/log4j.worker.properties"
     val sparkLocalDirs = env("SPARK_LOCAL_DIRS", "./tmpfs")
     val javaOpts = (workerLog4j +: (systemProperties ++ sparkSystemProperties.map { case (k, v) => s"-D$k=$v" })).mkString(" ")
-    Process(
-      command,
-      new File("."),
-      "JAVA_HOME" -> javaHome,
+    val extraEnv = ArrayBuffer(
       "SPARK_HOME" -> sparkHome,
       "SPARK_CONF_DIR" -> s"$spytHome/conf",
       "PYTHONPATH" -> s"$spytHome/python",
@@ -306,8 +309,12 @@ trait SparkLauncher {
       // when using MTN, Spark should use ip address and not hostname, because hostname is not in DNS
       "SPARK_LOCAL_HOSTNAME" -> ytHostnameOrIpAddress,
       "SPARK_DAEMON_MEMORY" -> memory,
-      "SPARK_DAEMON_JAVA_OPTS" -> javaOpts
-    ).run(ProcessLogger(log.info(_)))
+      "SPARK_DAEMON_JAVA_OPTS" -> javaOpts,
+    )
+    if (javaHome != null) {
+      extraEnv += ("JAVA_HOME" -> javaHome)
+    }
+    Process(command, new File("."), extraEnv: _*).run(ProcessLogger(log.info(_)))
   }
 
   @tailrec

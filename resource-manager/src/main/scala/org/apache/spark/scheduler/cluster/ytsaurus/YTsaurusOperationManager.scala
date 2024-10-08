@@ -25,7 +25,7 @@ import scala.collection.mutable.ArrayBuffer
 
 
 private[spark] class YTsaurusOperationManager(val ytClient: YTsaurusClient,
-                                              user: String, token: String,
+                                              token: String,
                                               portoLayers: YTreeNode,
                                               filePaths: YTreeNode,
                                               pythonPaths: YTreeMapNode,
@@ -109,7 +109,6 @@ private[spark] class YTsaurusOperationManager(val ytClient: YTsaurusClient,
     opSpecBuilder.setTask(taskName, opParams.taskSpec)
 
     val secureVault = YTree.mapBuilder()
-      .key("YT_USER").value(user)
       .key("YT_TOKEN").value(token)
       .buildMap()
 
@@ -289,8 +288,8 @@ private[spark] class YTsaurusOperationManager(val ytClient: YTsaurusClient,
 private[spark] object YTsaurusOperationManager extends Logging {
 
   def create(ytProxy: String, conf: SparkConf, networkName: Option[String]): YTsaurusOperationManager = {
-    val (user, token) = YTsaurusUtils.userAndToken(conf)
-    val ytClient: YTsaurusClient = buildClient(ytProxy, user, token, networkName)
+    val token = YTsaurusUtils.token(conf)
+    val ytClient: YTsaurusClient = buildClient(ytProxy, token, networkName)
 
     try {
       val globalConfigPath = conf.get(GLOBAL_CONFIG_PATH)
@@ -361,7 +360,6 @@ private[spark] object YTsaurusOperationManager extends Logging {
 
       new YTsaurusOperationManager(
         ytClient,
-        user,
         token,
         portoLayers,
         filePaths,
@@ -516,14 +514,14 @@ private[spark] object YTsaurusOperationManager extends Logging {
     description.filter(_.isStringNode).map(_.stringNode().getValue)
   }
 
-  private def buildClient(ytProxy: String, user: String, token: String, networkName: Option[String]): YTsaurusClient = {
+  private def buildClient(ytProxy: String, token: String, networkName: Option[String]): YTsaurusClient = {
     val builder: YTsaurusClient.ClientBuilder[_ <: YTsaurusClient, _] = YTsaurusClient.builder()
     builder.setCluster(ytProxy)
     if (networkName.isDefined) {
       builder.setProxyNetworkName(networkName.get)
     }
-    if (user != null && token != null) {
-      builder.setAuth(YTsaurusClientAuth.builder().setUser(user).setToken(token).build())
+    if (token != null) {
+      builder.setAuth(YTsaurusClientAuth.builder().setToken(token).build())
     }
     builder.build()
   }

@@ -73,7 +73,6 @@ class SubmissionClient(proxy: String,
     launcher.setConf("spark.rest.client.awaitTermination.enabled", "false")
 
     launcher.setConf("spark.hadoop.yt.proxy", proxy)
-    launcher.setConf("spark.hadoop.yt.user", user)
     launcher.setConf("spark.hadoop.yt.token", token)
 
     launcher.setConf("spark.eventLog.dir", "ytEventLog:/" + eventLogPath)

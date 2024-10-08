@@ -2,8 +2,6 @@ package tech.ytsaurus.spyt.patch;
 
 import javassist.*;
 import javassist.bytecode.ClassFile;
-import javassist.expr.ExprEditor;
-import org.apache.commons.io.IOUtils;
 import org.apache.hadoop.shaded.com.google.common.collect.Streams;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -14,11 +12,8 @@ import java.io.*;
 import java.lang.instrument.ClassFileTransformer;
 import java.lang.instrument.Instrumentation;
 import java.lang.management.ManagementFactory;
-import java.lang.reflect.InvocationTargetException;
-import java.nio.charset.Charset;
 import java.security.ProtectionDomain;
 import java.util.Map;
-import java.util.NoSuchElementException;
 import java.util.Optional;
 import java.util.jar.JarFile;
 import java.util.stream.Collectors;
@@ -67,7 +62,7 @@ public class SparkPatchAgent {
                     .filter(fileName -> fileName.endsWith(".class") && !fileName.startsWith("tech/ytsaurus/"));
 
             Stream<String> externalClasses =
-                    IOUtils.resourceToString("/externalClasses.txt", Charset.defaultCharset()).lines()
+                    resourceToString("/externalClasses.txt").lines()
                             .filter(line -> !line.isBlank())
                             .map(className -> className + ".class");
 
@@ -78,6 +73,12 @@ public class SparkPatchAgent {
             inst.addTransformer(new SparkPatchClassTransformer(classMappings));
         } catch (IOException e) {
             throw new SparkPatchException(e);
+        }
+    }
+
+    private static String resourceToString(String name) throws IOException {
+        try (var inputStream = SparkPatchAgent.class.getResourceAsStream(name)) {
+            return inputStream == null ? null : new String(inputStream.readAllBytes());
         }
     }
 }
@@ -125,12 +126,11 @@ class SparkPatchClassTransformer implements ClassFileTransformer {
         return new ClassFile(new DataInputStream(new ByteArrayInputStream(classBytes)));
     }
     static Optional<ClassFile> loadClassFile(String classFile) throws IOException {
-        ClassLoader classLoader = SparkPatchClassTransformer.class.getClassLoader();
-        if (classLoader.getResource(classFile) == null) {
-            return Optional.empty();
+        try (var inputStream = SparkPatchClassTransformer.class.getClassLoader().getResourceAsStream(classFile)) {
+            return inputStream == null
+                    ? Optional.empty()
+                    : Optional.of(loadClassFile(inputStream.readAllBytes()));
         }
-        byte[] patchSourceBytes = IOUtils.resourceToByteArray(classFile, classLoader);
-        return Optional.of(loadClassFile(patchSourceBytes));
     }
 
     static byte[] serializeClass(ClassFile cf) throws IOException {

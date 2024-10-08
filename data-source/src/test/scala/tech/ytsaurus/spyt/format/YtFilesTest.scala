@@ -2,13 +2,16 @@ package tech.ytsaurus.spyt.format
 
 import org.apache.spark.sql.Row
 import org.scalatest.{FlatSpec, Matchers}
+import tech.ytsaurus.core.tables.{ColumnValueType, TableSchema}
 import tech.ytsaurus.spyt.YtReader
 import tech.ytsaurus.spyt.test.{LocalSpark, TestUtils, TmpDir}
 import tech.ytsaurus.spyt.wrapper.YtWrapper
 
 import java.io.File
 import java.nio.charset.StandardCharsets
-import java.nio.file.{Files, Path, Paths}
+import java.nio.file.Files
+import java.util.stream.Collectors.toList
+import scala.collection.JavaConverters._
 import scala.concurrent.duration._
 import scala.language.postfixOps
 
@@ -59,8 +62,40 @@ class YtFilesTest extends FlatSpec with Matchers with LocalSpark with TmpDir wit
     )
   }
 
-  it should "read large csv" ignore {
+  it should "read large csv" in {
     writeFileFromResource("test.csv", tmpPath)
     spark.read.csv(s"yt:/$tmpPath").count() shouldEqual 100000
+  }
+
+  it should "read table from yt and write json files to external storage" in {
+    val tableSchema = TableSchema.builder()
+      .addValue("id", ColumnValueType.INT64)
+      .addValue("value", ColumnValueType.STRING)
+      .build()
+
+    writeTableFromYson(Seq(
+      """{id = 1; value = "value 1"}""",
+      """{id = 2; value = "value 2"}""",
+      """{id = 3; value = "value 3"}""",
+    ), tmpPath, tableSchema)
+
+    val df = spark.read.yt(tmpPath)
+    val tmpDirPath = Files.createTempDirectory("test_parquet_write")
+    val resultPath = tmpDirPath.resolve("result")
+
+    df.write.json(f"file://${resultPath}")
+
+    Files.list(resultPath).filter(_.getFileName.toString == "_SUCCESS").count() shouldBe 1L
+    val result = Files.list(resultPath)
+      .filter(_.toString.endsWith(".json"))
+      .flatMap(p => Files.readAllLines(p).stream())
+      .sorted()
+      .collect(toList[String]).asScala
+
+    result should contain theSameElementsInOrderAs Seq(
+      """{"id":1,"value":"value 1"}""",
+      """{"id":2,"value":"value 2"}""",
+      """{"id":3,"value":"value 3"}"""
+    )
   }
 }

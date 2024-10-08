@@ -13,14 +13,15 @@ import tech.ytsaurus.spyt.fs.path.YPathEnriched
 import tech.ytsaurus.spyt.wrapper.YtWrapper
 import tech.ytsaurus.client.{ApiServiceTransaction, CompoundClient}
 import tech.ytsaurus.spyt.exceptions._
-import tech.ytsaurus.spyt.format.YtOutputCommitter._
+import tech.ytsaurus.spyt.format.YtOutputCommitProtocol._
 import tech.ytsaurus.spyt.format.conf.SparkYtConfiguration.Write.DynBatchSize
 import tech.ytsaurus.spyt.fs.conf.ConfigEntry
 import tech.ytsaurus.spyt.wrapper.client.YtClientProvider
 
-class YtOutputCommitter(jobId: String,
-                        outputPath: String,
-                        dynamicPartitionOverwrite: Boolean) extends FileCommitProtocol with Serializable {
+class YtOutputCommitProtocol(jobId: String,
+                             outputPath: String,
+                             dynamicPartitionOverwrite: Boolean) extends FileCommitProtocol with Serializable {
+
   private val rootPath = YPathEnriched.fromPath(new Path(outputPath))
   private val tmpRichPath = rootPath.withName(rootPath.name + "_tmp")
 
@@ -106,7 +107,7 @@ class YtOutputCommitter(jobId: String,
     implicit val ytClient: CompoundClient = yt(conf)
     initWrittenTables()  // Executors will have null value after deserialization
     if (!isDynamicTable(conf)) {
-      val parent = YtOutputCommitter.getGlobalWriteTransaction(conf)
+      val parent = YtOutputCommitProtocol.getGlobalWriteTransaction(conf)
       createTransaction(conf, Transaction, Some(parent))
     }
   }
@@ -148,7 +149,7 @@ class YtOutputCommitter(jobId: String,
     val conf = jobContext.getConfiguration
     implicit val ytClient: CompoundClient = yt(conf)
     if (!isDynamicTable(conf)) {
-      withTransaction(YtOutputCommitter.getGlobalWriteTransaction(conf)) { transaction =>
+      withTransaction(YtOutputCommitProtocol.getGlobalWriteTransaction(conf)) { transaction =>
         renameTmpPartitionTables(taskCommits.map(_.obj.asInstanceOf[TaskMessage]), Some(transaction))
         if (isTableSorted(conf)) {
           concatenateSortedTables(conf, transaction)
@@ -193,7 +194,7 @@ class YtOutputCommitter(jobId: String,
       } else {
         // In case of dynamic partition we will write to another table and then rename with overwrite
         val p = if (dynamicPartitionOverwrite) fullPath.withName(tmpPartitionPrefix + fullPath.name) else fullPath
-        setupTable(p, conf, YtOutputCommitter.getGlobalWriteTransaction(conf))
+        setupTable(p, conf, YtOutputCommitProtocol.getGlobalWriteTransaction(conf))
         p
       }
     } else {
@@ -208,7 +209,7 @@ class YtOutputCommitter(jobId: String,
   }
 }
 
-object YtOutputCommitter {
+object YtOutputCommitProtocol {
   import tech.ytsaurus.spyt.format.conf.SparkYtInternalConfiguration._
 
   // These messages will be sent from successful tasks to a driver

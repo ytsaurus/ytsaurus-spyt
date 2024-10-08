@@ -29,7 +29,7 @@ class YtOutputWriterFactory(ytClientConf: YtClientConfiguration,
     if (YtWrapper.isDynamicTable(path.toStringYPath)) {
       new YtDynamicTableWriter(path, dataSchema, writeConfiguration, options)
     } else {
-      val transaction = YtOutputCommitter.getWriteTransaction(context.getConfiguration)
+      val transaction = YtOutputCommitProtocol.getWriteTransaction(context.getConfiguration)
       val richPath = path.withTransaction(transaction)
       new YtOutputWriter(richPath, dataSchema, writeConfiguration, options)
     }

@@ -94,10 +94,6 @@ def latest_compatible_spyt_version(version, client=None):
     return max(compatible_spyt_versions, key=SpytVersion)
 
 
-def python_bin_path(global_conf, version):
-    return global_conf["python_cluster_paths"].get(version)
-
-
 def worker_num_limit(global_conf):
     return global_conf.get("worker_num_limit", 1000)
 

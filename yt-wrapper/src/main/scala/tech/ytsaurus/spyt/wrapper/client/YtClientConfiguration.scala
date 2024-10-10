@@ -14,7 +14,6 @@ import scala.util.{Failure, Success, Try}
 
 @SerialVersionUID(6764302982752098915L)
 case class YtClientConfiguration(proxy: String,
-                                 user: String,
                                  token: String,
                                  timeout: Duration,
                                  proxyRole: Option[String],
@@ -41,7 +40,7 @@ case class YtClientConfiguration(proxy: String,
 
   def isHttps: Boolean = proxyUrl.toOption.exists(_.getProtocol == "https")
 
-  def clientAuth: YTsaurusClientAuth = YTsaurusClientAuth.builder().setUser(user).setToken(token).build()
+  def clientAuth: YTsaurusClientAuth = YTsaurusClientAuth.builder().setToken(token).build()
 
   def replaceProxy(newProxy: Option[String]): YtClientConfiguration = {
     if (newProxy.isDefined && newProxy.get != proxy) {
@@ -71,7 +70,6 @@ object YtClientConfiguration {
       getByName("proxy").orElse(sys.env.get("YT_PROXY")).getOrElse(
         throw new IllegalArgumentException("Proxy must be specified")
       ),
-      getByName("user").orElse(sys.env.get("YT_SECURE_VAULT_YT_USER")).getOrElse(DefaultRpcCredentials.user),
       getByName("token").orElse(sys.env.get("YT_SECURE_VAULT_YT_TOKEN")).getOrElse(DefaultRpcCredentials.token),
       getByName("timeout").map(Utils.parseDuration).getOrElse(60 seconds),
       getByName("proxyRole"),
@@ -104,13 +102,11 @@ object YtClientConfiguration {
 
   def default(proxy: String): YtClientConfiguration = default(
     proxy = proxy,
-    user = DefaultRpcCredentials.user,
     token = DefaultRpcCredentials.token
   )
 
-  def default(proxy: String, user: String, token: String): YtClientConfiguration = YtClientConfiguration(
+  def default(proxy: String, token: String): YtClientConfiguration = YtClientConfiguration(
     proxy = proxy,
-    user = user,
     token = token,
     timeout = 5 minutes,
     proxyRole = None,
@@ -121,7 +117,6 @@ object YtClientConfiguration {
   )
 
   def create(proxy: String,
-             user: String,
              token: String,
              timeout: JDuration,
              proxyRole: String,
@@ -129,7 +124,7 @@ object YtClientConfiguration {
              masterWrapperUrl: String,
              extendedFileTimeout: Boolean,
              proxyNetworkName: Option[String] = None) = new YtClientConfiguration(
-    proxy, user, token, toScalaDuration(timeout),
+    proxy, token, toScalaDuration(timeout),
     Option(proxyRole), byop, Option(masterWrapperUrl), extendedFileTimeout, proxyNetworkName
   )
 }

@@ -31,7 +31,6 @@ trait LocalYtClient extends LocalYt {
 
   private val conf: YtClientConfiguration = YtClientConfiguration(
     proxy = LocalYt.proxy,
-    user = "root",
     token = "",
     timeout = 5 minutes,
     proxyRole = None,

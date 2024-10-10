@@ -106,7 +106,7 @@ class ExtendedSchemaConverterTest extends AnyFlatSpec with Matchers
       structField("tuple", StructType(Seq(StructField("_1", BooleanType, nullable = false), StructField("_2", DateType, nullable = false))), nullable = false),
       structField("variantOverStruct", StructType(Seq(StructField("_vc", IntegerType, metadata = new MetadataBuilder().putBoolean("optional", false).build()),
         StructField("_vd", TimestampType, metadata = new MetadataBuilder().putBoolean("optional", false).build()))), nullable = false),
-      structField("variantOverTuple", StructType(Seq(StructField("_v_1", FloatType, metadata = new MetadataBuilder().putBoolean("optional", false).build()),
+      structField("variantOverTuple", StructType(Seq(StructField("_v_1", DoubleType, metadata = new MetadataBuilder().putBoolean("optional", false).build()),
         StructField("_v_2", LongType, metadata = new MetadataBuilder().putBoolean("optional", false).build()))), nullable = false)
     ))
   }

@@ -26,7 +26,7 @@ case class YtTableSparkSettings(configuration: Configuration) extends YtTableSet
 
   private def writeSchemaConverter = WriteSchemaConverter(configuration)
 
-  private def schema: StructType = configuration.ytConf(Schema).sparkType
+  private def schema: StructType = configuration.ytConf(Schema).sparkType.topLevel.asInstanceOf[StructType]
 
   override def ytSchema: YTreeNode = writeSchemaConverter.ytLogicalSchema(schema, sortOption)
 

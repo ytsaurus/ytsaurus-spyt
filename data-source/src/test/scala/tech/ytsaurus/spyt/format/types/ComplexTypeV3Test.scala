@@ -1,5 +1,6 @@
 package tech.ytsaurus.spyt.format.types
 
+import org.apache.spark.sql.functions.element_at
 import org.apache.spark.sql.types._
 import org.apache.spark.sql.v2.YtUtils
 import org.apache.spark.sql.{DataFrameReader, Row}
@@ -286,6 +287,99 @@ class ComplexTypeV3Test extends AnyFlatSpec with Matchers with LocalSpark with T
 
     val res = spark.read.option(YtUtils.Options.PARSING_TYPE_V3, value = true).yt(tmpPath)
     res.collect() should contain theSameElementsAs data.map(x => Row(Row(x: _*)))
+  }
+
+  it should "read nested float values" in {
+    val tableSchema = TableSchema.builder()
+      .addValue("id", TiType.int64())
+      .addValue("plain_value_f", TiType.floatType())
+      .addValue("plain_value_d", TiType.doubleType())
+      .addValue("nested_value_f", TiType.dict(TiType.utf8(), TiType.floatType()))
+      .addValue("nested_value_d", TiType.dict(TiType.utf8(), TiType.doubleType()))
+      .addValue("list_f", TiType.list(TiType.floatType()))
+      .addValue("opt_f", TiType.optional(TiType.floatType()))
+      .addValue("struct_f", TiType.struct(
+        TiType.member("key", TiType.string()), TiType.member("f_value", TiType.floatType())
+      ))
+      .addValue("tuple_f", TiType.tuple(TiType.floatType(), TiType.floatType()))
+      .build()
+
+    def createRow(id: Long, pvF: Float, pvD: Double, nvF: Map[String, Float], nvD: Map[String, Double],
+                  listF: List[Float], optF: Option[Float], structF: (String, Float), tupleF: (Float, Float)) = {
+      val nvFyson = nvF.foldLeft(YTree.listBuilder()) { case (builder, (key, floatValue)) =>
+        builder.value(YTree.listBuilder().value(key).value(floatValue).endList().build())
+      }.endList().build()
+
+      val nvDyson = nvD.foldLeft(YTree.listBuilder()) { case (builder, (key, doubleValue)) =>
+        builder.value(YTree.listBuilder().value(key).value(doubleValue).endList().build())
+      }.endList().build()
+
+      val listFyson = listF.foldLeft(YTree.listBuilder())((builder, fValue) => builder.value(fValue)).endList().build()
+      val structFyson = YTree.listBuilder().value(structF._1).value(structF._2).endList().build()
+      val tupleFYson = YTree.listBuilder().value(tupleF._1).value(tupleF._2).endList().build()
+
+      new UnversionedRow(java.util.List.of[UnversionedValue](
+        new UnversionedValue(0, ColumnValueType.INT64, false, id),
+        new UnversionedValue(1, ColumnValueType.DOUBLE, false, pvF.toDouble),
+        new UnversionedValue(2, ColumnValueType.DOUBLE, false, pvD),
+        new UnversionedValue(3, ColumnValueType.COMPOSITE, false, nvFyson.toBinary),
+        new UnversionedValue(4, ColumnValueType.COMPOSITE, false, nvDyson.toBinary),
+        new UnversionedValue(5, ColumnValueType.COMPOSITE, false, listFyson.toBinary),
+        new UnversionedValue(6, if (optF.isDefined) ColumnValueType.DOUBLE else ColumnValueType.NULL, false,
+          optF.map(_.toDouble).orNull),
+        new UnversionedValue(7, ColumnValueType.COMPOSITE, false, structFyson.toBinary),
+        new UnversionedValue(8, ColumnValueType.COMPOSITE, false, tupleFYson.toBinary)
+      ))
+    }
+
+    writeTableFromURow(Seq(
+      createRow(1, 1.1f, 1.3, Map("key1" -> 2.3f, "key2" -> 4.5f), Map("key3" -> 6.7, "key4" -> 8.9), List(1.2f),
+        Some(4.5f), "some_key" -> 6.7f, (8.1f, 9.2f)),
+      createRow(2, 2.2f, 2.4, Map("key1" -> 2.4f, "key2" -> 4.6f), Map("key3" -> 6.8, "key4" -> 8.8), List(3.4f, 5.6f),
+        Some(6.7f), "some_key" -> 7.7f, (6.1f, 7.4f)),
+      createRow(3, 3.3f, 3.5, Map("key1" -> 2.5f, "key2" -> 4.7f), Map("key3" -> 6.9, "key4" -> 8.7),
+        List(7.8f, 9.1f, 2.3f), None, "some_key" -> 8.7f, (5.3f, 8.2f))
+    ), tmpPath, tableSchema)
+
+    val df = spark.read.option(YtUtils.Options.PARSING_TYPE_V3, value = true).yt(tmpPath)
+    df.schema.fields.map(_.copy(metadata = Metadata.empty)) should contain theSameElementsAs Seq(
+      StructField("id", LongType, nullable = false),
+      StructField("plain_value_f", FloatType, nullable = false),
+      StructField("plain_value_d", DoubleType, nullable = false),
+      StructField("nested_value_f", MapType(StringType, DoubleType, valueContainsNull = false), nullable = false),
+      StructField("nested_value_d", MapType(StringType, DoubleType, valueContainsNull = false), nullable = false),
+      StructField("list_f", ArrayType(DoubleType, containsNull = false), nullable = false),
+      StructField("opt_f", FloatType, nullable = true),
+      StructField("struct_f", StructType(Seq(
+        StructField("key", StringType, nullable = false),
+        StructField("f_value", DoubleType, nullable = false)
+      )), nullable = false),
+      StructField("tuple_f", StructType(Seq(
+        StructField("_1", DoubleType, nullable = false),
+        StructField("_2", DoubleType, nullable = false)
+      )), nullable = false)
+    )
+
+    import spark.implicits._
+    val resultDf = df.select(
+      $"plain_value_f",
+      $"plain_value_d".cast(FloatType),
+      $"nested_value_d".getField("key3").cast(FloatType),
+      $"nested_value_f".getField("key1").cast(FloatType),
+      element_at($"list_f", 1).cast(FloatType),
+      $"opt_f".cast(FloatType),
+      $"struct_f.f_value".cast(FloatType),
+      $"tuple_f._1".cast(FloatType),
+      $"tuple_f._2".cast(FloatType)
+    )
+
+    val result = resultDf.collect()
+
+    result should contain theSameElementsAs Seq(
+      Row(1.1f, 1.3f, 6.7f, 2.3f, 1.2f, 4.5f, 6.7f, 8.1f, 9.2f),
+      Row(2.2f, 2.4f, 6.8f, 2.4f, 3.4f, 6.7f, 7.7f, 6.1f, 7.4f),
+      Row(3.3f, 3.5f, 6.9f, 2.5f, 7.8f, null, 8.7f, 5.3f, 8.2f)
+    )
   }
 
   it should "write decimal to yt" in {

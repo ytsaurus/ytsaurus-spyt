@@ -9,7 +9,14 @@ import tech.ytsaurus.typeinfo.{TiType, TypeName}
 
 import scala.annotation.tailrec
 
-case class DataTypeHolder(dataType: DataType, nullable: Boolean = false)
+sealed trait SparkType {
+  def topLevel: DataType
+  def innerLevel: DataType
+}
+case class SingleSparkType(topLevel: DataType) extends SparkType {
+  override def innerLevel: DataType = topLevel
+}
+case class TopInnerSparkTypes(topLevel: DataType, innerLevel: DataType) extends SparkType
 
 sealed trait YtLogicalType {
   def value: Int = columnValueType.getValue
@@ -34,11 +41,9 @@ sealed trait YtLogicalType {
 
   def tiType: TiType
 
-  def sparkType: DataType
+  def sparkType: SparkType
 
   def nullable: Boolean = false
-
-  def dataTypeHolder: DataTypeHolder = DataTypeHolder(sparkType, nullable)
 
   def alias: YtLogicalTypeAlias
 
@@ -54,10 +59,14 @@ sealed abstract class AtomicYtLogicalType(name: String,
                                           override val value: Int,
                                           val columnValueType: ColumnValueType,
                                           val tiType: TiType,
-                                          val sparkType: DataType,
-                                          otherAliases: Seq[String] = Seq.empty,
-                                          override val arrowSupported: Boolean = true)
+                                          val sparkType: SparkType,
+                                          otherAliases: Seq[String],
+                                          override val arrowSupported: Boolean)
   extends YtLogicalType with YtLogicalTypeAlias {
+
+  def this(name: String, value: Int, columnValueType: ColumnValueType, tiType: TiType, sparkType: DataType,
+           otherAliases: Seq[String] = Seq.empty, arrowSupported: Boolean = true) =
+    this(name, value, columnValueType, tiType, SingleSparkType(sparkType), otherAliases, arrowSupported)
 
   override def alias: YtLogicalTypeAlias = this
   override def aliases: Seq[String] = name +: otherAliases
@@ -81,7 +90,8 @@ object YtLogicalType {
 
   case object Int64 extends AtomicYtLogicalType("int64", 0x03, ColumnValueType.INT64, TiType.int64(), LongType)
   case object Uint64 extends AtomicYtLogicalType("uint64", 0x04, ColumnValueType.UINT64, TiType.uint64(), sparkTypeFor(TiType.uint64()))
-  case object Float extends AtomicYtLogicalType("float", 0x05, ColumnValueType.DOUBLE, TiType.floatType(), FloatType, arrowSupported = false)
+  case object Float extends AtomicYtLogicalType("float", 0x05, ColumnValueType.DOUBLE, TiType.floatType(),
+    TopInnerSparkTypes(FloatType, DoubleType), Seq.empty, arrowSupported = false)
   case object Double extends AtomicYtLogicalType("double", 0x05, ColumnValueType.DOUBLE, TiType.doubleType(), DoubleType)
   case object Boolean extends AtomicYtLogicalType("boolean", 0x06, ColumnValueType.BOOLEAN, TiType.bool(), BooleanType, Seq("bool"))
 
@@ -123,7 +133,7 @@ object YtLogicalType {
 
 
   case class Decimal(precision: Int, scale: Int) extends CompositeYtLogicalType {
-    override def sparkType: DataType = DecimalType(precision, scale)
+    override def sparkType: SparkType = SingleSparkType(DecimalType(precision, scale))
 
     override def alias: CompositeYtLogicalTypeAlias = Decimal
 
@@ -139,7 +149,7 @@ object YtLogicalType {
 
     override def tiType: TiType = TiType.optional(inner.tiType)
 
-    override def sparkType: DataType = inner.sparkType
+    override def sparkType: SparkType = inner.sparkType
 
     override def nullable: Boolean = true
 
@@ -152,8 +162,15 @@ object YtLogicalType {
 
   case object Optional extends CompositeYtLogicalTypeAlias(TypeName.Optional.getWireName)
 
+  private def resolveInnerType(sparkType: SparkType): DataType = sparkType match {
+    case SingleSparkType(sType) => sType
+    case TopInnerSparkTypes(_, innerLevel) => innerLevel
+  }
+
   case class Dict(dictKey: YtLogicalType, dictValue: YtLogicalType) extends CompositeYtLogicalType {
-    override def sparkType: DataType = MapType(dictKey.sparkType, dictValue.sparkType, dictValue.nullable)
+    override def sparkType: SparkType = SingleSparkType(
+      MapType(dictKey.sparkType.innerLevel, dictValue.sparkType.innerLevel, dictValue.nullable)
+    )
 
     override def tiType: TiType = TiType.dict(dictKey.tiType, dictValue.tiType)
 
@@ -163,7 +180,7 @@ object YtLogicalType {
   case object Dict extends CompositeYtLogicalTypeAlias(TypeName.Dict.getWireName)
 
   case class Array(inner: YtLogicalType) extends CompositeYtLogicalType {
-    override def sparkType: DataType = ArrayType(inner.sparkType, inner.nullable)
+    override def sparkType: SparkType = SingleSparkType( ArrayType(inner.sparkType.innerLevel, inner.nullable))
 
     override def tiType: TiType = TiType.list(inner.tiType)
 
@@ -173,8 +190,8 @@ object YtLogicalType {
   case object Array extends CompositeYtLogicalTypeAlias(TypeName.List.getWireName)
 
   case class Struct(fields: Seq[(String, YtLogicalType, Metadata)]) extends CompositeYtLogicalType {
-    override def sparkType: StructType = StructType(fields
-      .map { case (name, ytType, meta) => getStructField(name, ytType, meta) })
+    override def sparkType: SparkType = SingleSparkType(StructType(fields
+      .map { case (name, ytType, meta) => getStructField(name, ytType, meta, topLevel = false) }))
 
     import scala.collection.JavaConverters._
     override def tiType: TiType = TiType.struct(
@@ -187,8 +204,8 @@ object YtLogicalType {
   case object Struct extends CompositeYtLogicalTypeAlias(TypeName.Struct.getWireName)
 
   case class Tuple(elements: Seq[(YtLogicalType, Metadata)]) extends CompositeYtLogicalType {
-    override def sparkType: DataType = StructType(elements.zipWithIndex
-      .map { case ((ytType, meta), index) => getStructField(s"_${1 + index}", ytType, meta) })
+    override def sparkType: SparkType = SingleSparkType(StructType(elements.zipWithIndex
+      .map { case ((ytType, meta), index) => getStructField(s"_${1 + index}", ytType, meta, topLevel = false) }))
 
     import scala.collection.JavaConverters._
     override def tiType: TiType = TiType.tuple(
@@ -201,7 +218,7 @@ object YtLogicalType {
   case object Tuple extends CompositeYtLogicalTypeAlias(TypeName.Tuple.getWireName)
 
   case class Tagged(inner: YtLogicalType, tag: String) extends CompositeYtLogicalType {
-    override def sparkType: DataType = inner.sparkType
+    override def sparkType: SparkType = inner.sparkType
 
     override def tiType: TiType = TiType.tagged(inner.tiType, tag)
 
@@ -211,8 +228,8 @@ object YtLogicalType {
   case object Tagged extends CompositeYtLogicalTypeAlias(TypeName.Tagged.getWireName)
 
   case class VariantOverStruct(fields: Seq[(String, YtLogicalType, Metadata)]) extends CompositeYtLogicalType {
-    override def sparkType: DataType = StructType(fields.map { case (name, ytType, meta) =>
-      getStructField(s"_v$name", ytType, meta, forcedNullability = Some(true)) })
+    override def sparkType: SparkType = SingleSparkType(StructType(fields.map { case (name, ytType, meta) =>
+      getStructField(s"_v$name", ytType, meta, forcedNullability = Some(true), topLevel = false) }))
 
     import scala.collection.JavaConverters._
     override def tiType: TiType = TiType.variantOverStruct(
@@ -223,8 +240,10 @@ object YtLogicalType {
   }
 
   case class VariantOverTuple(fields: Seq[(YtLogicalType, Metadata)]) extends CompositeYtLogicalType {
-    override def sparkType: DataType = StructType(fields.zipWithIndex.map { case ((ytType, meta), index) =>
-      getStructField(s"_v_${1 + index}", ytType, meta, forcedNullability = Some(true)) })
+    override def sparkType: SparkType = SingleSparkType(
+      StructType(fields.zipWithIndex.map { case ((ytType, meta), index) =>
+        getStructField(s"_v_${1 + index}", ytType, meta, forcedNullability = Some(true), topLevel = false) })
+    )
 
     import scala.collection.JavaConverters._
     override def tiType: TiType = TiType.variantOverTuple(
@@ -257,14 +276,14 @@ object YtLogicalType {
   }
 
   def getStructField(name: String, ytType: YtLogicalType, metadata: Metadata = Metadata.empty,
-                     forcedNullability: Option[Boolean] = None): StructField = {
+                     forcedNullability: Option[Boolean] = None, topLevel: Boolean = true): StructField = {
     val metadataBuilder = new MetadataBuilder
     metadataBuilder.withMetadata(metadata)
     addInnerMetadata(metadataBuilder, ytType)
     forcedNullability.foreach(_ => metadataBuilder.putBoolean(MetadataFields.OPTIONAL, ytType.nullable))
     StructField(
       name,
-      ytType.sparkType,
+      if (topLevel) ytType.sparkType.topLevel else ytType.sparkType.innerLevel,
       forcedNullability.getOrElse(ytType.nullable),
       metadataBuilder.build()
     )

@@ -189,11 +189,8 @@ class Environment(object):
     IS_CLUSTER_PYTHON_PATH = False
 
     @staticmethod
-    def configure_python_path(python_cluster_paths):
-        python_version = "%d.%d" % sys.version_info[:2]
-        if python_version not in python_cluster_paths:
-            raise RuntimeError("Python version {} is not supported".format(python_version))
-        os.environ["PYSPARK_PYTHON"] = python_cluster_paths[python_version]
+    def configure_python_path():
+        os.environ["PYSPARK_PYTHON"] = "python%d.%d" % sys.version_info[:2]
         Environment.IS_CLUSTER_PYTHON_PATH = True
 
     @staticmethod
@@ -274,7 +271,7 @@ def _build_spark_conf(num_executors=None,
     set_conf(spark_conf, remote_conf["spark_conf"])
 
     if is_client_mode:
-        Environment.configure_python_path(remote_conf["python_cluster_paths"])
+        Environment.configure_python_path()
 
     spark_cluster_conf = read_cluster_conf(spark_cluster_conf_path, client=client).get("spark_conf") or {}
     spark_conf.setAll(spark_cluster_conf.items())

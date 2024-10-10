@@ -25,7 +25,7 @@ except Exception:
 
 from .conf import read_remote_conf, validate_cluster_version, \
     latest_compatible_spyt_version, update_config_inplace, validate_custom_params, validate_mtn_config, \
-    latest_ytserver_proxy_path, read_global_conf, python_bin_path, \
+    latest_ytserver_proxy_path, read_global_conf, \
     worker_num_limit, validate_worker_num, read_cluster_conf, validate_ssd_config, cuda_toolkit_version  # noqa: E402
 from .utils import get_spark_master, base_spark_conf, SparkDiscovery, SparkCluster, call_get_proxy_address_url, \
     parse_bool, _add_conf  # noqa: E402
@@ -155,7 +155,7 @@ def raw_submit(discovery_path, spark_home, spark_args,
     _add_master(discovery, spark_base_args, rest=True, client=client)
     _add_shs_option(discovery, spark_base_args, client=client)
     _add_base_spark_conf(client, discovery, spark_base_args)
-    _add_python_version(python_version, spark_base_args, client)
+    _add_python_version(python_version, spark_base_args)
     _add_dedicated_driver_op_conf(spark_base_args, dedicated_driver_op)
     _add_ipv6_preference(ipv6_preference_enabled, spark_base_args)
     spark_env = _create_spark_env(client, spark_home)
@@ -203,17 +203,9 @@ def _add_dedicated_driver_op_conf(spark_args, dedicated_driver_op):
         }, spark_args)
 
 
-def _add_python_version(python_version, spark_args, client):
+def _add_python_version(python_version, spark_args):
     if python_version is not None:
-        global_conf = read_global_conf(client=client)
-        python_path = python_bin_path(global_conf, python_version)
-        if python_path:
-            _add_conf({
-                "spark.pyspark.python": python_path
-            }, spark_args)
-        else:
-            raise RuntimeError(
-                "Interpreter for python version `{}` is not found".format(python_version))
+        _add_conf({"spark.pyspark.python": f"python{python_version}"}, spark_args)
 
 
 def _add_ipv6_preference(ipv6_preference_enabled, spark_args):

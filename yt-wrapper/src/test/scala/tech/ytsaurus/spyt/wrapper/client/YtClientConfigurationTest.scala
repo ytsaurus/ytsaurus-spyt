@@ -8,7 +8,7 @@ import scala.concurrent.duration.Duration
 class YtClientConfigurationTest extends AnyFlatSpec with Matchers {
 
   private val baseConf =
-    YtClientConfiguration("proxy", "user", "token", Duration.Zero, None, null, None, extendedFileTimeout = false, proxyNetworkName = None)
+    YtClientConfiguration("proxy", "token", Duration.Zero, None, null, None, extendedFileTimeout = false, proxyNetworkName = None)
 
   "YtClientConfiguration" should "parse short proxy" in {
     val conf = baseConf.copy(proxy = "short")

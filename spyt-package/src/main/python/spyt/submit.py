@@ -149,7 +149,7 @@ class SparkSubmissionClient(object):
         return instance
 
     def __init__(self, gateway, proxy, discovery_path, user, token):
-        self._jclient = gateway.jvm.tech.ytsaurus.spyt.submit.SubmissionClient(proxy, discovery_path, user, token)
+        self._jclient = gateway.jvm.tech.ytsaurus.spyt.submit.SubmissionClient(proxy, discovery_path, token)
         self.gateway = gateway
 
     def new_launcher(self):

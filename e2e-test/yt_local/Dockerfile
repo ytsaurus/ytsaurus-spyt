@@ -1,4 +1,4 @@
-FROM ghcr.io/ytsaurus/local:dev-24.1
+FROM ghcr.io/ytsaurus/local:stable
 
 WORKDIR /tmp
 

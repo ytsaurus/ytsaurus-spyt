@@ -2,6 +2,7 @@
 package org.apache.spark.deploy.ytsaurus
 
 import org.apache.spark.SparkConf
+import org.apache.spark.deploy.SparkSubmit
 import tech.ytsaurus.client.rpc.YTsaurusClientAuth
 
 object YTsaurusUtils {
@@ -22,4 +23,7 @@ object YTsaurusUtils {
       (user, token)
     }
   }
+
+  // Increasing visibility of SparkSubmit.isShell method
+  def isShell(res: String): Boolean = SparkSubmit.isShell(res)
 }

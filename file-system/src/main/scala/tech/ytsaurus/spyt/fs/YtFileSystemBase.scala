@@ -71,7 +71,7 @@ abstract class YtFileSystemBase extends FileSystem with LogLazy {
     YtWrapper.createDir(path.toYPath.parent(), path.transaction, ignoreExisting = true)(yt)
 
     def createFile(ytRpcClient: Option[YtRpcClient], ytClient: CompoundClient): FSDataOutputStream = {
-      YtWrapper.createFile(path.toYPath, path.transaction, overwrite)(ytClient)
+      YtWrapper.createFile(path.toYPath, path.transaction, overwrite, recursive = false)(ytClient)
       statistics.incrementWriteOps(1)
       val writeFile = YtWrapper.writeFile(path.toYPath, 7 days, ytRpcClient, path.transaction)(ytClient)
       new FSDataOutputStream(writeFile, statistics)

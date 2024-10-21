@@ -1,16 +1,21 @@
 package tech.ytsaurus.spyt.wrapper.file
 
+import org.apache.commons.codec.digest.DigestUtils
+import org.apache.commons.io.IOUtils
+import org.apache.commons.lang3.RandomStringUtils
 import org.slf4j.LoggerFactory
 import tech.ytsaurus.spyt.wrapper.YtJavaConverters._
 import tech.ytsaurus.spyt.wrapper.client.{YtClientUtils, YtRpcClient}
 import tech.ytsaurus.spyt.wrapper.cypress.{YtAttributes, YtCypressUtils}
 import tech.ytsaurus.spyt.wrapper.transaction.YtTransactionUtils
 import tech.ytsaurus.client.CompoundClient
-import tech.ytsaurus.client.request.{CreateNode, ReadFile, WriteFile}
+import tech.ytsaurus.client.request.{CreateNode, ExistsNode, GetFileFromCache, PutFileToCache, ReadFile, RemoveNode, WriteFile}
 import tech.ytsaurus.core.cypress.{CypressNodeType, YPath}
+import tech.ytsaurus.spyt.wrapper.YtWrapper
 import tech.ytsaurus.ysontree.YTreeNode
 
 import java.io.{FileOutputStream, OutputStream}
+import java.nio.file.{Files, Paths}
 import java.time.format.DateTimeFormatter
 import java.time.{LocalDateTime, ZoneOffset}
 import scala.concurrent.duration._
@@ -61,29 +66,40 @@ trait YtFileUtils {
 
   def createFile(path: String, transaction: Option[String] = None, force: Boolean = false)
                 (implicit yt: CompoundClient): Unit = {
-    createFile(YPath.simple(formatPath(path)), transaction, force)
+    createFile(YPath.simple(formatPath(path)), transaction, force, recursive = false)
   }
 
-  def createFile(path: YPath, transaction: Option[String], force: Boolean)
+  def createFile(path: YPath, transaction: Option[String], force: Boolean, recursive: Boolean)
                 (implicit yt: CompoundClient): Unit = {
     log.debug(s"Create file: $path, transaction: $transaction")
-    val request = CreateNode.builder().setPath(path).setType(CypressNodeType.FILE).optionalTransaction(transaction).setForce(force)
+    val request = CreateNode.builder()
+      .setPath(path)
+      .setType(CypressNodeType.FILE)
+      .optionalTransaction(transaction)
+      .setForce(force)
+      .setRecursive(recursive)
+      .build()
     yt.createNode(request).join()
   }
 
-  private def writeFileRequest(path: YPath, transaction: Option[String], timeout: Duration): WriteFile.Builder = {
+  private def writeFileRequest(path: YPath,
+                               transaction: Option[String],
+                               timeout: Duration,
+                               computeMd5: Boolean): WriteFile = {
     WriteFile.builder()
       .setPath(path.toString)
       .setWindowSize(10000000L)
       .setPacketSize(1000000L)
       .optionalTransaction(transaction)
       .setTimeout(toJavaDuration(timeout))
+      .setComputeMd5(computeMd5)
+      .build()
   }
 
-  def writeFile(path: YPath, timeout: Duration, ytRpcClient: Option[YtRpcClient], transaction: Option[String])
-               (implicit yt: CompoundClient): OutputStream = {
+  def writeFile(path: YPath, timeout: Duration, ytRpcClient: Option[YtRpcClient],
+                transaction: Option[String], computeMd5: Boolean = false)(implicit yt: CompoundClient): OutputStream = {
     log.debug(s"Write file: $path, transaction: $transaction")
-    val writer = yt.writeFile(writeFileRequest(path, transaction, timeout)).join()
+    val writer = yt.writeFile(writeFileRequest(path, transaction, timeout, computeMd5)).join()
     new YtFileOutputStream(writer, ytRpcClient)
   }
 
@@ -138,5 +154,62 @@ trait YtFileUtils {
 
   def modificationTimeTs(attributes: Map[String, YTreeNode]): Long = {
     modificationTimeTs(modificationTime(attributes))
+  }
+
+  /**
+   * This method has almost the same logic as it's python equivalent from here:
+   * https://github.com/ytsaurus/ytsaurus/blob/484207f63474cd94b9a5814e6e687615aa259e11/yt/python/yt/wrapper/file_commands.py#L450
+   * @return
+   */
+  def uploadFileToCache(localFilePath: String, timeout: Duration,
+                        remoteTempFilesDirectory: String)(implicit yt: CompoundClient): String = {
+    val fileInputStream = Files.newInputStream(Paths.get(localFilePath))
+    val md5hash = try {
+      DigestUtils.md5Hex(fileInputStream)
+    } finally {
+      fileInputStream.close()
+    }
+
+    val remoteTempFilesDirectoryPath = YPath.simple(remoteTempFilesDirectory)
+    val cachePath = remoteTempFilesDirectoryPath.child("new_cache")
+    if (!YtWrapper.exists(cachePath)) {
+      YtWrapper.createDir(cachePath, None, ignoreExisting = true)
+    }
+    val existingCachePath = yt
+      .getFileFromCache(GetFileFromCache.builder().setMd5(md5hash).setCachePath(cachePath).build())
+      .join()
+
+    if (existingCachePath.getPath.isPresent) {
+      return existingCachePath.getPath.get().toStableString
+    }
+
+    var destinationName = RandomStringUtils.random(10, true, true)
+    while (yt.existsNode(new ExistsNode(remoteTempFilesDirectoryPath.child(destinationName))).join()) {
+      destinationName = RandomStringUtils.random(10, true, true)
+    }
+
+    val realDestinationPath = remoteTempFilesDirectoryPath.child(destinationName)
+
+    createFile(realDestinationPath, None, force = false, recursive = true)
+    val remoteFileOutputStream = writeFile(realDestinationPath, timeout, None, None, computeMd5 = true)
+    val localFileInputStream = Files.newInputStream(Paths.get(localFilePath))
+    try {
+      IOUtils.copy(localFileInputStream, remoteFileOutputStream)
+    } finally {
+      localFileInputStream.close()
+      remoteFileOutputStream.flush()
+      remoteFileOutputStream.close()
+    }
+
+    val putFileToCacheReq = PutFileToCache.builder()
+      .setFilePath(realDestinationPath)
+      .setCachePath(cachePath)
+      .setMd5(md5hash)
+      .build()
+
+    val putFileToCacheResp = yt.putFileToCache(putFileToCacheReq).join()
+    val destination = putFileToCacheResp.getPath
+    yt.removeNode(RemoveNode.builder().setPath(realDestinationPath).setForce(true).build())
+    destination.toStableString
   }
 }

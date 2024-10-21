@@ -118,6 +118,12 @@ object Config {
     .stringConf
     .createOptional
 
+  val YTSAURUS_REMOTE_TEMP_FILES_DIRECTORY = ConfigBuilder("spark.ytsaurus.remote.temp.files.directory")
+    .doc("Path to temporary directory on Cypress for uploading local files and file cache")
+    .version("3.2.2")
+    .stringConf
+    .createWithDefault("//tmp/yt_wrapper/file_storage")
+
   val SPYT_ANNOTATIONS = "spark.ytsaurus.annotations"
   val SPYT_DRIVER_ANNOTATIONS = "spark.ytsaurus.driver.annotations"
   val SPYT_EXECUTORS_ANNOTATIONS = "spark.ytsaurus.executors.annotations"

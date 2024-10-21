@@ -8,6 +8,7 @@ import org.apache.spark.scheduler.cluster.ytsaurus.YTsaurusOperationManager.{App
 import org.apache.spark.{SparkConf, SparkFunSuite}
 import org.scalatest.BeforeAndAfter
 import org.scalatest.matchers.should.Matchers
+import tech.ytsaurus.spyt.wrapper.file.YtFileUtils
 import tech.ytsaurus.ysontree._
 
 import scala.collection.JavaConverters._
@@ -19,7 +20,7 @@ class YTsaurusOperationManagerSuite extends SparkFunSuite with BeforeAndAfter wi
     conf.set(SUBMIT_PYTHON_FILES, Seq("yt:/path/to/my/super/lib.zip"))
     conf.set(SPARK_PRIMARY_RESOURCE, "yt:///path/to/my/super/app.py")
 
-    val result = YTsaurusOperationManager.applicationFiles(conf)
+    val result = YTsaurusOperationManager.applicationFiles(conf, identity)
 
     result should contain theSameElementsAs
       Seq(ApplicationFile("//path/to/my/super/app.py"), ApplicationFile("//path/to/my/super/lib.zip"))
@@ -31,7 +32,7 @@ class YTsaurusOperationManagerSuite extends SparkFunSuite with BeforeAndAfter wi
     conf.set(SUBMIT_PYTHON_FILES, Seq("/tmp/spark-164a106b-cc57-4bb6-b30f-e67b7bbb8d8a/lib.zip"))
     conf.set(SPARK_PRIMARY_RESOURCE, "yt:///path/to/my/super/app.py")
 
-    val result = YTsaurusOperationManager.applicationFiles(conf)
+    val result = YTsaurusOperationManager.applicationFiles(conf, identity)
 
     result should contain theSameElementsAs
       Seq(ApplicationFile("//path/to/my/super/app.py"), ApplicationFile("//path/to/my/super/lib.zip"))
@@ -42,7 +43,7 @@ class YTsaurusOperationManagerSuite extends SparkFunSuite with BeforeAndAfter wi
     conf.set(JARS, Seq("yt:/path/to/my/super/lib.jar", "yt:///path/to/my/super/app.jar"))
     conf.set(SPARK_PRIMARY_RESOURCE, "yt:///path/to/my/super/app.jar")
 
-    val result = YTsaurusOperationManager.applicationFiles(conf)
+    val result = YTsaurusOperationManager.applicationFiles(conf, identity)
 
     result should contain theSameElementsAs
       Seq(ApplicationFile("//path/to/my/super/lib.jar"), ApplicationFile("//path/to/my/super/app.jar"))
@@ -54,7 +55,7 @@ class YTsaurusOperationManagerSuite extends SparkFunSuite with BeforeAndAfter wi
     conf.set(SUBMIT_PYTHON_FILES, Seq("yt:/path/to/lib.py#dep.py"))
     conf.set(SPARK_PRIMARY_RESOURCE, SparkLauncher.NO_RESOURCE)
 
-    val result = YTsaurusOperationManager.applicationFiles(conf)
+    val result = YTsaurusOperationManager.applicationFiles(conf, identity)
 
     result should contain theSameElementsAs
       Seq(ApplicationFile("//path/lib.tar.gz", Some("unpacked"), isArchive = true),
@@ -65,9 +66,22 @@ class YTsaurusOperationManagerSuite extends SparkFunSuite with BeforeAndAfter wi
     val conf = new SparkConf()
     conf.set(SPARK_PRIMARY_RESOURCE, "spark-shell")
 
-    val result = YTsaurusOperationManager.applicationFiles(conf)
+    val result = YTsaurusOperationManager.applicationFiles(conf, identity)
 
     result shouldBe empty
+  }
+
+  test("Generate application files when using local files that must be uploaded") {
+    val conf = new SparkConf()
+    conf.set(SUBMIT_PYTHON_FILES, Seq("dep.py"))
+    conf.set(SPARK_PRIMARY_RESOURCE, "my-job.py")
+    val uploader = (path: String) => s"uploaded-$path"
+
+    val result = YTsaurusOperationManager.applicationFiles(conf, uploader)
+
+    result should contain theSameElementsAs Seq(
+      ApplicationFile("uploaded-dep.py", Some("dep.py")), ApplicationFile("uploaded-my-job.py",Some("my-job.py"))
+    )
   }
 
   test("Test layer_paths override") {

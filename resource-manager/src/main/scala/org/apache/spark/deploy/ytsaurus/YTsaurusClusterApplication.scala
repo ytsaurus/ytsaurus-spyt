@@ -7,7 +7,8 @@ import org.apache.spark.deploy.SparkApplication
 import org.apache.spark.deploy.ytsaurus.Config.YTSAURUS_DRIVER_OPERATION_DUMP_PATH
 import org.apache.spark.internal.Logging
 import org.apache.spark.scheduler.cluster.ytsaurus.YTsaurusOperationManager
-import org.apache.spark.scheduler.cluster.ytsaurus.YTsaurusOperationManager.{getOperationState, getWebUIAddress, isCompletedState}
+import org.apache.spark.scheduler.cluster.ytsaurus.YTsaurusOperationManager.{getOperation, getOperationState,
+  getWebUIAddress, isCompletedState}
 
 import scala.reflect.io.File
 
@@ -38,7 +39,7 @@ private[spark] class YTsaurusClusterApplication extends SparkApplication with Lo
       conf.get(YTSAURUS_DRIVER_OPERATION_DUMP_PATH).foreach { File(_).writeAll(driverOperation.id.toString) }
       while (!YTsaurusOperationManager.isFinalState(currentState)) {
         Thread.sleep(pingInterval)
-        val opSpec = operationManager.getOperation(driverOperation)
+        val opSpec = getOperation(driverOperation, operationManager.ytClient)
         currentState = getOperationState(opSpec)
         logInfo(s"Operation: ${driverOperation.id}, State: $currentState")
 

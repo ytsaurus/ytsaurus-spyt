@@ -89,6 +89,7 @@ if [ "$deploy" = "true" ]; then
                -e YT_PROXY="localhost:8000" -e YT_USER="root" -e YT_TOKEN="token" \
                -e EXTRA_SPARK_VERSIONS="--use-cache 3.2.2 3.2.4 3.3.0 3.3.4" \
                -v /tmp:/tmp \
+               --rm \
                ghcr.io/ytsaurus/spyt:$spyt_version
 fi;
 

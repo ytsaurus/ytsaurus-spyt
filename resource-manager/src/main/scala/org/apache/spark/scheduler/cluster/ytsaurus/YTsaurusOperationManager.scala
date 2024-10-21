@@ -2,6 +2,7 @@
 package org.apache.spark.scheduler.cluster.ytsaurus
 
 import org.apache.spark.deploy.ytsaurus.Config._
+import org.apache.spark.deploy.ytsaurus.YTsaurusUtils.isShell
 import org.apache.spark.deploy.ytsaurus.{ApplicationArguments, Config, YTsaurusUtils}
 import org.apache.spark.internal.Logging
 import org.apache.spark.internal.config._
@@ -17,11 +18,14 @@ import tech.ytsaurus.client.request.{CompleteOperation, GetOperation, UpdateOper
 import tech.ytsaurus.client.rpc.YTsaurusClientAuth
 import tech.ytsaurus.core.GUID
 import tech.ytsaurus.spyt.wrapper.YtWrapper
+import tech.ytsaurus.spyt.wrapper.file.YtFileUtils
 import tech.ytsaurus.ysontree._
 
+import java.net.URI
 import java.nio.file.Paths
 import scala.collection.JavaConverters._
 import scala.collection.mutable.ArrayBuffer
+import scala.concurrent.duration.DurationInt
 
 
 private[spark] class YTsaurusOperationManager(val ytClient: YTsaurusClient,
@@ -76,7 +80,7 @@ private[spark] class YTsaurusOperationManager(val ytClient: YTsaurusClient,
   def stopExecutors(sc: SparkContext): Unit = {
     sc.conf.getOption(Config.EXECUTOR_OPERATION_ID).foreach { opId =>
       val operation = YTsaurusOperation(GUID.valueOf(opId))
-      if (!isFinalState(getOperationState(getOperation(operation)))) {
+      if (!isFinalState(getOperationState(getOperation(operation, ytClient)))) {
         val completeRequest = CompleteOperation.builder().setOperationId(operation.id).build()
         ytClient.completeOperation(completeRequest).join()
       }
@@ -95,11 +99,6 @@ private[spark] class YTsaurusOperationManager(val ytClient: YTsaurusClient,
     val runningOperation = ytClient.startVanilla(operationSpec).get()
     val operationId = runningOperation.getId
     YTsaurusOperation(operationId)
-  }
-
-  def getOperation(operation: YTsaurusOperation): YTreeNode = {
-    val request = GetOperation.builder().setOperationId(operation.id).build()
-    ytClient.getOperation(request).join()
   }
 
   private[ytsaurus] def createSpec(conf: SparkConf, taskName: String, opParams: OperationParameters): VanillaSpec = {
@@ -137,7 +136,7 @@ private[spark] class YTsaurusOperationManager(val ytClient: YTsaurusClient,
     val sparkJavaOpts = Utils.sparkJavaOpts(conf).map { opt =>
       val Array(k, v) = opt.split("=", 2)
       k + "=\"" + v + "\""
-    }
+    } ++ Seq(s"-D${Config.DRIVER_OPERATION_ID}=$$YT_OPERATION_ID")
 
     val driverOpts = conf.get(DRIVER_JAVA_OPTIONS).getOrElse("")
 
@@ -308,16 +307,6 @@ private[spark] object YTsaurusOperationManager extends Logging {
 
       val portoLayers = getPortoLayers(conf, releaseConfig.getListO("layer_paths").orElse(YTree.listBuilder().buildList()))
 
-      val filePaths = releaseConfig.getListO("file_paths").orElse(YTree.listBuilder().buildList())
-      val pythonPaths = globalConfig.getMapO("python_cluster_paths").orElse(YTree.mapBuilder().buildMap())
-      val cudaVersion = globalConfig.getStringO("cuda_toolkit_version").orElse("11.0")
-
-      applicationFiles(conf).foreach { appFile =>
-        val node = YTree.stringNode(appFile.ytPath)
-        node.putAttribute("file_name", YTree.stringNode(appFile.downloadName))
-        filePaths.add(node)
-      }
-
       val sv = org.apache.spark.SPARK_VERSION_SHORT
       val (svMajor, svMinor, svPatch) = VersionUtils.majorMinorPatchVersion(sv).get
       val distrRootPath = Seq(conf.get(SPARK_DISTRIBUTIVES_PATH), svMajor, svMinor, svPatch).mkString("/")
@@ -326,13 +315,29 @@ private[spark] object YTsaurusOperationManager extends Logging {
         distrRootContents.asScala.find(_.stringValue().endsWith(".tgz"))
       }
 
-      distrTgzOpt match {
-        case Some(sparkTgz) => filePaths.add(YTree.stringNode(s"$distrRootPath/${sparkTgz.stringValue()}"))
-        case _ => throw new SparkException(s"Spark $sv tgz distributive doesn't exist " +
-          s"at path $distrRootPath on cluster $ytProxy")
+      val filePaths = if (conf.contains(DRIVER_OPERATION_ID)) {
+        val driverOpId = conf.get(DRIVER_OPERATION_ID)
+        val driverOperation = getOperation(YTsaurusOperation(GUID.valueOf(driverOpId)), ytClient)
+        getDriverFilePaths(driverOperation)
+      } else {
+        val filePathsList = releaseConfig.getListO("file_paths").orElse(YTree.listBuilder().buildList())
+
+        applicationFiles(conf, localFileToCacheUploader(conf, ytClient)).foreach { appFile =>
+          val node = YTree.stringNode(appFile.ytPath)
+          node.putAttribute("file_name", YTree.stringNode(appFile.downloadName))
+          filePathsList.add(node)
+        }
+
+        distrTgzOpt match {
+          case Some(sparkTgz) => filePathsList.add(YTree.stringNode(s"$distrRootPath/${sparkTgz.stringValue()}"))
+          case _ => throw new SparkException(s"Spark $sv tgz distributive doesn't exist " +
+            s"at path $distrRootPath on cluster $ytProxy")
+        }
+
+        filePathsList
       }
 
-      val sparkTgz = distrTgzOpt.get.stringValue()
+      val pythonPaths = globalConfig.getMapO("python_cluster_paths").orElse(YTree.mapBuilder().buildMap())
 
       enrichSparkConf(conf, releaseConfig)
       enrichSparkConf(conf, globalConfig)
@@ -354,9 +359,11 @@ private[spark] object YTsaurusOperationManager extends Logging {
       ytsaurusJavaOptions += s"$$(cat $spytHome/conf/java-opts)"
 
       if (!conf.contains(YTSAURUS_CUDA_VERSION)) {
+        val cudaVersion = globalConfig.getStringO("cuda_toolkit_version").orElse("11.0")
         conf.set(YTSAURUS_CUDA_VERSION, cudaVersion)
       }
 
+      val sparkTgz = distrTgzOpt.get.stringValue()
       val prepareEnvCommand = s"./setup-spyt-env.sh --spark-home $home --spark-distributive $sparkTgz"
 
       new YTsaurusOperationManager(
@@ -378,6 +385,11 @@ private[spark] object YTsaurusOperationManager extends Logging {
         ytClient.close()
         throw t
     }
+  }
+
+  def getOperation(operation: YTsaurusOperation, ytClient: YTsaurusClient): YTreeNode = {
+    val request = GetOperation.builder().setOperationId(operation.id).build()
+    ytClient.getOperation(request).join()
   }
 
   private[ytsaurus] def getPortoLayers(conf: SparkConf, defaultLayers: YTreeListNode): YTreeNode = {
@@ -429,7 +441,8 @@ private[spark] object YTsaurusOperationManager extends Logging {
     versions.max.toString
   }
 
-  private[ytsaurus] case class ApplicationFile(ytPath: String, targetName: Option[String] = None,
+  private[ytsaurus] case class ApplicationFile(ytPath: String,
+                                               targetName: Option[String] = None,
                                                isArchive: Boolean = false) {
     private def originName: String = ytPath.split('/').last
 
@@ -440,23 +453,55 @@ private[spark] object YTsaurusOperationManager extends Logging {
     def downloadName: String = if (isArchive) s"$localName-arc-dep.$originExtension" else localName
   }
 
-  private[ytsaurus] def extractYtFiles(files: Seq[String], isArchive: Boolean = false): Seq[ApplicationFile] = {
-    files.filter(_.startsWith("yt:/")).map(YtWrapper.formatPath).map { file =>
-      val parts = file.split('#')
-      if (parts.length == 1) {
-        ApplicationFile(file, None, isArchive)
-      } else if (parts.length == 2) {
-        ApplicationFile(parts.head, Some(parts.last), isArchive)
-      } else {
-        throw new SparkException(s"Too many '#': $file")
-      }
-    }
+  type UploadToCache = String => String
+
+  def localFileToCacheUploader(conf: SparkConf, ytClient: YTsaurusClient): UploadToCache = (path: String) => {
+    val remoteTempFilesDirectory = conf.get(Config.YTSAURUS_REMOTE_TEMP_FILES_DIRECTORY)
+    YtWrapper.uploadFileToCache(path, 7.days, remoteTempFilesDirectory)(ytClient)
   }
 
-  private[ytsaurus] def applicationFiles(conf: SparkConf): Seq[ApplicationFile] = {
-    val files = Seq(JARS, FILES, ARCHIVES, SUBMIT_PYTHON_FILES).flatMap(k => extractYtFiles(conf.get(k), k == ARCHIVES))
+  private[ytsaurus] def extractYtFiles(files: Seq[String],
+                                       uploadToCache: UploadToCache,
+                                       isArchive: Boolean = false): Seq[ApplicationFile] = {
+    files.map(fileName => prepareFile(fileName, uploadToCache, isArchive))
+  }
+
+  private def prepareFile(fileName: String,
+                          uploadToCache: UploadToCache,
+                          isArchive: Boolean): ApplicationFile = {
+    val parts = fileName.split('#')
+    val (sourceName, specifiedName) = parts.length match {
+      case 1 => (fileName, None)
+      case 2 => (parts.head, Some(parts.last))
+      case _ => throw new SparkException(s"Too many '#': $fileName")
+    }
+
+    val (ytFileName, targetName) = if (sourceName.startsWith("yt:/")) {
+      (YtWrapper.formatPath(sourceName), specifiedName)
+    } else {
+      val uri = URI.create(sourceName)
+      (uploadToCache(uri.getPath), specifiedName.orElse(Some(Paths.get(uri.getPath).getFileName.toString)))
+    }
+    ApplicationFile(ytFileName, targetName, isArchive)
+  }
+
+  // This value is based on these code in Spark:
+  // https://github.com/apache/spark/blob/v3.5.3/core/src/main/scala/org/apache/spark/util/Utils.scala#L238
+  // https://github.com/apache/spark/blob/v3.5.3/core/src/main/scala/org/apache/spark/deploy/SparkSubmit.scala#L372
+  // It is used to exclude caching local files on YTsaurus that were previosly downloaded from cypress when
+  // running Spark in client mode
+  private val SPARK_TMP_DIR_PREFIX = s"${System.getProperty("java.io.tmpdir")}/spark"
+
+  private[ytsaurus] def applicationFiles(conf: SparkConf, uploadToCache: UploadToCache): Seq[ApplicationFile] = {
+    val files = Seq(JARS, FILES, ARCHIVES, SUBMIT_PYTHON_FILES)
+      .flatMap(k =>
+        extractYtFiles(conf.get(k).filter(res => !res.startsWith(SPARK_TMP_DIR_PREFIX)), uploadToCache, k == ARCHIVES)
+      )
     val primaryResource =
-      extractYtFiles(Option(conf.get(SPARK_PRIMARY_RESOURCE)).filter(_ != SparkLauncher.NO_RESOURCE).toSeq)
+      extractYtFiles(
+        Option(conf.get(SPARK_PRIMARY_RESOURCE)).filter(res => res != SparkLauncher.NO_RESOURCE && !isShell(res)).toSeq,
+        uploadToCache
+      )
 
     (files ++ primaryResource).distinct
   }
@@ -500,6 +545,10 @@ private[spark] object YTsaurusOperationManager extends Logging {
 
   def getOperationState(operation: YTreeNode): String = {
     operation.mapNode().getStringO("state").orElse("undefined")
+  }
+
+  private def getDriverFilePaths(operation: YTreeNode): YTreeNode = {
+    operation.mapNode().getMap("provided_spec").getMap("tasks").getMap("driver").getList("file_paths")
   }
 
   def isCompletedState(currentState: String): Boolean = currentState == "completed"

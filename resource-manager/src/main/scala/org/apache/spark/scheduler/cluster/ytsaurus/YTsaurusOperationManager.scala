@@ -32,7 +32,6 @@ private[spark] class YTsaurusOperationManager(val ytClient: YTsaurusClient,
                                               user: String, token: String,
                                               portoLayers: YTreeNode,
                                               filePaths: YTreeNode,
-                                              pythonPaths: YTreeMapNode,
                                               environment: YTreeMapNode,
                                               home: String,
                                               prepareEnvCommand: String,
@@ -229,15 +228,7 @@ private[spark] class YTsaurusOperationManager(val ytClient: YTsaurusClient,
     val execEnvironmentBuilder = environment.toMapBuilder
 
     if (isPythonApp && conf.get(YTSAURUS_PYTHON_VERSION).isDefined) {
-      val pythonVersion = conf.get(YTSAURUS_PYTHON_VERSION).get
-      val pythonPathOpt = pythonPaths.get(pythonVersion)
-      if (pythonPathOpt.isEmpty) {
-        throw new SparkException(
-          s"Python version $pythonVersion is not supported. Please check the path specified in " +
-            s"$GLOBAL_CONFIG_PATH for supported versions"
-        )
-      }
-      execEnvironmentBuilder.key("PYSPARK_EXECUTOR_PYTHON").value(pythonPathOpt.get())
+      execEnvironmentBuilder.key("PYSPARK_EXECUTOR_PYTHON").value(f"python${conf.get(YTSAURUS_PYTHON_VERSION).get}")
     }
 
     var executorCommand = (Seq(
@@ -337,8 +328,6 @@ private[spark] object YTsaurusOperationManager extends Logging {
         filePathsList
       }
 
-      val pythonPaths = globalConfig.getMapO("python_cluster_paths").orElse(YTree.mapBuilder().buildMap())
-
       enrichSparkConf(conf, releaseConfig)
       enrichSparkConf(conf, globalConfig)
 
@@ -372,7 +361,6 @@ private[spark] object YTsaurusOperationManager extends Logging {
         token,
         portoLayers,
         filePaths,
-        pythonPaths,
         environment,
         home,
         prepareEnvCommand,

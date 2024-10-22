@@ -144,6 +144,7 @@ def prepare_global_config(os_release: bool) -> Dict[str, Any]:
     global_config['latest_spyt_version'] = "1.76.1"
     global_config['latest_spark_cluster_version'] = "1.75.4"
     if not os_release:
+        # is preserved for backward compatibility and is subject to remove
         python_cluster_paths = {
             "3.11": "/opt/python3.11/bin/python3.11",
             "3.12": "/opt/python3.12/bin/python3.12",

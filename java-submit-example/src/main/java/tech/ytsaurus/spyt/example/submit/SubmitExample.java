@@ -8,12 +8,13 @@ import tech.ytsaurus.spyt.wrapper.client.DefaultRpcCredentials;
 
 public class SubmitExample {
     public static void main(String[] args) {
+        String token = DefaultRpcCredentials.token();
         SubmissionClient client = new SubmissionClient(
                 "hahn",
                 "//home/taxi-dwh-dev/test/spark-discovery-3",
                 "1.5.1",
-                DefaultRpcCredentials.user(),
-                DefaultRpcCredentials.token()
+                DefaultRpcCredentials.tokenUser(token),
+                token
         );
 
         InProcessLauncher launcher = client.newLauncher()

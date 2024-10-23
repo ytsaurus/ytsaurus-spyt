@@ -67,12 +67,13 @@ object YtClientConfiguration {
   def apply(getByName: String => Option[String]): YtClientConfiguration = {
     val byopEnabled = getByName("byop.enabled").orElse(sys.env.get("SPARK_YT_BYOP_ENABLED")).exists(_.toBoolean)
 
+    val token = getByName("token").orElse(sys.env.get("YT_SECURE_VAULT_YT_TOKEN")).getOrElse(DefaultRpcCredentials.token)
     YtClientConfiguration(
       getByName("proxy").orElse(sys.env.get("YT_PROXY")).getOrElse(
         throw new IllegalArgumentException("Proxy must be specified")
       ),
-      getByName("user").orElse(sys.env.get("YT_SECURE_VAULT_YT_USER")).getOrElse(DefaultRpcCredentials.user),
-      getByName("token").orElse(sys.env.get("YT_SECURE_VAULT_YT_TOKEN")).getOrElse(DefaultRpcCredentials.token),
+      getByName("user").orElse(sys.env.get("YT_SECURE_VAULT_YT_USER")).getOrElse(DefaultRpcCredentials.tokenUser(token)),
+      token,
       getByName("timeout").map(Utils.parseDuration).getOrElse(60 seconds),
       getByName("proxyRole"),
       ByopConfiguration(
@@ -102,11 +103,14 @@ object YtClientConfiguration {
     }
   }
 
-  def default(proxy: String): YtClientConfiguration = default(
-    proxy = proxy,
-    user = DefaultRpcCredentials.user,
-    token = DefaultRpcCredentials.token
-  )
+  def default(proxy: String): YtClientConfiguration = {
+    val token = DefaultRpcCredentials.token
+    default(
+      proxy = proxy,
+      user = DefaultRpcCredentials.tokenUser(token),
+      token = token,
+    )
+  }
 
   def default(proxy: String, user: String, token: String): YtClientConfiguration = YtClientConfiguration(
     proxy = proxy,

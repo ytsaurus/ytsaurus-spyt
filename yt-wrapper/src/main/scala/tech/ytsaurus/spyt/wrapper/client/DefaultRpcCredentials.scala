@@ -3,15 +3,20 @@ package tech.ytsaurus.spyt.wrapper.client
 import java.nio.file.{Files, Path, Paths}
 import tech.ytsaurus.client.rpc.YTsaurusClientAuth
 
+import java.util.Objects
+
 object DefaultRpcCredentials {
   def token: String = {
     sys.env.getOrElse("YT_TOKEN", readFileFromHome(".yt", "token"))
   }
 
-  def user: String = sys.env.getOrElse("YT_USER", System.getProperty("user.name"))
+  def tokenUser(token: String): String = sys.env.getOrElse(
+    "YT_USER", if (Objects.requireNonNullElse(token, "").isEmpty) System.getProperty("user.name") else null
+  )
 
   def credentials: YTsaurusClientAuth = {
-    YTsaurusClientAuth.builder().setUser(user).setToken(token).build()
+    val token = this.token
+    YTsaurusClientAuth.builder().setUser(tokenUser(token)).setToken(token).build()
   }
 
   private def readFileFromHome(path: String*): String = {

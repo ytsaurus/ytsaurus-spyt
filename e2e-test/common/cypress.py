@@ -1,6 +1,5 @@
 import logging
 import os
-import subprocess
 
 logger = logging.getLogger(__name__)
 
@@ -23,12 +22,6 @@ def set_spark_conf(options, yt_client):
 
 
 def set_python_path(python_path, yt_client):
-    py_version_full = (subprocess.run([python_path, '-V'], capture_output=True).stdout.decode()
-                       .replace("Python", "").strip())
-    py_version_short = py_version_full[:py_version_full.index('.', py_version_full.index('.') + 1)]
-    logger.info(f"Set python interpreter (version {py_version_short}): {python_path}")
-    python_cluster_paths = {py_version_short: python_path}
-    yt_client.set("//home/spark/conf/global/python_cluster_paths", python_cluster_paths)
     set_spark_conf({'spark.pyspark.python': python_path}, yt_client)
 
 

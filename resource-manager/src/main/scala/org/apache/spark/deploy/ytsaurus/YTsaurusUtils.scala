@@ -26,4 +26,8 @@ object YTsaurusUtils {
 
   // Increasing visibility of SparkSubmit.isShell method
   def isShell(res: String): Boolean = SparkSubmit.isShell(res)
+
+  def pythonBinaryWrapperPath(spytHome: String): String = {
+    s"$spytHome/bin/python-binary-wrapper.sh"
+  }
 }

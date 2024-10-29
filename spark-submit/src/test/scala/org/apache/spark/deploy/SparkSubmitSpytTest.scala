@@ -62,6 +62,17 @@ class SparkSubmitSpytTest extends AnyFlatSpec with Matchers {
     )
   }
 
+  it should "detect the resource as binary" in {
+    SparkSubmitSpyt.isBinary("yt:///path/to/my/script.py") shouldBe false
+    SparkSubmitSpyt.isBinary("script.py") shouldBe false
+    SparkSubmitSpyt.isBinary("yt:///path/to/my/application.jar") shouldBe false
+    SparkSubmitSpyt.isBinary("yt:///path/to/my/application.bin") shouldBe true
+    SparkSubmitSpyt.isBinary("//path/to/my/executable") shouldBe true
+    SparkSubmitSpyt.isBinary("strange_file.") shouldBe true
+    SparkSubmitSpyt.isBinary("spark-shell") shouldBe false
+    SparkSubmitSpyt.isBinary("spark-internal") shouldBe false
+  }
+
   private def ytArgs(deployMode: String): Seq[String] = Seq(
     "--master", "ytsaurus://my.yt.cluster",
     "--deploy-mode", deployMode,

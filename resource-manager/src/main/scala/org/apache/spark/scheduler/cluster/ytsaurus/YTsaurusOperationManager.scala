@@ -18,7 +18,6 @@ import tech.ytsaurus.client.request.{CompleteOperation, GetOperation, UpdateOper
 import tech.ytsaurus.client.rpc.YTsaurusClientAuth
 import tech.ytsaurus.core.GUID
 import tech.ytsaurus.spyt.wrapper.YtWrapper
-import tech.ytsaurus.spyt.wrapper.file.YtFileUtils
 import tech.ytsaurus.ysontree._
 
 import java.net.URI
@@ -178,6 +177,10 @@ private[spark] class YTsaurusOperationManager(val ytClient: YTsaurusClient,
 
     val memoryLimit = (driverMemoryMiB + memoryOverheadMiB) * MIB
 
+    conf.get(YTSAURUS_PYTHON_BINARY_ENTRY_POINT).foreach { ep =>
+      environment.put("Y_PYTHON_ENTRY_POINT", YTree.stringNode(ep))
+    }
+
     val spec: Spec = (specBuilder, _, _) => specBuilder.beginMap()
       .key("command").value(driverCommand)
       .key("job_count").value(1)
@@ -225,10 +228,13 @@ private[spark] class YTsaurusOperationManager(val ytClient: YTsaurusClient,
 
     val executorOpts = conf.get(EXECUTOR_JAVA_OPTIONS).getOrElse("")
 
-    val execEnvironmentBuilder = environment.toMapBuilder
+    if (isPythonApp && conf.get(YTSAURUS_PYTHON_EXECUTABLE).isDefined) {
+      environment.put("PYSPARK_EXECUTOR_PYTHON", YTree.stringNode(conf.get(YTSAURUS_PYTHON_EXECUTABLE).get))
+    }
 
-    if (isPythonApp && conf.get(YTSAURUS_PYTHON_VERSION).isDefined) {
-      execEnvironmentBuilder.key("PYSPARK_EXECUTOR_PYTHON").value(f"python${conf.get(YTSAURUS_PYTHON_VERSION).get}")
+    if (conf.get(YTSAURUS_IS_PYTHON_BINARY)) {
+      val binaryExecutable = Paths.get(conf.get(SPARK_PRIMARY_RESOURCE)).getFileName.toString
+      environment.put("Y_BINARY_EXECUTABLE", YTree.stringNode(binaryExecutable))
     }
 
     var executorCommand = (Seq(
@@ -262,7 +268,7 @@ private[spark] class YTsaurusOperationManager(val ytClient: YTsaurusClient,
         .key("memory_limit").value(memoryLimit)
         .key("layer_paths").value(portoLayers)
         .key("file_paths").value(filePaths)
-        .key("environment").value(execEnvironmentBuilder.endMap().build())
+        .key("environment").value(environment)
       if (gpuLimit > 0) {
         specBuilder
           .key("gpu_limit").value(gpuLimit)
@@ -316,6 +322,9 @@ private[spark] object YTsaurusOperationManager extends Logging {
         applicationFiles(conf, localFileToCacheUploader(conf, ytClient)).foreach { appFile =>
           val node = YTree.stringNode(appFile.ytPath)
           node.putAttribute("file_name", YTree.stringNode(appFile.downloadName))
+          if (appFile.isExecutable) {
+            node.putAttribute("executable", YTree.booleanNode(true))
+          }
           filePathsList.add(node)
         }
 
@@ -337,7 +346,16 @@ private[spark] object YTsaurusOperationManager extends Logging {
       val spytHome = s"$home/spyt-package"
       val sparkClassPath = s"$home/*:$spytHome/conf/:$spytHome/jars/*:$sparkHome/jars/*"
       environment.put("SPARK_HOME", YTree.stringNode(sparkHome))
-      environment.put("PYTHONPATH", YTree.stringNode(s"$spytHome/python"))
+
+      if (conf.get(YTSAURUS_IS_PYTHON_BINARY)) {
+        val pyBinaryWrapper = YTree.stringNode(YTsaurusUtils.pythonBinaryWrapperPath(spytHome))
+        environment.put("PYSPARK_EXECUTOR_PYTHON", pyBinaryWrapper)
+        if (conf.get(SUBMIT_DEPLOY_MODE) == "cluster") {
+          environment.put("PYSPARK_DRIVER_PYTHON", pyBinaryWrapper)
+        }
+      } else {
+        environment.put("PYTHONPATH", YTree.stringNode(s"$spytHome/python"))
+      }
 
       conf.set("spark.executor.resource.gpu.discoveryScript", s"$spytHome/bin/getGpusResources.sh")
 
@@ -431,7 +449,8 @@ private[spark] object YTsaurusOperationManager extends Logging {
 
   private[ytsaurus] case class ApplicationFile(ytPath: String,
                                                targetName: Option[String] = None,
-                                               isArchive: Boolean = false) {
+                                               isArchive: Boolean = false,
+                                               isExecutable: Boolean = false) {
     private def originName: String = ytPath.split('/').last
 
     private def originExtension: String = originName.split("\\.", 2).last
@@ -489,7 +508,7 @@ private[spark] object YTsaurusOperationManager extends Logging {
       extractYtFiles(
         Option(conf.get(SPARK_PRIMARY_RESOURCE)).filter(res => res != SparkLauncher.NO_RESOURCE && !isShell(res)).toSeq,
         uploadToCache
-      )
+      ).map(_.copy(isExecutable = conf.get(YTSAURUS_IS_PYTHON_BINARY)))
 
     (files ++ primaryResource).distinct
   }

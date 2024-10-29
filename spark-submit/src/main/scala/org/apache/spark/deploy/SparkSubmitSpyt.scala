@@ -3,8 +3,9 @@ package org.apache.spark.deploy
 import javassist.CtMethod
 import javassist.bytecode.{CodeAttribute, ConstPool, Opcode, StackMapTable, YTsaurusBytecodeUtils}
 import org.apache.hadoop.conf.{Configuration => HadoopConfiguration}
-import org.apache.spark.SparkConf
-import org.apache.spark.deploy.ytsaurus.Config.{YTSAURUS_IS_PYTHON, YTSAURUS_POOL, YTSAURUS_PYTHON_VERSION}
+import org.apache.spark.{SPARK_VERSION, SparkConf}
+import org.apache.spark.deploy.ytsaurus.Config.{YTSAURUS_IS_PYTHON, YTSAURUS_IS_PYTHON_BINARY, YTSAURUS_POOL, YTSAURUS_PYTHON_BINARY_ENTRY_POINT, YTSAURUS_PYTHON_EXECUTABLE}
+import org.apache.spark.deploy.ytsaurus.YTsaurusUtils
 import org.apache.spark.internal.config._
 import org.apache.spark.launcher.SparkLauncher
 import org.apache.spark.util.{DependencyUtils, Utils}
@@ -92,16 +93,25 @@ private[spark] class SparkSubmitSpyt {
       // YTsaurus only
       OptionAssigner(args.queue, YTSAURUS, ALL_DEPLOY_MODES, confKey = YTSAURUS_POOL.key),
       OptionAssigner(args.isPython.toString, YTSAURUS, ALL_DEPLOY_MODES, confKey = YTSAURUS_IS_PYTHON.key),
+      OptionAssigner(System.getenv("Y_PYTHON_ENTRY_POINT"), YTSAURUS, CLUSTER,
+        confKey = YTSAURUS_PYTHON_BINARY_ENTRY_POINT.key, mergeFn = Some(confOverEnv))
     )
 
     childArgs ++= processOptions(options, deployMode, clusterManager, sparkConf)
 
-    if (clusterManager == YTSAURUS &&
-      args.isPython &&
-      deployMode == CLIENT &&
-      !sparkConf.contains(YTSAURUS_PYTHON_VERSION.key)) {
-      val basePythonVersion = getBasePythonVersion(sparkConf)
-      sparkConf.set(YTSAURUS_PYTHON_VERSION.key, basePythonVersion)
+    if (isBinary(args.primaryResource)) {
+      sparkConf.set(YTSAURUS_IS_PYTHON_BINARY, true)
+    }
+
+    if (clusterManager == YTSAURUS && args.isPython && deployMode == CLIENT &&
+        !sparkConf.contains(YTSAURUS_PYTHON_EXECUTABLE.key) && !sparkConf.get(YTSAURUS_IS_PYTHON_BINARY)) {
+      val basePythonExecutable = getBasePythonExec(sparkConf)
+      sparkConf.set(YTSAURUS_PYTHON_EXECUTABLE.key, basePythonExecutable)
+    }
+
+    if (sparkConf.get(YTSAURUS_IS_PYTHON_BINARY) && deployMode == CLIENT) {
+      val pyBinaryWrapper = YTsaurusUtils.pythonBinaryWrapperPath(sys.env("SPYT_ROOT"))
+      sparkConf.set(PYSPARK_DRIVER_PYTHON, pyBinaryWrapper)
     }
 
     if (isYTsaurusCluster) {
@@ -201,7 +211,7 @@ object SparkSubmitSpyt {
     }
   }
 
-  private[deploy] def getBasePythonVersion(sparkConf: SparkConf): String = {
+  private[deploy] def getBasePythonExec(sparkConf: SparkConf): String = {
     // Exact copy from main method of org.apache.spark.deploy.PythonRunner
     val pythonExec = sparkConf.get(PYSPARK_DRIVER_PYTHON)
       .orElse(sparkConf.get(PYSPARK_PYTHON))
@@ -210,9 +220,36 @@ object SparkSubmitSpyt {
       .getOrElse("python3")
 
     val pythonVersion = Process(pythonExec, Seq("-V")).!!.replace("Python","").trim()
-    pythonVersion.substring(0, pythonVersion.indexOf('.', pythonVersion.indexOf('.') + 1))
+    val pythonVersionShort = pythonVersion.substring(0, pythonVersion.indexOf('.', pythonVersion.indexOf('.') + 1))
+    s"python$pythonVersionShort"
   }
+
+  private val knownExtensions = Set("jar", "py", "r")
+
+  private[deploy] def isBinary(res: String): Boolean = {
+    if (res == null || SparkSubmit.isShell(res) || SparkSubmit.isInternal(res)) {
+      false
+    } else {
+      val lastDot = res.lastIndexOf(".")
+      lastDot == -1 || !knownExtensions.contains(res.substring(lastDot + 1).toLowerCase)
+    }
+  }
+
+  private val confOverEnv: (String, String) => String = (confValue, _) => confValue
 }
+
+@Decorate
+@OriginClass("org.apache.spark.deploy.SparkSubmit$")
+object SparkSubmitDecorators {
+
+  @DecoratedMethod
+  private[deploy] def isPython(res: String): Boolean = {
+    __isPython(res) || SparkSubmitSpyt.isBinary(res)
+  }
+
+  private[deploy] def __isPython(res: String): Boolean = ???
+}
+
 
 object YTsaurusConstants {
   val YTSAURUS = 32

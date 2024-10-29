@@ -70,7 +70,21 @@ object Config {
     .booleanConf
     .createWithDefault(false)
 
-  val YTSAURUS_PYTHON_VERSION = ConfigBuilder("spark.ytsaurus.python.version")
+  val YTSAURUS_IS_PYTHON_BINARY = ConfigBuilder("spark.ytsaurus.isPythonBinary")
+    .internal()
+    .version("3.2.2")
+    .booleanConf
+    .createWithDefault(false)
+
+  val YTSAURUS_PYTHON_BINARY_ENTRY_POINT = ConfigBuilder("spark.ytsaurus.python.binary.entry.point")
+    .doc("An entry point for python binary for cluster mode if it's not main method. It is taken from " +
+      "Y_PYTHON_ENTRY_POINT environment variable if not explicitly specified as spark-submit --conf parameter. " +
+      "For client mode Y_PYTHON_ENTRY_POINT environment variable should be used.")
+    .version("3.2.2")
+    .stringConf
+    .createOptional
+
+  val YTSAURUS_PYTHON_EXECUTABLE = ConfigBuilder("spark.ytsaurus.python.executable")
     .internal()
     .version("3.2.2")
     .stringConf

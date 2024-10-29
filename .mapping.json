@@ -527,6 +527,7 @@
   "spyt-package/src/main/spark-extra/bin/driver-op-discovery.sh":"yt/spark/spark-over-yt/spyt-package/src/main/spark-extra/bin/driver-op-discovery.sh",
   "spyt-package/src/main/spark-extra/bin/getGpusResources.sh":"yt/spark/spark-over-yt/spyt-package/src/main/spark-extra/bin/getGpusResources.sh",
   "spyt-package/src/main/spark-extra/bin/job-id-discovery.sh":"yt/spark/spark-over-yt/spyt-package/src/main/spark-extra/bin/job-id-discovery.sh",
+  "spyt-package/src/main/spark-extra/bin/python-binary-wrapper.sh":"yt/spark/spark-over-yt/spyt-package/src/main/spark-extra/bin/python-binary-wrapper.sh",
   "spyt-package/src/main/spark-extra/conf/log4j.clusterLog.properties":"yt/spark/spark-over-yt/spyt-package/src/main/spark-extra/conf/log4j.clusterLog.properties",
   "spyt-package/src/main/spark-extra/conf/log4j.clusterLogJson.properties":"yt/spark/spark-over-yt/spyt-package/src/main/spark-extra/conf/log4j.clusterLogJson.properties",
   "spyt-package/src/main/spark-extra/conf/log4j.livy.properties":"yt/spark/spark-over-yt/spyt-package/src/main/spark-extra/conf/log4j.livy.properties",

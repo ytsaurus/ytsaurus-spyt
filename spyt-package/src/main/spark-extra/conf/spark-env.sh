@@ -2,8 +2,13 @@
 
 export ARROW_PRE_0_15_IPC_FORMAT=1
 
-if [ -z "$SPYT_CLASSPATH" ] && [ -n "$SPARK_CONF_DIR" ]; then
-  SPYT_CLASSPATH=$(cd "$SPARK_CONF_DIR"/..; pwd)/jars/*
+if [ -z "$SPYT_ROOT" ] && [ -n "$SPARK_CONF_DIR" ]; then
+  SPYT_ROOT=$(cd "$SPARK_CONF_DIR"/..; pwd)
+  export SPYT_ROOT
+fi
+
+if [ -z "$SPYT_CLASSPATH" ] && [ -n "$SPYT_ROOT" ]; then
+  SPYT_CLASSPATH="$SPYT_ROOT/jars/*"
   export SPYT_CLASSPATH
 fi
 

@@ -9,10 +9,9 @@ import scala.concurrent.duration.Duration
 
 class TableCopyByteStream(reader: TableReader[ByteBuffer], timeout: Duration,
                           reportBytesRead: Long => Unit) extends YtArrowInputStream {
-  private var _batch: ByteBuffer = _
-  private var _batchBytesLeft = 0
-  private val nextPageToken: Array[(Byte, Int)] = Array(-1, -1, -1, -1, 0, 0, 0, 0).map(_.toByte).zipWithIndex
-  private val emptySchemaToken: Array[(Byte, Int)] = Array(0, 0, 0, 0, 0, 0, 0, 0).map(_.toByte).zipWithIndex
+  private var _batch = ByteBuffer.allocate(0)
+  private val nextPageToken = ByteBuffer.wrap(Array(-1, -1, -1, -1, 0, 0, 0, 0))
+  private val emptySchemaToken = ByteBuffer.wrap(Array(0, 0, 0, 0, 0, 0, 0, 0))
 
   override def read(): Int = ???
 
@@ -24,15 +23,15 @@ class TableCopyByteStream(reader: TableReader[ByteBuffer], timeout: Duration,
     read(b, off, len, 0)
   }
 
-  private def recognizeToken(token: Array[(Byte, Int)]): Boolean = {
-    if (hasNext && _batchBytesLeft >= token.length) {
-      val res = token.forall { case (b, i) => _batch.array()(_batch.arrayOffset() + _batch.position() + i) == b }
-      if (res) {
-        _batch.position(_batch.position() + token.length)
-        _batchBytesLeft -= token.length
+  private def recognizeToken(token: ByteBuffer): Boolean = {
+    if (hasNext) {
+      val mismatch = _batch.mismatch(token)
+      if (mismatch == -1 || mismatch == token.remaining()) {
+        _batch.position(_batch.position() + token.remaining())
+        return true
       }
-      res
-    } else false
+    }
+    false
   }
 
   override def isNextPage: Boolean = {
@@ -48,20 +47,18 @@ class TableCopyByteStream(reader: TableReader[ByteBuffer], timeout: Duration,
     case 0 => readLen
     case _ =>
       if (hasNext) {
-        val readBytes = Math.min(len, _batchBytesLeft)
+        val readBytes = Math.min(len, _batch.remaining())
         readFromBatch(b, off, readBytes)
         read(b, off + readBytes, len - readBytes, readLen + readBytes)
       } else readLen
   }
 
   private def hasNext: Boolean = {
-    _batchBytesLeft > 0 || readNextBatch()
+    _batch.hasRemaining || readNextBatch()
   }
 
   private def readFromBatch(b: Array[Byte], off: Int, len: Int): Unit = {
-    System.arraycopy(_batch.array(), _batch.arrayOffset() + _batch.position(), b, off, len)
-    _batch.position(_batch.position() + len)
-    _batchBytesLeft -= len
+    _batch.get(b, off, len)
     reportBytesRead(len)
   }
 
@@ -71,7 +68,6 @@ class TableCopyByteStream(reader: TableReader[ByteBuffer], timeout: Duration,
       val res = reader.read()
       if (res != null) {
         _batch = res.get(0)
-        _batchBytesLeft = _batch.limit() - _batch.position()
         true
       } else {
         false

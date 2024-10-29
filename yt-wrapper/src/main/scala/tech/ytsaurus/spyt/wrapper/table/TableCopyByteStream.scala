@@ -26,8 +26,8 @@ class TableCopyByteStream(reader: TableReader[ByteBuffer], timeout: Duration,
   private def recognizeToken(token: ByteBuffer): Boolean = {
     if (hasNext) {
       val mismatch = _batch.mismatch(token)
-      if (mismatch == -1 || mismatch == token.remaining) {
-        _batch.position(_batch.position + token.remaining)
+      if (mismatch == -1 || mismatch == token.remaining()) {
+        _batch.position(_batch.position() + token.remaining())
         return true
       }
     }

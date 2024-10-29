@@ -223,6 +223,33 @@ class YtSparkSQLTest extends FlatSpec with Matchers with LocalSpark with TmpDir
     res.select("a", "b", "c").selectAs[TestRow].collect() should contain theSameElementsAs testData
   }
 
+  it should "select from a table using custom UDF" in {
+    writeTableFromYson(Seq(
+      """{a = 1; b = "a"; c = 0.3}""",
+      """{a = 2; b = "b"; c = 0.5}""",
+      """{a = 3; b = "c"; c = 1.0}"""
+    ), tmpPath, atomicSchema)
+
+    val myUdf = (x: Int) => x * 10
+    spark.udf.register("my_udf", myUdf)
+
+    val df = spark.sql(s"SELECT my_udf(a), my_udf(10) FROM yt.`$tmpPath`")
+
+    df.collect() should contain theSameElementsAs Seq(
+      Row(10, 100), Row(20, 100), Row(30, 100)
+    )
+  }
+
+  it should "select from a table using constant expressions" in {
+    writeTableFromYson(Seq(
+      """{a = 2; d = "hello"}"""
+    ), tmpPath, anotherSchema)
+
+    val df = spark.sql(s"SELECT 10 FROM yt.`$tmpPath`")
+
+    df.collect() should contain theSameElementsAs Seq(Row(10))
+  }
+
   it should "join static table with dynamic one" in {
     val path1 = s"$tmpPath/dynamic"
     prepareTestTable(path1, testData, Seq(Seq(), Seq(3), Seq(6, 12)))

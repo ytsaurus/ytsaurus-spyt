@@ -7,15 +7,16 @@ import org.apache.spark.sql.internal.SQLConf.FILE_COMMIT_PROTOCOL_CLASS
 import org.apache.spark.sql.{DataFrame, SparkSession}
 import org.apache.spark.yt.test.Utils
 import org.apache.spark.yt.test.Utils.{SparkConfigEntry, defaultConfValue}
-import org.scalatest.TestSuite
-import tech.ytsaurus.spyt.wrapper.client.YtClientConfigurationConverter._
-import tech.ytsaurus.spyt.wrapper.config.ConfigEntry
+import org.scalatest.{Assertion, TestSuite}
+import org.scalatest.prop.TableDrivenPropertyChecks
 import tech.ytsaurus.spyt.test.LocalSpark.defaultSparkConf
+import tech.ytsaurus.spyt.wrapper.client.YtClientConfigurationConverter._
 import tech.ytsaurus.spyt.wrapper.client.{YtClientProvider, YtRpcClient}
+import tech.ytsaurus.spyt.wrapper.config.ConfigEntry
 
 import scala.annotation.tailrec
 
-trait LocalSpark extends LocalYtClient {
+trait LocalSpark extends LocalYtClient with TableDrivenPropertyChecks {
   self: TestSuite =>
   System.setProperty("io.netty.tryReflectionSetAccessible", "true")
 
@@ -26,6 +27,26 @@ trait LocalSpark extends LocalYtClient {
   def sparkConf: SparkConf = defaultSparkConf
 
   def reinstantiateSparkSession: Boolean = false
+
+  def forAllWriteProtocols(fun: => Any): Assertion = {
+    forAll(Table("arrow_write_enabled", false, true)) { withSparkConfArrowWrite(_)(fun) }
+  }
+
+  def withSparkConfArrowWrite(enabled: Boolean)(fun: => Any): Assertion = {
+    val key = "spark.yt.write.arrow"
+    val prev = spark.conf.getOption(key)
+    try {
+      spark.conf.set(key, enabled.toString)
+      fun
+      succeed
+    } finally {
+      if (prev.isEmpty) {
+        spark.conf.unset(key)
+      } else {
+        spark.conf.set(key, prev.get)
+      }
+    }
+  }
 
   lazy val spark: SparkSession = {
     if (reinstantiateSparkSession) {

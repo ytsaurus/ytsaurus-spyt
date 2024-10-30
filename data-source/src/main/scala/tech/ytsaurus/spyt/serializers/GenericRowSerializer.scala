@@ -110,7 +110,7 @@ class GenericRowSerializer(schema: StructType) {
         TTaggedLogicalType.newBuilder().setElement(recurse(inner)).setTag(tag)
       )
 
-      case YtLogicalType.Decimal(precision, scale) => logicalType.setDecimal(
+      case YtLogicalType.Decimal(precision, scale, _) => logicalType.setDecimal(
         TDecimalLogicalType.newBuilder().setPrecision(precision).setScale(scale)
       )
     }

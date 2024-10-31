@@ -1,5 +1,3 @@
-from datetime import datetime, timedelta, timezone
-
 from common.helpers import assert_items_equal
 from pyspark.sql import Row
 from pyspark.sql.functions import udf
@@ -8,14 +6,6 @@ from spyt.types import Date32, Datetime64, Timestamp64, Interval64, Date32Type, 
     Interval64Type, Datetime, DatetimeType, MIN_DATE32, MIN_DATETIME64, MIN_TIMESTAMP64, MIN_INTERVAL64, MAX_DATE32, \
     MAX_DATETIME64, MAX_TIMESTAMP64, MAX_INTERVAL64, YsonType, Yson
 from yt.wrapper.format import RowsIterator
-
-
-def seconds_to_datetime(seconds):
-    if seconds is None:
-        return None
-    return (datetime(1970, 1, 1, tzinfo=timezone.utc) + timedelta(seconds=seconds)) \
-        .astimezone(timezone.utc).replace(tzinfo=None)
-
 
 yt_wide_types_rows = [
     {"date32": MIN_DATE32, "datetime64": MIN_DATETIME64, "timestamp64": MIN_TIMESTAMP64,
@@ -41,9 +31,9 @@ yt_datetime_type_rows = [
     {"datetime": None},
 ]
 spark_datetime_type_rows = [
-    Row(datetime=Datetime(seconds_to_datetime(8640000))),
-    Row(datetime=Datetime(seconds_to_datetime(1549719671))),
-    Row(datetime=Datetime(seconds_to_datetime(0))),
+    Row(datetime=Datetime.from_seconds(8640000)),
+    Row(datetime=Datetime.from_seconds(1549719671)),
+    Row(datetime=Datetime.from_seconds(0)),
     Row(datetime=None)
 ]
 

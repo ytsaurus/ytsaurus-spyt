@@ -9,9 +9,9 @@ DRIVER_HOST = "172.17.0.1"
 
 DRIVER_CLIENT_CONF = {
     "spark.driver.host": DRIVER_HOST,
-    "spark.driver.port": "27010",
-    "spark.ui.port": "27015",
-    "spark.blockManager.port": "27018",
+    "spark.driver.port": "27151",
+    "spark.ui.port": "27152",
+    "spark.blockManager.port": "27153",
 }
 
 SPARK_CONF = DEFAULT_SPARK_CONF | {

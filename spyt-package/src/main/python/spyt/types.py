@@ -1,11 +1,11 @@
-import datetime
 import io
+from datetime import datetime, timedelta, timezone
 from typing import Union
+
+import yt.yson as yt_yson
 from pyspark import SparkContext
 from pyspark.sql.column import _to_java_column, Column
 from pyspark.sql.types import UserDefinedType, BinaryType, IntegralType, LongType, IntegerType
-import yt.yson as yt_yson
-
 
 MIN_DATE32 = -53375809
 MAX_DATE32 = 53375807
@@ -25,14 +25,14 @@ class DatetimeType(UserDefinedType):
         dt = obj.value
         if dt is not None:
             if dt.tzinfo is None or dt.tzinfo.utcoffset(dt) is None:
-                tz_utc = datetime.timezone.utc
+                tz_utc = timezone.utc
                 dt = dt.replace(tzinfo=tz_utc)
             return int(dt.timestamp())
         return None
 
     def deserialize(self, ts):
         if ts is not None:
-            return Datetime(datetime.datetime.fromtimestamp(ts, datetime.timezone.utc).replace(microsecond=0, tzinfo=None))
+            return Datetime(datetime.fromtimestamp(ts, timezone.utc).replace(microsecond=0, tzinfo=None))
 
     @classmethod
     def typeName(cls):
@@ -69,6 +69,14 @@ class Datetime:
     def __eq__(self, other):
         return isinstance(other, self.__class__) and \
             other.value == self.value
+
+    @classmethod
+    def from_seconds(cls, seconds):
+        if seconds is None:
+            return None
+        dt_value = (datetime(1970, 1, 1, tzinfo=timezone.utc) + timedelta(seconds=seconds)) \
+            .astimezone(timezone.utc).replace(tzinfo=None)
+        return cls(dt_value)
 
 
 class Date32Type(UserDefinedType):

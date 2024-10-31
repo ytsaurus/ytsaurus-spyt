@@ -1,11 +1,12 @@
-from pyspark.sql import SparkSession
-from pyspark.sql.types import StructType, StructField
-from pyspark.sql.dataframe import DataFrame
-from pyspark.sql.column import _to_java_column
-from pyspark.cloudpickle.cloudpickle import _extract_code_globals_cache, GLOBAL_OPS
 import dis
 import sys
 import types
+
+from pyspark.cloudpickle.cloudpickle import _extract_code_globals_cache, GLOBAL_OPS
+from pyspark.sql.column import _to_java_column
+from pyspark.sql.dataframe import DataFrame
+from pyspark.sql.types import StructType, StructField
+from pyspark.sql import SparkSession
 
 
 # DataFrameReader extensions
@@ -17,9 +18,8 @@ def _dict_to_struct(dict_type):
     return StructType([StructField(name, data_type) for (name, data_type) in dict_type.items()])
 
 
-def schema_hint(self, fields):
+def read_schema_hint(self, fields):
     spark = SparkSession.builder.getOrCreate()
-
     struct_fields = []
     for name, data_type in fields.items():
         if isinstance(data_type, dict):
@@ -49,6 +49,16 @@ def sorted_by(self, *cols, **kwargs):
 
 def optimize_for(self, optimize_mode):
     return self.option("optimize_for", optimize_mode)
+
+
+def write_schema_hint(self, fields):
+    spark = SparkSession.builder.getOrCreate()
+
+    jschema = spark._jvm.java.util.HashMap()
+    for key, value in fields.items():
+        jschema.put(key, value)
+    self._jwrite = spark._jvm.tech.ytsaurus.spyt.PythonUtils.schemaHint(self._jwrite, jschema)
+    return self
 
 
 # DataFrame extensions

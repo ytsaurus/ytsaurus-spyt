@@ -10,8 +10,8 @@ require_pyspark()
 
 from .client import connect, spark_session, connect_direct, direct_spark_session, \
     info, stop, jvm_process_pid, yt_client, is_stopped  # noqa: E402
-from .extensions import read_yt, schema_hint, write_yt, sorted_by, optimize_for, withYsonColumn, transform, \
-    _extract_code_globals, _code_reduce  # noqa: E402
+from .extensions import read_yt, read_schema_hint, write_yt, sorted_by, optimize_for, withYsonColumn, transform, \
+    _extract_code_globals, _code_reduce, write_schema_hint  # noqa: E402
 from spyt.types import UInt64Type  # noqa: E402
 import pyspark.context  # noqa: E402
 import pyspark.sql.types  # noqa: E402
@@ -40,9 +40,10 @@ def initialize():
     pyspark.sql.types._acceptable_types.update({UInt64Type: (int,)})
 
     pyspark.sql.readwriter.DataFrameReader.yt = read_yt
-    pyspark.sql.readwriter.DataFrameReader.schema_hint = schema_hint
+    pyspark.sql.readwriter.DataFrameReader.schema_hint = read_schema_hint
 
     pyspark.sql.readwriter.DataFrameWriter.yt = write_yt
+    pyspark.sql.readwriter.DataFrameWriter.schema_hint = write_schema_hint
     pyspark.sql.readwriter.DataFrameWriter.sorted_by = sorted_by
     pyspark.sql.readwriter.DataFrameWriter.optimize_for = optimize_for
 

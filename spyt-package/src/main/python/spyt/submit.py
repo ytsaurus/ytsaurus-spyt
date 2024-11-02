@@ -1,5 +1,6 @@
 import logging
 import os
+import sys
 import shutil
 import signal
 import tempfile
@@ -347,7 +348,7 @@ def create_base_spark_env(spark_home):
 
 
 def direct_submit(yt_proxy, num_executors, main_file, deploy_mode="cluster", pool=None,
-                  spark_base_args=[], job_args=[], spark_conf={}):
+                  spark_base_args=[], job_args=[], spark_conf={}, extra_env={}):
     spark_home = get_spark_home()
     spark_submit_path = "{}/bin/spark-submit".format(spark_home)
     spark_args = [spark_submit_path]
@@ -362,6 +363,33 @@ def direct_submit(yt_proxy, num_executors, main_file, deploy_mode="cluster", poo
     spark_args.extend(job_args)
 
     spark_env = create_base_spark_env(spark_home)
+    spark_env.update(extra_env)
 
     # replace stdin to avoid https://bugs.openjdk.java.net/browse/JDK-8211842
     return subprocess.call(spark_args, env=spark_env, stdin=subprocess.PIPE)
+
+
+def direct_submit_binary(yt_proxy, num_executors, spyt_version, driver_entry_point=None, executable=sys.executable,
+                         deploy_mode="cluster", pool=None, spark_base_args=[], job_args=[], spark_conf={}):
+    """
+    Submits Spark job compiled as single binary executable file. By default, it submits itself assuming
+    that this method is called from inside such binary
+
+    :param yt_proxy: YTsaurus proxy address
+    :param num_executors: number of Spark executors
+    :param spyt_version: SPYT version to be used on cluster
+    :param driver_entry_point: Spark driver entry point (default: None)
+    :param executable: (default: sys.executable)
+    :param deploy_mode: Spark deploy mode, client or cluster (default: cluster)
+    :param pool: YTsaurus pool to execute this job (default: None)
+    :param spark_base_args: additional Spark arguments
+    :param job_args: job arguments
+    :param spark_conf: additional Spark configuration as Python dict
+    :return:
+    """
+    conf = dict(spark_conf)
+    conf["spark.ytsaurus.spyt.version"] = spyt_version
+    extra_env = {"Y_PYTHON_ENTRY_POINT": driver_entry_point} if driver_entry_point else {}
+
+    return direct_submit(yt_proxy, num_executors, executable, deploy_mode, pool,
+                         spark_base_args, job_args, conf, extra_env)

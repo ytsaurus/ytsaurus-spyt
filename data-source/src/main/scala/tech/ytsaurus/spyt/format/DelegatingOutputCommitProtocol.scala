@@ -50,7 +50,10 @@ object DelegatingOutputCommitProtocol {
   def isYtsaurusFileSystem(outputPath: String): Boolean = {
     val schemaPos = outputPath.indexOf(":/")
     if (schemaPos < 0) {
-      return false
+      // Output paths without specified schema should be treated as ytTable,
+      // because spark.hadoop.fs.null.impl property is set to tech.ytsaurus.spyt.fs.YtTableFileSystem in
+      // default SPYT configuration for Spark SQL compatibility with other YTsaurus SQL engines.
+      return true
     }
     val schema = outputPath.substring(0, schemaPos)
     ytsaurusFileSystems.contains(schema)

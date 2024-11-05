@@ -1,5 +1,6 @@
 package tech.ytsaurus.spyt.fs
 
+import org.apache.spark.SparkException
 import org.apache.spark.sql.{AnalysisException, Row}
 import org.apache.spark.sql.types.{ArrayType, LongType, MapType, StringType}
 import org.apache.spark.sql.spyt.types.YsonBinary
@@ -14,7 +15,7 @@ import tech.ytsaurus.spyt.serialization.YsonEncoder
 import tech.ytsaurus.spyt.test.{DynTableTestUtils, LocalSpark, LocalYt, TestRow, TestUtils, TmpDir}
 import tech.ytsaurus.spyt.wrapper.YtWrapper
 import tech.ytsaurus.spyt.wrapper.table.OptimizeMode
-import tech.ytsaurus.ysontree.YTree
+import tech.ytsaurus.ysontree.{YTree, YTreeNode}
 
 import scala.language.postfixOps
 
@@ -84,6 +85,14 @@ class YtSparkSQLTest extends FlatSpec with Matchers with LocalSpark with TmpDir
 
       res.columns should contain theSameElementsAs Seq("a", "b", "c")
       res.select("a", "b", "c").collect() should contain theSameElementsAs Seq(
+        Row(1, "a", 0.3),
+        Row(2, "b", 0.5)
+      )
+
+      val res2 = spark.sql(s"SELECT * FROM yt.`$path`")
+
+      res2.columns should contain theSameElementsAs Seq("a", "b", "c")
+      res2.select("a", "b", "c").collect() should contain theSameElementsAs Seq(
         Row(1, "a", 0.3),
         Row(2, "b", 0.5)
       )
@@ -286,6 +295,13 @@ class YtSparkSQLTest extends FlatSpec with Matchers with LocalSpark with TmpDir
     }
   }
 
+  it should "create a table without specifying ytTable:/ prefix" in {
+    spark.sql(s"CREATE TABLE yt.`$tmpPath` (id INT, name STRING, age INT) USING yt")
+    val res = spark.read.yt(tmpPath)
+    res.columns should contain theSameElementsAs Seq("id", "name", "age")
+    res.collect() should contain theSameElementsAs Seq()
+  }
+
   it should "create table with custom attributes" in {
     spark.sql(s"CREATE TABLE yt.`ytTable:/$tmpPath` (id INT, name STRING, age INT) " +
       s"USING yt TBLPROPERTIES ('custom1'='value1','custom2'='4','key_columns'='[id]')")
@@ -304,6 +320,21 @@ class YtSparkSQLTest extends FlatSpec with Matchers with LocalSpark with TmpDir
     res.collect() should contain theSameElementsAs Seq(Row(1, false))
   }
 
+  it should "create table as select from existing table" in {
+    YtWrapper.createDir(tmpPath)
+    val originalPath = s"$tmpPath/original"
+    val copyPath = s"$tmpPath/copy"
+    writeTableFromYson(Seq(
+      """{a = 1; d = "a"}""",
+      """{a = 2; d = "b"}"""
+    ), originalPath, anotherSchema)
+
+    spark.sql(s"CREATE TABLE yt.`$copyPath` USING yt AS SELECT * FROM yt.`$originalPath`")
+    val res = spark.read.yt(copyPath)
+    res.columns should contain theSameElementsAs Seq("a", "d")
+    res.collect() should contain theSameElementsAs Seq(Row(1, "a"), Row(2, "b"))
+  }
+
   it should "drop table" in {
     spark.sql(s"CREATE TABLE yt.`ytTable:/$tmpPath` (id INT, age INT) USING yt")
     YtWrapper.exists(tmpPath) shouldBe true
@@ -316,6 +347,25 @@ class YtSparkSQLTest extends FlatSpec with Matchers with LocalSpark with TmpDir
     }
 
     spark.sql(s"DROP TABLE IF EXISTS yt.`ytTable:/$tmpPath`")
+  }
+
+  it should "not create a table or other cypress node when there were errors" in {
+    YtWrapper.createDir(tmpPath)
+    val originalPath = s"$tmpPath/original"
+    val copyPath = s"$tmpPath/copy"
+    writeTableFromYson(Seq(
+      """{a = 1; d = "a"}""",
+      """{a = 2; d = "b"}"""
+    ), originalPath, anotherSchema)
+
+    val bogusUdf: Int => Int = (a: Int) => if (a == 2) a else throw new RuntimeException("Should be a bug here")
+    spark.udf.register("bogus_udf", bogusUdf)
+
+    a[SparkException] shouldBe thrownBy {
+      spark.sql(s"CREATE TABLE yt.`$copyPath` USING yt AS SELECT bogus_udf(a) FROM yt.`$originalPath`")
+    }
+
+    YtWrapper.exists(copyPath) shouldBe false
   }
 
   it should "insert to table" in {

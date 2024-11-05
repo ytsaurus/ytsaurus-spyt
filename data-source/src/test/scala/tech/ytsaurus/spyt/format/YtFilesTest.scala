@@ -80,7 +80,7 @@ class YtFilesTest extends FlatSpec with Matchers with LocalSpark with TmpDir wit
     ), tmpPath, tableSchema)
 
     val df = spark.read.yt(tmpPath)
-    val tmpDirPath = Files.createTempDirectory("test_parquet_write")
+    val tmpDirPath = Files.createTempDirectory("test_json_write_to_local_filesystem")
     val resultPath = tmpDirPath.resolve("result")
 
     df.write.json(f"file://${resultPath}")

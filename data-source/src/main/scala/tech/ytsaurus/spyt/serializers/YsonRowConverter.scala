@@ -264,8 +264,9 @@ object YsonRowConverter {
           YsonRowConverter.getOrCreate(t, ytType, config).serializeStruct(value, consumer)
         case map: MapType =>
           serializeMap(value, map, ytType, config, consumer)
-        case _: DatetimeType => consumer.onInteger(value.asInstanceOf[Long])
-        case TimestampType => consumer.onInteger(value.asInstanceOf[Long])
+        case _: DatetimeType => consumer.onUnsignedInteger(value.asInstanceOf[Long])
+        case DateType => consumer.onUnsignedInteger(value.asInstanceOf[Int])
+        case TimestampType => consumer.onUnsignedInteger(value.asInstanceOf[Long])
         case _: Date32Type => consumer.onInteger(value.asInstanceOf[Int])
         case _: Datetime64Type => consumer.onInteger(value.asInstanceOf[Long])
         case _: Timestamp64Type => consumer.onInteger(value.asInstanceOf[Long])

@@ -1,5 +1,6 @@
 package tech.ytsaurus.spyt.serialization
 
+import org.apache.spark.sql.spyt.types.{Date32Type, DatetimeType}
 import org.apache.spark.sql.types._
 import org.apache.spark.unsafe.types.UTF8String
 import tech.ytsaurus.core.common.Decimal.binaryToText
@@ -145,6 +146,7 @@ class YsonDecoder(bytes: Array[Byte], dataType: IndexedDataType) extends YsonBas
           case ShortType => parseVarInt64.toShort
           case IntegerType => parseVarInt64.toInt
           case BinaryType => first +: parseInt64AsBytes
+          case _: Date32Type => parseVarInt64.toInt
           case _ => parseVarInt64
         }
       case YsonTags.BINARY_UINT =>
@@ -157,6 +159,8 @@ class YsonDecoder(bytes: Array[Byte], dataType: IndexedDataType) extends YsonBas
           case NullType =>
             parseUInt64
             null
+          case DateType => parseUInt64.toInt
+          case TimestampType | _: DatetimeType => parseUInt64
           case otherType => YTsaurusTypes.instance.parseUInt64Value(otherType, parseUInt64)
         }
       case YsonTags.BINARY_DOUBLE =>

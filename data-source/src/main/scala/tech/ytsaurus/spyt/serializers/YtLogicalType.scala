@@ -75,7 +75,9 @@ sealed abstract class AtomicYtLogicalType(name: String,
 sealed trait CompositeYtLogicalType extends YtLogicalType {
   override def columnValueType: ColumnValueType = ColumnValueType.ANY
 
-  override def getName(isColumnType: Boolean): String = ColumnValueType.ANY.getName
+  override def getName(isColumnType: Boolean): String = throw new IllegalStateException(
+    "unable to serialize a complex type: use spark.yt.write.typeV3.enabled"
+  )
 }
 
 sealed abstract class CompositeYtLogicalTypeAlias(name: String,

@@ -30,7 +30,7 @@ class CastBaseDecorators {
     if (DataType.equalsStructurally(from, to)) {
       __cast(from, to)
     } else if (from == NullType) {
-      _ => throw QueryExecutionErrors.cannotCastFromNullTypeError(to)
+      YTsaurusCastUtils.cannotCastFromNullTypeError(to)
     } else {
       to match {
         case UInt64Type => UInt64Long.cast(from)
@@ -65,4 +65,10 @@ class CastBaseDecorators {
     case _ => __castToBinaryCode(from)
   }
   private[this] def __castToBinaryCode(from: DataType): CastFunction = ???
+}
+
+object YTsaurusCastUtils {
+  def cannotCastFromNullTypeError(to: DataType): Any => Any = {
+    _ => throw QueryExecutionErrors.cannotCastFromNullTypeError(to)
+  }
 }

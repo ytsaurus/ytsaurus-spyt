@@ -17,6 +17,7 @@ import tech.ytsaurus.spyt.wrapper.YtWrapper
 import tech.ytsaurus.spyt.wrapper.table.OptimizeMode
 import tech.ytsaurus.ysontree.{YTree, YTreeNode}
 
+import scala.collection.mutable
 import scala.language.postfixOps
 
 class YtSparkSQLTest extends FlatSpec with Matchers with LocalSpark with TmpDir
@@ -282,6 +283,13 @@ class YtSparkSQLTest extends FlatSpec with Matchers with LocalSpark with TmpDir
       Row(5, "13"),
       Row(6, "11")
     )
+  }
+
+  it should "cast nested null values" in {
+    val df = spark.sql("SELECT col1, col3, cast(array(NULL) as array<int>) FROM VALUES (1, 2, 3)")
+    val result = df.collect()
+
+    result should contain theSameElementsAs Seq(Row(1, 3, mutable.WrappedArray.make(Array(null))))
   }
 
   it should "create table" in {

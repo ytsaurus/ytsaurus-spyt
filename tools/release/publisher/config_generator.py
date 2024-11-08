@@ -73,8 +73,7 @@ def get_spark_conf(proxy: str):
     else:
         logger.debug("Using default spark conf")
         return {
-            "spark.yt.log.enabled": "false",
-            "spark.hadoop.yt.proxyRole": "spark",
+            "spark.yt.log.enabled": "false"
         }
 
 

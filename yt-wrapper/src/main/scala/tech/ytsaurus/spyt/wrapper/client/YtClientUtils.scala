@@ -161,6 +161,7 @@ trait YtClientUtils {
     }
 
     config.proxyNetworkName.foreach(clientBuilder.setProxyNetworkName(_))
+    config.proxyRole.foreach(clientBuilder.setProxyRole(_))
 
     clientBuilder.build()
   }

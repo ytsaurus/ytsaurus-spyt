@@ -286,7 +286,8 @@ private[spark] object YTsaurusOperationManager extends Logging {
 
   def create(ytProxy: String, conf: SparkConf, networkName: Option[String]): YTsaurusOperationManager = {
     val (user, token) = YTsaurusUtils.userAndToken(conf)
-    val ytClient: YTsaurusClient = buildClient(ytProxy, user, token, networkName)
+    val proxyRole = conf.getOption("spark.hadoop.yt.proxyRole")
+    val ytClient: YTsaurusClient = buildClient(ytProxy, user, token, networkName, proxyRole)
 
     try {
       val globalConfigPath = conf.get(GLOBAL_CONFIG_PATH)
@@ -572,12 +573,15 @@ private[spark] object YTsaurusOperationManager extends Logging {
     description.filter(_.isStringNode).map(_.stringNode().getValue)
   }
 
-  private def buildClient(ytProxy: String, user: String, token: String, networkName: Option[String]): YTsaurusClient = {
+  private def buildClient(ytProxy: String,
+                          user: String,
+                          token: String,
+                          networkName: Option[String],
+                          proxyRole: Option[String]): YTsaurusClient = {
     val builder: YTsaurusClient.ClientBuilder[_ <: YTsaurusClient, _] = YTsaurusClient.builder()
     builder.setCluster(ytProxy)
-    if (networkName.isDefined) {
-      builder.setProxyNetworkName(networkName.get)
-    }
+    networkName.foreach(nn => builder.setProxyNetworkName(nn))
+    proxyRole.foreach(pr => builder.setProxyRole(pr))
     if (user != null && token != null) {
       builder.setAuth(YTsaurusClientAuth.builder().setUser(user).setToken(token).build())
     }

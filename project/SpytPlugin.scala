@@ -27,12 +27,14 @@ object SpytPlugin extends AutoPlugin {
 
     val spytPublishSnapshot = taskKey[Unit]("Publish spyt with snapshot version")
 
-    val spytPublishRelease = taskKey[Unit]("Publish spyt with release version")
+    val spytDistributive = taskKey[Unit]("Build SPYT distributive")
+    val spytBuildRelease = taskKey[Unit]("Build spyt with release version")
 
     val prepareBuildDirectory = taskKey[Unit]("")
-    val spytPublish = taskKey[Unit]("Publish spyt")
 
-    val spytPublishLibraries = taskKey[Unit]("Publish spyt libraries")
+    val publishToYt = taskKey[Unit]("Publish spyt distributive to YTsaurus cluster")
+    val publishToPypi = taskKey[Unit]("Publish SPYT Python libraries to PyPi")
+    val publishToMavenCentral = taskKey[Unit]("Publish SPYT Java libraries to Maven Central")
 
     val spytUpdatePythonVersion = taskKey[Unit]("Update versions in data-source/version.py")
 
@@ -44,13 +46,11 @@ object SpytPlugin extends AutoPlugin {
     val spytVersionPyFile = settingKey[File]("Spyt client version")
     val spytBuildDirectory = settingKey[File]("Build directory")
 
-    def publishRepoEnabled: Boolean = Option(System.getProperty("publishRepo")).exists(_.toBoolean)
-    def publishMavenCentralEnabled: Boolean = Option(System.getProperty("publishMavenCentral")).exists(_.toBoolean)
-    def publishYtEnabled: Boolean = Option(System.getProperty("publishYt")).forall(_.toBoolean)
+    def publishYtEnabled: Boolean = Option(System.getProperty("proxies")).exists(_.nonEmpty)
     def customSpytVersion: Option[String] = Option(System.getProperty("customSpytVersion"))
     def gpgPassphrase: Option[String] = Option(System.getProperty("gpg.passphrase"))
 
-    private def getBuildDirectory(rootDirectory: File): File = {
+    def getBuildDirectory(rootDirectory: File): File = {
       rootDirectory / "build_output"
     }
 
@@ -125,7 +125,7 @@ object SpytPlugin extends AutoPlugin {
       runProcess(state.value, spytSnapshotProcess)
     },
 
-    spytPublishRelease := {
+    spytBuildRelease := {
       runProcess(state.value, spytReleaseProcess)
     }
   )

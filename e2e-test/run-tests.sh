@@ -65,8 +65,7 @@ done
 
 if [ "$rebuild" = "true" ]; then
     # Build SPYT artifacts
-    sbt -DpublishRepo=False -DpublishMavenCentral=False -DpublishYt=False \
-        -DcustomSpytVersion=$spyt_version spytPublishRelease
+    sbt -DcustomSpytVersion=$spyt_version spytBuildRelease
 fi;
 
 if [ "$start_yt_local" = "true" ]; then

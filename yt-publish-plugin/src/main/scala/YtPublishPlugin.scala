@@ -163,10 +163,7 @@ object YtPublishPlugin extends AutoPlugin {
     }
 
     def ytProxies: Seq[String] = {
-      val envProxy = Option(System.getenv("YT_PROXY"))
-      val propProxy = Option(System.getProperty("proxies"))
-      val proxy = propProxy.orElse(envProxy)
-      proxy match {
+      Option(System.getProperty("proxies")) match {
         case Some(value) => value.split(",").toSeq
         case None => Nil
       }
@@ -176,8 +173,8 @@ object YtPublishPlugin extends AutoPlugin {
     def configGenerationEnabled: Boolean = Option(System.getProperty("configGeneration")).forall(_.toBoolean)
     def innerSidecarConfigEnabled: Boolean = Option(System.getProperty("innerSidecarConfig")).exists(_.toBoolean)
 
-    val publishYt = taskKey[Unit]("Publish to yt directory")
-    val publishYtArtifacts = taskKey[Seq[YtPublishArtifact]]("Yt publish artifacts")
+    val publishYt = taskKey[Unit]("Publish SPYT artifacts to YTsaurus cluster")
+    val publishYtArtifacts = taskKey[Seq[YtPublishArtifact]]("Artifacts to publish on the cluster")
   }
 
   import autoImport._
@@ -272,7 +269,7 @@ object YtPublishPlugin extends AutoPlugin {
             }
       }
       if (ytProxies.isEmpty) {
-        log.warn("No yt proxies provided. Use `proxies` property or `YT_PROXY` environment variable")
+        log.warn("No yt proxies provided via `proxies` property.")
       }
       ytProxies.par.foreach { proxy =>
         val (ytClient, connector) = createYtClient(proxy, creds)

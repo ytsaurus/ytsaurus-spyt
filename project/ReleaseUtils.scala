@@ -12,23 +12,15 @@ import java.io.File
 
 object ReleaseUtils {
 
-  lazy val logSpytVersion: ReleaseStep = { st: State =>
-    st.log.info(s"SPYT scala version: ${st.extract.get(spytVersion)}")
-    st.log.info(s"SPYT python version: ${st.extract.get(spytPythonVersion)}")
-    st
-  }
-
   lazy val dumpVersions: ReleaseStep = { st: State =>
     val scalaVersion = st.extract.get(spytVersion)
     val pythonVersion = st.extract.get(spytPythonVersion)
     st.log.info(s"SPYT scala version dump: $scalaVersion")
     st.log.info(s"SPYT python version dump: $pythonVersion")
-    if (!publishYtEnabled) {
-      dumpVersionsToBuildDirectory(
-        Map("scala" -> scalaVersion, "python" -> pythonVersion),
-        st.extract.get(baseDirectory), "version.json"
-      )
-    }
+    dumpVersionsToBuildDirectory(
+      Map("scala" -> scalaVersion, "python" -> pythonVersion),
+      st.extract.get(baseDirectory), "version.json"
+    )
     st
   }
 

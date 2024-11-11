@@ -9,32 +9,15 @@ import spyt.SpytPlugin.autoImport._
 
 object SpytRelease {
 
-  lazy val spytReleaseProcess: Seq[ReleaseStep] = testProcess ++ Seq(
+  lazy val spytReleaseProcess: Seq[ReleaseStep] = Seq(
     ReleaseStep(releaseStepTask(prepareBuildDirectory)),
     minorReleaseVersions,
     setReleaseSpytVersion,
   ) ++ setCustomVersions ++ Seq(
     ReleaseStep(releaseStepTask(spytUpdatePythonVersion)),
-    ReleaseStep(releaseStepTask(spytPublish)),
-    ReleaseStep(releaseStepTask(spytPublishLibraries)),
-    dumpVersions,
-    setNextSpytVersion,
-    ReleaseStep(releaseStepTask(spytUpdatePythonVersion)),
-    logSpytVersion
+    ReleaseStep(releaseStepTask(spytDistributive)),
+    dumpVersions
   )
-
-  private lazy val testProcess: Seq[ReleaseStep] = {
-    val skipTests = Option(System.getProperty("skipTests")).forall(_.toBoolean)
-    if (skipTests) {
-      Nil
-    } else {
-      Seq(
-        checkSnapshotDependencies,
-        runClean,
-        runTest
-      )
-    }
-  }
 
   private def releaseMinorVersions(versions: SettingKey[Versions],
                                    st: State,

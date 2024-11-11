@@ -18,8 +18,8 @@ object SpytSnapshot {
     spytSnapshotVersions,
     setSpytSnapshotVersion,
     releaseStepTask(spytUpdatePythonVersion),
-    releaseStepTask(spytPublish),
-    dumpVersions
+    releaseStepTask(spytDistributive),
+    releaseStepTask(publishToYt)
   )
 
   case class SnapshotVersion(main: String,

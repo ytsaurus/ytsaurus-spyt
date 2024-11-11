@@ -199,8 +199,10 @@ lazy val `spyt-package` = (project in file("spyt-package"))
       val clusterConfigArtifacts = spyt.ClusterConfig.artifacts(streams.value.log, versionValue,
         (Compile / resourceDirectory).value)
 
+      val spytPackageZip = getBuildDirectory(baseDirectory.value.getParentFile) / s"${(Universal / packageName).value}.zip"
+
       Seq(
-        YtPublishFile((Universal / packageBin).value, basePath, None, isTtlLimited = isTtlLimited),
+        YtPublishFile(spytPackageZip, basePath, None, isTtlLimited = isTtlLimited),
         YtPublishFile(setupSpytEnvScript.value, basePath, None, isTtlLimited = isTtlLimited, isExecutable = true)
       ) ++ clusterConfigArtifacts
     }
@@ -228,41 +230,41 @@ lazy val root = (project in file("."))
       streams.value.log.info(s"Preparing build directory in ${baseDirectory.value}")
       deleteBuildDirectory(baseDirectory.value)
     },
-    spytPublish := Def.taskDyn {
-      val task1 = if (publishYtEnabled) {
-        `spyt-package` / publishYt
-      } else {
-        streams.value.log.info("Publishing SPYT files to YT is skipped because of disabled publishYt")
-        `spyt-package` / spytArtifacts
-      }
-      val task2 = Def.task {
-        if (publishRepoEnabled) {
-          (`spyt-package` / pythonBuildAndUpload).value
-        } else {
-          streams.value.log.info("Publishing spyt client to pypi is skipped because of disabled publishRepo")
+
+    spytDistributive := Def.taskDyn {
+      val spytPackageArchives = `spyt-package` / spytArtifacts
+      val pythonWhl = Def.task {
           val pythonDist = (`spyt-package` / pythonBuild).value
           makeLinkToBuildDirectory(pythonDist, baseDirectory.value, "ytsaurus-spyt")
-        }
       }
-      Def.sequential(task1, task2)
+      Def.sequential(spytPackageArchives, pythonWhl)
     }.value,
-    spytPublishLibraries := {
-      if (publishMavenCentralEnabled) {
-        Def.sequential(
-          `spark-adapter-api` / publishSigned,
-          `spark-adapter-impl-322` / publishSigned,
-          `spark-adapter-impl-330` / publishSigned,
-          `yt-wrapper` / publishSigned,
-          `file-system` / publishSigned,
-          `spark-patch` / publishSigned,
-          `data-source-base` / publishSigned,
-          `data-source-extended` / publishSigned,
-          `resource-manager` / publishSigned,
-          `cluster` / publishSigned,
-          `spark-submit` / publishSigned
-        ).value
+
+    publishToYt := {
+      if (publishYtEnabled) {
+        (`spyt-package` / publishYt).value
       } else {
-        streams.value.log.info("Publishing spyt libraries to maven is skipped because of disabled publishRepo")
+        streams.value.log.info("Publishing SPYT files to YT is skipped because no cluster was specified")
       }
+    },
+
+    publishToPypi := {
+      (`spyt-package` / pythonUpload).value
+    },
+
+    publishToMavenCentral := {
+      Def.sequential(
+        `spark-adapter-api` / publishSigned,
+        `spark-adapter-impl-322` / publishSigned,
+        `spark-adapter-impl-330` / publishSigned,
+        `yt-wrapper` / publishSigned,
+        `file-system` / publishSigned,
+        `spark-patch` / publishSigned,
+        `data-source-base` / publishSigned,
+        `data-source-extended` / publishSigned,
+        `resource-manager` / publishSigned,
+        `cluster` / publishSigned,
+        `spark-submit` / publishSigned
+      ).value
     }
   )

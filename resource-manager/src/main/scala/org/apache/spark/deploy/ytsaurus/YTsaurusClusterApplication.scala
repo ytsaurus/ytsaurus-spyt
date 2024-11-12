@@ -5,6 +5,7 @@ import scala.collection.mutable
 import org.apache.spark.SparkConf
 import org.apache.spark.deploy.SparkApplication
 import org.apache.spark.deploy.ytsaurus.Config.YTSAURUS_DRIVER_OPERATION_DUMP_PATH
+import org.apache.spark.deploy.ytsaurus.Config.YTSAURUS_DRIVER_WATCH
 import org.apache.spark.internal.Logging
 import org.apache.spark.scheduler.cluster.ytsaurus.YTsaurusOperationManager
 import org.apache.spark.scheduler.cluster.ytsaurus.YTsaurusOperationManager.{getOperation, getOperationState,
@@ -33,24 +34,27 @@ private[spark] class YTsaurusClusterApplication extends SparkApplication with Lo
 
     try {
       val driverOperation = operationManager.startDriver(conf, appArgs)
-
-      var currentState = "undefined"
-      var webUIAddress: Option[String] = None
       conf.get(YTSAURUS_DRIVER_OPERATION_DUMP_PATH).foreach { File(_).writeAll(driverOperation.id.toString) }
-      while (!YTsaurusOperationManager.isFinalState(currentState)) {
-        Thread.sleep(pingInterval)
-        val opSpec = getOperation(driverOperation, operationManager.ytClient)
-        currentState = getOperationState(opSpec)
-        logInfo(s"Operation: ${driverOperation.id}, State: $currentState")
+      if (conf.get(YTSAURUS_DRIVER_WATCH)) {
+        var currentState = "undefined"
+        var webUIAddress: Option[String] = None
+        while (!YTsaurusOperationManager.isFinalState(currentState)) {
+          Thread.sleep(pingInterval)
+          val opSpec = getOperation(driverOperation, operationManager.ytClient)
+          currentState = getOperationState(opSpec)
+          logInfo(s"Operation: ${driverOperation.id}, State: $currentState")
 
-        val currentWebUiAddress = getWebUIAddress(opSpec)
-        if (currentWebUiAddress.isDefined && currentWebUiAddress != webUIAddress) {
-          webUIAddress = currentWebUiAddress
-          webUIAddress.foreach(addr => logInfo(s"Web UI: $addr"))
+          val currentWebUiAddress = getWebUIAddress(opSpec)
+          if (currentWebUiAddress.isDefined && currentWebUiAddress != webUIAddress) {
+            webUIAddress = currentWebUiAddress
+            webUIAddress.foreach(addr => logInfo(s"Web UI: $addr"))
+          }
         }
-      }
-      if (!isCompletedState(currentState)) {
-        throw new IllegalStateException(s"Unsuccessful operation state: $currentState")  // For non-zero exit code
+        if (!isCompletedState(currentState)) {
+          throw new IllegalStateException(s"Unsuccessful operation state: $currentState")  // For non-zero exit code
+        }
+      } else {
+        logInfo(s"Driver operation: ${driverOperation.id}")
       }
     } finally {
       operationManager.close()

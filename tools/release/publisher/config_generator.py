@@ -46,7 +46,6 @@ GLOBAL_CONFIG = {
 SPARK_CONFS = {
     'hahn': {
         "spark.yt.log.enabled": "false",
-        "spark.hadoop.yt.proxyRole": "spark",
     },
     'hume': {
         "spark.yt.log.enabled": "false",
@@ -57,7 +56,6 @@ SPARK_CONFS = {
     },
     'arnold': {
         "spark.yt.log.enabled": "false",
-        "spark.hadoop.yt.proxyRole": "spark",
     }
 }
 

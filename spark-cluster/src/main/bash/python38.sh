@@ -32,6 +32,7 @@ $PYTHON_VERSION -m pip install -i https://pypi.yandex-team.ru/simple pandas==1.5
 # $PYTHON_VERSION -m pip install -i https://pypi.yandex-team.ru/simple cyson
 $PYTHON_VERSION -m pip install -i https://pypi.yandex-team.ru/simple scipy==1.10.1
 $PYTHON_VERSION -m pip install -i https://pypi.yandex-team.ru/simple numpy==1.24.2
+$PYTHON_VERSION -m pip install -i https://pypi.yandex-team.ru/simple packaging==24.1
 
 mkdir -p /opt/$PYTHON_VERSION/bin
 ln -s /usr/bin/$PYTHON_VERSION /opt/$PYTHON_VERSION/bin/python

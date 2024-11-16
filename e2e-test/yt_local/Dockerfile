@@ -11,7 +11,7 @@ RUN set -eux; \
   do \
     apt-get install -y python$VERSION python$VERSION-distutils; \
     curl -sS https://bootstrap.pypa.io/get-pip.py | python$VERSION; \
-    python$VERSION -m pip install ytsaurus-client==0.13.19; \
+    python$VERSION -m pip install ytsaurus-client==0.13.20 packaging==24.1; \
   done
 
 COPY ./start.sh /usr/bin/start-mod.sh

@@ -27,11 +27,17 @@ object SpytSnapshot {
                              hash: Int,
                              dev: Int) {
     def toScalaString: String = {
-      s"$main-$ticket-$hash-$dev-SNAPSHOT"
+      (ticket, hash, dev) match {
+        case (0, 0, 0) => main
+        case _ => s"$main-$ticket-$hash-$dev-SNAPSHOT"
+      }
     }
 
     def toPythonString: String = {
-      s"${main}b$ticket.post$hash.dev$dev"
+      (ticket, hash, dev) match {
+        case (0, 0, 0) => main
+        case _ => s"${main}b$ticket.post$hash.dev$dev"
+      }
     }
 
     def inc: SnapshotVersion = getVcsInfo()
@@ -125,6 +131,10 @@ object SpytSnapshot {
     def parse(str: String): SnapshotVersion = {
       str match {
         case snapshotVersionRegex(main, _, ticket, _, hash, _, dev) =>
+          SnapshotVersion(
+            main, parseTicket(ticket), parseHash(hash), parseDev(dev)
+          )
+        case pythonVersionRegex(main, _, ticket, _, hash, _, dev) =>
           SnapshotVersion(
             main, parseTicket(ticket), parseHash(hash), parseDev(dev)
           )

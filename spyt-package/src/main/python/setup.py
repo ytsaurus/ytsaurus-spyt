@@ -39,7 +39,7 @@ setuptools.setup(
     ],
     extras_require={
         "all": [
-            'pyspark>=3.2.2,<3.4.0',
+            'pyspark>=3.2.2,<3.5.0',
             'ytsaurus-client',
             'ytsaurus-yson'
         ]

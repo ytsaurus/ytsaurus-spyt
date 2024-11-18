@@ -1,7 +1,7 @@
 package tech.ytsaurus.spyt.format
 
 import org.apache.spark.sql.Row
-import org.apache.spark.sql.spyt.types.{UInt64Long, UInt64Type}
+import org.apache.spark.sql.spyt.types.UInt64Type
 import org.apache.spark.sql.types.{BooleanType, ByteType, DoubleType, FloatType, LongType, StructField, StructType}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -9,6 +9,7 @@ import tech.ytsaurus.client.rows.{UnversionedRow, UnversionedValue}
 import tech.ytsaurus.core.tables.{ColumnValueType, TableSchema}
 import tech.ytsaurus.spyt._
 import tech.ytsaurus.spyt.test.{LocalSpark, TestUtils, TmpDir}
+import tech.ytsaurus.spyt.types.UInt64Long
 
 class ExtendedYtFileFormatTest extends AnyFlatSpec with Matchers with LocalSpark with TmpDir with TestUtils {
 

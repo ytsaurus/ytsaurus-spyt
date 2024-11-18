@@ -1,5 +1,6 @@
 package org.apache.spark.launcher;
 
+import tech.ytsaurus.spyt.patch.annotations.Applicability;
 import tech.ytsaurus.spyt.patch.annotations.OriginClass;
 import tech.ytsaurus.spyt.patch.annotations.Subclass;
 

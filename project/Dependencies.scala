@@ -3,6 +3,7 @@ import sbt._
 object Dependencies {
   lazy val circeVersion = "0.12.3"
   lazy val circeYamlVersion = "0.12.0"
+  lazy val shapelessVersion = "2.3.7"
   lazy val scalatestVersion = "3.1.0"
   lazy val livyVersion = "0.8.0-incubating"
   lazy val ytsaurusClientVersion = "1.2.6"
@@ -17,6 +18,10 @@ object Dependencies {
     "io.circe" %% "circe-generic",
     "io.circe" %% "circe-parser"
   ).map(_ % circeVersion)
+
+  lazy val shapeless = Seq(
+    "com.chuusai" %% "shapeless" % shapelessVersion
+  )
 
   lazy val mockito = Seq(
     "org.mockito" %% "mockito-scala-scalatest" % mockitoVersion % Test,

@@ -2,15 +2,15 @@ package tech.ytsaurus.spyt.format.types
 
 import org.apache.spark.sql.{DataFrame, Row}
 import org.apache.spark.sql.functions._
-import org.apache.spark.sql.types.{LongType, Metadata, StringType, StructField, StructType}
-import org.apache.spark.sql.spyt.types.UInt64Long.{fromStringUdf, toStringUdf}
-import org.apache.spark.sql.spyt.types.{UInt64Long, UInt64Type}
+import org.apache.spark.sql.types.{LongType, Metadata, StringType, StructField}
+import org.apache.spark.sql.spyt.types.UInt64Support.{fromStringUdf, toStringUdf}
+import org.apache.spark.sql.spyt.types.UInt64Type
 import org.apache.spark.storage.StorageLevel
-import org.apache.spark.storage.StorageLevel._
 import org.scalatest.{FlatSpec, Matchers}
 import tech.ytsaurus.spyt._
 import tech.ytsaurus.spyt.test.{LocalSpark, TestUtils, TmpDir}
 import tech.ytsaurus.core.tables.{ColumnValueType, TableSchema}
+import tech.ytsaurus.spyt.types.UInt64Long
 import tech.ytsaurus.spyt.wrapper.YtWrapper
 
 class UInt64Test extends FlatSpec with Matchers with LocalSpark with TmpDir with TestUtils {

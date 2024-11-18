@@ -1,6 +1,7 @@
 package org.apache.spark.sql.v2
 
 import org.apache.spark.sql.execution.datasources.PartitionedFile
+import tech.ytsaurus.spyt.SparkAdapter
 import tech.ytsaurus.spyt.format.YtPartitionedFileDelegate
 import tech.ytsaurus.spyt.format.YtPartitionedFileDelegate.YtPartitionedFileExt
 import tech.ytsaurus.spyt.fs.path.YPathEnriched
@@ -17,7 +18,7 @@ object TestPartitionedFile {
         Static(ytFile.path, ytFile.delegate.beginRow, ytFile.delegate.endRow)
       case ytFile: YtPartitionedFileExt =>
         Dynamic(ytFile.path, ytFile.length)
-      case _ => Csv(file.filePath, file.length)
+      case _ => Csv(SparkAdapter.instance.getStringFilePath(file), file.length)
     }
   }
 
@@ -35,7 +36,8 @@ object TestPartitionedFile {
   }
 
   case class Csv(path: String, length: Long) extends TestPartitionedFile {
-    override def toPartitionedFile: PartitionedFile =
-      PartitionedFile(YtPartitionedFileDelegate.emptyInternalRow, path, 0, length)
+    override def toPartitionedFile: PartitionedFile = {
+      SparkAdapter.instance.createPartitionedFile(YtPartitionedFileDelegate.emptyInternalRow, path, 0, length)
+    }
   }
 }

@@ -8,6 +8,8 @@ from pyspark.sql.dataframe import DataFrame
 from pyspark.sql.types import StructType, StructField
 from pyspark.sql import SparkSession
 
+from .utils import check_spark_version
+
 
 # DataFrameReader extensions
 def read_yt(self, *paths):
@@ -74,119 +76,117 @@ def transform(self, func):
     return func(self)
 
 
-# Cloudpickle extensions. Must be applied if Spark version is less than 3.4.0
-def _extract_code_globals(co):
-    """
-    Find all globals names read or written to by codeblock co
-    """
-    out_names = _extract_code_globals_cache.get(co)
-    if out_names is None:
-        # SPYT-415: From Spark 3.4
-        if sys.version_info < (3, 11):
-            names = co.co_names
-            out_names = {names[oparg] for _, oparg in _walk_global_ops(co)}
-        else:
-            # We use a dict with None values instead of a set to get a
-            # deterministic order (assuming Python 3.6+) and avoid introducing
-            # non-deterministic pickle bytes as a results.
-            out_names = {name: None for name in _walk_global_ops(co)}
-
-        # Declaring a function inside another one using the "def ..."
-        # syntax generates a constant code object corresonding to the one
-        # of the nested function's As the nested function may itself need
-        # global variables, we need to introspect its code, extract its
-        # globals, (look for code object in it's co_consts attribute..) and
-        # add the result to code_globals
-        if co.co_consts:
-            for const in co.co_consts:
-                if isinstance(const, types.CodeType):
-                    out_names.update(_extract_code_globals(const))
-
-        _extract_code_globals_cache[co] = out_names
-
-    return out_names
-
-
-# SPYT-415: From Spark 3.4
-if sys.version_info < (3, 11):
-    def _walk_global_ops(code):
+if check_spark_version(less_than="3.4.0"):
+    def _extract_code_globals(co):
         """
-        Yield (opcode, argument number) tuples for all
-        global-referencing instructions in *code*.
+        Find all globals names read or written to by codeblock co
         """
-        for instr in dis.get_instructions(code):
-            op = instr.opcode
-            if op in GLOBAL_OPS:
-                yield op, instr.arg
-else:
-    def _walk_global_ops(code):
-        """
-        Yield referenced name for all global-referencing instructions in *code*.
-        """
-        for instr in dis.get_instructions(code):
-            op = instr.opcode
-            if op in GLOBAL_OPS:
-                yield instr.argval
+        out_names = _extract_code_globals_cache.get(co)
+        if out_names is None:
+            # SPYT-415: From Spark 3.4
+            if sys.version_info < (3, 11):
+                names = co.co_names
+                out_names = {names[oparg] for _, oparg in _walk_global_ops(co)}
+            else:
+                # We use a dict with None values instead of a set to get a
+                # deterministic order (assuming Python 3.6+) and avoid introducing
+                # non-deterministic pickle bytes as a results.
+                out_names = {name: None for name in _walk_global_ops(co)}
 
+            # Declaring a function inside another one using the "def ..."
+            # syntax generates a constant code object corresonding to the one
+            # of the nested function's As the nested function may itself need
+            # global variables, we need to introspect its code, extract its
+            # globals, (look for code object in it's co_consts attribute..) and
+            # add the result to code_globals
+            if co.co_consts:
+                for const in co.co_consts:
+                    if isinstance(const, types.CodeType):
+                        out_names.update(_extract_code_globals(const))
 
-def _code_reduce(obj):
-    """codeobject reducer"""
+            _extract_code_globals_cache[co] = out_names
+
+        return out_names
+
     # SPYT-415: From Spark 3.4
-    # If you are not sure about the order of arguments, take a look at help
-    # of the specific type from types, for example:
-    # >>> from types import CodeType
-    # >>> help(CodeType)
-    if hasattr(obj, "co_exceptiontable"):  # pragma: no branch
-        # Python 3.11 and later: there are some new attributes
-        # related to the enhanced exceptions.
-        args = (
-            obj.co_argcount, obj.co_posonlyargcount,
-            obj.co_kwonlyargcount, obj.co_nlocals, obj.co_stacksize,
-            obj.co_flags, obj.co_code, obj.co_consts, obj.co_names,
-            obj.co_varnames, obj.co_filename, obj.co_name, obj.co_qualname,
-            obj.co_firstlineno, obj.co_linetable, obj.co_exceptiontable,
-            obj.co_freevars, obj.co_cellvars,
-        )
-    elif hasattr(obj, "co_linetable"):  # pragma: no branch
-        # Python 3.10 and later: obj.co_lnotab is deprecated and constructor
-        # expects obj.co_linetable instead.
-        args = (
-            obj.co_argcount, obj.co_posonlyargcount,
-            obj.co_kwonlyargcount, obj.co_nlocals, obj.co_stacksize,
-            obj.co_flags, obj.co_code, obj.co_consts, obj.co_names,
-            obj.co_varnames, obj.co_filename, obj.co_name,
-            obj.co_firstlineno, obj.co_linetable, obj.co_freevars,
-            obj.co_cellvars
-        )
-    elif hasattr(obj, "co_nmeta"):  # pragma: no cover
-        # "nogil" Python: modified attributes from 3.9
-        args = (
-            obj.co_argcount, obj.co_posonlyargcount,
-            obj.co_kwonlyargcount, obj.co_nlocals, obj.co_framesize,
-            obj.co_ndefaultargs, obj.co_nmeta,
-            obj.co_flags, obj.co_code, obj.co_consts,
-            obj.co_varnames, obj.co_filename, obj.co_name,
-            obj.co_firstlineno, obj.co_lnotab, obj.co_exc_handlers,
-            obj.co_jump_table, obj.co_freevars, obj.co_cellvars,
-            obj.co_free2reg, obj.co_cell2reg
-        )
-    elif hasattr(obj, "co_posonlyargcount"):
-        # Backward compat for 3.9 and older
-        args = (
-            obj.co_argcount, obj.co_posonlyargcount,
-            obj.co_kwonlyargcount, obj.co_nlocals, obj.co_stacksize,
-            obj.co_flags, obj.co_code, obj.co_consts, obj.co_names,
-            obj.co_varnames, obj.co_filename, obj.co_name,
-            obj.co_firstlineno, obj.co_lnotab, obj.co_freevars,
-            obj.co_cellvars
-        )
+    if sys.version_info < (3, 11):
+        def _walk_global_ops(code):
+            """
+            Yield (opcode, argument number) tuples for all
+            global-referencing instructions in *code*.
+            """
+            for instr in dis.get_instructions(code):
+                op = instr.opcode
+                if op in GLOBAL_OPS:
+                    yield op, instr.arg
     else:
-        # Backward compat for even older versions of Python
-        args = (
-            obj.co_argcount, obj.co_kwonlyargcount, obj.co_nlocals,
-            obj.co_stacksize, obj.co_flags, obj.co_code, obj.co_consts,
-            obj.co_names, obj.co_varnames, obj.co_filename,
-            obj.co_name, obj.co_firstlineno, obj.co_lnotab,
-            obj.co_freevars, obj.co_cellvars
-        )
-    return types.CodeType, args
+        def _walk_global_ops(code):
+            """
+            Yield referenced name for all global-referencing instructions in *code*.
+            """
+            for instr in dis.get_instructions(code):
+                op = instr.opcode
+                if op in GLOBAL_OPS:
+                    yield instr.argval
+
+    def _code_reduce(obj):
+        """codeobject reducer"""
+        # SPYT-415: From Spark 3.4
+        # If you are not sure about the order of arguments, take a look at help
+        # of the specific type from types, for example:
+        # >>> from types import CodeType
+        # >>> help(CodeType)
+        if hasattr(obj, "co_exceptiontable"):  # pragma: no branch
+            # Python 3.11 and later: there are some new attributes
+            # related to the enhanced exceptions.
+            args = (
+                obj.co_argcount, obj.co_posonlyargcount,
+                obj.co_kwonlyargcount, obj.co_nlocals, obj.co_stacksize,
+                obj.co_flags, obj.co_code, obj.co_consts, obj.co_names,
+                obj.co_varnames, obj.co_filename, obj.co_name, obj.co_qualname,
+                obj.co_firstlineno, obj.co_linetable, obj.co_exceptiontable,
+                obj.co_freevars, obj.co_cellvars,
+            )
+        elif hasattr(obj, "co_linetable"):  # pragma: no branch
+            # Python 3.10 and later: obj.co_lnotab is deprecated and constructor
+            # expects obj.co_linetable instead.
+            args = (
+                obj.co_argcount, obj.co_posonlyargcount,
+                obj.co_kwonlyargcount, obj.co_nlocals, obj.co_stacksize,
+                obj.co_flags, obj.co_code, obj.co_consts, obj.co_names,
+                obj.co_varnames, obj.co_filename, obj.co_name,
+                obj.co_firstlineno, obj.co_linetable, obj.co_freevars,
+                obj.co_cellvars
+            )
+        elif hasattr(obj, "co_nmeta"):  # pragma: no cover
+            # "nogil" Python: modified attributes from 3.9
+            args = (
+                obj.co_argcount, obj.co_posonlyargcount,
+                obj.co_kwonlyargcount, obj.co_nlocals, obj.co_framesize,
+                obj.co_ndefaultargs, obj.co_nmeta,
+                obj.co_flags, obj.co_code, obj.co_consts,
+                obj.co_varnames, obj.co_filename, obj.co_name,
+                obj.co_firstlineno, obj.co_lnotab, obj.co_exc_handlers,
+                obj.co_jump_table, obj.co_freevars, obj.co_cellvars,
+                obj.co_free2reg, obj.co_cell2reg
+            )
+        elif hasattr(obj, "co_posonlyargcount"):
+            # Backward compat for 3.9 and older
+            args = (
+                obj.co_argcount, obj.co_posonlyargcount,
+                obj.co_kwonlyargcount, obj.co_nlocals, obj.co_stacksize,
+                obj.co_flags, obj.co_code, obj.co_consts, obj.co_names,
+                obj.co_varnames, obj.co_filename, obj.co_name,
+                obj.co_firstlineno, obj.co_lnotab, obj.co_freevars,
+                obj.co_cellvars
+            )
+        else:
+            # Backward compat for even older versions of Python
+            args = (
+                obj.co_argcount, obj.co_kwonlyargcount, obj.co_nlocals,
+                obj.co_stacksize, obj.co_flags, obj.co_code, obj.co_consts,
+                obj.co_names, obj.co_varnames, obj.co_filename,
+                obj.co_name, obj.co_firstlineno, obj.co_lnotab,
+                obj.co_freevars, obj.co_cellvars
+            )
+        return types.CodeType, args

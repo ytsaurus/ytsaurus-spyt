@@ -14,7 +14,8 @@ from yt.wrapper.http_helpers import get_token, get_user_name, get_proxy_address_
 
 from .arcadia import checked_extract_spark  # noqa: E402
 from .utils import default_token, default_discovery_dir, get_spark_master, set_conf, \
-    SparkDiscovery, parse_memory, format_memory, base_spark_conf, parse_bool, get_spyt_home  # noqa: E402
+    SparkDiscovery, parse_memory, format_memory, base_spark_conf, parse_bool, get_spyt_home, \
+    check_spark_version  # noqa: E402
 from .conf import read_remote_conf, read_global_conf, validate_versions_compatibility, \
     read_cluster_conf, SELF_VERSION  # noqa: E402
 
@@ -286,7 +287,9 @@ def _build_spark_conf(num_executors=None,
     ipv6_preference_enabled = parse_bool(spark_conf.get('spark.hadoop.yt.preferenceIpv6.enabled'))
     if ipv6_preference_enabled:
         spark_conf.set('spark.driver.extraJavaOptions', '-Djava.net.preferIPv6Addresses=true')
-        spark_conf.set('spark.executor.extraJavaOptions', '-Djava.net.preferIPv6Addresses=true')
+        if check_spark_version(less_than="3.4.0"):
+            # Starting from spark 3.4.0 IPv6 preference for executors is dependent on driver
+            spark_conf.set('spark.executor.extraJavaOptions', '-Djava.net.preferIPv6Addresses=true')
 
     return spark_conf
 

@@ -28,7 +28,7 @@ from .conf import read_remote_conf, validate_cluster_version, \
     latest_ytserver_proxy_path, read_global_conf, \
     worker_num_limit, validate_worker_num, read_cluster_conf, validate_ssd_config, cuda_toolkit_version  # noqa: E402
 from .utils import get_spark_master, base_spark_conf, SparkDiscovery, SparkCluster, call_get_proxy_address_url, \
-    parse_bool, _add_conf  # noqa: E402
+    parse_bool, _add_conf, check_spark_version  # noqa: E402
 from .enabler import SpytEnablers  # noqa: E402
 from .spec import SparkDefaultArguments, CommonComponentConfig, MasterConfig, WorkerConfig, HistoryServerConfig, \
     LivyConfig, build_spark_operation_spec, WorkerResources  # noqa: E402
@@ -210,10 +210,11 @@ def _add_python_version(python_version, spark_args):
 
 def _add_ipv6_preference(ipv6_preference_enabled, spark_args):
     if ipv6_preference_enabled:
-        _add_conf({
-            'spark.driver.extraJavaOptions': '-Djava.net.preferIPv6Addresses=true',
-            'spark.executor.extraJavaOptions': '-Djava.net.preferIPv6Addresses=true'
-        }, spark_args)
+        ipv6_conf = {'spark.driver.extraJavaOptions': '-Djava.net.preferIPv6Addresses=true'}
+        if check_spark_version(less_than="3.4.0"):
+            # Starting from spark 3.4.0 IPv6 preference for executors is dependent on driver
+            ipv6_conf['spark.executor.extraJavaOptions'] = '-Djava.net.preferIPv6Addresses=true'
+        _add_conf(ipv6_conf, spark_args)
 
 
 def wrap_cached_jar(path, jar_caching_enabled):

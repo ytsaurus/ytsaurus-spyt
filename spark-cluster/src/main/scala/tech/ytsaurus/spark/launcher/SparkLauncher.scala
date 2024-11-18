@@ -12,7 +12,7 @@ import tech.ytsaurus.spyt.wrapper.YtWrapper
 import tech.ytsaurus.spyt.wrapper.client.YtClientConfiguration
 import tech.ytsaurus.spyt.wrapper.discovery.{Address, CompoundDiscoveryService, CypressDiscoveryService, DiscoveryServerService, DiscoveryService}
 import tech.ytsaurus.client.CompoundClient
-import tech.ytsaurus.spyt.HostAndPort
+import tech.ytsaurus.spyt.{HostAndPort, SparkVersionUtils}
 
 import java.io.File
 import java.nio.file.{Files, Path}
@@ -83,10 +83,13 @@ trait SparkLauncher {
 
   private def getLivyClientSparkConf(): Seq[String] = {
     if (isIpv6PreferenceEnabled) {
-      Seq(
-        "spark.driver.extraJavaOptions = -Djava.net.preferIPv6Addresses=true",
-        "spark.executor.extraJavaOptions = -Djava.net.preferIPv6Addresses=true"
-      )
+      Seq("spark.driver.extraJavaOptions = -Djava.net.preferIPv6Addresses=true") ++ (
+        if (SparkVersionUtils.lessThan("3.4.0")) {
+          // Starting from spark 3.4.0 IPv6 preference for executors is dependent on driver
+          Seq("spark.executor.extraJavaOptions = -Djava.net.preferIPv6Addresses=true")
+        } else {
+          Nil
+        })
     } else {
       Seq()
     }
@@ -190,7 +193,7 @@ trait SparkLauncher {
       "LIVY_PID_DIR" -> livyHome,
       "PYSPARK_PYTHON" -> "python3",
       "LIVY_SERVER_JAVA_OPTS" -> livyJavaOpts,
-      "CLASSPATH" -> s"$sparkHome/jars/*",
+      "CLASSPATH" -> s"$spytHome/jars/*:$sparkHome/jars/*",
       "PYTHONPATH" -> s"$spytHome/python",
     )
     if (javaHome != null) {

@@ -3,9 +3,9 @@ package tech.ytsaurus.spyt.format
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.execution.datasources.PartitionedFile
 
-trait YtPartitioningSupport[T <: YtPartitioningDelegate] { this: PartitionedFile =>
+trait YtPartitioningSupport[T <: YtPartitioningDelegate] {
   val delegate: T
-  def path: String = filePath
+  def path: String = delegate.filePath
 }
 
 object YtPartitioningSupport {

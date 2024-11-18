@@ -10,7 +10,7 @@ def require_yt_client():
 
 
 def require_pyspark():
-    compatible_versions_str = '>=3.2.2,<3.4.0'
+    compatible_versions_str = '>=3.2.2,<3.5.0'
     try:
         import pyspark
         try:

@@ -17,4 +17,8 @@ object SparkVersionUtils {
   }
 
   def lessThan(sparkVersion: String): Boolean = ordering.lt(currentVersion, sparkVersion)
+
+  def greaterThanOrEqual(sparkVersion: String): Boolean = ordering.gteq(currentVersion, sparkVersion)
+
+  def is(sparkVersion: String): Boolean = currentVersion == sparkVersion
 }

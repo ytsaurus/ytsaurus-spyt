@@ -1166,6 +1166,7 @@ public class ArrowTableRowsSerializer<Struct, List, Dict, Getters extends YTGett
             try (var batch = unloader.getRecordBatch()) {
                 MessageSerializer.serialize(writeChannel, batch);
             }
+            writeChannel.writeZeros(4);
         } catch (IOException e) {
             throw new RuntimeException(e);
         }

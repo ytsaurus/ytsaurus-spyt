@@ -1,31 +1,12 @@
 package tech.ytsaurus.spyt.serializers
 
-import org.apache.spark.sql.Row
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.util.{ArrayData, MapData}
 import org.apache.spark.sql.spyt.types._
 import org.apache.spark.sql.types._
-import tech.ytsaurus.client.{InternalRowYTGetters, YTGetters}
+import tech.ytsaurus.client.InternalRowYTGetters
 import tech.ytsaurus.core.tables.ColumnValueType
 import tech.ytsaurus.spyt.serializers.SchemaConverter.MetadataFields
-import tech.ytsaurus.spyt.serializers.YsonRowConverter.{isNull, serializeValue}
-import tech.ytsaurus.spyt.serializers.YtLogicalType.Binary.tiType
-import tech.ytsaurus.spyt.serializers.YtLogicalType.Boolean.tiType
-import tech.ytsaurus.spyt.serializers.YtLogicalType.Date.tiType
-import tech.ytsaurus.spyt.serializers.YtLogicalType.Datetime.tiType
-import tech.ytsaurus.spyt.serializers.YtLogicalType.Double.tiType
-import tech.ytsaurus.spyt.serializers.YtLogicalType.Float.tiType
-import tech.ytsaurus.spyt.serializers.YtLogicalType.Int16.tiType
-import tech.ytsaurus.spyt.serializers.YtLogicalType.Int32.tiType
-import tech.ytsaurus.spyt.serializers.YtLogicalType.Int64.tiType
-import tech.ytsaurus.spyt.serializers.YtLogicalType.Int8.tiType
-import tech.ytsaurus.spyt.serializers.YtLogicalType.Interval.tiType
-import tech.ytsaurus.spyt.serializers.YtLogicalType.Null.tiType
-import tech.ytsaurus.spyt.serializers.YtLogicalType.String.tiType
-import tech.ytsaurus.spyt.serializers.YtLogicalType.Timestamp.tiType
-import tech.ytsaurus.spyt.serializers.YtLogicalType.Uint32.tiType
-import tech.ytsaurus.spyt.serializers.YtLogicalType.Uint64.tiType
-import tech.ytsaurus.spyt.serializers.YtLogicalType.Utf8.tiType
 import tech.ytsaurus.typeinfo.StructType.Member
 import tech.ytsaurus.typeinfo.{TiType, TypeName}
 import tech.ytsaurus.yson.YsonConsumer

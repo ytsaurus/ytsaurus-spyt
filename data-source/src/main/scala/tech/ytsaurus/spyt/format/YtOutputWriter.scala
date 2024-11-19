@@ -9,7 +9,7 @@ import org.apache.spark.sql.catalyst.util.{ArrayData, MapData}
 import org.apache.spark.sql.execution.datasources.OutputWriter
 import org.apache.spark.sql.types.StructType
 import org.slf4j.LoggerFactory
-import tech.ytsaurus.client.request.{TransactionalOptions, WriteTable}
+import tech.ytsaurus.client.request.{TransactionalOptions, WriteSerializationContext, WriteTable}
 import tech.ytsaurus.client.{ArrowWriteSerializationContext, CompoundClient, InternalRowYTGetters, TableWriter}
 import tech.ytsaurus.core.GUID
 import tech.ytsaurus.spyt.format.conf.SparkYtWriteConfiguration
@@ -156,12 +156,17 @@ class YtOutputWriter(richPath: YPathEnriched,
     val internalRowGetters = new InternalRowYTGetters()
     val request = WriteTable.builder[InternalRow]()
       .setPath(appendPath)
-      .setSerializationContext(new ArrowWriteSerializationContext[InternalRow, ArrayData, MapData, InternalRowYTGetters](
-        WriteSchemaConverter(options).ytLogicalTypeStruct(schema).fields.zipWithIndex.map {
-          case ((name, ytLogicalType, _), i) =>
-            util.Map.entry(name, ytLogicalType.ytGettersFromStruct(internalRowGetters, i))
-        }.asJava
-      ))
+      .setSerializationContext(
+        if (options.ytConf(ArrowWriteEnabled))
+          new ArrowWriteSerializationContext[InternalRow, ArrayData, MapData, InternalRowYTGetters](
+            WriteSchemaConverter(options).ytLogicalTypeStruct(schema).fields.zipWithIndex.map {
+              case ((name, ytLogicalType, _), i) =>
+                util.Map.entry(name, ytLogicalType.ytGettersFromStruct(internalRowGetters, i))
+            }.asJava
+          )
+        else
+          new WriteSerializationContext(new InternalRowSerializer(schema, WriteSchemaConverter(options)))
+      )
       .setTransactionalOptions(new TransactionalOptions(GUID.valueOf(transactionGuid)))
       .setNeedRetries(false)
       .build()

@@ -70,7 +70,10 @@ object SpytRelease {
 
   private lazy val setCustomSpytVersions: ReleaseStep = {
     customSpytVersion.map { v =>
-      setVersionForced(Seq(spytVersion -> v, spytPythonVersion -> v), spytVersionFile)
+      setVersionForced(Seq(
+        spytVersion -> SpytSnapshot.SnapshotVersion.parse(v).toScalaString,
+        spytPythonVersion -> SpytSnapshot.SnapshotVersion.parse(v).toPythonString
+      ), spytVersionFile)
     }.getOrElse(ReleaseStep(identity))
   }
 }

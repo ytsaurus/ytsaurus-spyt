@@ -177,6 +177,7 @@ public class ArrowTableRowsSerializer<Struct, List, Dict, Getters extends YTGett
     private ArrowGetterFromList nonComplexArrowGetter(String name, Getters.FromList getter) {
         var tiType = getter.getTiType();
         switch (tiType.getTypeName()) {
+            case Utf8:
             case String: {
                 var stringGetter = (Getters.FromListToString) getter;
                 return new ArrowGetterFromList(
@@ -630,6 +631,7 @@ public class ArrowTableRowsSerializer<Struct, List, Dict, Getters extends YTGett
     private ArrowGetterFromStruct nonComplexArrowGetter(String name, Getters.FromStruct getter) {
         var tiType = getter.getTiType();
         switch (tiType.getTypeName()) {
+            case Utf8:
             case String: {
                 var stringGetter = (Getters.FromStructToString) getter;
                 return new ArrowGetterFromStruct(field(name, new ArrowType.Binary())) {

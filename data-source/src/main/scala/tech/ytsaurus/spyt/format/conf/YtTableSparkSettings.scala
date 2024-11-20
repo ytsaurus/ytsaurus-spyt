@@ -65,7 +65,7 @@ object YtTableSparkSettings {
 
   case object ArrowEnabled extends ConfigEntry[Boolean]("arrow_enabled", Some(true))
 
-  case object ArrowWriteEnabled extends ConfigEntry[Boolean]("arrow_write_enabled", Some(true))
+  case object ArrowWriteEnabled extends ConfigEntry[Boolean]("arrow_write_enabled", Some(false))
 
   case object KeyPartitioned extends ConfigEntry[Boolean]("key_partitioned")
 

@@ -24,16 +24,23 @@ private[spark] class YTsaurusClusterManager extends ExternalClusterManager with 
     logInfo("Creating YTsaurus scheduler backend")
     var ytProxy = YTsaurusUtils.parseMasterUrl(masterURL)
     val deployMode = sc.conf.get("spark.submit.deployMode")
+    var proxyRole = sc.conf.getOption("spark.hadoop.yt.proxyRole")
     var networkName = sc.conf.getOption("spark.hadoop.yt.proxyNetworkName")
     if (deployMode == "cluster") {
       ytProxy = sc.conf.get("spark.hadoop.yt.clusterProxy", ytProxy)
+      if (sc.conf.contains("spark.hadoop.yt.clusterProxyRole")) {
+        proxyRole = sc.conf.getOption("spark.hadoop.yt.clusterProxyRole")
+      }
       networkName = None
     }
     if (sc.conf.contains("spark.hadoop.yt.clusterProxy")) {
       sc.conf.set("spark.hadoop.yt.proxy", sc.conf.get("spark.hadoop.yt.clusterProxy"))
     }
+    if (sc.conf.contains("spark.hadoop.yt.clusterProxyRole")) {
+      sc.conf.set("spark.hadoop.yt.proxyRole", sc.conf.get("spark.hadoop.yt.clusterProxyRole"))
+    }
 
-    val operationManager = YTsaurusOperationManager.create(ytProxy, sc.conf, networkName)
+    val operationManager = YTsaurusOperationManager.create(ytProxy, sc.conf, networkName, proxyRole)
 
     new YTsaurusSchedulerBackend(scheduler.asInstanceOf[TaskSchedulerImpl], sc, operationManager)
   }

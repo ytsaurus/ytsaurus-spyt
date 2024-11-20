@@ -19,25 +19,20 @@ class WriteSchemaConverter(
 ) {
   private def ytLogicalTypeV3Variant(struct: StructType): YtLogicalType = {
     if (isVariantOverTuple(struct)) {
-      YtLogicalType.VariantOverTuple {
-        struct.fields.map(tF =>
-          (wrapSparkAttributes(ytLogicalTypeV3(tF), tF.nullable, Some(tF.metadata)), tF.metadata))
-      }
+      YtLogicalType.VariantOverTuple { struct.fields.map(tF => (ytLogicalTypeV3(tF), tF.metadata)) }
     } else {
-      YtLogicalType.VariantOverStruct {
-        struct.fields.map(sf => (sf.name.drop(2),
-          wrapSparkAttributes(ytLogicalTypeV3(sf), sf.nullable, Some(sf.metadata)), sf.metadata))
-      }
+      YtLogicalType.VariantOverStruct { struct.fields.map(sf => (sf.name.drop(2), ytLogicalTypeV3(sf), sf.metadata)) }
     }
   }
 
   def ytLogicalTypeStruct(structType: StructType): YtLogicalType.Struct = YtLogicalType.Struct {
-    structType.fields.map(sf => (sf.name,
-      wrapSparkAttributes(ytLogicalTypeV3(sf), sf.nullable, Some(sf.metadata)), sf.metadata))
+    structType.fields.map(sf => (sf.name, ytLogicalTypeV3(sf), sf.metadata))
   }
 
-  def ytLogicalTypeV3(structField: StructField): YtLogicalType =
-    ytLogicalTypeV3(structField.dataType, hint.getOrElse(structField.name, null))
+  def ytLogicalTypeV3(structField: StructField): YtLogicalType = wrapSparkAttributes(
+    ytLogicalTypeV3(structField.dataType, hint.getOrElse(structField.name, null)),
+    structField.nullable, Some(structField.metadata),
+  )
 
   def ytLogicalTypeV3(sparkType: DataType, hint: YtLogicalType = null): YtLogicalType = sparkType match {
     case NullType => YtLogicalType.Null
@@ -96,8 +91,7 @@ class WriteSchemaConverter(
       val builder = YTree.builder
         .beginMap
         .key("name").value(field.name)
-      val fieldType = hint.getOrElse(field.name,
-        wrapSparkAttributes(ytLogicalTypeV3(field), field.nullable, Some(field.metadata)))
+      val fieldType = hint.getOrElse(field.name, ytLogicalTypeV3(field))
       if (typeV3Format) {
         builder
           .key("type_v3").value(serializeTypeV3(fieldType))

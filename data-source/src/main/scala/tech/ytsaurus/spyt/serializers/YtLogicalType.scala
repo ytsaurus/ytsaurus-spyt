@@ -3,6 +3,7 @@ package tech.ytsaurus.spyt.serializers
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.util.{ArrayData, MapData}
 import org.apache.spark.sql.spyt.types._
+import org.apache.spark.sql.types
 import org.apache.spark.sql.types._
 import tech.ytsaurus.client.InternalRowYTGetters
 import tech.ytsaurus.core.tables.ColumnValueType
@@ -59,9 +60,9 @@ sealed trait YtLogicalType {
 
   def arrowSupported: Boolean = true
 
-  def ytGettersFromList(ytGetter: InternalRowYTGetters): ytGetter.FromList
+  def ytGettersFromList(ytGetter: InternalRowYTGetters, dataType: DataType): ytGetter.FromList
 
-  def ytGettersFromStruct(ytGetter: InternalRowYTGetters, ordinal: Int): ytGetter.FromStruct
+  def ytGettersFromStruct(ytGetter: InternalRowYTGetters, dataType: DataType, ordinal: Int): ytGetter.FromStruct
 }
 
 sealed trait YtLogicalTypeAlias {
@@ -104,7 +105,7 @@ object YtLogicalType {
   import tech.ytsaurus.spyt.types.YTsaurusTypes.instance.sparkTypeFor
 
   case object Null extends AtomicYtLogicalType("null", 0x02, ColumnValueType.NULL, TiType.nullType(), NullType) {
-    override def ytGettersFromList(ytGetter: InternalRowYTGetters): ytGetter.FromList = new ytGetter.FromListToNull {
+    override def ytGettersFromList(ytGetter: InternalRowYTGetters, dataType: DataType): ytGetter.FromList = new ytGetter.FromListToNull {
       override def getTiType: TiType = tiType
 
       override def getSize(list: ArrayData): Int = list.numElements()
@@ -112,7 +113,7 @@ object YtLogicalType {
       override def getYson(list: ArrayData, i: Int, ysonConsumer: YsonConsumer): Unit = ysonConsumer.onEntity()
     }
 
-    override def ytGettersFromStruct(ytGetter: InternalRowYTGetters, ordinal: Int): ytGetter.FromStruct =
+    override def ytGettersFromStruct(ytGetter: InternalRowYTGetters, dataType: DataType, ordinal: Int): ytGetter.FromStruct =
       new ytGetter.FromStructToNull {
         override def getTiType: TiType = tiType
 
@@ -121,7 +122,7 @@ object YtLogicalType {
   }
 
   case object Int64 extends AtomicYtLogicalType("int64", 0x03, ColumnValueType.INT64, TiType.int64(), LongType) {
-    override def ytGettersFromList(ytGetter: InternalRowYTGetters): ytGetter.FromList = new ytGetter.FromListToLong {
+    override def ytGettersFromList(ytGetter: InternalRowYTGetters, dataType: DataType): ytGetter.FromList = new ytGetter.FromListToLong {
       override def getLong(list: ArrayData, i: Int): Long = list.getLong(i)
 
       override def getSize(list: ArrayData): Int = list.numElements()
@@ -131,7 +132,7 @@ object YtLogicalType {
       override def getYson(list: ArrayData, i: Int, ysonConsumer: YsonConsumer): Unit = ysonConsumer.onInteger(list.getLong(i))
     }
 
-    override def ytGettersFromStruct(ytGetter: InternalRowYTGetters, ordinal: Int): ytGetter.FromStruct = new ytGetter.FromStructToLong {
+    override def ytGettersFromStruct(ytGetter: InternalRowYTGetters, dataType: DataType, ordinal: Int): ytGetter.FromStruct = new ytGetter.FromStructToLong {
       override def getLong(struct: InternalRow): Long = struct.getLong(ordinal)
 
       override def getTiType: TiType = tiType
@@ -141,22 +142,42 @@ object YtLogicalType {
   }
 
   case object Uint64 extends AtomicYtLogicalType("uint64", 0x04, ColumnValueType.UINT64, TiType.uint64(), sparkTypeFor(TiType.uint64())) {
-    override def ytGettersFromList(ytGetter: InternalRowYTGetters): ytGetter.FromList = new ytGetter.FromListToLong {
-      override def getLong(list: ArrayData, i: Int): Long = list.getLong(i)
+    override def ytGettersFromList(ytGetter: InternalRowYTGetters, dataType: DataType): ytGetter.FromList = dataType match {
+      case decimalType: DecimalType => new ytGetter.FromListToLong {
+        override def getLong(list: ArrayData, i: Int): Long = list.getDecimal(i, decimalType.precision, decimalType.scale).toLong
 
-      override def getSize(list: ArrayData): Int = list.numElements()
+        override def getSize(list: ArrayData): Int = list.numElements()
 
-      override def getTiType: TiType = tiType
+        override def getTiType: TiType = tiType
 
-      override def getYson(list: ArrayData, i: Int, ysonConsumer: YsonConsumer): Unit = ysonConsumer.onUnsignedInteger(getLong(list, i))
+        override def getYson(list: ArrayData, i: Int, ysonConsumer: YsonConsumer): Unit = ysonConsumer.onUnsignedInteger(getLong(list, i))
+      }
+      case _ => new ytGetter.FromListToLong {
+        override def getLong(list: ArrayData, i: Int): Long = list.getLong(i)
+
+        override def getSize(list: ArrayData): Int = list.numElements()
+
+        override def getTiType: TiType = tiType
+
+        override def getYson(list: ArrayData, i: Int, ysonConsumer: YsonConsumer): Unit = ysonConsumer.onUnsignedInteger(getLong(list, i))
+      }
     }
 
-    override def ytGettersFromStruct(ytGetter: InternalRowYTGetters, ordinal: Int): ytGetter.FromStruct = new ytGetter.FromStructToLong {
-      override def getLong(struct: InternalRow): Long = struct.getLong(ordinal)
+    override def ytGettersFromStruct(ytGetter: InternalRowYTGetters, dataType: DataType, ordinal: Int): ytGetter.FromStruct = dataType match {
+      case decimalType: DecimalType => new ytGetter.FromStructToLong {
+        override def getLong(struct: InternalRow): Long = struct.getDecimal(ordinal, decimalType.precision, decimalType.scale).toLong
 
-      override def getTiType: TiType = tiType
+        override def getTiType: TiType = tiType
 
-      override def getYson(struct: InternalRow, ysonConsumer: YsonConsumer): Unit = ysonConsumer.onUnsignedInteger(getLong(struct))
+        override def getYson(struct: InternalRow, ysonConsumer: YsonConsumer): Unit = ysonConsumer.onUnsignedInteger(getLong(struct))
+      }
+      case _ => new ytGetter.FromStructToLong {
+        override def getLong(struct: InternalRow): Long = struct.getLong(ordinal)
+
+        override def getTiType: TiType = tiType
+
+        override def getYson(struct: InternalRow, ysonConsumer: YsonConsumer): Unit = ysonConsumer.onUnsignedInteger(getLong(struct))
+      }
     }
   }
 
@@ -164,7 +185,7 @@ object YtLogicalType {
     "float", 0x05, ColumnValueType.DOUBLE, TiType.floatType(),
     TopInnerSparkTypes(FloatType, DoubleType), Seq.empty, arrowSupported = false,
   ) {
-    override def ytGettersFromList(ytGetter: InternalRowYTGetters): ytGetter.FromList = new ytGetter.FromListToFloat {
+    override def ytGettersFromList(ytGetter: InternalRowYTGetters, dataType: DataType): ytGetter.FromList = new ytGetter.FromListToFloat {
       override def getFloat(list: ArrayData, i: Int): Float = list.getFloat(i)
 
       override def getSize(list: ArrayData): Int = list.numElements()
@@ -174,7 +195,7 @@ object YtLogicalType {
       override def getYson(list: ArrayData, i: Int, ysonConsumer: YsonConsumer): Unit = ysonConsumer.onDouble(getFloat(list, i))
     }
 
-    override def ytGettersFromStruct(ytGetter: InternalRowYTGetters, ordinal: Int): ytGetter.FromStruct = new ytGetter.FromStructToFloat {
+    override def ytGettersFromStruct(ytGetter: InternalRowYTGetters, dataType: DataType, ordinal: Int): ytGetter.FromStruct = new ytGetter.FromStructToFloat {
       override def getFloat(struct: InternalRow): Float = struct.getFloat(ordinal)
 
       override def getTiType: TiType = tiType
@@ -184,7 +205,7 @@ object YtLogicalType {
   }
 
   case object Double extends AtomicYtLogicalType("double", 0x05, ColumnValueType.DOUBLE, TiType.doubleType(), DoubleType) {
-    override def ytGettersFromList(ytGetter: InternalRowYTGetters): ytGetter.FromList = new ytGetter.FromListToDouble {
+    override def ytGettersFromList(ytGetter: InternalRowYTGetters, dataType: DataType): ytGetter.FromList = new ytGetter.FromListToDouble {
       override def getDouble(list: ArrayData, i: Int): Double = list.getDouble(i)
 
       override def getSize(list: ArrayData): Int = list.numElements()
@@ -194,7 +215,7 @@ object YtLogicalType {
       override def getYson(list: ArrayData, i: Int, ysonConsumer: YsonConsumer): Unit = ysonConsumer.onDouble(getDouble(list, i))
     }
 
-    override def ytGettersFromStruct(ytGetter: InternalRowYTGetters, ordinal: Int): ytGetter.FromStruct = new ytGetter.FromStructToDouble {
+    override def ytGettersFromStruct(ytGetter: InternalRowYTGetters, dataType: DataType, ordinal: Int): ytGetter.FromStruct = new ytGetter.FromStructToDouble {
       override def getDouble(struct: InternalRow): Double = struct.getDouble(ordinal)
 
       override def getTiType: TiType = tiType
@@ -204,7 +225,7 @@ object YtLogicalType {
   }
 
   case object Boolean extends AtomicYtLogicalType("boolean", 0x06, ColumnValueType.BOOLEAN, TiType.bool(), BooleanType, Seq("bool")) {
-    override def ytGettersFromList(ytGetter: InternalRowYTGetters): ytGetter.FromList = new ytGetter.FromListToBoolean {
+    override def ytGettersFromList(ytGetter: InternalRowYTGetters, dataType: DataType): ytGetter.FromList = new ytGetter.FromListToBoolean {
       override def getBoolean(list: ArrayData, i: Int): Boolean = list.getBoolean(i)
 
       override def getSize(list: ArrayData): Int = list.numElements()
@@ -215,7 +236,7 @@ object YtLogicalType {
         ysonConsumer.onBoolean(list.getBoolean(i))
     }
 
-    override def ytGettersFromStruct(ytGetter: InternalRowYTGetters, ordinal: Int): ytGetter.FromStruct = new ytGetter.FromStructToBoolean {
+    override def ytGettersFromStruct(ytGetter: InternalRowYTGetters, dataType: DataType, ordinal: Int): ytGetter.FromStruct = new ytGetter.FromStructToBoolean {
       override def getBoolean(struct: InternalRow): Boolean = struct.getBoolean(ordinal)
 
       override def getTiType: TiType = tiType
@@ -232,7 +253,7 @@ object YtLogicalType {
   }
 
   case object String extends AtomicYtLogicalType("string", 0x10, ColumnValueType.STRING, TiType.string(), StringType) {
-    override def ytGettersFromList(ytGetter: InternalRowYTGetters): ytGetter.FromList = new ytGetter.FromListToString {
+    override def ytGettersFromList(ytGetter: InternalRowYTGetters, dataType: DataType): ytGetter.FromList = new ytGetter.FromListToString {
       override def getString(list: ArrayData, i: Int): ByteBuffer = list.getUTF8String(i).getByteBuffer
 
       override def getSize(list: ArrayData): Int = list.numElements()
@@ -245,7 +266,7 @@ object YtLogicalType {
       }
     }
 
-    override def ytGettersFromStruct(ytGetter: InternalRowYTGetters, ordinal: Int): ytGetter.FromStruct = new ytGetter.FromStructToString {
+    override def ytGettersFromStruct(ytGetter: InternalRowYTGetters, dataType: DataType, ordinal: Int): ytGetter.FromStruct = new ytGetter.FromStructToString {
       override def getString(struct: InternalRow): ByteBuffer = struct.getUTF8String(ordinal).getByteBuffer
 
       override def getTiType: TiType = tiType
@@ -264,7 +285,7 @@ object YtLogicalType {
       if (inner) alias.name else "string"
     }
 
-    override def ytGettersFromList(ytGetter: InternalRowYTGetters): ytGetter.FromList = new ytGetter.FromListToString {
+    override def ytGettersFromList(ytGetter: InternalRowYTGetters, dataType: DataType): ytGetter.FromList = new ytGetter.FromListToString {
       override def getString(list: ArrayData, i: Int): ByteBuffer = ByteBuffer.wrap(list.getBinary(i))
 
       override def getSize(list: ArrayData): Int = list.numElements()
@@ -279,7 +300,7 @@ object YtLogicalType {
       }
     }
 
-    override def ytGettersFromStruct(ytGetter: InternalRowYTGetters, ordinal: Int): ytGetter.FromStruct = new ytGetter.FromStructToString {
+    override def ytGettersFromStruct(ytGetter: InternalRowYTGetters, dataType: DataType, ordinal: Int): ytGetter.FromStruct = new ytGetter.FromStructToString {
       override def getString(struct: InternalRow): ByteBuffer = ByteBuffer.wrap(struct.getBinary(ordinal))
 
       override def getTiType: TiType = tiType
@@ -296,7 +317,7 @@ object YtLogicalType {
   case object Any extends AtomicYtLogicalType("any", 0x11, ColumnValueType.ANY, TiType.yson(), sparkTypeFor(TiType.yson()), Seq("yson")) {
     override def nullable: Boolean = true
 
-    override def ytGettersFromList(ytGetter: InternalRowYTGetters): ytGetter.FromList = new ytGetter.FromListToYson {
+    override def ytGettersFromList(ytGetter: InternalRowYTGetters, dataType: DataType): ytGetter.FromList = new ytGetter.FromListToYson {
       override def getSize(list: ArrayData): Int = list.numElements()
 
       override def getTiType: TiType = tiType
@@ -305,7 +326,7 @@ object YtLogicalType {
         YTreeBinarySerializer.deserialize(new ByteArrayInputStream(list.getBinary(i)), ysonConsumer)
     }
 
-    override def ytGettersFromStruct(ytGetter: InternalRowYTGetters, ordinal: Int): ytGetter.FromStruct = new ytGetter.FromStructToYson {
+    override def ytGettersFromStruct(ytGetter: InternalRowYTGetters, dataType: DataType, ordinal: Int): ytGetter.FromStruct = new ytGetter.FromStructToYson {
       override def getTiType: TiType = tiType
 
       override def getYson(struct: InternalRow, ysonConsumer: YsonConsumer): Unit =
@@ -314,7 +335,7 @@ object YtLogicalType {
   }
 
   case object Int8 extends AtomicYtLogicalType("int8", 0x1000, ColumnValueType.INT64, TiType.int8(), ByteType) {
-    override def ytGettersFromList(ytGetter: InternalRowYTGetters): ytGetter.FromList = new ytGetter.FromListToByte {
+    override def ytGettersFromList(ytGetter: InternalRowYTGetters, dataType: DataType): ytGetter.FromList = new ytGetter.FromListToByte {
       override def getByte(list: ArrayData, i: Int): Byte = list.getByte(i)
 
       override def getSize(list: ArrayData): Int = list.numElements()
@@ -324,7 +345,7 @@ object YtLogicalType {
       override def getYson(list: ArrayData, i: Int, ysonConsumer: YsonConsumer): Unit = ysonConsumer.onInteger(list.getByte(i))
     }
 
-    override def ytGettersFromStruct(ytGetter: InternalRowYTGetters, ordinal: Int): ytGetter.FromStruct = new ytGetter.FromStructToByte {
+    override def ytGettersFromStruct(ytGetter: InternalRowYTGetters, dataType: DataType, ordinal: Int): ytGetter.FromStruct = new ytGetter.FromStructToByte {
       override def getByte(struct: InternalRow): Byte = struct.getByte(ordinal)
 
       override def getTiType: TiType = tiType
@@ -334,7 +355,7 @@ object YtLogicalType {
   }
 
   case object Uint8 extends AtomicYtLogicalType("uint8", 0x1001, ColumnValueType.INT64, TiType.uint8(), ShortType) {
-    override def ytGettersFromList(ytGetter: InternalRowYTGetters): ytGetter.FromList = new ytGetter.FromListToByte {
+    override def ytGettersFromList(ytGetter: InternalRowYTGetters, dataType: DataType): ytGetter.FromList = new ytGetter.FromListToByte {
       override def getByte(list: ArrayData, i: Int): Byte = list.getShort(i).toByte
 
       override def getSize(list: ArrayData): Int = list.numElements()
@@ -344,7 +365,7 @@ object YtLogicalType {
       override def getYson(list: ArrayData, i: Int, ysonConsumer: YsonConsumer): Unit = ysonConsumer.onUnsignedInteger(getByte(list, i))
     }
 
-    override def ytGettersFromStruct(ytGetter: InternalRowYTGetters, ordinal: Int): ytGetter.FromStruct = new ytGetter.FromStructToByte {
+    override def ytGettersFromStruct(ytGetter: InternalRowYTGetters, dataType: DataType, ordinal: Int): ytGetter.FromStruct = new ytGetter.FromStructToByte {
       override def getByte(struct: InternalRow): Byte = struct.getShort(ordinal).toByte
 
       override def getTiType: TiType = tiType
@@ -354,7 +375,7 @@ object YtLogicalType {
   }
 
   case object Int16 extends AtomicYtLogicalType("int16", 0x1003, ColumnValueType.INT64, TiType.int16(), ShortType) {
-    override def ytGettersFromList(ytGetter: InternalRowYTGetters): ytGetter.FromList = new ytGetter.FromListToShort {
+    override def ytGettersFromList(ytGetter: InternalRowYTGetters, dataType: DataType): ytGetter.FromList = new ytGetter.FromListToShort {
       override def getShort(list: ArrayData, i: Int): Short = list.getShort(i)
 
       override def getSize(list: ArrayData): Int = list.numElements()
@@ -364,7 +385,7 @@ object YtLogicalType {
       override def getYson(list: ArrayData, i: Int, ysonConsumer: YsonConsumer): Unit = ysonConsumer.onInteger(list.getShort(i))
     }
 
-    override def ytGettersFromStruct(ytGetter: InternalRowYTGetters, ordinal: Int): ytGetter.FromStruct = new ytGetter.FromStructToShort {
+    override def ytGettersFromStruct(ytGetter: InternalRowYTGetters, dataType: DataType, ordinal: Int): ytGetter.FromStruct = new ytGetter.FromStructToShort {
       override def getShort(struct: InternalRow): Short = struct.getShort(ordinal)
 
       override def getTiType: TiType = tiType
@@ -374,7 +395,7 @@ object YtLogicalType {
   }
 
   case object Uint16 extends AtomicYtLogicalType("uint16", 0x1004, ColumnValueType.INT64, TiType.uint16(), IntegerType) {
-    override def ytGettersFromList(ytGetter: InternalRowYTGetters): ytGetter.FromList = new ytGetter.FromListToShort {
+    override def ytGettersFromList(ytGetter: InternalRowYTGetters, dataType: DataType): ytGetter.FromList = new ytGetter.FromListToShort {
       override def getShort(list: ArrayData, i: Int): Short = list.getInt(i).toShort
 
       override def getSize(list: ArrayData): Int = list.numElements()
@@ -384,7 +405,7 @@ object YtLogicalType {
       override def getYson(list: ArrayData, i: Int, ysonConsumer: YsonConsumer): Unit = ysonConsumer.onUnsignedInteger(getShort(list, i))
     }
 
-    override def ytGettersFromStruct(ytGetter: InternalRowYTGetters, ordinal: Int): ytGetter.FromStruct = new ytGetter.FromStructToShort {
+    override def ytGettersFromStruct(ytGetter: InternalRowYTGetters, dataType: DataType, ordinal: Int): ytGetter.FromStruct = new ytGetter.FromStructToShort {
       override def getShort(struct: InternalRow): Short = struct.getInt(ordinal).toShort
 
       override def getTiType: TiType = tiType
@@ -394,7 +415,7 @@ object YtLogicalType {
   }
 
   case object Int32 extends AtomicYtLogicalType("int32", 0x1005, ColumnValueType.INT64, TiType.int32(), IntegerType) {
-    override def ytGettersFromList(ytGetter: InternalRowYTGetters): ytGetter.FromList = new ytGetter.FromListToInt {
+    override def ytGettersFromList(ytGetter: InternalRowYTGetters, dataType: DataType): ytGetter.FromList = new ytGetter.FromListToInt {
       override def getInt(list: ArrayData, i: Int): Int = list.getInt(i)
 
       override def getSize(list: ArrayData): Int = list.numElements()
@@ -404,7 +425,7 @@ object YtLogicalType {
       override def getYson(list: ArrayData, i: Int, ysonConsumer: YsonConsumer): Unit = ysonConsumer.onInteger(list.getInt(i))
     }
 
-    override def ytGettersFromStruct(ytGetter: InternalRowYTGetters, ordinal: Int): ytGetter.FromStruct = new ytGetter.FromStructToInt {
+    override def ytGettersFromStruct(ytGetter: InternalRowYTGetters, dataType: DataType, ordinal: Int): ytGetter.FromStruct = new ytGetter.FromStructToInt {
       override def getInt(struct: InternalRow): Int = struct.getInt(ordinal)
 
       override def getTiType: TiType = tiType
@@ -414,7 +435,7 @@ object YtLogicalType {
   }
 
   case object Uint32 extends AtomicYtLogicalType("uint32", 0x1006, ColumnValueType.INT64, TiType.uint32(), LongType) {
-    override def ytGettersFromList(ytGetter: InternalRowYTGetters): ytGetter.FromList = new ytGetter.FromListToInt {
+    override def ytGettersFromList(ytGetter: InternalRowYTGetters, dataType: DataType): ytGetter.FromList = new ytGetter.FromListToInt {
       override def getInt(list: ArrayData, i: Int): Int = list.getLong(i).toInt
 
       override def getSize(list: ArrayData): Int = list.numElements()
@@ -424,7 +445,7 @@ object YtLogicalType {
       override def getYson(list: ArrayData, i: Int, ysonConsumer: YsonConsumer): Unit = ysonConsumer.onUnsignedInteger(getInt(list, i))
     }
 
-    override def ytGettersFromStruct(ytGetter: InternalRowYTGetters, ordinal: Int): ytGetter.FromStruct = new ytGetter.FromStructToInt {
+    override def ytGettersFromStruct(ytGetter: InternalRowYTGetters, dataType: DataType, ordinal: Int): ytGetter.FromStruct = new ytGetter.FromStructToInt {
       override def getInt(struct: InternalRow): Int = struct.getLong(ordinal).toInt
 
       override def getTiType: TiType = tiType
@@ -434,7 +455,7 @@ object YtLogicalType {
   }
 
   case object Utf8 extends AtomicYtLogicalType("utf8", 0x1007, ColumnValueType.STRING, TiType.utf8(), StringType) {
-    override def ytGettersFromList(ytGetter: InternalRowYTGetters): ytGetter.FromList = new ytGetter.FromListToString {
+    override def ytGettersFromList(ytGetter: InternalRowYTGetters, dataType: DataType): ytGetter.FromList = new ytGetter.FromListToString {
       override def getString(list: ArrayData, i: Int): ByteBuffer = list.getUTF8String(i).getByteBuffer
 
       override def getSize(list: ArrayData): Int = list.numElements()
@@ -447,7 +468,7 @@ object YtLogicalType {
       }
     }
 
-    override def ytGettersFromStruct(ytGetter: InternalRowYTGetters, ordinal: Int): ytGetter.FromStruct = new ytGetter.FromStructToString {
+    override def ytGettersFromStruct(ytGetter: InternalRowYTGetters, dataType: DataType, ordinal: Int): ytGetter.FromStruct = new ytGetter.FromStructToString {
       override def getString(struct: InternalRow): ByteBuffer = struct.getUTF8String(ordinal).getByteBuffer
 
       override def getTiType: TiType = tiType
@@ -461,7 +482,7 @@ object YtLogicalType {
 
   // Unsupported types are listed here: yt/yt/client/arrow/arrow_row_stream_encoder.cpp
   case object Date extends AtomicYtLogicalType("date", 0x1008, ColumnValueType.UINT64, TiType.date(), DateType, arrowSupported = false) {
-    override def ytGettersFromList(ytGetter: InternalRowYTGetters): ytGetter.FromList = new ytGetter.FromListToInt {
+    override def ytGettersFromList(ytGetter: InternalRowYTGetters, dataType: DataType): ytGetter.FromList = new ytGetter.FromListToInt {
       override def getInt(list: ArrayData, i: Int): Int = list.getInt(i)
 
       override def getSize(list: ArrayData): Int = list.numElements()
@@ -472,7 +493,7 @@ object YtLogicalType {
         ysonConsumer.onUnsignedInteger(getInt(list, i))
     }
 
-    override def ytGettersFromStruct(ytGetter: InternalRowYTGetters, ordinal: Int): ytGetter.FromStruct = new ytGetter.FromStructToInt {
+    override def ytGettersFromStruct(ytGetter: InternalRowYTGetters, dataType: DataType, ordinal: Int): ytGetter.FromStruct = new ytGetter.FromStructToInt {
       override def getInt(struct: InternalRow): Int = struct.getInt(ordinal)
 
       override def getTiType: TiType = tiType
@@ -483,7 +504,7 @@ object YtLogicalType {
   }
 
   case object Datetime extends AtomicYtLogicalType("datetime", 0x1009, ColumnValueType.UINT64, TiType.datetime(), new DatetimeType(), arrowSupported = false) {
-    override def ytGettersFromList(ytGetter: InternalRowYTGetters): ytGetter.FromList = new ytGetter.FromListToLong {
+    override def ytGettersFromList(ytGetter: InternalRowYTGetters, dataType: DataType): ytGetter.FromList = new ytGetter.FromListToLong {
       override def getLong(list: ArrayData, i: Int): Long = list.getLong(i)
 
       override def getSize(list: ArrayData): Int = list.numElements()
@@ -494,7 +515,7 @@ object YtLogicalType {
         ysonConsumer.onUnsignedInteger(getLong(list, i))
     }
 
-    override def ytGettersFromStruct(ytGetter: InternalRowYTGetters, ordinal: Int): ytGetter.FromStruct = new ytGetter.FromStructToLong {
+    override def ytGettersFromStruct(ytGetter: InternalRowYTGetters, dataType: DataType, ordinal: Int): ytGetter.FromStruct = new ytGetter.FromStructToLong {
       override def getLong(struct: InternalRow): Long = struct.getLong(ordinal)
 
       override def getTiType: TiType = tiType
@@ -505,7 +526,7 @@ object YtLogicalType {
   }
 
   case object Timestamp extends AtomicYtLogicalType("timestamp", 0x100a, ColumnValueType.UINT64, TiType.timestamp(), TimestampType, arrowSupported = false) {
-    override def ytGettersFromList(ytGetter: InternalRowYTGetters): ytGetter.FromList = new ytGetter.FromListToLong {
+    override def ytGettersFromList(ytGetter: InternalRowYTGetters, dataType: DataType): ytGetter.FromList = new ytGetter.FromListToLong {
       override def getLong(list: ArrayData, i: Int): Long = list.getLong(i)
 
       override def getSize(list: ArrayData): Int = list.numElements()
@@ -516,7 +537,7 @@ object YtLogicalType {
         ysonConsumer.onUnsignedInteger(getLong(list, i))
     }
 
-    override def ytGettersFromStruct(ytGetter: InternalRowYTGetters, ordinal: Int): ytGetter.FromStruct = new ytGetter.FromStructToLong {
+    override def ytGettersFromStruct(ytGetter: InternalRowYTGetters, dataType: DataType, ordinal: Int): ytGetter.FromStruct = new ytGetter.FromStructToLong {
       override def getLong(struct: InternalRow): Long = struct.getLong(ordinal)
 
       override def getTiType: TiType = tiType
@@ -527,7 +548,7 @@ object YtLogicalType {
   }
 
   case object Interval extends AtomicYtLogicalType("interval", 0x100b, ColumnValueType.INT64, TiType.interval(), LongType, arrowSupported = false) {
-    override def ytGettersFromList(ytGetter: InternalRowYTGetters): ytGetter.FromList = new ytGetter.FromListToLong {
+    override def ytGettersFromList(ytGetter: InternalRowYTGetters, dataType: DataType): ytGetter.FromList = new ytGetter.FromListToLong {
       override def getLong(list: ArrayData, i: Int): Long = list.getLong(i)
 
       override def getSize(list: ArrayData): Int = list.numElements()
@@ -538,7 +559,7 @@ object YtLogicalType {
         ysonConsumer.onInteger(getLong(list, i))
     }
 
-    override def ytGettersFromStruct(ytGetter: InternalRowYTGetters, ordinal: Int): ytGetter.FromStruct = new ytGetter.FromStructToLong {
+    override def ytGettersFromStruct(ytGetter: InternalRowYTGetters, dataType: DataType, ordinal: Int): ytGetter.FromStruct = new ytGetter.FromStructToLong {
       override def getLong(struct: InternalRow): Long = struct.getLong(ordinal)
 
       override def getTiType: TiType = tiType
@@ -549,7 +570,7 @@ object YtLogicalType {
   }
 
   case object Void extends AtomicYtLogicalType("void", 0x100c, ColumnValueType.NULL, TiType.voidType(), NullType) {
-    override def ytGettersFromList(ytGetter: InternalRowYTGetters): ytGetter.FromList = new ytGetter.FromListToNull {
+    override def ytGettersFromList(ytGetter: InternalRowYTGetters, dataType: DataType): ytGetter.FromList = new ytGetter.FromListToNull {
       override def getTiType: TiType = tiType
 
       override def getSize(list: ArrayData): Int = list.numElements()
@@ -557,7 +578,7 @@ object YtLogicalType {
       override def getYson(list: ArrayData, i: Int, ysonConsumer: YsonConsumer): Unit = ysonConsumer.onEntity()
     }
 
-    override def ytGettersFromStruct(ytGetter: InternalRowYTGetters, ordinal: Int): ytGetter.FromStruct =
+    override def ytGettersFromStruct(ytGetter: InternalRowYTGetters, dataType: DataType, ordinal: Int): ytGetter.FromStruct =
       new ytGetter.FromStructToNull {
         override def getTiType: TiType = tiType
 
@@ -566,7 +587,7 @@ object YtLogicalType {
   }
 
   case object Date32 extends AtomicYtLogicalType("date32", 0x1018, ColumnValueType.INT64, TiType.date32(), new Date32Type(), arrowSupported = false) {
-    override def ytGettersFromList(ytGetter: InternalRowYTGetters): ytGetter.FromList = new ytGetter.FromListToInt {
+    override def ytGettersFromList(ytGetter: InternalRowYTGetters, dataType: DataType): ytGetter.FromList = new ytGetter.FromListToInt {
       override def getInt(list: ArrayData, i: Int): Int = list.getInt(i)
 
       override def getSize(list: ArrayData): Int = list.numElements()
@@ -577,7 +598,7 @@ object YtLogicalType {
         ysonConsumer.onUnsignedInteger(getInt(list, i))
     }
 
-    override def ytGettersFromStruct(ytGetter: InternalRowYTGetters, ordinal: Int): ytGetter.FromStruct = new ytGetter.FromStructToInt {
+    override def ytGettersFromStruct(ytGetter: InternalRowYTGetters, dataType: DataType, ordinal: Int): ytGetter.FromStruct = new ytGetter.FromStructToInt {
       override def getInt(struct: InternalRow): Int = struct.getInt(ordinal)
 
       override def getTiType: TiType = tiType
@@ -588,7 +609,7 @@ object YtLogicalType {
   }
 
   case object Datetime64 extends AtomicYtLogicalType("datetime64", 0x1019, ColumnValueType.INT64, TiType.datetime64(), new Datetime64Type(), arrowSupported = false) {
-    override def ytGettersFromList(ytGetter: InternalRowYTGetters): ytGetter.FromList = new ytGetter.FromListToLong {
+    override def ytGettersFromList(ytGetter: InternalRowYTGetters, dataType: DataType): ytGetter.FromList = new ytGetter.FromListToLong {
       override def getLong(list: ArrayData, i: Int): Long = list.getLong(i)
 
       override def getSize(list: ArrayData): Int = list.numElements()
@@ -599,7 +620,7 @@ object YtLogicalType {
         ysonConsumer.onUnsignedInteger(getLong(list, i))
     }
 
-    override def ytGettersFromStruct(ytGetter: InternalRowYTGetters, ordinal: Int): ytGetter.FromStruct = new ytGetter.FromStructToLong {
+    override def ytGettersFromStruct(ytGetter: InternalRowYTGetters, dataType: DataType, ordinal: Int): ytGetter.FromStruct = new ytGetter.FromStructToLong {
       override def getLong(struct: InternalRow): Long = struct.getLong(ordinal)
 
       override def getTiType: TiType = tiType
@@ -610,7 +631,7 @@ object YtLogicalType {
   }
 
   case object Timestamp64 extends AtomicYtLogicalType("timestamp64", 0x101a, ColumnValueType.INT64, TiType.timestamp64(), new Timestamp64Type(), arrowSupported = false) {
-    override def ytGettersFromList(ytGetter: InternalRowYTGetters): ytGetter.FromList = new ytGetter.FromListToLong {
+    override def ytGettersFromList(ytGetter: InternalRowYTGetters, dataType: DataType): ytGetter.FromList = new ytGetter.FromListToLong {
       override def getLong(list: ArrayData, i: Int): Long = list.getLong(i)
 
       override def getSize(list: ArrayData): Int = list.numElements()
@@ -621,7 +642,7 @@ object YtLogicalType {
         ysonConsumer.onUnsignedInteger(getLong(list, i))
     }
 
-    override def ytGettersFromStruct(ytGetter: InternalRowYTGetters, ordinal: Int): ytGetter.FromStruct = new ytGetter.FromStructToLong {
+    override def ytGettersFromStruct(ytGetter: InternalRowYTGetters, dataType: DataType, ordinal: Int): ytGetter.FromStruct = new ytGetter.FromStructToLong {
       override def getLong(struct: InternalRow): Long = struct.getLong(ordinal)
 
       override def getTiType: TiType = tiType
@@ -632,7 +653,7 @@ object YtLogicalType {
   }
 
   case object Interval64 extends AtomicYtLogicalType("interval64", 0x101b, ColumnValueType.INT64, TiType.interval64(), new Interval64Type(), arrowSupported = false) {
-    override def ytGettersFromList(ytGetter: InternalRowYTGetters): ytGetter.FromList = new ytGetter.FromListToLong {
+    override def ytGettersFromList(ytGetter: InternalRowYTGetters, dataType: DataType): ytGetter.FromList = new ytGetter.FromListToLong {
       override def getLong(list: ArrayData, i: Int): Long = list.getLong(i)
 
       override def getSize(list: ArrayData): Int = list.numElements()
@@ -643,7 +664,7 @@ object YtLogicalType {
         ysonConsumer.onInteger(getLong(list, i))
     }
 
-    override def ytGettersFromStruct(ytGetter: InternalRowYTGetters, ordinal: Int): ytGetter.FromStruct = new ytGetter.FromStructToLong {
+    override def ytGettersFromStruct(ytGetter: InternalRowYTGetters, dataType: DataType, ordinal: Int): ytGetter.FromStruct = new ytGetter.FromStructToLong {
       override def getLong(struct: InternalRow): Long = struct.getLong(ordinal)
 
       override def getTiType: TiType = tiType
@@ -660,7 +681,7 @@ object YtLogicalType {
 
     override def tiType: TiType = TiType.decimal(precision, scale)
 
-    override def ytGettersFromList(ytGetter: InternalRowYTGetters): ytGetter.FromList = new ytGetter.FromListToBigDecimal {
+    override def ytGettersFromList(ytGetter: InternalRowYTGetters, dataType: DataType): ytGetter.FromList = new ytGetter.FromListToBigDecimal {
       override def getBigDecimal(list: ArrayData, i: Int): java.math.BigDecimal =
         list.getDecimal(i, decimalType.precision, decimalType.scale).toJavaBigDecimal.setScale(scale)
 
@@ -674,7 +695,7 @@ object YtLogicalType {
       }
     }
 
-    override def ytGettersFromStruct(ytGetter: InternalRowYTGetters, ordinal: Int): ytGetter.FromStruct = new ytGetter.FromStructToBigDecimal {
+    override def ytGettersFromStruct(ytGetter: InternalRowYTGetters, dataType: DataType, ordinal: Int): ytGetter.FromStruct = new ytGetter.FromStructToBigDecimal {
       override def getBigDecimal(struct: InternalRow): java.math.BigDecimal =
         struct.getDecimal(ordinal, decimalType.precision, decimalType.scale).toJavaBigDecimal.setScale(scale)
 
@@ -706,8 +727,8 @@ object YtLogicalType {
 
     override def arrowSupported: Boolean = inner.arrowSupported
 
-    override def ytGettersFromList(ytGetter: InternalRowYTGetters): ytGetter.FromList = new ytGetter.FromListToOptional {
-      private val notEmptyGetter = inner.ytGettersFromList(ytGetter)
+    override def ytGettersFromList(ytGetter: InternalRowYTGetters, dataType: DataType): ytGetter.FromList = new ytGetter.FromListToOptional {
+      private val notEmptyGetter = inner.ytGettersFromList(ytGetter, dataType)
 
       override def getNotEmptyGetter: ytGetter.FromList = notEmptyGetter
 
@@ -731,8 +752,8 @@ object YtLogicalType {
       }
     }
 
-    override def ytGettersFromStruct(ytGetter: InternalRowYTGetters, ordinal: Int): ytGetter.FromStruct = new ytGetter.FromStructToOptional {
-      private val notEmptyGetter = inner.ytGettersFromStruct(ytGetter, ordinal)
+    override def ytGettersFromStruct(ytGetter: InternalRowYTGetters, dataType: DataType, ordinal: Int): ytGetter.FromStruct = new ytGetter.FromStructToOptional {
+      private val notEmptyGetter = inner.ytGettersFromStruct(ytGetter, dataType, ordinal)
 
       override def getNotEmptyGetter: ytGetter.FromStruct = notEmptyGetter
 
@@ -767,9 +788,9 @@ object YtLogicalType {
       MapType(dictKey.sparkType.innerLevel, dictValue.sparkType.innerLevel, dictValue.nullable)
     )
 
-    private def newGetter(ytGetter: InternalRowYTGetters): ytGetter.FromDict = new ytGetter.FromDict {
-      private val keyGetter = dictKey.ytGettersFromList(ytGetter)
-      private val valueGetter = dictValue.ytGettersFromList(ytGetter)
+    private def newGetter(ytGetter: InternalRowYTGetters, dataType: DataType): ytGetter.FromDict = new ytGetter.FromDict {
+      private val keyGetter = dictKey.ytGettersFromList(ytGetter, dataType.asInstanceOf[MapType].keyType)
+      private val valueGetter = dictValue.ytGettersFromList(ytGetter, dataType.asInstanceOf[MapType].valueType)
 
       override def getKeyGetter: ytGetter.FromList = keyGetter
 
@@ -808,8 +829,8 @@ object YtLogicalType {
 
     override def alias: CompositeYtLogicalTypeAlias = Dict
 
-    override def ytGettersFromList(ytGetter: InternalRowYTGetters): ytGetter.FromList = new ytGetter.FromListToDict {
-      private val getter = newGetter(ytGetter)
+    override def ytGettersFromList(ytGetter: InternalRowYTGetters, dataType: DataType): ytGetter.FromList = new ytGetter.FromListToDict {
+      private val getter = newGetter(ytGetter, dataType)
       private val ysonSerializer = newYsonSerializer(getter)
 
       override def getGetter(): ytGetter.FromDict = getter
@@ -824,8 +845,8 @@ object YtLogicalType {
         ysonSerializer(list.getMap(i), ysonConsumer)
     }
 
-    override def ytGettersFromStruct(ytGetter: InternalRowYTGetters, ordinal: Int): ytGetter.FromStruct = new ytGetter.FromStructToDict {
-      private val getter = newGetter(ytGetter)
+    override def ytGettersFromStruct(ytGetter: InternalRowYTGetters, dataType: DataType, ordinal: Int): ytGetter.FromStruct = new ytGetter.FromStructToDict {
+      private val getter = newGetter(ytGetter, dataType)
       private val ysonSerializer = newYsonSerializer(getter)
 
       override def getGetter(): ytGetter.FromDict = getter
@@ -849,8 +870,8 @@ object YtLogicalType {
     override def alias: CompositeYtLogicalTypeAlias = Array
 
 
-    override def ytGettersFromList(ytGetter: InternalRowYTGetters): ytGetter.FromList = new ytGetter.FromListToList {
-      val elementGetter: ytGetter.FromList = inner.ytGettersFromList(ytGetter)
+    override def ytGettersFromList(ytGetter: InternalRowYTGetters, dataType: DataType): ytGetter.FromList = new ytGetter.FromListToList {
+      val elementGetter: ytGetter.FromList = inner.ytGettersFromList(ytGetter, dataType.asInstanceOf[ArrayType].elementType)
 
       override def getSize(list: ArrayData): Int = list.numElements()
 
@@ -871,8 +892,8 @@ object YtLogicalType {
       }
     }
 
-    override def ytGettersFromStruct(ytGetter: InternalRowYTGetters, ordinal: Int): ytGetter.FromStruct = new ytGetter.FromStructToList {
-      val elementGetter: ytGetter.FromList = inner.ytGettersFromList(ytGetter)
+    override def ytGettersFromStruct(ytGetter: InternalRowYTGetters, dataType: DataType, ordinal: Int): ytGetter.FromStruct = new ytGetter.FromStructToList {
+      val elementGetter: ytGetter.FromList = inner.ytGettersFromList(ytGetter, dataType.asInstanceOf[ArrayType].elementType)
 
       override def getElementGetter: ytGetter.FromList = elementGetter
 
@@ -906,9 +927,9 @@ object YtLogicalType {
 
     override def alias: CompositeYtLogicalTypeAlias = Struct
 
-    def newMembersGetters(ytGetter: InternalRowYTGetters): java.util.List[java.util.Map.Entry[String, ytGetter.FromStruct]] =
-      fields.zipWithIndex.map { case (field, i) =>
-        java.util.Map.entry(field._1, field._2.ytGettersFromStruct(ytGetter, i))
+    def newMembersGetters(ytGetter: InternalRowYTGetters, dataType: DataType): java.util.List[java.util.Map.Entry[String, ytGetter.FromStruct]] =
+      fields.zip(dataType.asInstanceOf[StructType].fields).zipWithIndex.map { case ((field, structField), i) =>
+        java.util.Map.entry(field._1, field._2.ytGettersFromStruct(ytGetter, structField.dataType, i))
       }.asJava
 
     def yson(ytGetter: InternalRowYTGetters)(
@@ -923,8 +944,8 @@ object YtLogicalType {
       ysonConsumer.onEndList()
     }
 
-    override def ytGettersFromList(ytGetter: InternalRowYTGetters): ytGetter.FromList = new ytGetter.FromListToStruct {
-      private val membersGetters = newMembersGetters(ytGetter)
+    override def ytGettersFromList(ytGetter: InternalRowYTGetters, dataType: DataType): ytGetter.FromList = new ytGetter.FromListToStruct {
+      private val membersGetters = newMembersGetters(ytGetter, dataType)
 
       override def getMembersGetters(): java.util.List[java.util.Map.Entry[String, ytGetter.FromStruct]] =
         membersGetters
@@ -939,8 +960,8 @@ object YtLogicalType {
         yson(ytGetter)(membersGetters, list.getStruct(i, membersGetters.size()), ysonConsumer)
     }
 
-    override def ytGettersFromStruct(ytGetter: InternalRowYTGetters, ordinal: Int): ytGetter.FromStruct = new ytGetter.FromStructToStruct {
-      private val membersGetters = newMembersGetters(ytGetter)
+    override def ytGettersFromStruct(ytGetter: InternalRowYTGetters, dataType: DataType, ordinal: Int): ytGetter.FromStruct = new ytGetter.FromStructToStruct {
+      private val membersGetters = newMembersGetters(ytGetter, dataType)
 
       override def getMembersGetters(): java.util.List[java.util.Map.Entry[String, ytGetter.FromStruct]] =
         membersGetters
@@ -969,9 +990,10 @@ object YtLogicalType {
 
     override def alias: CompositeYtLogicalTypeAlias = Tuple
 
-    override def ytGettersFromList(ytGetter: InternalRowYTGetters): ytGetter.FromList = new ytGetter.FromListToStruct {
-      private val membersGetters = entries.zipWithIndex.map { case ((name, logicalType), i) =>
-        java.util.Map.entry(name, logicalType.ytGettersFromStruct(ytGetter, i))
+    override def ytGettersFromList(ytGetter: InternalRowYTGetters, dataType: DataType): ytGetter.FromList = new ytGetter.FromListToStruct {
+      private val membersGetters = entries.zip(dataType.asInstanceOf[types.StructType]).zipWithIndex.map {
+        case (((name, logicalType), structField), i) =>
+          java.util.Map.entry(name, logicalType.ytGettersFromStruct(ytGetter, structField.dataType, i))
       }.asJava
 
       override def getMembersGetters(): java.util.List[java.util.Map.Entry[String, ytGetter.FromStruct]] = membersGetters
@@ -993,9 +1015,10 @@ object YtLogicalType {
       }
     }
 
-    override def ytGettersFromStruct(ytGetter: InternalRowYTGetters, ordinal: Int): ytGetter.FromStruct = new ytGetter.FromStructToStruct {
-      private val membersGetters = entries.zipWithIndex.map { case ((name, logicalType), i) =>
-        java.util.Map.entry(name, logicalType.ytGettersFromStruct(ytGetter, i))
+    override def ytGettersFromStruct(ytGetter: InternalRowYTGetters, dataType: DataType, ordinal: Int): ytGetter.FromStruct = new ytGetter.FromStructToStruct {
+      private val membersGetters = entries.zip(dataType.asInstanceOf[types.StructType]).zipWithIndex.map {
+        case (((name, logicalType), structField), i) =>
+          java.util.Map.entry(name, logicalType.ytGettersFromStruct(ytGetter, structField.dataType, i))
       }.asJava
 
       override def getMembersGetters(): java.util.List[java.util.Map.Entry[String, ytGetter.FromStruct]] = membersGetters
@@ -1025,15 +1048,17 @@ object YtLogicalType {
 
     override def alias: CompositeYtLogicalTypeAlias = Tagged
 
-    override def ytGettersFromList(ytGetter: InternalRowYTGetters): ytGetter.FromList = inner.ytGettersFromList(ytGetter)
+    override def ytGettersFromList(ytGetter: InternalRowYTGetters, dataType: DataType): ytGetter.FromList = inner.ytGettersFromList(ytGetter, dataType)
 
-    override def ytGettersFromStruct(ytGetter: InternalRowYTGetters, ordinal: Int): ytGetter.FromStruct = inner.ytGettersFromStruct(ytGetter, ordinal)
+    override def ytGettersFromStruct(ytGetter: InternalRowYTGetters, dataType: DataType, ordinal: Int): ytGetter.FromStruct = inner.ytGettersFromStruct(ytGetter, dataType, ordinal)
   }
 
   case object Tagged extends CompositeYtLogicalTypeAlias(TypeName.Tagged.getWireName)
 
-  private class VariantGetter(fields: Seq[YtLogicalType], ytGetter: InternalRowYTGetters) {
-    private val getters = fields.zipWithIndex.map { case (field, i) => field.ytGettersFromStruct(ytGetter, i) }
+  private class VariantGetter(fields: Seq[YtLogicalType], ytGetter: InternalRowYTGetters, dataType: DataType) {
+    private val getters = fields.zip(dataType.asInstanceOf[StructType].fields).zipWithIndex.map {
+      case ((field, structField), i) => field.ytGettersFromStruct(ytGetter, structField.dataType, i)
+    }
 
     def get(row: InternalRow, ysonConsumer: YsonConsumer): Unit = {
       val notNulls = (0 until row.numFields).filter(!row.isNullAt(_))
@@ -1066,8 +1091,8 @@ object YtLogicalType {
 
     override def alias: CompositeYtLogicalTypeAlias = Variant
 
-    override def ytGettersFromList(ytGetter: InternalRowYTGetters): ytGetter.FromList = new ytGetter.FromListToYson {
-      val getter = new VariantGetter(fields.map(_._2), ytGetter)
+    override def ytGettersFromList(ytGetter: InternalRowYTGetters, dataType: DataType): ytGetter.FromList = new ytGetter.FromListToYson {
+      val getter = new VariantGetter(fields.map(_._2), ytGetter, dataType)
 
       override def getSize(list: ArrayData): Int = list.numElements()
 
@@ -1077,8 +1102,8 @@ object YtLogicalType {
         getter.get(list.getStruct(i, fields.size), ysonConsumer)
     }
 
-    override def ytGettersFromStruct(ytGetter: InternalRowYTGetters, ordinal: Int): ytGetter.FromStruct = new ytGetter.FromStructToYson {
-      val getter = new VariantGetter(fields.map(_._2), ytGetter)
+    override def ytGettersFromStruct(ytGetter: InternalRowYTGetters, dataType: DataType, ordinal: Int): ytGetter.FromStruct = new ytGetter.FromStructToYson {
+      val getter = new VariantGetter(fields.map(_._2), ytGetter, dataType)
 
       override def getTiType: TiType = tiType
 
@@ -1102,8 +1127,8 @@ object YtLogicalType {
 
     override def alias: CompositeYtLogicalTypeAlias = Variant
 
-    override def ytGettersFromList(ytGetter: InternalRowYTGetters): ytGetter.FromList = new ytGetter.FromListToYson {
-      val getter = new VariantGetter(fields.map(_._1), ytGetter)
+    override def ytGettersFromList(ytGetter: InternalRowYTGetters, dataType: DataType): ytGetter.FromList = new ytGetter.FromListToYson {
+      val getter = new VariantGetter(fields.map(_._1), ytGetter, dataType)
 
       override def getSize(list: ArrayData): Int = list.numElements()
 
@@ -1113,8 +1138,8 @@ object YtLogicalType {
         getter.get(list.getStruct(i, fields.size), ysonConsumer)
     }
 
-    override def ytGettersFromStruct(ytGetter: InternalRowYTGetters, ordinal: Int): ytGetter.FromStruct = new ytGetter.FromStructToYson {
-      val getter = new VariantGetter(fields.map(_._1), ytGetter)
+    override def ytGettersFromStruct(ytGetter: InternalRowYTGetters, dataType: DataType, ordinal: Int): ytGetter.FromStruct = new ytGetter.FromStructToYson {
+      val getter = new VariantGetter(fields.map(_._1), ytGetter, dataType)
 
       override def getTiType: TiType = tiType
 

@@ -154,15 +154,17 @@ class YtOutputWriter(richPath: YPathEnriched,
     val appendPath = richPath.withAttr("append", "true").toYPath
     log.debugLazy(s"Initialize new write: $appendPath, transaction: $transactionGuid")
     val internalRowGetters = new InternalRowYTGetters()
+    val writeSchemaConverter = WriteSchemaConverter(options)
     val request = WriteTable.builder[InternalRow]()
       .setPath(appendPath)
       .setSerializationContext(
         if (options.ytConf(ArrowWriteEnabled))
           new ArrowWriteSerializationContext[InternalRow, ArrayData, MapData, InternalRowYTGetters](
-            WriteSchemaConverter(options).ytLogicalTypeStruct(schema).fields.zipWithIndex.map {
-              case ((name, ytLogicalType, _), i) =>
-                util.Map.entry(name, ytLogicalType.ytGettersFromStruct(internalRowGetters, i))
-            }.asJava
+            schema.fields.zipWithIndex.map { case (field, i) =>
+              util.Map.entry(field.name, writeSchemaConverter.ytLogicalTypeV3(field).ytGettersFromStruct(
+                internalRowGetters, field.dataType, i
+              ))
+            }.toSeq.asJava
           )
         else
           new WriteSerializationContext(new InternalRowSerializer(schema, WriteSchemaConverter(options)))

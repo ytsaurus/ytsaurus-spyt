@@ -56,9 +56,12 @@ class WriteSchemaConverter(
     case FloatType => YtLogicalType.Float
     case DoubleType => YtLogicalType.Double
     case BooleanType => YtLogicalType.Boolean
-    case d: DecimalType =>
+    case d: DecimalType => if (hint != null) {
+      hint
+    } else {
       val dT = if (d.precision > 35) applyYtLimitToSparkDecimal(d) else d
       YtLogicalType.Decimal(dT.precision, dT.scale, d)
+    }
     case aT: ArrayType =>
       YtLogicalType.Array(wrapSparkAttributes(ytLogicalTypeV3(aT.elementType), aT.containsNull))
     case _: StructType if hint != null => hint

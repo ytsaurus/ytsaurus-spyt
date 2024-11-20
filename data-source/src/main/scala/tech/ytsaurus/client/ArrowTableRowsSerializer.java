@@ -175,6 +175,23 @@ public class ArrowTableRowsSerializer<Struct, List, Dict, Getters extends YTGett
     private ArrowGetterFromList nonComplexArrowGetter(String name, Getters.FromList getter) {
         var tiType = getter.getTiType();
         switch (tiType.getTypeName()) {
+            case Null:
+            case Void: {
+                return new ArrowGetterFromList(
+                        new Field(name, new FieldType(false, new ArrowType.Null(), null), new ArrayList<>())
+                ) {
+                    @Override
+                    public ArrowWriterFromList writer(ValueVector valueVector) {
+                        var nullVector = (NullVector) valueVector;
+                        return new ArrowWriterFromList() {
+                            @Override
+                            void setFromList(List list, int i) {
+                                nullVector.setValueCount(nullVector.getValueCount() + 1);
+                            }
+                        };
+                    }
+                };
+            }
             case Utf8:
             case String: {
                 var stringGetter = (Getters.FromListToString) getter;
@@ -629,6 +646,23 @@ public class ArrowTableRowsSerializer<Struct, List, Dict, Getters extends YTGett
     private ArrowGetterFromStruct nonComplexArrowGetter(String name, Getters.FromStruct getter) {
         var tiType = getter.getTiType();
         switch (tiType.getTypeName()) {
+            case Null:
+            case Void: {
+                return new ArrowGetterFromStruct(
+                        new Field(name, new FieldType(false, new ArrowType.Null(), null), new ArrayList<>())
+                ) {
+                    @Override
+                    public ArrowWriterFromStruct writer(ValueVector valueVector) {
+                        var nullVector = (NullVector) valueVector;
+                        return new ArrowWriterFromStruct() {
+                            @Override
+                            void setFromStruct(Struct struct) {
+                                nullVector.setValueCount(nullVector.getValueCount() + 1);
+                            }
+                        };
+                    }
+                };
+            }
             case Utf8:
             case String: {
                 var stringGetter = (Getters.FromStructToString) getter;

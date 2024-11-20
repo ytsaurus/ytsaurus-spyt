@@ -158,7 +158,10 @@ class YtOutputWriter(richPath: YPathEnriched,
     val request = WriteTable.builder[InternalRow]()
       .setPath(appendPath)
       .setSerializationContext(
-        if (options.ytConf(ArrowWriteEnabled))
+        if (options.ytConf(ArrowWriteEnabled)) {
+          if (!writeSchemaConverter.typeV3Format) {
+            throw new RuntimeException("arrow writer is only supported with typeV3")
+          }
           new ArrowWriteSerializationContext[InternalRow, ArrayData, MapData, InternalRowYTGetters](
             schema.fields.zipWithIndex.map { case (field, i) =>
               util.Map.entry(field.name, writeSchemaConverter.ytLogicalTypeV3(field).ytGettersFromStruct(
@@ -166,7 +169,7 @@ class YtOutputWriter(richPath: YPathEnriched,
               ))
             }.toSeq.asJava
           )
-        else
+        } else
           new WriteSerializationContext(new InternalRowSerializer(schema, WriteSchemaConverter(options)))
       )
       .setTransactionalOptions(new TransactionalOptions(GUID.valueOf(transactionGuid)))

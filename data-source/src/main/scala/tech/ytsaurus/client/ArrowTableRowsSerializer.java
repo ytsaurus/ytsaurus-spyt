@@ -20,10 +20,8 @@ import org.apache.arrow.vector.types.pojo.Schema;
 import tech.ytsaurus.rpcproxy.ERowsetFormat;
 import tech.ytsaurus.rpcproxy.TRowsetDescriptor;
 import tech.ytsaurus.spyt.format.batch.ArrowUtils;
-import tech.ytsaurus.spyt.serialization.YsonDecoder;
 import tech.ytsaurus.typeinfo.DecimalType;
 import tech.ytsaurus.yson.YsonBinaryWriter;
-import tech.ytsaurus.ysontree.YTreeBuilder;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;

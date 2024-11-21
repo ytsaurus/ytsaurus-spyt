@@ -263,9 +263,7 @@ object YtLogicalType {
         override def getString(list: ArrayData, i: Int): ByteBuffer = ByteBuffer.wrap(list.getBinary(i))
 
         override def getYson(list: ArrayData, i: Int, ysonConsumer: YsonConsumer): Unit = {
-          val byteBuffer = getString(list, i)
-          val bytes = new scala.Array[Byte](byteBuffer.remaining())
-          byteBuffer.get(bytes)
+          val bytes = getBytes(getString(list, i))
           ysonConsumer.onString(bytes, 0, bytes.length)
         }
       }
@@ -275,9 +273,7 @@ object YtLogicalType {
         override def getString(struct: InternalRow): ByteBuffer = ByteBuffer.wrap(struct.getBinary(ordinal))
 
         override def getYson(struct: InternalRow, ysonConsumer: YsonConsumer): Unit = {
-          val byteBuffer = getString(struct)
-          val bytes = new scala.Array[Byte](byteBuffer.remaining())
-          byteBuffer.get(bytes)
+          val bytes = getBytes(getString(struct))
           ysonConsumer.onString(bytes, 0, bytes.length)
         }
       }
@@ -774,15 +770,8 @@ object YtLogicalType {
 
         override def getList(list: ArrayData, i: Int): ArrayData = list.getArray(i)
 
-        override def getYson(list: ArrayData, i: Int, ysonConsumer: YsonConsumer): Unit = {
-          val value = list.getArray(i)
-          ysonConsumer.onBeginList()
-          for (j <- 0 until value.numElements()) {
-            ysonConsumer.onListItem()
-            elementGetter.getYson(value, j, ysonConsumer)
-          }
-          ysonConsumer.onEndList()
-        }
+        override def getYson(list: ArrayData, i: Int, ysonConsumer: YsonConsumer): Unit =
+          onList(ysonConsumer, elementGetter, list.getArray(i))
       }
 
     override def ytGettersFromStruct(dataType: DataType, ordinal: Int): YTGetters.FromStruct[InternalRow] =
@@ -793,16 +782,18 @@ object YtLogicalType {
 
         override def getList(struct: InternalRow): ArrayData = struct.getArray(ordinal)
 
-        override def getYson(struct: InternalRow, ysonConsumer: YsonConsumer): Unit = {
-          val value = struct.getArray(ordinal)
-          ysonConsumer.onBeginList()
-          for (j <- 0 until value.numElements()) {
-            ysonConsumer.onListItem()
-            elementGetter.getYson(value, j, ysonConsumer)
-          }
-          ysonConsumer.onEndList()
-        }
+        override def getYson(struct: InternalRow, ysonConsumer: YsonConsumer): Unit =
+          onList(ysonConsumer, elementGetter, struct.getArray(ordinal))
       }
+
+    private def onList(ysonConsumer: YsonConsumer, elementGetter: YTGetters.FromList[ArrayData], value: ArrayData): Unit = {
+      ysonConsumer.onBeginList()
+      for (j <- 0 until value.numElements()) {
+        ysonConsumer.onListItem()
+        elementGetter.getYson(value, j, ysonConsumer)
+      }
+      ysonConsumer.onEndList()
+    }
   }
 
   case object Array extends CompositeYtLogicalTypeAlias(TypeName.List.getWireName)

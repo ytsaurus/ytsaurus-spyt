@@ -70,7 +70,7 @@ class TableWriterBaseImpl<T> extends RawTableWriterImpl {
                 var format = this.req.getSerializationContext().getFormat();
                 if (format.isPresent() && "arrow".equals(format.get().getType())) {
                     tableRowsSerializer = new ArrowTableRowsSerializer<>(
-                            ((ArrowWriteSerializationContext<T, ?, ?, ?>) this.req.getSerializationContext()).getRowGetters()
+                            ((ArrowWriteSerializationContext<T>) this.req.getSerializationContext()).getRowGetters()
                     );
                 }
             }

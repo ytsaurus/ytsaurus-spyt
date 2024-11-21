@@ -31,8 +31,8 @@ import java.util.*;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
-public class ArrowTableRowsSerializer<Struct, List, Dict, Getters extends YTGetters<Struct, List, Dict>> extends TableRowsSerializer<Struct> implements AutoCloseable {
-    private abstract class ArrowGetterFromStruct {
+public class ArrowTableRowsSerializer<Row> extends TableRowsSerializer<Row> implements AutoCloseable {
+    private static abstract class ArrowGetterFromStruct<Row> {
         public final Field field;
         public final ArrowType arrowType;
 
@@ -46,14 +46,14 @@ public class ArrowTableRowsSerializer<Struct, List, Dict, Getters extends YTGett
             return arrowType;
         }
 
-        public abstract ArrowWriterFromStruct writer(ValueVector valueVector);
+        public abstract ArrowWriterFromStruct<Row> writer(ValueVector valueVector);
     }
 
-    private abstract class ArrowWriterFromStruct {
-        abstract void setFromStruct(Struct struct);
+    private static abstract class ArrowWriterFromStruct<Row> {
+        abstract void setFromStruct(Row struct);
     }
 
-    private abstract class ArrowGetterFromList {
+    private static abstract class ArrowGetterFromList<List> {
         public final Field field;
         public final ArrowType arrowType;
 
@@ -66,50 +66,50 @@ public class ArrowTableRowsSerializer<Struct, List, Dict, Getters extends YTGett
             return arrowType;
         }
 
-        public abstract ArrowWriterFromList writer(ValueVector valueVector);
+        public abstract ArrowWriterFromList<List> writer(ValueVector valueVector);
     }
 
-    private abstract class ArrowWriterFromList {
+    private static abstract class ArrowWriterFromList<List> {
         abstract void setFromList(List list, int i);
     }
 
-    private ArrowGetterFromList arrowGetter(String name, Getters.FromList getter) {
+    private <Array> ArrowGetterFromList<Array> arrowGetter(String name, YTGetters.FromList<Array> getter) {
         var optionalGetter = getter instanceof YTGetters.FromListToOptional
-                ? (Getters.FromListToOptional) getter
+                ? (YTGetters.FromListToOptional<Array>) getter
                 : null;
-        var nonEmptyGetter = optionalGetter != null ? (Getters.FromList) optionalGetter.getNotEmptyGetter() : getter;
+        var nonEmptyGetter = optionalGetter != null ? optionalGetter.getNotEmptyGetter() : getter;
         var arrowGetter = nonComplexArrowGetter(name, nonEmptyGetter);
         if (arrowGetter != null) {
-            return optionalGetter == null ? arrowGetter : new ArrowGetterFromList(new Field(name, new FieldType(
+            return optionalGetter == null ? arrowGetter : new ArrowGetterFromList<>(new Field(name, new FieldType(
                     true, arrowGetter.field.getType(), null
             ), arrowGetter.field.getChildren())) {
                 @Override
-                public ArrowWriterFromList writer(ValueVector valueVector) {
+                public ArrowWriterFromList<Array> writer(ValueVector valueVector) {
                     var nonOptionalWriter = arrowGetter.writer(valueVector);
-                    return new ArrowWriterFromList() {
+                    return new ArrowWriterFromList<>() {
                         @Override
-                        public void setFromList(List list, int i) {
-                            nonOptionalWriter.setFromList(optionalGetter.isEmpty(list, i) ? null : list, i);
+                        public void setFromList(Array array, int i) {
+                            nonOptionalWriter.setFromList(optionalGetter.isEmpty(array, i) ? null : array, i);
                         }
                     };
                 }
             };
         }
-        return new ArrowGetterFromList(new Field(name, new FieldType(
+        return new ArrowGetterFromList<>(new Field(name, new FieldType(
                 optionalGetter != null, new ArrowType.Binary(), null
         ), new ArrayList<>())) {
             @Override
-            public ArrowWriterFromList writer(ValueVector valueVector) {
+            public ArrowWriterFromList<Array> writer(ValueVector valueVector) {
                 var varBinaryVector = (VarBinaryVector) valueVector;
-                return new ArrowWriterFromList() {
+                return new ArrowWriterFromList<>() {
                     @Override
-                    public void setFromList(List list, int i) {
-                        if (optionalGetter != null && optionalGetter.isEmpty(list, i)) {
+                    public void setFromList(Array array, int i) {
+                        if (optionalGetter != null && optionalGetter.isEmpty(array, i)) {
                             varBinaryVector.setNull(varBinaryVector.getValueCount());
                         } else {
                             var byteArrayOutputStream = new ByteArrayOutputStream();
                             try (var ysonBinaryWriter = new YsonBinaryWriter(byteArrayOutputStream)) {
-                                nonEmptyGetter.getYson(list, i, ysonBinaryWriter);
+                                nonEmptyGetter.getYson(array, i, ysonBinaryWriter);
                             }
                             varBinaryVector.set(varBinaryVector.getValueCount(), byteArrayOutputStream.toByteArray());
                         }
@@ -120,20 +120,20 @@ public class ArrowTableRowsSerializer<Struct, List, Dict, Getters extends YTGett
         };
     }
 
-    private ArrowGetterFromStruct arrowGetter(String name, Getters.FromStruct getter) {
+    private <Struct> ArrowGetterFromStruct<Struct> arrowGetter(String name, YTGetters.FromStruct<Struct> getter) {
         var optionalGetter = getter instanceof YTGetters.FromStructToOptional
-                ? (Getters.FromStructToOptional) getter
+                ? (YTGetters.FromStructToOptional<Struct>) getter
                 : null;
-        var nonEmptyGetter = optionalGetter != null ? (Getters.FromStruct) optionalGetter.getNotEmptyGetter() : getter;
+        var nonEmptyGetter = optionalGetter != null ? optionalGetter.getNotEmptyGetter() : getter;
         var arrowGetter = nonComplexArrowGetter(name, nonEmptyGetter);
         if (arrowGetter != null) {
-            return optionalGetter == null ? arrowGetter : new ArrowGetterFromStruct(new Field(name, new FieldType(
+            return optionalGetter == null ? arrowGetter : new ArrowGetterFromStruct<>(new Field(name, new FieldType(
                     true, arrowGetter.field.getType(), null
             ), arrowGetter.field.getChildren())) {
                 @Override
-                public ArrowWriterFromStruct writer(ValueVector valueVector) {
+                public ArrowWriterFromStruct<Struct> writer(ValueVector valueVector) {
                     var nonOptionalWriter = arrowGetter.writer(valueVector);
-                    return new ArrowWriterFromStruct() {
+                    return new ArrowWriterFromStruct<>() {
                         @Override
                         public void setFromStruct(Struct struct) {
                             nonOptionalWriter.setFromStruct(optionalGetter.isEmpty(struct) ? null : struct);
@@ -142,13 +142,13 @@ public class ArrowTableRowsSerializer<Struct, List, Dict, Getters extends YTGett
                 }
             };
         } else {
-            return new ArrowGetterFromStruct(new Field(name, new FieldType(
+            return new ArrowGetterFromStruct<>(new Field(name, new FieldType(
                     optionalGetter != null, new ArrowType.Binary(), null
             ), new ArrayList<>())) {
                 @Override
-                public ArrowWriterFromStruct writer(ValueVector valueVector) {
+                public ArrowWriterFromStruct<Struct> writer(ValueVector valueVector) {
                     var varBinaryVector = (VarBinaryVector) valueVector;
-                    return new ArrowWriterFromStruct() {
+                    return new ArrowWriterFromStruct<>() {
                         @Override
                         void setFromStruct(Struct struct) {
                             if (optionalGetter != null && optionalGetter.isEmpty(struct)) {
@@ -172,20 +172,20 @@ public class ArrowTableRowsSerializer<Struct, List, Dict, Getters extends YTGett
         return new Field(name, new FieldType(false, arrowType, null), Collections.emptyList());
     }
 
-    private ArrowGetterFromList nonComplexArrowGetter(String name, Getters.FromList getter) {
+    private <Array> ArrowGetterFromList<Array> nonComplexArrowGetter(String name, YTGetters.FromList<Array> getter) {
         var tiType = getter.getTiType();
         switch (tiType.getTypeName()) {
             case Null:
             case Void: {
-                return new ArrowGetterFromList(
+                return new ArrowGetterFromList<>(
                         new Field(name, new FieldType(false, new ArrowType.Null(), null), new ArrayList<>())
                 ) {
                     @Override
-                    public ArrowWriterFromList writer(ValueVector valueVector) {
+                    public ArrowWriterFromList<Array> writer(ValueVector valueVector) {
                         var nullVector = (NullVector) valueVector;
-                        return new ArrowWriterFromList() {
+                        return new ArrowWriterFromList<>() {
                             @Override
-                            void setFromList(List list, int i) {
+                            void setFromList(Array list, int i) {
                                 nullVector.setValueCount(nullVector.getValueCount() + 1);
                             }
                         };
@@ -194,16 +194,16 @@ public class ArrowTableRowsSerializer<Struct, List, Dict, Getters extends YTGett
             }
             case Utf8:
             case String: {
-                var stringGetter = (Getters.FromListToString) getter;
-                return new ArrowGetterFromList(
+                var stringGetter = (YTGetters.FromListToString<Array>) getter;
+                return new ArrowGetterFromList<>(
                         new Field(name, new FieldType(false, new ArrowType.Binary(), null), new ArrayList<>())
                 ) {
                     @Override
-                    public ArrowWriterFromList writer(ValueVector valueVector) {
+                    public ArrowWriterFromList<Array> writer(ValueVector valueVector) {
                         var varBinaryVector = (VarBinaryVector) valueVector;
-                        return new ArrowWriterFromList() {
+                        return new ArrowWriterFromList<>() {
                             @Override
-                            void setFromList(List list, int i) {
+                            void setFromList(Array list, int i) {
                                 if (list == null) {
                                     varBinaryVector.setNull(varBinaryVector.getValueCount());
                                 } else {
@@ -220,14 +220,14 @@ public class ArrowTableRowsSerializer<Struct, List, Dict, Getters extends YTGett
                 };
             }
             case Int8: {
-                var byteGetter = (Getters.FromListToByte) getter;
-                return new ArrowGetterFromList(field(name, new ArrowType.Int(8, true))) {
+                var byteGetter = (YTGetters.FromListToByte<Array>) getter;
+                return new ArrowGetterFromList<>(field(name, new ArrowType.Int(8, true))) {
                     @Override
-                    public ArrowWriterFromList writer(ValueVector valueVector) {
+                    public ArrowWriterFromList<Array> writer(ValueVector valueVector) {
                         var tinyIntVector = (TinyIntVector) valueVector;
-                        return new ArrowWriterFromList() {
+                        return new ArrowWriterFromList<>() {
                             @Override
-                            void setFromList(List list, int i) {
+                            void setFromList(Array list, int i) {
                                 if (list == null) {
                                     tinyIntVector.setNull(tinyIntVector.getValueCount());
                                 } else {
@@ -240,14 +240,14 @@ public class ArrowTableRowsSerializer<Struct, List, Dict, Getters extends YTGett
                 };
             }
             case Uint8: {
-                var byteGetter = (Getters.FromListToByte) getter;
-                return new ArrowGetterFromList(field(name, new ArrowType.Int(8, false))) {
+                var byteGetter = (YTGetters.FromListToByte<Array>) getter;
+                return new ArrowGetterFromList<>(field(name, new ArrowType.Int(8, false))) {
                     @Override
-                    public ArrowWriterFromList writer(ValueVector valueVector) {
+                    public ArrowWriterFromList<Array> writer(ValueVector valueVector) {
                         var uInt1Vector = (UInt1Vector) valueVector;
-                        return new ArrowWriterFromList() {
+                        return new ArrowWriterFromList<>() {
                             @Override
-                            void setFromList(List list, int i) {
+                            void setFromList(Array list, int i) {
                                 if (list == null) {
                                     uInt1Vector.setNull(uInt1Vector.getValueCount());
                                 } else {
@@ -260,14 +260,14 @@ public class ArrowTableRowsSerializer<Struct, List, Dict, Getters extends YTGett
                 };
             }
             case Int16: {
-                var shortGetter = (Getters.FromListToShort) getter;
-                return new ArrowGetterFromList(field(name, new ArrowType.Int(16, true))) {
+                var shortGetter = (YTGetters.FromListToShort<Array>) getter;
+                return new ArrowGetterFromList<>(field(name, new ArrowType.Int(16, true))) {
                     @Override
-                    public ArrowWriterFromList writer(ValueVector valueVector) {
+                    public ArrowWriterFromList<Array> writer(ValueVector valueVector) {
                         var smallIntVector = (SmallIntVector) valueVector;
-                        return new ArrowWriterFromList() {
+                        return new ArrowWriterFromList<>() {
                             @Override
-                            void setFromList(List list, int i) {
+                            void setFromList(Array list, int i) {
                                 if (list == null) {
                                     smallIntVector.setNull(smallIntVector.getValueCount());
                                 } else {
@@ -280,14 +280,14 @@ public class ArrowTableRowsSerializer<Struct, List, Dict, Getters extends YTGett
                 };
             }
             case Uint16: {
-                var shortGetter = (Getters.FromListToShort) getter;
-                return new ArrowGetterFromList(field(name, new ArrowType.Int(16, false))) {
+                var shortGetter = (YTGetters.FromListToShort<Array>) getter;
+                return new ArrowGetterFromList<>(field(name, new ArrowType.Int(16, false))) {
                     @Override
-                    public ArrowWriterFromList writer(ValueVector valueVector) {
+                    public ArrowWriterFromList<Array> writer(ValueVector valueVector) {
                         var uInt2Vector = (UInt2Vector) valueVector;
-                        return new ArrowWriterFromList() {
+                        return new ArrowWriterFromList<>() {
                             @Override
-                            void setFromList(List list, int i) {
+                            void setFromList(Array list, int i) {
                                 if (list == null) {
                                     uInt2Vector.setNull(uInt2Vector.getValueCount());
                                 } else {
@@ -300,14 +300,14 @@ public class ArrowTableRowsSerializer<Struct, List, Dict, Getters extends YTGett
                 };
             }
             case Int32: {
-                var intGetter = (Getters.FromListToInt) getter;
-                return new ArrowGetterFromList(field(name, new ArrowType.Int(32, true))) {
+                var intGetter = (YTGetters.FromListToInt<Array>) getter;
+                return new ArrowGetterFromList<>(field(name, new ArrowType.Int(32, true))) {
                     @Override
-                    public ArrowWriterFromList writer(ValueVector valueVector) {
+                    public ArrowWriterFromList<Array> writer(ValueVector valueVector) {
                         var intVector = (IntVector) valueVector;
-                        return new ArrowWriterFromList() {
+                        return new ArrowWriterFromList<>() {
                             @Override
-                            void setFromList(List list, int i) {
+                            void setFromList(Array list, int i) {
                                 if (list == null) {
                                     intVector.setNull(intVector.getValueCount());
                                 } else {
@@ -320,14 +320,14 @@ public class ArrowTableRowsSerializer<Struct, List, Dict, Getters extends YTGett
                 };
             }
             case Uint32: {
-                var intGetter = (Getters.FromListToInt) getter;
-                return new ArrowGetterFromList(field(name, new ArrowType.Int(32, false))) {
+                var intGetter = (YTGetters.FromListToInt<Array>) getter;
+                return new ArrowGetterFromList<>(field(name, new ArrowType.Int(32, false))) {
                     @Override
-                    public ArrowWriterFromList writer(ValueVector valueVector) {
+                    public ArrowWriterFromList<Array> writer(ValueVector valueVector) {
                         var uInt4Vector = (UInt4Vector) valueVector;
-                        return new ArrowWriterFromList() {
+                        return new ArrowWriterFromList<>() {
                             @Override
-                            void setFromList(List list, int i) {
+                            void setFromList(Array list, int i) {
                                 if (list == null) {
                                     uInt4Vector.setNull(uInt4Vector.getValueCount());
                                 } else {
@@ -342,14 +342,14 @@ public class ArrowTableRowsSerializer<Struct, List, Dict, Getters extends YTGett
             case Interval:
             case Interval64:
             case Int64: {
-                var longGetter = (Getters.FromListToLong) getter;
-                return new ArrowGetterFromList(field(name, new ArrowType.Int(64, true))) {
+                var longGetter = (YTGetters.FromListToLong<Array>) getter;
+                return new ArrowGetterFromList<>(field(name, new ArrowType.Int(64, true))) {
                     @Override
-                    public ArrowWriterFromList writer(ValueVector valueVector) {
+                    public ArrowWriterFromList<Array> writer(ValueVector valueVector) {
                         var bigIntVector = (BigIntVector) valueVector;
-                        return new ArrowWriterFromList() {
+                        return new ArrowWriterFromList<>() {
                             @Override
-                            void setFromList(List list, int i) {
+                            void setFromList(Array list, int i) {
                                 if (list == null) {
                                     bigIntVector.setNull(bigIntVector.getValueCount());
                                 } else {
@@ -362,14 +362,14 @@ public class ArrowTableRowsSerializer<Struct, List, Dict, Getters extends YTGett
                 };
             }
             case Uint64: {
-                var longGetter = (Getters.FromListToLong) getter;
-                return new ArrowGetterFromList(field(name, new ArrowType.Int(64, false))) {
+                var longGetter = (YTGetters.FromListToLong<Array>) getter;
+                return new ArrowGetterFromList<>(field(name, new ArrowType.Int(64, false))) {
                     @Override
-                    public ArrowWriterFromList writer(ValueVector valueVector) {
+                    public ArrowWriterFromList<Array> writer(ValueVector valueVector) {
                         var uInt8Vector = (UInt8Vector) valueVector;
-                        return new ArrowWriterFromList() {
+                        return new ArrowWriterFromList<>() {
                             @Override
-                            void setFromList(List list, int i) {
+                            void setFromList(Array list, int i) {
                                 if (list == null) {
                                     uInt8Vector.setNull(uInt8Vector.getValueCount());
                                 } else {
@@ -382,14 +382,14 @@ public class ArrowTableRowsSerializer<Struct, List, Dict, Getters extends YTGett
                 };
             }
             case Bool: {
-                var booleanGetter = (Getters.FromListToBoolean) getter;
-                return new ArrowGetterFromList(field(name, new ArrowType.Bool())) {
+                var booleanGetter = (YTGetters.FromListToBoolean<Array>) getter;
+                return new ArrowGetterFromList<>(field(name, new ArrowType.Bool())) {
                     @Override
-                    public ArrowWriterFromList writer(ValueVector valueVector) {
+                    public ArrowWriterFromList<Array> writer(ValueVector valueVector) {
                         var bitVector = (BitVector) valueVector;
-                        return new ArrowWriterFromList() {
+                        return new ArrowWriterFromList<>() {
                             @Override
-                            void setFromList(List list, int i) {
+                            void setFromList(Array list, int i) {
                                 if (list == null) {
                                     bitVector.setNull(bitVector.getValueCount());
                                 } else {
@@ -402,14 +402,14 @@ public class ArrowTableRowsSerializer<Struct, List, Dict, Getters extends YTGett
                 };
             }
             case Float: {
-                var floatGetter = (Getters.FromListToFloat) getter;
-                return new ArrowGetterFromList(field(name, new ArrowType.FloatingPoint(FloatingPointPrecision.SINGLE))) {
+                var floatGetter = (YTGetters.FromListToFloat<Array>) getter;
+                return new ArrowGetterFromList<>(field(name, new ArrowType.FloatingPoint(FloatingPointPrecision.SINGLE))) {
                     @Override
-                    public ArrowWriterFromList writer(ValueVector valueVector) {
+                    public ArrowWriterFromList<Array> writer(ValueVector valueVector) {
                         var float4Vector = (Float4Vector) valueVector;
-                        return new ArrowWriterFromList() {
+                        return new ArrowWriterFromList<>() {
                             @Override
-                            void setFromList(List list, int i) {
+                            void setFromList(Array list, int i) {
                                 if (list == null) {
                                     float4Vector.setNull(float4Vector.getValueCount());
                                 } else {
@@ -422,14 +422,14 @@ public class ArrowTableRowsSerializer<Struct, List, Dict, Getters extends YTGett
                 };
             }
             case Double: {
-                var doubleGetter = (Getters.FromListToDouble) getter;
-                return new ArrowGetterFromList(field(name, new ArrowType.FloatingPoint(FloatingPointPrecision.DOUBLE))) {
+                var doubleGetter = (YTGetters.FromListToDouble<Array>) getter;
+                return new ArrowGetterFromList<>(field(name, new ArrowType.FloatingPoint(FloatingPointPrecision.DOUBLE))) {
                     @Override
-                    public ArrowWriterFromList writer(ValueVector valueVector) {
+                    public ArrowWriterFromList<Array> writer(ValueVector valueVector) {
                         var float8Vector = (Float8Vector) valueVector;
-                        return new ArrowWriterFromList() {
+                        return new ArrowWriterFromList<>() {
                             @Override
-                            void setFromList(List list, int i) {
+                            void setFromList(Array list, int i) {
                                 if (list == null) {
                                     float8Vector.setNull(float8Vector.getValueCount());
                                 } else {
@@ -442,17 +442,17 @@ public class ArrowTableRowsSerializer<Struct, List, Dict, Getters extends YTGett
                 };
             }
             case Decimal: {
-                var decimalGetter = (Getters.FromListToBigDecimal) getter;
+                var decimalGetter = (YTGetters.FromListToBigDecimal<Array>) getter;
                 var decimalType = (DecimalType) decimalGetter.getTiType();
-                return new ArrowGetterFromList(field(name, new ArrowType.Decimal(
+                return new ArrowGetterFromList<>(field(name, new ArrowType.Decimal(
                         decimalType.getPrecision(), decimalType.getScale()
                 ))) {
                     @Override
-                    public ArrowWriterFromList writer(ValueVector valueVector) {
+                    public ArrowWriterFromList<Array> writer(ValueVector valueVector) {
                         var decimalVector = (DecimalVector) valueVector;
-                        return new ArrowWriterFromList() {
+                        return new ArrowWriterFromList<>() {
                             @Override
-                            void setFromList(List list, int i) {
+                            void setFromList(Array list, int i) {
                                 if (list == null) {
                                     decimalVector.setNull(decimalVector.getValueCount());
                                 } else {
@@ -466,14 +466,14 @@ public class ArrowTableRowsSerializer<Struct, List, Dict, Getters extends YTGett
             }
             case Date:
             case Date32: {
-                var intGetter = (Getters.FromListToInt) getter;
-                return new ArrowGetterFromList(field(name, new ArrowType.Date(DateUnit.DAY))) {
+                var intGetter = (YTGetters.FromListToInt<Array>) getter;
+                return new ArrowGetterFromList<>(field(name, new ArrowType.Date(DateUnit.DAY))) {
                     @Override
-                    public ArrowWriterFromList writer(ValueVector valueVector) {
+                    public ArrowWriterFromList<Array> writer(ValueVector valueVector) {
                         var dateDayVector = (DateDayVector) valueVector;
-                        return new ArrowWriterFromList() {
+                        return new ArrowWriterFromList<>() {
                             @Override
-                            void setFromList(List list, int i) {
+                            void setFromList(Array list, int i) {
                                 if (list == null) {
                                     dateDayVector.setNull(dateDayVector.getValueCount());
                                 } else {
@@ -487,14 +487,14 @@ public class ArrowTableRowsSerializer<Struct, List, Dict, Getters extends YTGett
             }
             case Datetime:
             case Datetime64: {
-                var longGetter = (Getters.FromListToLong) getter;
-                return new ArrowGetterFromList(field(name, new ArrowType.Date(DateUnit.MILLISECOND))) {
+                var longGetter = (YTGetters.FromListToLong<Array>) getter;
+                return new ArrowGetterFromList<>(field(name, new ArrowType.Date(DateUnit.MILLISECOND))) {
                     @Override
-                    public ArrowWriterFromList writer(ValueVector valueVector) {
+                    public ArrowWriterFromList<Array> writer(ValueVector valueVector) {
                         var dateMilliVector = (DateMilliVector) valueVector;
-                        return new ArrowWriterFromList() {
+                        return new ArrowWriterFromList<>() {
                             @Override
-                            void setFromList(List list, int i) {
+                            void setFromList(Array list, int i) {
                                 if (list == null) {
                                     dateMilliVector.setNull(dateMilliVector.getValueCount());
                                 } else {
@@ -508,14 +508,14 @@ public class ArrowTableRowsSerializer<Struct, List, Dict, Getters extends YTGett
             }
             case Timestamp:
             case Timestamp64: {
-                var longGetter = (Getters.FromListToLong) getter;
-                return new ArrowGetterFromList(field(name, new ArrowType.Timestamp(TimeUnit.MICROSECOND, null))) {
+                var longGetter = (YTGetters.FromListToLong<Array>) getter;
+                return new ArrowGetterFromList<>(field(name, new ArrowType.Timestamp(TimeUnit.MICROSECOND, null))) {
                     @Override
-                    public ArrowWriterFromList writer(ValueVector valueVector) {
+                    public ArrowWriterFromList<Array> writer(ValueVector valueVector) {
                         var timeStampMicroVector = (TimeStampMicroVector) valueVector;
-                        return new ArrowWriterFromList() {
+                        return new ArrowWriterFromList<>() {
                             @Override
-                            void setFromList(List list, int i) {
+                            void setFromList(Array list, int i) {
                                 if (list == null) {
                                     timeStampMicroVector.setNull(timeStampMicroVector.getValueCount());
                                 } else {
@@ -528,133 +528,148 @@ public class ArrowTableRowsSerializer<Struct, List, Dict, Getters extends YTGett
                 };
             }
             case List: {
-                var listGetter = (Getters.FromListToList) getter;
-                var elementGetter = listGetter.getElementGetter();
-                var itemGetter = arrowGetter("item", (Getters.FromList) elementGetter);
-                return new ArrowGetterFromList(new Field(name, new FieldType(
-                        false, new ArrowType.List(), null
-                ), Collections.singletonList(itemGetter.field))) {
-                    @Override
-                    public ArrowWriterFromList writer(ValueVector valueVector) {
-                        var listVector = (ListVector) valueVector;
-                        var dataWriter = itemGetter.writer(listVector.getDataVector());
-                        return new ArrowWriterFromList() {
-                            @Override
-                            void setFromList(List list, int i) {
-                                var value = list == null ? null : (List) listGetter.getList(list, i);
-                                if (value != null) {
-                                    int size = elementGetter.getSize(value);
-                                    listVector.startNewValue(listVector.getValueCount());
-                                    for (int j = 0; j < size; j++) {
-                                        dataWriter.setFromList(value, j);
-                                    }
-                                    listVector.endValue(listVector.getValueCount(), size);
-                                }
-                                listVector.setValueCount(listVector.getValueCount() + 1);
-                            }
-                        };
-                    }
-                };
+                return getArrowGetterFromList(name, (YTGetters.FromListToList<Array, ?>) getter);
             }
             case Dict: {
-                var dictGetter = (Getters.FromListToDict) getter;
-                var fromDictGetter = dictGetter.getGetter();
-                var keyGetter = nonComplexArrowGetter("key", (Getters.FromList) fromDictGetter.getKeyGetter());
-                var valueGetter = arrowGetter("value", (Getters.FromList) fromDictGetter.getValueGetter());
-                if (keyGetter == null || valueGetter == null) {
-                    return null;
-                }
-                return new ArrowGetterFromList(new Field(
-                        name, new FieldType(false, new ArrowType.Map(false), null),
-                        Collections.singletonList(new Field(
-                                "entries", new FieldType(false, new ArrowType.Struct(), null),
-                                Arrays.asList(keyGetter.field, valueGetter.field)
-                        ))
-                )) {
-                    @Override
-                    public ArrowWriterFromList writer(ValueVector valueVector) {
-                        var mapVector = (MapVector) valueVector;
-                        var structVector = (StructVector) mapVector.getDataVector();
-                        var keyWriter = keyGetter.writer(structVector.getChildByOrdinal(0));
-                        var valueWriter = valueGetter.writer(structVector.getChildByOrdinal(1));
-                        return new ArrowWriterFromList() {
-                            @Override
-                            void setFromList(List list, int i) {
-                                var dict = list == null ? null : dictGetter.getDict(list, i);
-                                if (dict != null) {
-                                    int size = fromDictGetter.getSize(dict);
-                                    var keys = fromDictGetter.getKeys(dict);
-                                    var values = fromDictGetter.getValues(dict);
-                                    mapVector.startNewValue(mapVector.getValueCount());
-                                    for (int j = 0; j < size; j++) {
-                                        structVector.setIndexDefined(structVector.getValueCount());
-                                        keyWriter.setFromList((List) keys, j);
-                                        valueWriter.setFromList((List) values, j);
-                                        structVector.setValueCount(structVector.getValueCount() + 1);
-                                    }
-                                    mapVector.endValue(mapVector.getValueCount(), size);
-                                }
-                                mapVector.setValueCount(mapVector.getValueCount() + 1);
-                            }
-                        };
-                    }
-                };
+                return getArrowGetterFromList(name, (YTGetters.FromListToDict<Array, ?, ?, ?>) getter);
             }
             case Struct: {
-                var structGetter = (Getters.FromListToStruct) getter;
-                var members = (java.util.List<Map.Entry<String, Getters.FromStruct>>) structGetter.getMembersGetters();
-                var membersGetters = new ArrayList<ArrowGetterFromStruct>(members.size());
-                for (Map.Entry<String, Getters.FromStruct> member : members) {
-                    membersGetters.add(arrowGetter(member.getKey(), member.getValue()));
-                }
-                return new ArrowGetterFromList(new Field(
-                        name, new FieldType(false, new ArrowType.Struct(), null),
-                        membersGetters.stream().map(member -> member.field).collect(Collectors.toList())
-                )) {
-                    @Override
-                    public ArrowWriterFromList writer(ValueVector valueVector) {
-                        var structVector = (StructVector) valueVector;
-                        var membersWriters = new ArrayList<ArrowWriterFromStruct>(members.size());
-                        for (int i = 0; i < members.size(); i++) {
-                            membersWriters.add(membersGetters.get(i).writer(structVector.getChildByOrdinal(i)));
-                        }
-                        return new ArrowWriterFromList() {
-                            @Override
-                            void setFromList(List list, int i) {
-                                if (list == null) {
-                                    for (int j = 0; j < members.size(); j++) {
-                                        membersWriters.get(j).setFromStruct(null);
-                                    }
-                                } else {
-                                    var struct = (Struct) structGetter.getStruct(list, i);
-                                    structVector.setIndexDefined(structVector.getValueCount());
-                                    for (int j = 0; j < members.size(); j++) {
-                                        membersWriters.get(j).setFromStruct(struct);
-                                    }
-                                }
-                                structVector.setValueCount(structVector.getValueCount() + 1);
-                            }
-                        };
-                    }
-                };
+                return getArrowGetterFromList(name, (YTGetters.FromListToStruct<Array, ?>) getter);
             }
             default:
                 return null;
         }
     }
 
-    private ArrowGetterFromStruct nonComplexArrowGetter(String name, Getters.FromStruct getter) {
+    private <Array, Struct> ArrowGetterFromList<Array> getArrowGetterFromList(
+            String name, YTGetters.FromListToStruct<Array, Struct> structGetter
+    ) {
+        var members = structGetter.getMembersGetters();
+        var membersGetters = new ArrayList<ArrowGetterFromStruct<Struct>>(members.size());
+        for (var member : members) {
+            membersGetters.add(arrowGetter(member.getKey(), member.getValue()));
+        }
+        return new ArrowGetterFromList<>(new Field(
+                name, new FieldType(false, new ArrowType.Struct(), null),
+                membersGetters.stream().map(member -> member.field).collect(Collectors.toList())
+        )) {
+            @Override
+            public ArrowWriterFromList<Array> writer(ValueVector valueVector) {
+                var structVector = (StructVector) valueVector;
+                var membersWriters = new ArrayList<ArrowWriterFromStruct<Struct>>(members.size());
+                for (int i = 0; i < members.size(); i++) {
+                    membersWriters.add(membersGetters.get(i).writer(structVector.getChildByOrdinal(i)));
+                }
+                return new ArrowWriterFromList<>() {
+                    @Override
+                    void setFromList(Array list, int i) {
+                        if (list == null) {
+                            for (int j = 0; j < members.size(); j++) {
+                                membersWriters.get(j).setFromStruct(null);
+                            }
+                        } else {
+                            var struct = structGetter.getStruct(list, i);
+                            structVector.setIndexDefined(structVector.getValueCount());
+                            for (int j = 0; j < members.size(); j++) {
+                                membersWriters.get(j).setFromStruct(struct);
+                            }
+                        }
+                        structVector.setValueCount(structVector.getValueCount() + 1);
+                    }
+                };
+            }
+        };
+    }
+
+    private <Array, Dict, Keys, Values> ArrowGetterFromList<Array> getArrowGetterFromList(
+            String name, YTGetters.FromListToDict<Array, Dict, Keys, Values> dictGetter
+    ) {
+        var fromDictGetter = dictGetter.getGetter();
+        var keyGetter = nonComplexArrowGetter("key", fromDictGetter.getKeyGetter());
+        var valueGetter = arrowGetter("value", fromDictGetter.getValueGetter());
+        if (keyGetter == null) {
+            return null;
+        }
+        return new ArrowGetterFromList<>(new Field(
+                name, new FieldType(false, new ArrowType.Map(false), null),
+                Collections.singletonList(new Field(
+                        "entries", new FieldType(false, new ArrowType.Struct(), null),
+                        Arrays.asList(keyGetter.field, valueGetter.field)
+                ))
+        )) {
+            @Override
+            public ArrowWriterFromList<Array> writer(ValueVector valueVector) {
+                var mapVector = (MapVector) valueVector;
+                var structVector = (StructVector) mapVector.getDataVector();
+                var keyWriter = keyGetter.writer(structVector.getChildByOrdinal(0));
+                var valueWriter = valueGetter.writer(structVector.getChildByOrdinal(1));
+                return new ArrowWriterFromList<>() {
+                    @Override
+                    void setFromList(Array list, int i) {
+                        var dict = list == null ? null : dictGetter.getDict(list, i);
+                        if (dict != null) {
+                            int size = fromDictGetter.getSize(dict);
+                            var keys = fromDictGetter.getKeys(dict);
+                            var values = fromDictGetter.getValues(dict);
+                            mapVector.startNewValue(mapVector.getValueCount());
+                            for (int j = 0; j < size; j++) {
+                                structVector.setIndexDefined(structVector.getValueCount());
+                                keyWriter.setFromList(keys, j);
+                                valueWriter.setFromList(values, j);
+                                structVector.setValueCount(structVector.getValueCount() + 1);
+                            }
+                            mapVector.endValue(mapVector.getValueCount(), size);
+                        }
+                        mapVector.setValueCount(mapVector.getValueCount() + 1);
+                    }
+                };
+            }
+        };
+    }
+
+    private <Array, Value> ArrowGetterFromList<Array> getArrowGetterFromList(
+            String name, YTGetters.FromListToList<Array, Value> listGetter
+    ) {
+        var elementGetter = listGetter.getElementGetter();
+        var itemGetter = arrowGetter("item", elementGetter);
+        return new ArrowGetterFromList<>(new Field(name, new FieldType(
+                false, new ArrowType.List(), null
+        ), Collections.singletonList(itemGetter.field))) {
+            @Override
+            public ArrowWriterFromList<Array> writer(ValueVector valueVector) {
+                var listVector = (ListVector) valueVector;
+                var dataWriter = itemGetter.writer(listVector.getDataVector());
+                return new ArrowWriterFromList<>() {
+                    @Override
+                    void setFromList(Array list, int i) {
+                        var value = list == null ? null : listGetter.getList(list, i);
+                        if (value != null) {
+                            int size = elementGetter.getSize(value);
+                            listVector.startNewValue(listVector.getValueCount());
+                            for (int j = 0; j < size; j++) {
+                                dataWriter.setFromList(value, j);
+                            }
+                            listVector.endValue(listVector.getValueCount(), size);
+                        }
+                        listVector.setValueCount(listVector.getValueCount() + 1);
+                    }
+                };
+            }
+        };
+    }
+
+    private <Struct> ArrowGetterFromStruct<Struct> nonComplexArrowGetter(String name, YTGetters.FromStruct<Struct> getter) {
         var tiType = getter.getTiType();
         switch (tiType.getTypeName()) {
             case Null:
             case Void: {
-                return new ArrowGetterFromStruct(
+                return new ArrowGetterFromStruct<>(
                         new Field(name, new FieldType(false, new ArrowType.Null(), null), new ArrayList<>())
                 ) {
                     @Override
-                    public ArrowWriterFromStruct writer(ValueVector valueVector) {
+                    public ArrowWriterFromStruct<Struct> writer(ValueVector valueVector) {
                         var nullVector = (NullVector) valueVector;
-                        return new ArrowWriterFromStruct() {
+                        return new ArrowWriterFromStruct<>() {
                             @Override
                             void setFromStruct(Struct struct) {
                                 nullVector.setValueCount(nullVector.getValueCount() + 1);
@@ -665,12 +680,12 @@ public class ArrowTableRowsSerializer<Struct, List, Dict, Getters extends YTGett
             }
             case Utf8:
             case String: {
-                var stringGetter = (Getters.FromStructToString) getter;
-                return new ArrowGetterFromStruct(field(name, new ArrowType.Binary())) {
+                var stringGetter = (YTGetters.FromStructToString<Struct>) getter;
+                return new ArrowGetterFromStruct<>(field(name, new ArrowType.Binary())) {
                     @Override
-                    public ArrowWriterFromStruct writer(ValueVector valueVector) {
+                    public ArrowWriterFromStruct<Struct> writer(ValueVector valueVector) {
                         var varBinaryVector = (VarBinaryVector) valueVector;
-                        return new ArrowWriterFromStruct() {
+                        return new ArrowWriterFromStruct<>() {
                             @Override
                             void setFromStruct(Struct struct) {
                                 if (struct == null) {
@@ -689,12 +704,12 @@ public class ArrowTableRowsSerializer<Struct, List, Dict, Getters extends YTGett
                 };
             }
             case Int8: {
-                var byteGetter = (Getters.FromStructToByte) getter;
-                return new ArrowGetterFromStruct(field(name, new ArrowType.Int(8, true))) {
+                var byteGetter = (YTGetters.FromStructToByte<Struct>) getter;
+                return new ArrowGetterFromStruct<>(field(name, new ArrowType.Int(8, true))) {
                     @Override
-                    public ArrowWriterFromStruct writer(ValueVector valueVector) {
+                    public ArrowWriterFromStruct<Struct> writer(ValueVector valueVector) {
                         var tinyIntVector = (TinyIntVector) valueVector;
-                        return new ArrowWriterFromStruct() {
+                        return new ArrowWriterFromStruct<>() {
                             @Override
                             void setFromStruct(Struct struct) {
                                 if (struct == null) {
@@ -709,12 +724,12 @@ public class ArrowTableRowsSerializer<Struct, List, Dict, Getters extends YTGett
                 };
             }
             case Uint8: {
-                var byteGetter = (Getters.FromStructToByte) getter;
-                return new ArrowGetterFromStruct(field(name, new ArrowType.Int(8, false))) {
+                var byteGetter = (YTGetters.FromStructToByte<Struct>) getter;
+                return new ArrowGetterFromStruct<>(field(name, new ArrowType.Int(8, false))) {
                     @Override
-                    public ArrowWriterFromStruct writer(ValueVector valueVector) {
+                    public ArrowWriterFromStruct<Struct> writer(ValueVector valueVector) {
                         var uInt1Vector = (UInt1Vector) valueVector;
-                        return new ArrowWriterFromStruct() {
+                        return new ArrowWriterFromStruct<>() {
                             @Override
                             void setFromStruct(Struct struct) {
                                 if (struct == null) {
@@ -729,12 +744,12 @@ public class ArrowTableRowsSerializer<Struct, List, Dict, Getters extends YTGett
                 };
             }
             case Int16: {
-                var shortGetter = (Getters.FromStructToShort) getter;
-                return new ArrowGetterFromStruct(field(name, new ArrowType.Int(16, true))) {
+                var shortGetter = (YTGetters.FromStructToShort<Struct>) getter;
+                return new ArrowGetterFromStruct<>(field(name, new ArrowType.Int(16, true))) {
                     @Override
-                    public ArrowWriterFromStruct writer(ValueVector valueVector) {
+                    public ArrowWriterFromStruct<Struct> writer(ValueVector valueVector) {
                         var smallIntVector = (SmallIntVector) valueVector;
-                        return new ArrowWriterFromStruct() {
+                        return new ArrowWriterFromStruct<>() {
                             @Override
                             void setFromStruct(Struct struct) {
                                 if (struct == null) {
@@ -749,12 +764,12 @@ public class ArrowTableRowsSerializer<Struct, List, Dict, Getters extends YTGett
                 };
             }
             case Uint16: {
-                var shortGetter = (Getters.FromStructToShort) getter;
-                return new ArrowGetterFromStruct(field(name, new ArrowType.Int(16, false))) {
+                var shortGetter = (YTGetters.FromStructToShort<Struct>) getter;
+                return new ArrowGetterFromStruct<>(field(name, new ArrowType.Int(16, false))) {
                     @Override
-                    public ArrowWriterFromStruct writer(ValueVector valueVector) {
+                    public ArrowWriterFromStruct<Struct> writer(ValueVector valueVector) {
                         var uInt2Vector = (UInt2Vector) valueVector;
-                        return new ArrowWriterFromStruct() {
+                        return new ArrowWriterFromStruct<>() {
                             @Override
                             void setFromStruct(Struct struct) {
                                 if (struct == null) {
@@ -769,12 +784,12 @@ public class ArrowTableRowsSerializer<Struct, List, Dict, Getters extends YTGett
                 };
             }
             case Int32: {
-                var intGetter = (Getters.FromStructToInt) getter;
-                return new ArrowGetterFromStruct(field(name, new ArrowType.Int(32, true))) {
+                var intGetter = (YTGetters.FromStructToInt<Struct>) getter;
+                return new ArrowGetterFromStruct<>(field(name, new ArrowType.Int(32, true))) {
                     @Override
-                    public ArrowWriterFromStruct writer(ValueVector valueVector) {
+                    public ArrowWriterFromStruct<Struct> writer(ValueVector valueVector) {
                         var intVector = (IntVector) valueVector;
-                        return new ArrowWriterFromStruct() {
+                        return new ArrowWriterFromStruct<>() {
                             @Override
                             void setFromStruct(Struct struct) {
                                 if (struct == null) {
@@ -789,12 +804,12 @@ public class ArrowTableRowsSerializer<Struct, List, Dict, Getters extends YTGett
                 };
             }
             case Uint32: {
-                var intGetter = (Getters.FromStructToInt) getter;
-                return new ArrowGetterFromStruct(field(name, new ArrowType.Int(32, false))) {
+                var intGetter = (YTGetters.FromStructToInt<Struct>) getter;
+                return new ArrowGetterFromStruct<>(field(name, new ArrowType.Int(32, false))) {
                     @Override
-                    public ArrowWriterFromStruct writer(ValueVector valueVector) {
+                    public ArrowWriterFromStruct<Struct> writer(ValueVector valueVector) {
                         var uInt4Vector = (UInt4Vector) valueVector;
-                        return new ArrowWriterFromStruct() {
+                        return new ArrowWriterFromStruct<>() {
                             @Override
                             void setFromStruct(Struct struct) {
                                 if (struct == null) {
@@ -811,12 +826,12 @@ public class ArrowTableRowsSerializer<Struct, List, Dict, Getters extends YTGett
             case Interval:
             case Interval64:
             case Int64: {
-                var longGetter = (Getters.FromStructToLong) getter;
-                return new ArrowGetterFromStruct(field(name, new ArrowType.Int(64, true))) {
+                var longGetter = (YTGetters.FromStructToLong<Struct>) getter;
+                return new ArrowGetterFromStruct<>(field(name, new ArrowType.Int(64, true))) {
                     @Override
-                    public ArrowWriterFromStruct writer(ValueVector valueVector) {
+                    public ArrowWriterFromStruct<Struct> writer(ValueVector valueVector) {
                         var bigIntVector = (BigIntVector) valueVector;
-                        return new ArrowWriterFromStruct() {
+                        return new ArrowWriterFromStruct<>() {
                             @Override
                             void setFromStruct(Struct struct) {
                                 if (struct == null) {
@@ -831,12 +846,12 @@ public class ArrowTableRowsSerializer<Struct, List, Dict, Getters extends YTGett
                 };
             }
             case Uint64: {
-                var longGetter = (Getters.FromStructToLong) getter;
-                return new ArrowGetterFromStruct(field(name, new ArrowType.Int(64, false))) {
+                var longGetter = (YTGetters.FromStructToLong<Struct>) getter;
+                return new ArrowGetterFromStruct<>(field(name, new ArrowType.Int(64, false))) {
                     @Override
-                    public ArrowWriterFromStruct writer(ValueVector valueVector) {
+                    public ArrowWriterFromStruct<Struct> writer(ValueVector valueVector) {
                         var uInt8Vector = (UInt8Vector) valueVector;
-                        return new ArrowWriterFromStruct() {
+                        return new ArrowWriterFromStruct<>() {
                             @Override
                             void setFromStruct(Struct struct) {
                                 if (struct == null) {
@@ -851,12 +866,12 @@ public class ArrowTableRowsSerializer<Struct, List, Dict, Getters extends YTGett
                 };
             }
             case Bool: {
-                var booleanGetter = (Getters.FromStructToBoolean) getter;
-                return new ArrowGetterFromStruct(field(name, new ArrowType.Bool())) {
+                var booleanGetter = (YTGetters.FromStructToBoolean<Struct>) getter;
+                return new ArrowGetterFromStruct<>(field(name, new ArrowType.Bool())) {
                     @Override
-                    public ArrowWriterFromStruct writer(ValueVector valueVector) {
+                    public ArrowWriterFromStruct<Struct> writer(ValueVector valueVector) {
                         var bitVector = (BitVector) valueVector;
-                        return new ArrowWriterFromStruct() {
+                        return new ArrowWriterFromStruct<>() {
                             @Override
                             void setFromStruct(Struct struct) {
                                 if (struct == null) {
@@ -871,12 +886,12 @@ public class ArrowTableRowsSerializer<Struct, List, Dict, Getters extends YTGett
                 };
             }
             case Float: {
-                var floatGetter = (Getters.FromStructToFloat) getter;
-                return new ArrowGetterFromStruct(field(name, new ArrowType.FloatingPoint(FloatingPointPrecision.SINGLE))) {
+                var floatGetter = (YTGetters.FromStructToFloat<Struct>) getter;
+                return new ArrowGetterFromStruct<>(field(name, new ArrowType.FloatingPoint(FloatingPointPrecision.SINGLE))) {
                     @Override
-                    public ArrowWriterFromStruct writer(ValueVector valueVector) {
+                    public ArrowWriterFromStruct<Struct> writer(ValueVector valueVector) {
                         var float4Vector = (Float4Vector) valueVector;
-                        return new ArrowWriterFromStruct() {
+                        return new ArrowWriterFromStruct<>() {
                             @Override
                             void setFromStruct(Struct struct) {
                                 if (struct == null) {
@@ -891,12 +906,12 @@ public class ArrowTableRowsSerializer<Struct, List, Dict, Getters extends YTGett
                 };
             }
             case Double: {
-                var doubleGetter = (Getters.FromStructToDouble) getter;
-                return new ArrowGetterFromStruct(field(name, new ArrowType.FloatingPoint(FloatingPointPrecision.DOUBLE))) {
+                var doubleGetter = (YTGetters.FromStructToDouble<Struct>) getter;
+                return new ArrowGetterFromStruct<>(field(name, new ArrowType.FloatingPoint(FloatingPointPrecision.DOUBLE))) {
                     @Override
-                    public ArrowWriterFromStruct writer(ValueVector valueVector) {
+                    public ArrowWriterFromStruct<Struct> writer(ValueVector valueVector) {
                         var float8Vector = (Float8Vector) valueVector;
-                        return new ArrowWriterFromStruct() {
+                        return new ArrowWriterFromStruct<>() {
                             @Override
                             void setFromStruct(Struct struct) {
                                 if (struct == null) {
@@ -911,15 +926,15 @@ public class ArrowTableRowsSerializer<Struct, List, Dict, Getters extends YTGett
                 };
             }
             case Decimal: {
-                var decimalGetter = (Getters.FromStructToBigDecimal) getter;
+                var decimalGetter = (YTGetters.FromStructToBigDecimal<Struct>) getter;
                 var decimalType = (DecimalType) decimalGetter.getTiType();
-                return new ArrowGetterFromStruct(field(name, new ArrowType.Decimal(
+                return new ArrowGetterFromStruct<>(field(name, new ArrowType.Decimal(
                         decimalType.getPrecision(), decimalType.getScale()
                 ))) {
                     @Override
-                    public ArrowWriterFromStruct writer(ValueVector valueVector) {
+                    public ArrowWriterFromStruct<Struct> writer(ValueVector valueVector) {
                         var decimalVector = (DecimalVector) valueVector;
-                        return new ArrowWriterFromStruct() {
+                        return new ArrowWriterFromStruct<>() {
                             @Override
                             void setFromStruct(Struct struct) {
                                 if (struct == null) {
@@ -935,12 +950,12 @@ public class ArrowTableRowsSerializer<Struct, List, Dict, Getters extends YTGett
             }
             case Date:
             case Date32: {
-                var intGetter = (Getters.FromStructToInt) getter;
-                return new ArrowGetterFromStruct(field(name, new ArrowType.Date(DateUnit.DAY))) {
+                var intGetter = (YTGetters.FromStructToInt<Struct>) getter;
+                return new ArrowGetterFromStruct<>(field(name, new ArrowType.Date(DateUnit.DAY))) {
                     @Override
-                    public ArrowWriterFromStruct writer(ValueVector valueVector) {
+                    public ArrowWriterFromStruct<Struct> writer(ValueVector valueVector) {
                         var dateDayVector = (DateDayVector) valueVector;
-                        return new ArrowWriterFromStruct() {
+                        return new ArrowWriterFromStruct<>() {
                             @Override
                             void setFromStruct(Struct struct) {
                                 if (struct == null) {
@@ -956,12 +971,12 @@ public class ArrowTableRowsSerializer<Struct, List, Dict, Getters extends YTGett
             }
             case Datetime:
             case Datetime64: {
-                var longGetter = (Getters.FromStructToLong) getter;
-                return new ArrowGetterFromStruct(field(name, new ArrowType.Date(DateUnit.MILLISECOND))) {
+                var longGetter = (YTGetters.FromStructToLong<Struct>) getter;
+                return new ArrowGetterFromStruct<>(field(name, new ArrowType.Date(DateUnit.MILLISECOND))) {
                     @Override
-                    public ArrowWriterFromStruct writer(ValueVector valueVector) {
+                    public ArrowWriterFromStruct<Struct> writer(ValueVector valueVector) {
                         var dateMilliVector = (DateMilliVector) valueVector;
-                        return new ArrowWriterFromStruct() {
+                        return new ArrowWriterFromStruct<>() {
                             @Override
                             void setFromStruct(Struct struct) {
                                 if (struct == null) {
@@ -977,12 +992,12 @@ public class ArrowTableRowsSerializer<Struct, List, Dict, Getters extends YTGett
             }
             case Timestamp:
             case Timestamp64: {
-                var longGetter = (Getters.FromStructToLong) getter;
-                return new ArrowGetterFromStruct(field(name, new ArrowType.Timestamp(TimeUnit.MICROSECOND, null))) {
+                var longGetter = (YTGetters.FromStructToLong<Struct>) getter;
+                return new ArrowGetterFromStruct<>(field(name, new ArrowType.Timestamp(TimeUnit.MICROSECOND, null))) {
                     @Override
-                    public ArrowWriterFromStruct writer(ValueVector valueVector) {
+                    public ArrowWriterFromStruct<Struct> writer(ValueVector valueVector) {
                         var timeStampMicroVector = (TimeStampMicroVector) valueVector;
-                        return new ArrowWriterFromStruct() {
+                        return new ArrowWriterFromStruct<>() {
                             @Override
                             void setFromStruct(Struct struct) {
                                 if (struct == null) {
@@ -997,127 +1012,142 @@ public class ArrowTableRowsSerializer<Struct, List, Dict, Getters extends YTGett
                 };
             }
             case List: {
-                var listGetter = (Getters.FromStructToList) getter;
-                var elementGetter = (Getters.FromList) listGetter.getElementGetter();
-                var itemGetter = arrowGetter("item", elementGetter);
-                return new ArrowGetterFromStruct(new Field(name, new FieldType(
-                        false, new ArrowType.List(), null
-                ), Collections.singletonList(itemGetter.field))) {
-                    @Override
-                    public ArrowWriterFromStruct writer(ValueVector valueVector) {
-                        var listVector = (ListVector) valueVector;
-                        var dataWriter = itemGetter.writer(listVector.getDataVector());
-                        return new ArrowWriterFromStruct() {
-                            @Override
-                            public void setFromStruct(Struct struct) {
-                                var list = struct == null ? null : (List) listGetter.getList(struct);
-                                if (list != null) {
-                                    int size = elementGetter.getSize(list);
-                                    listVector.startNewValue(listVector.getValueCount());
-                                    for (int i = 0; i < size; i++) {
-                                        dataWriter.setFromList(list, i);
-                                    }
-                                    listVector.endValue(listVector.getValueCount(), size);
-                                }
-                                listVector.setValueCount(listVector.getValueCount() + 1);
-                            }
-                        };
-                    }
-                };
+                return getArrowGetterFromStruct(name, (YTGetters.FromStructToList<Struct, ?>) getter);
             }
             case Dict: {
-                var dictGetter = (Getters.FromStructToDict) getter;
-                var fromDictGetter = (Getters.FromDict) dictGetter.getGetter();
-                var keyGetter = nonComplexArrowGetter("key", (Getters.FromList) fromDictGetter.getKeyGetter());
-                var valueGetter = arrowGetter("value", (Getters.FromList) fromDictGetter.getValueGetter());
-                if (keyGetter == null || valueGetter == null) {
-                    return null;
-                }
-                return new ArrowGetterFromStruct(new Field(
-                        name, new FieldType(false, new ArrowType.Map(false), null),
-                        Collections.singletonList(new Field(
-                                "entries", new FieldType(false, new ArrowType.Struct(), null),
-                                Arrays.asList(keyGetter.field, valueGetter.field)
-                        ))
-                )) {
-                    @Override
-                    public ArrowWriterFromStruct writer(ValueVector valueVector) {
-                        var mapVector = (MapVector) valueVector;
-                        var structVector = (StructVector) mapVector.getDataVector();
-                        var keyWriter = keyGetter.writer(structVector.getChildByOrdinal(0));
-                        var valueWriter = valueGetter.writer(structVector.getChildByOrdinal(1));
-                        return new ArrowWriterFromStruct() {
-                            @Override
-                            public void setFromStruct(Struct struct) {
-                                var dict = struct == null ? null : dictGetter.getDict(struct);
-                                if (dict != null) {
-                                    int size = fromDictGetter.getSize(dict);
-                                    var keys = (List) fromDictGetter.getKeys(dict);
-                                    var values = (List) fromDictGetter.getValues(dict);
-                                    mapVector.startNewValue(mapVector.getValueCount());
-                                    for (int i = 0; i < size; i++) {
-                                        structVector.setIndexDefined(structVector.getValueCount());
-                                        keyWriter.setFromList(keys, i);
-                                        valueWriter.setFromList(values, i);
-                                        structVector.setValueCount(structVector.getValueCount() + 1);
-                                    }
-                                    mapVector.endValue(mapVector.getValueCount(), size);
-                                }
-                                mapVector.setValueCount(mapVector.getValueCount() + 1);
-                            }
-                        };
-                    }
-                };
+                return getArrowGetterFromStruct(name, (YTGetters.FromStructToDict<Struct, ?, ?, ?>) getter);
             }
             case Struct: {
-                var structGetter = (Getters.FromStructToStruct) getter;
-                var members = (java.util.List<Map.Entry<String, Getters.FromStruct>>) structGetter.getMembersGetters();
-                var membersGetters = new ArrayList<ArrowGetterFromStruct>(members.size());
-                for (Map.Entry<String, ? extends Getters.FromStruct> member : members) {
-                    membersGetters.add(arrowGetter(member.getKey(), member.getValue()));
-                }
-                return new ArrowGetterFromStruct(new Field(
-                        name, new FieldType(false, new ArrowType.Struct(), null),
-                        membersGetters.stream().map(member -> member.field).collect(Collectors.toList())
-                )) {
-                    @Override
-                    public ArrowWriterFromStruct writer(ValueVector valueVector) {
-                        var structVector = (StructVector) valueVector;
-                        var membersWriters = new ArrayList<ArrowWriterFromStruct>(members.size());
-                        for (int i = 0; i < members.size(); i++) {
-                            membersWriters.add(membersGetters.get(i).writer(structVector.getChildByOrdinal(i)));
-                        }
-                        return new ArrowWriterFromStruct() {
-                            @Override
-                            void setFromStruct(Struct row) {
-                                if (row == null) {
-                                    for (int i = 0; i < members.size(); i++) {
-                                        membersWriters.get(i).setFromStruct(null);
-                                    }
-                                } else {
-                                    var struct = (Struct) structGetter.getStruct(row);
-                                    structVector.setIndexDefined(structVector.getValueCount());
-                                    for (int i = 0; i < members.size(); i++) {
-                                        membersWriters.get(i).setFromStruct(struct);
-                                    }
-                                }
-                                structVector.setValueCount(structVector.getValueCount() + 1);
-                            }
-                        };
-                    }
-                };
+                return getArrowGetterFromStruct(name, (YTGetters.FromStructToStruct<Struct, ?>) getter);
             }
             default:
                 return null;
         }
     }
 
-    private final java.util.List<ArrowGetterFromStruct> fieldGetters;
+    private <Struct, Value> ArrowGetterFromStruct<Struct> getArrowGetterFromStruct(
+            String name, YTGetters.FromStructToStruct<Struct, Value> structGetter
+    ) {
+        var members = structGetter.getMembersGetters();
+        var membersGetters = new ArrayList<ArrowGetterFromStruct<Value>>(members.size());
+        for (var member : members) {
+            membersGetters.add(arrowGetter(member.getKey(), member.getValue()));
+        }
+        return new ArrowGetterFromStruct<>(new Field(
+                name, new FieldType(false, new ArrowType.Struct(), null),
+                membersGetters.stream().map(member -> member.field).collect(Collectors.toList())
+        )) {
+            @Override
+            public ArrowWriterFromStruct<Struct> writer(ValueVector valueVector) {
+                var structVector = (StructVector) valueVector;
+                var membersWriters = new ArrayList<ArrowWriterFromStruct<Value>>(members.size());
+                for (int i = 0; i < members.size(); i++) {
+                    membersWriters.add(membersGetters.get(i).writer(structVector.getChildByOrdinal(i)));
+                }
+                return new ArrowWriterFromStruct<>() {
+                    @Override
+                    void setFromStruct(Struct row) {
+                        if (row == null) {
+                            for (int i = 0; i < members.size(); i++) {
+                                membersWriters.get(i).setFromStruct(null);
+                            }
+                        } else {
+                            var value = structGetter.getStruct(row);
+                            structVector.setIndexDefined(structVector.getValueCount());
+                            for (int i = 0; i < members.size(); i++) {
+                                membersWriters.get(i).setFromStruct(value);
+                            }
+                        }
+                        structVector.setValueCount(structVector.getValueCount() + 1);
+                    }
+                };
+            }
+        };
+    }
+
+    private <Struct, Dict, Keys, Values> ArrowGetterFromStruct<Struct> getArrowGetterFromStruct(
+            String name, YTGetters.FromStructToDict<Struct, Dict, Keys, Values> dictGetter
+    ) {
+        var fromDictGetter = dictGetter.getGetter();
+        var keyGetter = nonComplexArrowGetter("key", fromDictGetter.getKeyGetter());
+        var valueGetter = arrowGetter("value", fromDictGetter.getValueGetter());
+        if (keyGetter == null) {
+            return null;
+        }
+        return new ArrowGetterFromStruct<>(new Field(
+                name, new FieldType(false, new ArrowType.Map(false), null),
+                Collections.singletonList(new Field(
+                        "entries", new FieldType(false, new ArrowType.Struct(), null),
+                        Arrays.asList(keyGetter.field, valueGetter.field)
+                ))
+        )) {
+            @Override
+            public ArrowWriterFromStruct<Struct> writer(ValueVector valueVector) {
+                var mapVector = (MapVector) valueVector;
+                var structVector = (StructVector) mapVector.getDataVector();
+                var keyWriter = keyGetter.writer(structVector.getChildByOrdinal(0));
+                var valueWriter = valueGetter.writer(structVector.getChildByOrdinal(1));
+                return new ArrowWriterFromStruct<>() {
+                    @Override
+                    public void setFromStruct(Struct struct) {
+                        var dict = struct == null ? null : dictGetter.getDict(struct);
+                        if (dict != null) {
+                            int size = fromDictGetter.getSize(dict);
+                            var keys = fromDictGetter.getKeys(dict);
+                            var values = fromDictGetter.getValues(dict);
+                            mapVector.startNewValue(mapVector.getValueCount());
+                            for (int i = 0; i < size; i++) {
+                                structVector.setIndexDefined(structVector.getValueCount());
+                                keyWriter.setFromList(keys, i);
+                                valueWriter.setFromList(values, i);
+                                structVector.setValueCount(structVector.getValueCount() + 1);
+                            }
+                            mapVector.endValue(mapVector.getValueCount(), size);
+                        }
+                        mapVector.setValueCount(mapVector.getValueCount() + 1);
+                    }
+                };
+            }
+        };
+    }
+
+    private <Struct, Array> ArrowGetterFromStruct<Struct> getArrowGetterFromStruct(
+            String name, YTGetters.FromStructToList<Struct, Array> listGetter
+    ) {
+        var elementGetter = listGetter.getElementGetter();
+        var itemGetter = arrowGetter("item", elementGetter);
+        return new ArrowGetterFromStruct<>(new Field(name, new FieldType(
+                false, new ArrowType.List(), null
+        ), Collections.singletonList(itemGetter.field))) {
+            @Override
+            public ArrowWriterFromStruct<Struct> writer(ValueVector valueVector) {
+                var listVector = (ListVector) valueVector;
+                var dataWriter = itemGetter.writer(listVector.getDataVector());
+                return new ArrowWriterFromStruct<>() {
+                    @Override
+                    public void setFromStruct(Struct struct) {
+                        var list = struct == null ? null : listGetter.getList(struct);
+                        if (list != null) {
+                            int size = elementGetter.getSize(list);
+                            listVector.startNewValue(listVector.getValueCount());
+                            for (int i = 0; i < size; i++) {
+                                dataWriter.setFromList(list, i);
+                            }
+                            listVector.endValue(listVector.getValueCount(), size);
+                        }
+                        listVector.setValueCount(listVector.getValueCount() + 1);
+                    }
+                };
+            }
+        };
+    }
+
+    private final java.util.List<ArrowGetterFromStruct<Row>> fieldGetters;
     private final Schema schema;
     private final BufferAllocator allocator =
             ArrowUtils.rootAllocator().newChildAllocator("toBatchIterator", 0, Long.MAX_VALUE);
 
-    public ArrowTableRowsSerializer(java.util.List<? extends Map.Entry<String, ? extends Getters.FromStruct>> structsGetter) {
+    public ArrowTableRowsSerializer(java.util.List<? extends Map.Entry<String, ? extends YTGetters.FromStruct<Row>>> structsGetter) {
         super(ERowsetFormat.RF_FORMAT);
         fieldGetters = structsGetter.stream().map(memberGetter -> arrowGetter(
                 memberGetter.getKey(), memberGetter.getValue()
@@ -1168,13 +1198,13 @@ public class ArrowTableRowsSerializer<Struct, List, Dict, Getters extends YTGett
 
     @Override
     protected void writeRowsWithoutCount(
-            ByteBuf buf, TRowsetDescriptor descriptor, java.util.List<Struct> rows, int[] idMapping
+            ByteBuf buf, TRowsetDescriptor descriptor, java.util.List<Row> rows, int[] idMapping
     ) {
         writeRows(buf, descriptor, rows, idMapping);
     }
 
     @Override
-    protected void writeRows(ByteBuf buf, TRowsetDescriptor descriptor, java.util.List<Struct> rows, int[] idMapping) {
+    protected void writeRows(ByteBuf buf, TRowsetDescriptor descriptor, java.util.List<Row> rows, int[] idMapping) {
         try {
             var writeChannel = new WriteChannel(new ByteBufWritableByteChannel(buf));
             MessageSerializer.serialize(writeChannel, schema);

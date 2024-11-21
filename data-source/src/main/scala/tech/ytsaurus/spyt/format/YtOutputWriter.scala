@@ -5,12 +5,11 @@ import org.apache.spark.executor.TaskMetricUpdater
 import org.apache.spark.metrics.yt.YtMetricsRegister
 import org.apache.spark.metrics.yt.YtMetricsRegister.ytMetricsSource._
 import org.apache.spark.sql.catalyst.InternalRow
-import org.apache.spark.sql.catalyst.util.{ArrayData, MapData}
 import org.apache.spark.sql.execution.datasources.OutputWriter
 import org.apache.spark.sql.types.StructType
 import org.slf4j.LoggerFactory
 import tech.ytsaurus.client.request.{TransactionalOptions, WriteSerializationContext, WriteTable}
-import tech.ytsaurus.client.{ArrowWriteSerializationContext, CompoundClient, InternalRowYTGetters, TableWriter}
+import tech.ytsaurus.client.{ArrowWriteSerializationContext, CompoundClient, TableWriter}
 import tech.ytsaurus.core.GUID
 import tech.ytsaurus.spyt.format.conf.SparkYtWriteConfiguration
 import tech.ytsaurus.spyt.format.conf.YtTableSparkSettings._
@@ -153,7 +152,6 @@ class YtOutputWriter(richPath: YPathEnriched,
   protected def initializeWriter(): TableWriter[InternalRow] = {
     val appendPath = richPath.withAttr("append", "true").toYPath
     log.debugLazy(s"Initialize new write: $appendPath, transaction: $transactionGuid")
-    val internalRowGetters = new InternalRowYTGetters()
     val writeSchemaConverter = WriteSchemaConverter(options)
     val request = WriteTable.builder[InternalRow]()
       .setPath(appendPath)
@@ -162,10 +160,10 @@ class YtOutputWriter(richPath: YPathEnriched,
           if (!writeSchemaConverter.typeV3Format) {
             throw new RuntimeException("arrow writer is only supported with typeV3")
           }
-          new ArrowWriteSerializationContext[InternalRow, ArrayData, MapData, InternalRowYTGetters](
+          new ArrowWriteSerializationContext[InternalRow](
             schema.fields.zipWithIndex.map { case (field, i) =>
               util.Map.entry(field.name, writeSchemaConverter.ytLogicalTypeV3(field).ytGettersFromStruct(
-                internalRowGetters, field.dataType, i
+                field.dataType, i
               ))
             }.toSeq.asJava
           )

@@ -7,171 +7,162 @@ import java.math.BigDecimal;
 import java.nio.ByteBuffer;
 import java.util.Map;
 
-public class YTGetters<Struct, List, Dict> {
-    public abstract class Getter {
-        private Getter() {
-        }
-
-        public abstract TiType getTiType();
+public class YTGetters {
+    public interface GetTiType {
+        TiType getTiType();
     }
 
-    public abstract class FromStruct extends Getter {
-        private FromStruct() {
-        }
-
-        public abstract void getYson(Struct struct, YsonConsumer ysonConsumer);
+    public interface FromStruct<Struct> extends GetTiType {
+        void getYson(Struct struct, YsonConsumer ysonConsumer);
     }
 
-    public abstract class FromList extends Getter {
-        private FromList() {
-        }
+    public interface FromList<List> extends GetTiType {
+        int getSize(List list);
 
-        public abstract int getSize(List list);
-
-        public abstract void getYson(List list, int i, YsonConsumer ysonConsumer);
+        void getYson(List list, int i, YsonConsumer ysonConsumer);
     }
 
-    public abstract class FromStructToYson extends FromStruct {
+    public interface FromStructToYson<Struct> extends FromStruct<Struct> {
     }
 
-    public abstract class FromListToYson extends FromList {
+    public interface FromListToYson<List> extends FromList<List> {
     }
 
-    public abstract class FromDict extends Getter {
-        public abstract FromList getKeyGetter();
+    public interface FromDict<Dict, Keys, Values> extends GetTiType {
+        FromList<Keys> getKeyGetter();
 
-        public abstract FromList getValueGetter();
+        FromList<Values> getValueGetter();
 
-        public abstract int getSize(Dict dict);
+        int getSize(Dict dict);
 
-        public abstract List getKeys(Dict dict);
+        Keys getKeys(Dict dict);
 
-        public abstract List getValues(Dict dict);
+        Values getValues(Dict dict);
     }
 
-    public abstract class FromStructToNull extends FromStruct {
+    public interface FromStructToNull<Struct> extends FromStruct<Struct> {
     }
 
-    public abstract class FromListToNull extends FromList {
+    public interface FromListToNull<List> extends FromList<List> {
     }
 
-    public abstract class FromStructToOptional extends FromStruct {
-        public abstract FromStruct getNotEmptyGetter();
+    public interface FromStructToOptional<Struct> extends FromStruct<Struct> {
+        FromStruct<Struct> getNotEmptyGetter();
 
-        public abstract boolean isEmpty(Struct struct);
+        boolean isEmpty(Struct struct);
     }
 
-    public abstract class FromListToOptional extends FromList {
-        public abstract FromList getNotEmptyGetter();
+    public interface FromListToOptional<List> extends FromList<List> {
+        FromList<List> getNotEmptyGetter();
 
-        public abstract boolean isEmpty(List list, int i);
+        boolean isEmpty(List list, int i);
     }
 
-    public abstract class FromStructToString extends FromStruct {
-        public abstract ByteBuffer getString(Struct struct);
+    public interface FromStructToString<Struct> extends FromStruct<Struct> {
+        ByteBuffer getString(Struct struct);
     }
 
-    public abstract class FromListToString extends FromList {
-        public abstract ByteBuffer getString(List struct, int i);
+    public interface FromListToString<List> extends FromList<List> {
+        ByteBuffer getString(List struct, int i);
     }
 
-    public abstract class FromStructToByte extends FromStruct {
-        public abstract byte getByte(Struct struct);
+    public interface FromStructToByte<Struct> extends FromStruct<Struct> {
+        byte getByte(Struct struct);
     }
 
-    public abstract class FromListToByte extends FromList {
-        public abstract byte getByte(List list, int i);
+    public interface FromListToByte<List> extends FromList<List> {
+        byte getByte(List list, int i);
     }
 
-    public abstract class FromStructToShort extends FromStruct {
-        public abstract short getShort(Struct struct);
+    public interface FromStructToShort<Struct> extends FromStruct<Struct> {
+        short getShort(Struct struct);
     }
 
-    public abstract class FromListToShort extends FromList {
-        public abstract short getShort(List list, int i);
+    public interface FromListToShort<List> extends FromList<List> {
+        short getShort(List list, int i);
     }
 
-    public abstract class FromStructToInt extends FromStruct {
-        public abstract int getInt(Struct struct);
+    public interface FromStructToInt<Struct> extends FromStruct<Struct> {
+        int getInt(Struct struct);
     }
 
-    public abstract class FromListToInt extends FromList {
-        public abstract int getInt(List list, int i);
+    public interface FromListToInt<List> extends FromList<List> {
+        int getInt(List list, int i);
     }
 
-    public abstract class FromStructToLong extends FromStruct {
-        public abstract long getLong(Struct struct);
+    public interface FromStructToLong<Struct> extends FromStruct<Struct> {
+        long getLong(Struct struct);
     }
 
-    public abstract class FromListToLong extends FromList {
-        public abstract long getLong(List list, int i);
+    public interface FromListToLong<List> extends FromList<List> {
+        long getLong(List list, int i);
     }
 
-    public abstract class FromStructToBoolean extends FromStruct {
-        public abstract boolean getBoolean(Struct struct);
+    public interface FromStructToBoolean<Struct> extends FromStruct<Struct> {
+        boolean getBoolean(Struct struct);
     }
 
-    public abstract class FromListToBoolean extends FromList {
-        public abstract boolean getBoolean(List list, int i);
+    public interface FromListToBoolean<List> extends FromList<List> {
+        boolean getBoolean(List list, int i);
     }
 
-    public abstract class FromStructToFloat extends FromStruct {
-        public abstract float getFloat(Struct struct);
+    public interface FromStructToFloat<Struct> extends FromStruct<Struct> {
+        float getFloat(Struct struct);
     }
 
-    public abstract class FromListToFloat extends FromList {
-        public abstract float getFloat(List list, int i);
+    public interface FromListToFloat<List> extends FromList<List> {
+        float getFloat(List list, int i);
     }
 
-    public abstract class FromStructToDouble extends FromStruct {
-        public abstract double getDouble(Struct struct);
+    public interface FromStructToDouble<Struct> extends FromStruct<Struct> {
+        double getDouble(Struct struct);
     }
 
-    public abstract class FromListToDouble extends FromList {
-        public abstract double getDouble(List list, int i);
+    public interface FromListToDouble<List> extends FromList<List> {
+        double getDouble(List list, int i);
     }
 
-    public abstract class FromStructToStruct extends FromStruct {
-        public abstract java.util.List<Map.Entry<String, FromStruct>> getMembersGetters();
+    public interface FromStructToStruct<Struct, Value> extends FromStruct<Struct> {
+        java.util.List<Map.Entry<String, FromStruct<Value>>> getMembersGetters();
 
-        public abstract Struct getStruct(Struct struct);
+        Value getStruct(Struct struct);
     }
 
-    public abstract class FromListToStruct extends FromList {
-        public abstract java.util.List<Map.Entry<String, FromStruct>> getMembersGetters();
+    public interface FromListToStruct<List, Value> extends FromList<List> {
+        java.util.List<Map.Entry<String, FromStruct<Value>>> getMembersGetters();
 
-        public abstract Struct getStruct(List list, int i);
+        Value getStruct(List list, int i);
     }
 
-    public abstract class FromStructToList extends FromStruct {
-        public abstract FromList getElementGetter();
+    public interface FromStructToList<Struct, List> extends FromStruct<Struct> {
+        FromList<List> getElementGetter();
 
-        public abstract List getList(Struct struct);
+        List getList(Struct struct);
     }
 
-    public abstract class FromListToList extends FromList {
-        public abstract FromList getElementGetter();
+    public interface FromListToList<List, Value> extends FromList<List> {
+        FromList<Value> getElementGetter();
 
-        public abstract List getList(List list, int i);
+        Value getList(List list, int i);
     }
 
-    public abstract class FromStructToDict extends FromStruct {
-        public abstract FromDict getGetter();
+    public interface FromStructToDict<Struct, Dict, Keys, Values> extends FromStruct<Struct> {
+        FromDict<Dict, Keys, Values> getGetter();
 
-        public abstract Dict getDict(Struct struct);
+        Dict getDict(Struct struct);
     }
 
-    public abstract class FromListToDict extends FromList {
-        public abstract FromDict getGetter();
+    public interface FromListToDict<List, Dict, Keys, Values> extends FromList<List> {
+        FromDict<Dict, Keys, Values> getGetter();
 
-        public abstract Dict getDict(List list, int i);
+        Dict getDict(List list, int i);
     }
 
-    public abstract class FromStructToBigDecimal extends FromStruct {
-        public abstract BigDecimal getBigDecimal(Struct struct);
+    public interface FromStructToBigDecimal<Struct> extends FromStruct<Struct> {
+        BigDecimal getBigDecimal(Struct struct);
     }
 
-    public abstract class FromListToBigDecimal extends FromList {
-        public abstract BigDecimal getBigDecimal(List list, int i);
+    public interface FromListToBigDecimal<List> extends FromList<List> {
+        BigDecimal getBigDecimal(List list, int i);
     }
 }

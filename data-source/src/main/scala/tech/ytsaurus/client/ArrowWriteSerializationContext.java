@@ -7,18 +7,18 @@ import tech.ytsaurus.rpcproxy.ERowsetFormat;
 import java.util.HashMap;
 import java.util.Map;
 
-public class ArrowWriteSerializationContext<T, L, D, G extends YTGetters<T, L, D>> extends SerializationContext<T> {
-    private final java.util.List<? extends Map.Entry<String, ? extends G.FromStruct>> rowGetters;
+public class ArrowWriteSerializationContext<Row> extends SerializationContext<Row> {
+    private final java.util.List<? extends Map.Entry<String, ? extends YTGetters.FromStruct<Row>>> rowGetters;
 
     public ArrowWriteSerializationContext(
-            java.util.List<? extends Map.Entry<String, ? extends G.FromStruct>> rowGetters
+            java.util.List<? extends Map.Entry<String, ? extends YTGetters.FromStruct<Row>>> rowGetters
     ) {
         this.rowsetFormat = ERowsetFormat.RF_FORMAT;
         this.format = new Format("arrow", new HashMap<>());
         this.rowGetters = rowGetters;
     }
 
-    public java.util.List<? extends Map.Entry<String, ? extends G.FromStruct>> getRowGetters() {
+    public java.util.List<? extends Map.Entry<String, ? extends YTGetters.FromStruct<Row>>> getRowGetters() {
         return rowGetters;
     }
 }

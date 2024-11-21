@@ -1208,27 +1208,28 @@ public class ArrowTableRowsSerializer<Row> extends TableRowsSerializer<Row> impl
         try {
             var writeChannel = new WriteChannel(new ByteBufWritableByteChannel(buf));
             MessageSerializer.serialize(writeChannel, schema);
-            var root = VectorSchemaRoot.create(schema, allocator);
-            var unloader = new VectorUnloader(root);
-            var writers = IntStream.range(0, fieldGetters.size()).mapToObj(column -> {
-                var valueVector = root.getFieldVectors().get(column);
-                if (valueVector instanceof FixedWidthVector) {
-                    ((FixedWidthVector) valueVector).allocateNew(rows.size());
-                } else {
-                    valueVector.allocateNew();
+            try (var root = VectorSchemaRoot.create(schema, allocator)) {
+                var unloader = new VectorUnloader(root);
+                var writers = IntStream.range(0, fieldGetters.size()).mapToObj(column -> {
+                    var valueVector = root.getFieldVectors().get(column);
+                    if (valueVector instanceof FixedWidthVector) {
+                        ((FixedWidthVector) valueVector).allocateNew(rows.size());
+                    } else {
+                        valueVector.allocateNew();
+                    }
+                    return fieldGetters.get(column).writer(valueVector);
+                }).collect(Collectors.toList());
+                for (var row : rows) {
+                    for (var writer : writers) {
+                        writer.setFromStruct(row);
+                    }
                 }
-                return fieldGetters.get(column).writer(valueVector);
-            }).collect(Collectors.toList());
-            for (var row : rows) {
-                for (var writer : writers) {
-                    writer.setFromStruct(row);
+                root.setRowCount(rows.size());
+                try (var batch = unloader.getRecordBatch()) {
+                    MessageSerializer.serialize(writeChannel, batch);
                 }
+                writeChannel.writeZeros(4);
             }
-            root.setRowCount(rows.size());
-            try (var batch = unloader.getRecordBatch()) {
-                MessageSerializer.serialize(writeChannel, batch);
-            }
-            writeChannel.writeZeros(4);
         } catch (IOException e) {
             throw new RuntimeException(e);
         }

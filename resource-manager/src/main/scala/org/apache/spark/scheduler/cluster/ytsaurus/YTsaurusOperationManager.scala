@@ -245,6 +245,8 @@ private[spark] class YTsaurusOperationManager(val ytClient: YTsaurusClient,
       environment.put(v._1, YTree.stringNode(v._2))
     }
 
+    environment.put("SPARK_LOCAL_DIRS", YTree.stringNode(environment.getStringO("YT_SPARK_LOCAL_DIRS").orElse("/tmp") + s"/$appId"))
+
     var executorCommand = (Seq(
       prepareEnvCommand,
       "&&",
@@ -379,7 +381,7 @@ private[spark] object YTsaurusOperationManager extends Logging {
       }
 
       val sparkTgz = distrTgzOpt.get.stringValue()
-      val prepareEnvCommand = s"source ./setup-spyt-env.sh --spark-home $home --spark-distributive $sparkTgz"
+      val prepareEnvCommand = s"./setup-spyt-env.sh --spark-home $home --spark-distributive $sparkTgz"
 
       new YTsaurusOperationManager(
         ytClient,

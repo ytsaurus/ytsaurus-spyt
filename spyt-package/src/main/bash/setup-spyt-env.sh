@@ -63,4 +63,4 @@ for file in $(ls); do
   fi
 done
 
-export SPARK_LOCAL_DIRS="${YT_SPARK_LOCAL_DIRS:-/tmp}/${YT_OPERATION_ID}"
+mkdir -p ${SPARK_LOCAL_DIRS:-/tmp} && echo "$YT_OPERATION_ID" > ${SPARK_LOCAL_DIRS:-/tmp}/operation_id

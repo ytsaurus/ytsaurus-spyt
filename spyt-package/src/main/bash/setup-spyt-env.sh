@@ -62,5 +62,3 @@ for file in $(ls); do
     fi
   fi
 done
-
-mkdir -p ${SPARK_LOCAL_DIRS:-/tmp} && echo "$YT_OPERATION_ID" > ${SPARK_LOCAL_DIRS:-/tmp}/operation_id

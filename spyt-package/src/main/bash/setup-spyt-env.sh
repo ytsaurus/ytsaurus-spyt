@@ -62,3 +62,5 @@ for file in $(ls); do
     fi
   fi
 done
+
+export SPARK_LOCAL_DIRS="${YT_SPARK_LOCAL_DIRS:-/tmp}/${YT_OPERATION_ID}"

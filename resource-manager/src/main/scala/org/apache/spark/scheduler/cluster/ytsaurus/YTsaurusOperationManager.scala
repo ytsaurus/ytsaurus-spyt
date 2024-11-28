@@ -181,6 +181,10 @@ private[spark] class YTsaurusOperationManager(val ytClient: YTsaurusClient,
       environment.put("Y_PYTHON_ENTRY_POINT", YTree.stringNode(ep))
     }
 
+    conf.getAllWithPrefix("spark.ytsaurus.driverEnv.").foreach { v =>
+      environment.put(v._1, YTree.stringNode(v._2))
+    }
+
     val spec: Spec = (specBuilder, _, _) => specBuilder.beginMap()
       .key("command").value(driverCommand)
       .key("job_count").value(1)
@@ -235,6 +239,10 @@ private[spark] class YTsaurusOperationManager(val ytClient: YTsaurusClient,
     if (conf.get(YTSAURUS_IS_PYTHON_BINARY)) {
       val binaryExecutable = Paths.get(conf.get(SPARK_PRIMARY_RESOURCE)).getFileName.toString
       environment.put("Y_BINARY_EXECUTABLE", YTree.stringNode(binaryExecutable))
+    }
+
+    conf.getExecutorEnv.foreach { v =>
+      environment.put(v._1, YTree.stringNode(v._2))
     }
 
     var executorCommand = (Seq(
@@ -371,7 +379,7 @@ private[spark] object YTsaurusOperationManager extends Logging {
       }
 
       val sparkTgz = distrTgzOpt.get.stringValue()
-      val prepareEnvCommand = s"./setup-spyt-env.sh --spark-home $home --spark-distributive $sparkTgz"
+      val prepareEnvCommand = s"source ./setup-spyt-env.sh --spark-home $home --spark-distributive $sparkTgz"
 
       new YTsaurusOperationManager(
         ytClient,
@@ -407,7 +415,7 @@ private[spark] object YTsaurusOperationManager extends Logging {
       })
     })
 
-    if (conf.contains(YTSAURUS_PORTO_LAYER_PATHS)){
+    if (conf.contains(YTSAURUS_PORTO_LAYER_PATHS)) {
       conf.get(YTSAURUS_PORTO_LAYER_PATHS).foreach(layers => {
         layers.split(',').foreach(layer => {
           portoLayers.add(YTree.stringNode(layer))

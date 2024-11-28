@@ -20,9 +20,13 @@ private[spark] class YTsaurusClusterApplication extends SparkApplication with Lo
   override def start(args: Array[String], conf: SparkConf): Unit = {
     val masterURL = conf.get("spark.master")
     val ytProxy = YTsaurusUtils.parseMasterUrl(masterURL)
+    val proxyRole = conf.getOption("spark.hadoop.yt.proxyRole")
     val networkName = conf.getOption("spark.hadoop.yt.proxyNetworkName")
     if (conf.contains("spark.hadoop.yt.clusterProxy")) {
       conf.set("spark.hadoop.yt.proxy", conf.get("spark.hadoop.yt.clusterProxy"))
+    }
+    if (conf.contains("spark.hadoop.yt.clusterProxyRole")) {
+      conf.set("spark.hadoop.yt.proxyRole", conf.get("spark.hadoop.yt.clusterProxyRole"))
     }
 
     val appArgs = ApplicationArguments.fromCommandLineArgs(args)
@@ -30,7 +34,7 @@ private[spark] class YTsaurusClusterApplication extends SparkApplication with Lo
     logInfo(s"Submitting spark application to YTsaurus cluster at $ytProxy")
     logInfo(s"Application arguments: $appArgs")
 
-    val operationManager = YTsaurusOperationManager.create(ytProxy, conf, networkName)
+    val operationManager = YTsaurusOperationManager.create(ytProxy, conf, networkName, proxyRole)
 
     try {
       val driverOperation = operationManager.startDriver(conf, appArgs)

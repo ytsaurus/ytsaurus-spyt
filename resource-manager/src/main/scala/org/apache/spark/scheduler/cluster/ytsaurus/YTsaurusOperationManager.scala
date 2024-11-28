@@ -379,7 +379,8 @@ private[spark] object YTsaurusOperationManager extends Logging {
       }
 
       val sparkTgz = distrTgzOpt.get.stringValue()
-      val prepareEnvCommand = s"./setup-spyt-env.sh --spark-home $home --spark-distributive $sparkTgz" + "&& export SPARK_LOCAL_DIRS=\"${YT_SPARK_LOCAL_DIRS:-/tmp}/${YT_OPERATION_ID}\""
+      val prepareEnvCommand = s"./setup-spyt-env.sh --spark-home $home --spark-distributive $sparkTgz" +
+        "&& export SPARK_LOCAL_DIRS=\"${YT_SPARK_LOCAL_DIRS:-/tmp}/${YT_OPERATION_ID}\"" // TODO: make a pretty filling
 
       new YTsaurusOperationManager(
         ytClient,

@@ -10,12 +10,13 @@ import tech.ytsaurus.spyt.types.YTsaurusTypes.{AddValue, BoxValue}
 import tech.ytsaurus.typeinfo.{TiType, TypeName}
 import tech.ytsaurus.yson.YsonConsumer
 
-import java.util.{Comparator, ServiceLoader}
+import java.util.ServiceLoader
 import scala.collection.JavaConverters._
 
 trait YTsaurusTypes {
   /**
    * Implementation with higher priority will take the precedence.
+   *
    * @return
    */
   def priority: Int
@@ -26,7 +27,6 @@ trait YTsaurusTypes {
   def wireDeserializeBoolean(dataType: DataType, value: Boolean, addValue: AddValue): Boolean
   def wireDeserializeDouble(dataType: DataType, value: Double, addValue: AddValue): Boolean
   def wireDeserializeBytes(dataType: DataType, bytes: Array[Byte], isString: Boolean, addValue: AddValue): Boolean
-
   def wireWriteRow(dataType: DataType,
                    row: InternalRow,
                    writeable: WireProtocolWriteable,
@@ -36,11 +36,13 @@ trait YTsaurusTypes {
                    getColumnType: Int => ColumnValueType): Boolean
 
   def ytLogicalTypeV3(dataType: DataType): YtLogicalType
+
   def toYsonField(dataType: DataType, value: Any, consumer: YsonConsumer): Unit
 
   def parseUInt64Value(dataType: DataType, value: Long): Any
 
   def sparkTypeFor(tiType: TiType): DataType
+
   def supportsInnerDataType(dataType: DataType): Option[Boolean]
 }
 
@@ -79,7 +81,7 @@ class BaseYTsaurusTypes extends YTsaurusTypes {
   override def wireDeserializeDouble(dataType: DataType, value: Double, addValue: AddValue): Boolean = false
 
   override def wireDeserializeBytes(
-    dataType: DataType, bytes: Array[Byte], isString: Boolean, addValue: AddValue): Boolean = false
+      dataType: DataType, bytes: Array[Byte], isString: Boolean, addValue: AddValue): Boolean = false
 
   override def wireWriteRow(dataType: DataType, row: InternalRow, writeable: WireProtocolWriteable,
                             aggregate: Boolean, idMapping: Array[Int], i: Int,

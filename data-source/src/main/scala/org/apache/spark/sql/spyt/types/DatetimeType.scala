@@ -1,12 +1,14 @@
 package org.apache.spark.sql.spyt.types
 
 import org.apache.spark.sql.AnalysisException
+import org.apache.spark.sql.catalyst.expressions.codegen.Block.BlockHelper
+import org.apache.spark.sql.catalyst.expressions.codegen.{Block, ExprValue}
 import org.apache.spark.sql.types.{DataType, LongType, SQLUserDefinedType, UserDefinedType}
 import org.json4s.JsonAST.JValue
 import org.json4s.JsonDSL._
-import tech.ytsaurus.spyt.common.utils.DateTimeTypesConverter.{localDateTimeToSeconds, longToDatetime}
+import tech.ytsaurus.spyt.common.utils.DateTimeTypesConverter.localDateTimeToSeconds
 
-import java.time.{LocalDateTime, ZoneId, ZoneOffset}
+import java.time.{LocalDateTime, ZoneOffset}
 
 
 class DatetimeType extends UserDefinedType[Datetime] {
@@ -38,7 +40,6 @@ class DatetimeType extends UserDefinedType[Datetime] {
   }
 
   override def catalogString: String = "datetime"
-
 }
 
 @SQLUserDefinedType(udt = classOf[DatetimeType])
@@ -55,4 +56,14 @@ object Datetime {
   def apply(value: Long): Datetime = {
     Datetime(LocalDateTime.ofEpochSecond(value, 0, ZoneOffset.UTC))
   }
+}
+
+object DatetimeCastToTimestamp extends (Any => Any) {
+  override def apply(v: Any): Any = {
+    v.asInstanceOf[Long] * 1000000
+  }
+}
+
+object DatetimeCastToTimestampCode extends ((ExprValue, ExprValue, ExprValue) => Block) {
+  def apply(c: ExprValue, evPrim: ExprValue, evNull: ExprValue): Block = code"""$evPrim = $c * 1000000;"""
 }

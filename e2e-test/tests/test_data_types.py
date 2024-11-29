@@ -258,3 +258,18 @@ def test_write_yson_type(yt_client, tmp_dir, local_session):
 
     result: RowsIterator = yt_client.read_table(table_path)
     assert_items_equal(result, yt_yson_rows)
+
+
+def test_datetime_cache(yt_client, tmp_dir, local_session):
+    from pyspark.sql.functions import col
+
+    table_path = f"{tmp_dir}/datetime_type_table_in_cache"
+    yt_client.create("table", table_path, attributes={"schema": [
+        {"name": "datetime", "type": "datetime", "nullable": True},
+    ]})
+    yt_client.write_table(table_path, yt_datetime_type_rows)
+
+    df = local_session.read.yt(table_path)
+    grouped_df = df.select(col('datetime')).groupBy(col('datetime')).count().cache()
+    res_list = grouped_df.select(col('datetime')).limit(10).collect()
+    assert_items_equal(res_list, spark_datetime_type_rows)

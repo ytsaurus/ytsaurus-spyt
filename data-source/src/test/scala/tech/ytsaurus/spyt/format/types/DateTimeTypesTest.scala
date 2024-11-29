@@ -8,6 +8,7 @@ import org.apache.spark.sql.spyt.types._
 import org.apache.spark.sql.types._
 import org.apache.spark.sql.v2.YtUtils
 import org.apache.spark.sql.{DataFrame, Row}
+import org.apache.spark.storage.StorageLevel
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import tech.ytsaurus.core.tables.{ColumnValueType, TableSchema}
@@ -19,9 +20,13 @@ import tech.ytsaurus.spyt.wrapper.YtWrapper
 import tech.ytsaurus.spyt.{SchemaTestUtils, YtReader, YtWriter}
 import tech.ytsaurus.typeinfo.TiType
 
+import org.apache.spark.sql.internal.SQLConf.{CODEGEN_FACTORY_MODE, WHOLESTAGE_CODEGEN_ENABLED}
+import org.apache.spark.sql.catalyst.expressions.CodegenObjectFactoryMode
+
 import java.sql.{Date, Timestamp}
 import java.time.{LocalDate, LocalDateTime}
 import scala.collection.mutable.ListBuffer
+
 
 class DateTimeTypesTest extends AnyFlatSpec with Matchers with LocalSpark with TmpDir with TestUtils with SchemaTestUtils {
   behavior of "YtDataSource"
@@ -34,7 +39,7 @@ class DateTimeTypesTest extends AnyFlatSpec with Matchers with LocalSpark with T
   val timestampArr: Seq[String] = List.apply("1970-04-11T00:00:00.000000Z", "2019-02-09T13:41:11.654321Z", "1970-01-01T00:00:00.000000Z")
   val numbers: Seq[Int] = Seq(101, 202, 303)
 
-  it should "datetime types test: write table by yt - read by spark" in {
+  private def readTestTemplate(dfTransformer: DataFrame => DataFrame): Unit = {
     val tableSchema: TableSchema = TableSchema.builder()
       .addValue("id", TiType.int64())
       .addValue("date", TiType.date())
@@ -54,7 +59,7 @@ class DateTimeTypesTest extends AnyFlatSpec with Matchers with LocalSpark with T
     }
     writeTableFromYson(ysonData, tmpPath, tableSchema)
 
-    val df: DataFrame = spark.read.yt(tmpPath)
+    val df: DataFrame = dfTransformer(spark.read.yt(tmpPath))
     df.schema.fields.map(_.copy(metadata = Metadata.empty)) should contain theSameElementsInOrderAs Seq(
       StructField("id", LongType),
       StructField("date", DateType),
@@ -88,6 +93,25 @@ class DateTimeTypesTest extends AnyFlatSpec with Matchers with LocalSpark with T
     )
 
     df.collect() should contain theSameElementsAs expectedData
+  }
+
+  it should "read datetime types test" in {
+    readTestTemplate(identity)
+  }
+
+  it should "work correctly with caching dataframes containing datetime types columns" in {
+    readTestTemplate(_.cache())
+  }
+
+  private val storageLevels = List("NONE", "DISK_ONLY", "DISK_ONLY_2", "DISK_ONLY_3", "MEMORY_ONLY", "MEMORY_ONLY_2",
+    "MEMORY_ONLY_SER", "MEMORY_ONLY_SER_2", "MEMORY_AND_DISK", "MEMORY_AND_DISK_2", "MEMORY_AND_DISK_SER",
+    "MEMORY_AND_DISK_SER_2", "OFF_HEAP")
+
+  storageLevels.foreach { storageLevel =>
+    it should s"work correctly with persisting dataframes containing datetime types columns using $storageLevel " +
+      s"StorageLevel" in {
+      readTestTemplate(_.persist(StorageLevel.fromString(storageLevel)))
+    }
   }
 
   it should "datetime types test: write table by spark - read by yt" in {
@@ -184,7 +208,7 @@ class DateTimeTypesTest extends AnyFlatSpec with Matchers with LocalSpark with T
   it should "wide datetime types: write by yt, read by spark" in {
     withConf(SparkYtConfiguration.Schema.ForcingNullableIfNoMetadata, false) {
       val ysonData = ListBuffer[String]()
-      for (i <- rightYtDataForWideDatetimeTypesTests.indices){
+      for (i <- rightYtDataForWideDatetimeTypesTests.indices) {
         ysonData +=
           s"""{date32 = ${rightYtDataForWideDatetimeTypesTests(i)._1.toInt};
              |datetime64 = ${rightYtDataForWideDatetimeTypesTests(i)._2.toLong};

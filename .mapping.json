@@ -72,6 +72,7 @@
   "data-source-extended/src/test/scala/tech/ytsaurus/spyt/format/optimizer/YtSortedTableBaseProperties.scala":"yt/spark/spark-over-yt/data-source-extended/src/test/scala/tech/ytsaurus/spyt/format/optimizer/YtSortedTableBaseProperties.scala",
   "data-source-extended/src/test/scala/tech/ytsaurus/spyt/format/optimizer/YtSortedTableJoinProperties.scala":"yt/spark/spark-over-yt/data-source-extended/src/test/scala/tech/ytsaurus/spyt/format/optimizer/YtSortedTableJoinProperties.scala",
   "data-source-extended/src/test/scala/tech/ytsaurus/spyt/format/optimizer/YtSortedTableJoinTest.scala":"yt/spark/spark-over-yt/data-source-extended/src/test/scala/tech/ytsaurus/spyt/format/optimizer/YtSortedTableJoinTest.scala",
+  "data-source-extended/src/test/scala/tech/ytsaurus/spyt/format/types/ExtendedDatetimeTypeTest.scala":"yt/spark/spark-over-yt/data-source-extended/src/test/scala/tech/ytsaurus/spyt/format/types/ExtendedDatetimeTypeTest.scala",
   "data-source-extended/src/test/scala/tech/ytsaurus/spyt/format/types/UInt64Test.scala":"yt/spark/spark-over-yt/data-source-extended/src/test/scala/tech/ytsaurus/spyt/format/types/UInt64Test.scala",
   "data-source-extended/src/test/scala/tech/ytsaurus/spyt/format/types/YsonTypeTest.scala":"yt/spark/spark-over-yt/data-source-extended/src/test/scala/tech/ytsaurus/spyt/format/types/YsonTypeTest.scala",
   "data-source-extended/src/test/scala/tech/ytsaurus/spyt/fs/YtSparkSQLTest.scala":"yt/spark/spark-over-yt/data-source-extended/src/test/scala/tech/ytsaurus/spyt/fs/YtSparkSQLTest.scala",

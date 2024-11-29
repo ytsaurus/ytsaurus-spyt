@@ -1,8 +1,8 @@
 package org.apache.spark.sql.execution.aggregate
 
 import org.apache.spark.sql.catalyst.expressions.codegen.CodegenContext
+import org.apache.spark.sql.spyt.types.{DatetimeType, UInt64Type}
 import org.apache.spark.sql.types.DataType
-import org.apache.spark.sql.spyt.types.UInt64Type
 import tech.ytsaurus.spyt.patch.annotations.{Decorate, DecoratedMethod, OriginClass}
 
 @Decorate
@@ -15,6 +15,7 @@ class HashMapGeneratorDecorators {
                                      dataType: DataType,
                                      result: String): String = dataType match {
     case UInt64Type => s"long $result = $input;"
+    case _: DatetimeType => s"long $result = $input;"
     case _ => __genComputeHash(ctx, input, dataType, result)
   }
 

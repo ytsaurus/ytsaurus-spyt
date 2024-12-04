@@ -104,8 +104,8 @@ class WorkerConfig(NamedTuple):
     worker_log_update_interval: str = SparkDefaultArguments.SPARK_WORKER_LOG_UPDATE_INTERVAL
     worker_log_table_ttl: str = SparkDefaultArguments.SPARK_WORKER_LOG_TABLE_TTL
     worker_disk_name: str = "default"
-    worker_disk_limit = None
-    worker_disk_account = None
+    worker_disk_limit: str = None
+    worker_disk_account: str = None
     worker_gpu_limit: int = 0
     cuda_toolkit_version: str = None
 

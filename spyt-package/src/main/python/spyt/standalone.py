@@ -571,8 +571,8 @@ def start_spark_cluster(worker_cores, worker_memory, worker_num, worker_cores_ov
     master_config = MasterConfig(master_memory_limit, master_port)
     worker_config = WorkerConfig(
         tmpfs_limit, worker_res, worker_port, None, True, autoscaler_period is not None, worker_log_transfer,
-        worker_log_json_mode, worker_log_update_interval, worker_log_table_ttl, worker_disk_name, worker_gpu_limit,
-        cuda_toolkit_version(global_conf)
+        worker_log_json_mode, worker_log_update_interval, worker_log_table_ttl, worker_disk_name,
+        worker_disk_limit, worker_disk_account, worker_gpu_limit, cuda_toolkit_version(global_conf)
     )
     hs_config = HistoryServerConfig(
         history_server_memory_limit, history_server_cpu_limit, history_server_memory_overhead, shs_location,

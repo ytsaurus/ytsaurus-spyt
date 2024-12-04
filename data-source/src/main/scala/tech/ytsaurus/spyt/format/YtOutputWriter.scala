@@ -8,18 +8,19 @@ import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.execution.datasources.OutputWriter
 import org.apache.spark.sql.types.StructType
 import org.slf4j.LoggerFactory
+import tech.ytsaurus.client.request.{TransactionalOptions, WriteSerializationContext, WriteTable}
+import tech.ytsaurus.client.{ArrowWriteSerializationContext, CompoundClient, TableWriter}
+import tech.ytsaurus.core.GUID
+import tech.ytsaurus.spyt.format.conf.SparkYtWriteConfiguration
 import tech.ytsaurus.spyt.format.conf.YtTableSparkSettings._
 import tech.ytsaurus.spyt.fs.conf._
 import tech.ytsaurus.spyt.fs.path.YPathEnriched
 import tech.ytsaurus.spyt.serializers.{InternalRowSerializer, WriteSchemaConverter}
 import tech.ytsaurus.spyt.wrapper.LogLazy
-import tech.ytsaurus.client.request.{TransactionalOptions, WriteSerializationContext, WriteTable}
-import tech.ytsaurus.client.{CompoundClient, TableWriter}
-import tech.ytsaurus.core.GUID
-import tech.ytsaurus.spyt.format.conf.SparkYtWriteConfiguration
 
 import java.util
 import java.util.concurrent.{CompletableFuture, TimeUnit}
+import scala.collection.JavaConverters.seqAsJavaListConverter
 import scala.concurrent.{Await, Future}
 import scala.util.{Failure, Try}
 
@@ -151,9 +152,24 @@ class YtOutputWriter(richPath: YPathEnriched,
   protected def initializeWriter(): TableWriter[InternalRow] = {
     val appendPath = richPath.withAttr("append", "true").toYPath
     log.debugLazy(s"Initialize new write: $appendPath, transaction: $transactionGuid")
+    val writeSchemaConverter = WriteSchemaConverter(options)
     val request = WriteTable.builder[InternalRow]()
       .setPath(appendPath)
-      .setSerializationContext(new WriteSerializationContext(new InternalRowSerializer(schema, WriteSchemaConverter(options))))
+      .setSerializationContext(
+        if (options.ytConf(ArrowWriteEnabled)) {
+          if (!writeSchemaConverter.typeV3Format) {
+            throw new RuntimeException("arrow writer is only supported with typeV3")
+          }
+          new ArrowWriteSerializationContext[InternalRow](
+            schema.fields.zipWithIndex.map { case (field, i) =>
+              util.Map.entry(field.name, writeSchemaConverter.ytLogicalTypeV3(field).ytGettersFromStruct(
+                field.dataType, i
+              ))
+            }.toSeq.asJava
+          )
+        } else
+          new WriteSerializationContext(new InternalRowSerializer(schema, WriteSchemaConverter(options)))
+      )
       .setTransactionalOptions(new TransactionalOptions(GUID.valueOf(transactionGuid)))
       .setNeedRetries(false)
       .build()

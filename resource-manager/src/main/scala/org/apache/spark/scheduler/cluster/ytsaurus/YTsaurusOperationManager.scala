@@ -17,6 +17,7 @@ import tech.ytsaurus.client.operations.{Spec, VanillaSpec}
 import tech.ytsaurus.client.request.{CompleteOperation, GetOperation, UpdateOperationParameters, VanillaOperation}
 import tech.ytsaurus.client.rpc.YTsaurusClientAuth
 import tech.ytsaurus.core.GUID
+import tech.ytsaurus.spyt.BuildInfo
 import tech.ytsaurus.spyt.wrapper.YtWrapper
 import tech.ytsaurus.ysontree._
 
@@ -300,7 +301,10 @@ private[spark] object YTsaurusOperationManager extends Logging {
       val globalConfigPath = conf.get(GLOBAL_CONFIG_PATH)
       val globalConfig: YTreeMapNode = getDocument(ytClient, globalConfigPath)
 
-      val spytVersion = conf.get(SPYT_VERSION).getOrElse(getLatestRelease(ytClient, conf))
+      if (!conf.contains(SPYT_VERSION)) {
+        conf.set(SPYT_VERSION, BuildInfo.version)
+      }
+      val spytVersion = conf.get(SPYT_VERSION.key)
       logInfo(s"Used SPYT version: $spytVersion")
       val environment = globalConfig.getMap("environment")
       val javaHome = environment.getStringO("JAVA_HOME")
@@ -444,16 +448,6 @@ private[spark] object YTsaurusOperationManager extends Logging {
     val array = version.split("\\.").map(_.toInt)
     require(array.length == 3, s"Release version ($version) must have 3 numbers")
     SpytVersion(array(0), array(1), array(2))
-  }
-
-  private[ytsaurus] def getLatestRelease(ytClient: YTsaurusClient, conf: SparkConf): String = {
-    val path = conf.get(RELEASE_SPYT_PATH)
-    val releaseNodes = ytClient.listNode(path).join().asList().asScala
-    if (releaseNodes.isEmpty) {
-      throw new IllegalStateException(s"No releases found in $path")
-    }
-    val versions = releaseNodes.map(x => parseVersion(x.stringValue()))
-    versions.max.toString
   }
 
   private[ytsaurus] case class ApplicationFile(ytPath: String,

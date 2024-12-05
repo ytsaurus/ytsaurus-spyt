@@ -154,8 +154,7 @@ lazy val `spyt-package` = (project in file("spyt-package"))
     pythonAppends := {
       if (isSnapshot.value) { Seq("spyt/conf/spark-defaults.conf" -> (
         s"spark.ytsaurus.config.releases.path                   //home/spark/conf/snapshots\n" +
-          s"spark.ytsaurus.spyt.releases.path                     //home/spark/spyt/snapshots\n" +
-          s"spark.ytsaurus.spyt.version                           ${version.value}\n"
+          s"spark.ytsaurus.spyt.releases.path                     //home/spark/spyt/snapshots\n"
         ), "spyt/conf/log4j.properties" -> "log4j.rootLogger=INFO, console\n") } else {
         Seq.empty
       }

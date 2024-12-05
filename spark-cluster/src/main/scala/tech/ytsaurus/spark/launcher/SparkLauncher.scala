@@ -202,8 +202,8 @@ trait SparkLauncher {
     if (startProcessCode == 0) {
       val pid = Seq("bash", "-c", """cat "$0"/livy-*-server.pid""", livyHome).!!.trim
       log.info(f"Attaching to livy process with pid $pid...")
-      Process("tail", Seq(f"-f", "-n", "0", f"$livyHome/logs/livy--server.out")).run(ProcessLogger(log.info(_)))
-      Process("tail", Seq(f"--pid=$pid", "-f", "/dev/null")).run(ProcessLogger(log.info(_)))
+      Process("bash", Seq("-c", """tail -f -n 0 "$0"/logs/livy-*-server.out""", livyHome)).run(ProcessLogger(log.info(_)))
+      Process("bash", Seq("-c", """tail --pid="$0" -f /dev/null""", pid)).run(ProcessLogger(log.info(_)))
     } else {
       startProcess
     }

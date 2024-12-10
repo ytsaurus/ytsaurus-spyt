@@ -675,6 +675,23 @@ class ComplexTypeV3Test extends AnyFlatSpec with Matchers with LocalSpark with T
       Info("Test2", Data(30, 99.9f))
     )
   }
+
+  it should "write long strings" in {
+    withSparkConfArrowWrite(enabled = true) {
+      val string = "1" * 20000000
+      val data = Seq(string)
+      data.map(Some(_))
+        .toDF("a").coalesce(1)
+        .write.optimizeFor("scan")
+        .option(YtTableSparkSettings.WriteTableConfig, YTree.builder.beginMap().key("max_row_weight").value(30000000L).endMap().build())
+        .option(YtTableSparkSettings.WriteTypeV3.name, value = true)
+        .yt(YtWrapper.removeIfExists(tmpPath))
+      spark.read
+        .enableArrow
+        .option(YtUtils.Options.PARSING_TYPE_V3, value = true)
+        .yt(tmpPath).collect()(0)(0) shouldBe string
+    }
+  }
 }
 
 object ComplexTypeV3Test {

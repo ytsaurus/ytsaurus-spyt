@@ -170,10 +170,11 @@ trait YtCypressUtils {
     yt.removeNode(request).join()
   }
 
-  def removeIfExists(path: String, transaction: Option[String] = None)(implicit yt: CompoundClient): Unit = {
+  def removeIfExists(path: String, transaction: Option[String] = None)(implicit yt: CompoundClient): String = {
     if (exists(path)) {
       remove(path, transaction)
     }
+    path
   }
 
   def removeDirIfExists(path: String, recursive: Boolean, force: Boolean = false, transaction: Option[String] = None)

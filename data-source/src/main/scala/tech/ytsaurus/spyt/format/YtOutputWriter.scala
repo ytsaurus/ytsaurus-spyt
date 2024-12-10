@@ -11,12 +11,13 @@ import org.slf4j.LoggerFactory
 import tech.ytsaurus.client.request.{TransactionalOptions, WriteSerializationContext, WriteTable}
 import tech.ytsaurus.client.{ArrowWriteSerializationContext, CompoundClient, TableWriter}
 import tech.ytsaurus.core.GUID
-import tech.ytsaurus.spyt.format.conf.SparkYtWriteConfiguration
+import tech.ytsaurus.spyt.format.conf.{SparkYtWriteConfiguration, YtTableSparkSettings}
 import tech.ytsaurus.spyt.format.conf.YtTableSparkSettings._
 import tech.ytsaurus.spyt.fs.conf._
 import tech.ytsaurus.spyt.fs.path.YPathEnriched
 import tech.ytsaurus.spyt.serializers.{InternalRowSerializer, WriteSchemaConverter}
 import tech.ytsaurus.spyt.wrapper.LogLazy
+import tech.ytsaurus.ysontree.YTree
 
 import java.util
 import java.util.concurrent.{CompletableFuture, TimeUnit}
@@ -155,6 +156,7 @@ class YtOutputWriter(richPath: YPathEnriched,
     val writeSchemaConverter = WriteSchemaConverter(options)
     val request = WriteTable.builder[InternalRow]()
       .setPath(appendPath)
+      .setConfig(options.ytConf(YtTableSparkSettings.WriteTableConfig))
       .setSerializationContext(
         if (writeConfiguration.arrow) {
           if (!writeSchemaConverter.typeV3Format) {

@@ -11,7 +11,7 @@ import tech.ytsaurus.core.common.Decimal.textToBinary
 import tech.ytsaurus.core.tables.{ColumnValueType, TableSchema}
 import tech.ytsaurus.spyt._
 import tech.ytsaurus.spyt.format.conf.SparkYtConfiguration.Read.TypeV3
-import tech.ytsaurus.spyt.format.conf.YtTableSparkSettings
+import tech.ytsaurus.spyt.format.conf.{SparkYtConfiguration, YtTableSparkSettings}
 import tech.ytsaurus.spyt.serializers.SchemaConverter.MetadataFields
 import tech.ytsaurus.spyt.serializers.YtLogicalType
 import tech.ytsaurus.spyt.test.{LocalSpark, TestUtils, TmpDir}
@@ -652,6 +652,23 @@ class ComplexTypeV3Test extends AnyFlatSpec with Matchers with LocalSpark with T
             nullable = true,
             metadata = getMetadataBuilder("a").build())))
       }
+    }
+  }
+
+  it should "write long strings" in {
+    withSparkConfArrowWrite(enabled = true) {
+      val string = "1" * 20000000
+      val data = Seq(string)
+      data.map(Some(_))
+        .toDF("a").coalesce(1)
+        .write.optimizeFor("scan")
+        .option(YtTableSparkSettings.WriteTableConfig, YTree.builder.beginMap().key("max_row_weight").value(30000000L).endMap().build())
+        .option(YtTableSparkSettings.WriteTypeV3.name, value = true)
+        .yt(YtWrapper.removeIfExists(tmpPath))
+      spark.read
+        .enableArrow
+        .option(YtUtils.Options.PARSING_TYPE_V3, value = true)
+        .yt(tmpPath).collect()(0)(0) shouldBe string
     }
   }
 }

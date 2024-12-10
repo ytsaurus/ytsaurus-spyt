@@ -7,7 +7,8 @@ import org.apache.spark.sql.internal.SQLConf.FILE_COMMIT_PROTOCOL_CLASS
 import org.apache.spark.sql.{DataFrame, SparkSession}
 import org.apache.spark.yt.test.Utils
 import org.apache.spark.yt.test.Utils.{SparkConfigEntry, defaultConfValue}
-import org.scalatest.TestSuite
+import org.scalatest.prop.TableDrivenPropertyChecks
+import org.scalatest.{Assertion, TestSuite}
 import tech.ytsaurus.spyt.fs.YtClientConfigurationConverter._
 import tech.ytsaurus.spyt.fs.conf.ConfigEntry
 import tech.ytsaurus.spyt.test.LocalSpark.defaultSparkConf
@@ -15,13 +16,33 @@ import tech.ytsaurus.spyt.wrapper.client.{YtClientProvider, YtRpcClient}
 
 import scala.annotation.tailrec
 
-trait LocalSpark extends LocalYtClient {
+trait LocalSpark extends LocalYtClient with TableDrivenPropertyChecks {
   self: TestSuite =>
   System.setProperty("io.netty.tryReflectionSetAccessible", "true")
 
   def numExecutors: Int = 4
 
   def sparkConf: SparkConf = defaultSparkConf
+
+  def forAllWriteProtocols(fun: => Any): Assertion = {
+    forAll(Table("arrow_write_enabled", false, true)) { withSparkConfArrowWrite(_)(fun) }
+  }
+
+  def withSparkConfArrowWrite(enabled: Boolean)(fun: => Any): Assertion = {
+    val key = "spark.yt.write.arrow"
+    val prev = spark.conf.getOption(key)
+    try {
+      spark.conf.set(key, enabled.toString)
+      fun
+      succeed
+    } finally {
+      if (prev.isEmpty) {
+        spark.conf.unset(key)
+      } else {
+        spark.conf.set(key, prev.get)
+      }
+    }
+  }
 
   lazy val spark: SparkSession = {
     if (LocalSpark.spark != null) {

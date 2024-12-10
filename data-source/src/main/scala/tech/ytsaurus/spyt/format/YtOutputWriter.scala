@@ -156,7 +156,7 @@ class YtOutputWriter(richPath: YPathEnriched,
     val request = WriteTable.builder[InternalRow]()
       .setPath(appendPath)
       .setSerializationContext(
-        if (options.ytConf(ArrowWriteEnabled)) {
+        if (writeConfiguration.arrow) {
           if (!writeSchemaConverter.typeV3Format) {
             throw new RuntimeException("arrow writer is only supported with typeV3")
           }
@@ -167,8 +167,9 @@ class YtOutputWriter(richPath: YPathEnriched,
               ))
             }.toSeq.asJava
           )
-        } else
+        } else {
           new WriteSerializationContext(new InternalRowSerializer(schema, WriteSchemaConverter(options)))
+        }
       )
       .setTransactionalOptions(new TransactionalOptions(GUID.valueOf(transactionGuid)))
       .setNeedRetries(false)

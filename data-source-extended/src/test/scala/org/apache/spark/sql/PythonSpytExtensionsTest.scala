@@ -4,11 +4,12 @@ import org.apache.spark.api.java.JavaRDD
 import org.apache.spark.api.python.SerDeUtil
 import org.apache.spark.sql.api.python.PythonSQLUtils
 import org.apache.spark.sql.types.{DataType, IntegerType, Metadata, StructField, StructType}
-import org.apache.spark.sql.spyt.types.{UInt64Long, UInt64Type}
+import org.apache.spark.sql.spyt.types.UInt64Type
 import org.json4s.JsonAST.JString
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import tech.ytsaurus.spyt.test.LocalSpark
+import tech.ytsaurus.spyt.types.UInt64Long
 
 
 class PythonSpytExtensionsTest extends AnyFlatSpec with Matchers with LocalSpark {

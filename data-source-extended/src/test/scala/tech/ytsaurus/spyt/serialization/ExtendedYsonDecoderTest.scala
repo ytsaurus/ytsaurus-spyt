@@ -1,8 +1,9 @@
 package tech.ytsaurus.spyt.serialization
 
-import org.apache.spark.sql.spyt.types.{UInt64Long, UInt64Type}
+import org.apache.spark.sql.spyt.types.UInt64Type
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
+import tech.ytsaurus.spyt.types.UInt64Long
 
 class ExtendedYsonDecoderTest extends AnyFlatSpec with Matchers {
 

@@ -49,11 +49,12 @@ case class YtScan(sparkSession: SparkSession,
     val broadcastedConf = sparkSession.sparkContext.broadcast(
       new SerializableConfiguration(hadoopConf))
     val keyPartitionedOptions = Map(YtTableSparkSettings.KeyPartitioned.name -> supportsKeyPartitioning.toString)
-    YtPartitionReaderFactory(sparkSession.sessionState.conf, broadcastedConf,
+    val adapter = YtPartitionReaderFactoryAdapter(sparkSession.sessionState.conf, broadcastedConf,
       dataSchema, readDataSchema, readPartitionSchema,
       options.asScala.toMap ++ keyPartitionedOptions,
       pushedFilterSegments, filterPushdownConf, YtDynTableLoggerConfig.fromSpark(sparkSession)
     )
+    SparkAdapter.instance.createYtPartitionReaderFactory(adapter)
   }
 
   override def equals(obj: Any): Boolean = obj match {
@@ -141,7 +142,6 @@ case class YtScan(sparkSession: SparkSession,
           sparkSession = sparkSession,
           file = file,
           filePath = filePath,
-          isSplitable = isSplitable(filePath),
           maxSplitBytes = maxSplitBytes,
           partitionValues = partitionValues,
           readDataSchema = Some(readDataSchema)

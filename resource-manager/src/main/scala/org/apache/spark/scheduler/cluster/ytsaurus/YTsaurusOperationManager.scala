@@ -17,7 +17,7 @@ import tech.ytsaurus.client.operations.{Spec, VanillaSpec}
 import tech.ytsaurus.client.request.{CompleteOperation, GetOperation, UpdateOperationParameters, VanillaOperation}
 import tech.ytsaurus.client.rpc.YTsaurusClientAuth
 import tech.ytsaurus.core.GUID
-import tech.ytsaurus.spyt.BuildInfo
+import tech.ytsaurus.spyt.{BuildInfo, SparkAdapter, SparkVersionUtils}
 import tech.ytsaurus.spyt.wrapper.YtWrapper
 import tech.ytsaurus.ysontree._
 
@@ -246,6 +246,8 @@ private[spark] class YTsaurusOperationManager(val ytClient: YTsaurusClient,
       environment.put(v._1, YTree.stringNode(v._2))
     }
 
+    val execCores = SparkAdapter.instance.getExecutorCores(execResources)
+
     var executorCommand = (Seq(
       prepareEnvCommand,
       "&&",
@@ -259,7 +261,7 @@ private[spark] class YTsaurusOperationManager(val ytClient: YTsaurusClient,
       "org.apache.spark.executor.YTsaurusCoarseGrainedExecutorBackend",
       "--driver-url", driverUrl,
       "--executor-id", "$YT_TASK_JOB_INDEX",
-      "--cores", execResources.cores.toString,
+      "--cores", execCores.toString,
       "--app-id", appId,
       "--hostname", "$HOSTNAME"
     )).mkString(" ")
@@ -273,7 +275,7 @@ private[spark] class YTsaurusOperationManager(val ytClient: YTsaurusClient,
       specBuilder.beginMap()
         .key("command").value(executorCommand)
         .key("job_count").value(numExecutors)
-        .key("cpu_limit").value(execResources.cores)
+        .key("cpu_limit").value(execCores)
         .key("memory_limit").value(memoryLimit)
         .key("layer_paths").value(portoLayers)
         .key("file_paths").value(filePaths)
@@ -372,10 +374,17 @@ private[spark] object YTsaurusOperationManager extends Logging {
       conf.set("spark.executor.resource.gpu.discoveryScript", s"$spytHome/bin/getGpusResources.sh")
 
       val ytsaurusJavaOptions = ArrayBuffer[String]()
-      if (conf.getBoolean("spark.hadoop.yt.preferenceIpv6.enabled", defaultValue = false)) {
-        ytsaurusJavaOptions += "-Djava.net.preferIPv6Addresses=true"
-      }
       ytsaurusJavaOptions += s"$$(cat $spytHome/conf/java-opts)"
+      if (conf.getBoolean("spark.hadoop.yt.preferenceIpv6.enabled", defaultValue = false)) {
+        if (SparkVersionUtils.lessThan("3.4.0")) {
+          ytsaurusJavaOptions += "-Djava.net.preferIPv6Addresses=true"
+        } else {
+          val driverJavaOptions = conf.get(DRIVER_JAVA_OPTIONS).getOrElse("")
+          if (!driverJavaOptions.contains("java.net.preferIPv6Addresses")) {
+            conf.set(DRIVER_JAVA_OPTIONS, s"-Djava.net.preferIPv6Addresses=true $driverJavaOptions")
+          }
+        }
+      }
 
       if (!conf.contains(YTSAURUS_CUDA_VERSION)) {
         val cudaVersion = globalConfig.getStringO("cuda_toolkit_version").orElse("11.0")

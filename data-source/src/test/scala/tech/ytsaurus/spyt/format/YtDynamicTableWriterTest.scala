@@ -6,6 +6,7 @@ import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import tech.ytsaurus.core.cypress.YPath
 import tech.ytsaurus.core.tables.{ColumnValueType, TableSchema}
+import tech.ytsaurus.spyt.SparkVersionUtils
 import tech.ytsaurus.spyt.exceptions._
 import tech.ytsaurus.spyt.serializers.{InternalRowSerializer, SchemaConverter, WriteSchemaConverter}
 import tech.ytsaurus.spyt.serializers.SchemaConverter.{Sorted, Unordered}
@@ -51,7 +52,11 @@ class YtDynamicTableWriterTest extends AnyFlatSpec with TmpDir with LocalSpark w
       doTheTest(externalTableSchema = Some(tableSchema))
     }
 
-    sparkException.getMessage shouldEqual "Job aborted."
+    if (SparkVersionUtils.lessThan("3.4.0")) {
+      sparkException.getMessage shouldEqual "Job aborted."
+    } else {
+      sparkException.getCause.getMessage should startWith ("[TASK_WRITE_FAILED]")
+    }
   }
 
   it should "write the data to the table when dataframe contains some part of the table's columns" in {
@@ -76,7 +81,11 @@ class YtDynamicTableWriterTest extends AnyFlatSpec with TmpDir with LocalSpark w
         })
     }
 
-    sparkException.getMessage shouldEqual "Job aborted."
+    if (SparkVersionUtils.lessThan("3.4.0")) {
+      sparkException.getMessage shouldEqual "Job aborted."
+    } else {
+      sparkException.getCause.getMessage should startWith ("[TASK_WRITE_FAILED]")
+    }
   }
 
   it should "check that the saveMode is set to Append" in {

@@ -2,7 +2,7 @@ package tech.ytsaurus.spyt.types
 
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.catalyst.InternalRow
-import org.apache.spark.sql.spyt.types.{UInt64Long, UInt64Type, YsonBinary, YsonType}
+import org.apache.spark.sql.spyt.types.{UInt64Type, YsonBinary, YsonType}
 import org.apache.spark.sql.types.DataType
 import tech.ytsaurus.client.rows.{UnversionedValue, WireProtocolWriteable}
 import tech.ytsaurus.core.tables.ColumnValueType

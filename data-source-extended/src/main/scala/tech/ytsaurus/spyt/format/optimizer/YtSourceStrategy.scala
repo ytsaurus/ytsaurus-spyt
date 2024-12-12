@@ -11,6 +11,7 @@ import org.apache.spark.sql.execution.datasources.{BucketingUtils, HadoopFsRelat
 import org.apache.spark.sql.yt.YtSourceScanExec
 import org.apache.spark.sql.{Strategy, execution}
 import org.apache.spark.util.collection.BitSet
+import tech.ytsaurus.spyt.SparkVersionUtils
 
 class YtSourceStrategy extends Strategy with Logging {
 
@@ -144,7 +145,16 @@ class YtSourceStrategy extends Strategy with Logging {
       val dataFilters = normalizedFilters.filter(_.references.intersect(partitionSet).isEmpty)
 
       // Predicates with both partition keys and attributes need to be evaluated after the scan.
-      val afterScanFilters = filterSet -- partitionKeyFilters.filter(_.references.nonEmpty)
+      val filtersToExclude = partitionKeyFilters.filter(_.references.nonEmpty)
+      val afterScanFilters = if (SparkVersionUtils.lessThan("3.4.0") ||
+        SparkVersionUtils.greaterThanOrEqual("3.5.2") ||
+        SparkVersionUtils.is("3.4.4")) {
+        // According to https://issues.apache.org/jira/browse/SPARK-47897 method -- in ExpressionSet was removed in
+        // Spark 3.4.0 and reverted back in 3.4.4 and 3.5.2 versions because of performance degradation.
+        filterSet -- filtersToExclude
+      } else {
+        filtersToExclude.foldLeft(filterSet)((fs, filter) => fs - filter)
+      }
       logInfo(s"Post-Scan Filters: ${afterScanFilters.mkString(",")}")
 
       val filterAttributes = AttributeSet(afterScanFilters)

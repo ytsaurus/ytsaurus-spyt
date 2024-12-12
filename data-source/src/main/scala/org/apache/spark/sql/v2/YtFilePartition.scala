@@ -122,7 +122,6 @@ object YtFilePartition {
   def splitFiles(sparkSession: SparkSession,
                  file: FileStatus,
                  filePath: Path,
-                 isSplitable: Boolean,
                  maxSplitBytes: Long,
                  partitionValues: InternalRow,
                  readDataSchema: Option[StructType] = None): Seq[PartitionedFile] = {
@@ -292,8 +291,8 @@ object YtFilePartition {
 
   private[v2] def getPivotKeys(schema: StructType, keys: Seq[String], files: Seq[YtPartitionedFile])
                           (implicit yt: CompoundClient): Seq[TuplePoint] = {
-    val filepath = files.head.filePath
-    val basePath = YPathEnriched.fromPath(new Path(filepath)).toYPath.withColumns(keys: _*)
+    val hadoopPath = SparkAdapter.instance.getHadoopFilePath(files.head)
+    val basePath = YPathEnriched.fromPath(hadoopPath).toYPath.withColumns(keys: _*)
     val pathWithRanges = files.tail.map(_.delegate.beginRow)
       .foldLeft(basePath) { case (path, br) => path.withRange(br, br + 1) }
     val tableIterator = YtWrapper.readTable(

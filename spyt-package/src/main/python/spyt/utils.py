@@ -3,6 +3,8 @@ import logging
 import os
 import re
 import subprocess
+from packaging.version import Version
+from pyspark import __version__ as spark_version
 
 from spyt.dependency_utils import require_yt_client
 require_yt_client()
@@ -344,3 +346,13 @@ def _add_conf(spark_conf, spark_args):
         for k, v in spark_conf.items():
             spark_args.append("--conf")
             spark_args.append("{}={}".format(k, v))
+
+
+def check_spark_version(less_than=None, greater_than_or_equal=None):
+    result = True
+    current_version = Version(spark_version)
+    if less_than:
+        result = result and current_version < Version(less_than)
+    if greater_than_or_equal:
+        result = result and current_version >= Version(greater_than_or_equal)
+    return result

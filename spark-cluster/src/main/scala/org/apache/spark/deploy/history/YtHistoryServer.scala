@@ -67,11 +67,4 @@ object YtHistoryServer extends Logging {
     // Wait until the end of the world... or if the HistoryServer process is manually stopped
     while(true) { Thread.sleep(Int.MaxValue) }
   }
-
-  object Config {
-    val CREATE_LOG_DIR = ConfigBuilder("spark.history.fs.createLogDirectory")
-      .version("3.0.1")
-      .booleanConf
-      .createWithDefault(false)
-  }
 }

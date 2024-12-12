@@ -11,18 +11,6 @@ lazy val `spark-adapter-api` = (project in file("spark-adapter/api"))
     libraryDependencies ++= defaultSpark,
   )
 
-lazy val `spark-adapter-impl-322` = (project in file(s"spark-adapter/impl/spark-3.2.2"))
-  .dependsOn(`spark-adapter-api`)
-  .settings(
-    libraryDependencies ++= spark("3.2.2")
-  )
-
-lazy val `spark-adapter-impl-330` = (project in file(s"spark-adapter/impl/spark-3.3.0"))
-  .dependsOn(`spark-adapter-api`)
-  .settings(
-    libraryDependencies ++= spark("3.3.0")
-  )
-
 lazy val `spark-patch` = (project in file("spark-patch"))
   .dependsOn(`spark-adapter-api` % "compile->compile;test->test;provided->provided")
   .settings(
@@ -38,11 +26,31 @@ lazy val javaAgents = Def.task {
   ))
 }
 
+
+lazy val `spark-adapter-impl-322` = (project in file(s"spark-adapter/impl/spark-3.2.2"))
+  .dependsOn(`spark-adapter-api`, `spark-patch` % Provided)
+  .settings(
+    libraryDependencies ++= spark("3.2.2")
+  )
+
+lazy val `spark-adapter-impl-330` = (project in file(s"spark-adapter/impl/spark-3.3.0"))
+  .dependsOn(`spark-adapter-api`, `spark-patch` % Provided)
+  .settings(
+    libraryDependencies ++= spark("3.3.0")
+  )
+
+lazy val `spark-adapter-impl-340` = (project in file(s"spark-adapter/impl/spark-3.4.0"))
+  .dependsOn(`spark-adapter-api`, `spark-patch` % Provided)
+  .settings(
+    libraryDependencies ++= spark("3.4.0")
+  )
+
 lazy val `yt-wrapper` = (project in file("yt-wrapper"))
   .enablePlugins(BuildInfoPlugin)
   .dependsOn(`spark-adapter-api` % "compile->compile;test->test;provided->provided")
   .settings(
     libraryDependencies ++= circe,
+    libraryDependencies ++= shapeless,
     libraryDependencies ++= sttp,
     libraryDependencies ++= ytsaurusClient,
     libraryDependencies ++= logging,
@@ -56,10 +64,15 @@ lazy val `file-system` = (project in file("file-system"))
   .dependsOn(`yt-wrapper` % "compile->compile;test->test;provided->provided")
 
 lazy val `data-source-base` = (project in file("data-source"))
-  .dependsOn(`file-system` % "compile->compile;test->test;provided->provided", `spark-adapter-impl-322` % Test, `spark-adapter-impl-330` % Test)
+  .dependsOn(
+    `file-system` % "compile->compile;test->test;provided->provided",
+    `spark-adapter-impl-322` % Test,
+    `spark-adapter-impl-330` % Test,
+    `spark-adapter-impl-340` % Test
+  )
 
 lazy val `data-source-extended` = (project in file("data-source-extended"))
-  .dependsOn(`data-source-base` % "compile->compile;test->test;provided->provided", `spark-patch` % Provided)
+  .dependsOn(`data-source-base` % "compile->compile;test->test;provided->provided")
   .enablePlugins(JavaAgent)
   .settings(
     resolvedJavaAgents := javaAgents.value
@@ -94,7 +107,8 @@ lazy val `spyt-package` = (project in file("spyt-package"))
     `spark-submit` % "compile->compile;test->test;provided->provided",
     `spark-patch`,
     `spark-adapter-impl-322`,
-    `spark-adapter-impl-330`
+    `spark-adapter-impl-330`,
+    `spark-adapter-impl-340`
   )
   .settings(
 
@@ -104,7 +118,6 @@ lazy val `spyt-package` = (project in file("spyt-package"))
       "org.apache.commons" % "commons-lang3",
       "org.typelevel" %% "cats-kernel",
       "org.lz4" % "lz4-java",
-      "com.chuusai" %% "shapeless",
       "io.dropwizard.metrics" % "metrics-core",
       "org.slf4j" % "slf4j-api",
       "org.scala-lang.modules" %% "scala-parser-combinators",
@@ -214,6 +227,7 @@ lazy val root = (project in file("."))
     `spark-adapter-api`,
     `spark-adapter-impl-322`,
     `spark-adapter-impl-330`,
+    `spark-adapter-impl-340`,
     `yt-wrapper`,
     `file-system`,
     `data-source-base`,
@@ -256,6 +270,7 @@ lazy val root = (project in file("."))
         `spark-adapter-api` / publishSigned,
         `spark-adapter-impl-322` / publishSigned,
         `spark-adapter-impl-330` / publishSigned,
+        `spark-adapter-impl-340` / publishSigned,
         `yt-wrapper` / publishSigned,
         `file-system` / publishSigned,
         `spark-patch` / publishSigned,

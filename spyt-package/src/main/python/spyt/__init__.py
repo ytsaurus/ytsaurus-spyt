@@ -11,7 +11,8 @@ require_pyspark()
 from .client import connect, spark_session, connect_direct, direct_spark_session, \
     info, stop, jvm_process_pid, yt_client, is_stopped  # noqa: E402
 from .extensions import read_yt, read_schema_hint, write_yt, sorted_by, optimize_for, withYsonColumn, transform, \
-    _extract_code_globals, _code_reduce, write_schema_hint  # noqa: E402
+    write_schema_hint  # noqa: E402
+from .utils import check_spark_version  # noqa: E402
 from spyt.types import UInt64Type  # noqa: E402
 import pyspark.context  # noqa: E402
 import pyspark.sql.types  # noqa: E402
@@ -52,10 +53,13 @@ def initialize():
 
     pyspark.context.SparkContext.PACKAGE_EXTENSIONS += ('.whl',)
 
-    pyspark.cloudpickle.cloudpickle._extract_code_globals = _extract_code_globals
-    pyspark.cloudpickle.cloudpickle_fast._extract_code_globals = _extract_code_globals
-    pyspark.cloudpickle.cloudpickle_fast._code_reduce = _code_reduce
-    pyspark.cloudpickle.cloudpickle_fast.CloudPickler.dispatch_table[CodeType] = _code_reduce
+    if check_spark_version(less_than="3.4.0"):
+        from .extensions import _extract_code_globals, _code_reduce
+
+        pyspark.cloudpickle.cloudpickle._extract_code_globals = _extract_code_globals
+        pyspark.cloudpickle.cloudpickle_fast._extract_code_globals = _extract_code_globals
+        pyspark.cloudpickle.cloudpickle_fast._code_reduce = _code_reduce
+        pyspark.cloudpickle.cloudpickle_fast.CloudPickler.dispatch_table[CodeType] = _code_reduce
 
 
 initialize()

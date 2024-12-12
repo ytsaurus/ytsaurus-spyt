@@ -10,6 +10,7 @@ import org.apache.spark.sql.execution.exchange.{REPARTITION_BY_NUM, ShuffleExcha
 import org.apache.spark.sql.execution.metric.{SQLMetric, SQLMetrics, SQLShuffleWriteMetricsReporter}
 import org.apache.spark.util.MutablePair
 import org.apache.spark.{Partitioner, ShuffleDependency}
+import tech.ytsaurus.spyt.SparkAdapter
 import tech.ytsaurus.spyt.common.utils.TuplePoint
 import tech.ytsaurus.spyt.common.utils.ExpressionTransformer
 
@@ -98,7 +99,7 @@ class DependentHashShuffleExchangeExec(dependentPartitioning: Partitioning,
     val dependency =
       new ShuffleDependency[Int, InternalRow, InternalRow](
         rddWithPartitionIds,
-        new PartitionIdPassthrough(part.numPartitions),
+        SparkAdapter.instance.createShufflePartitioner(part.numPartitions),
         serializer,
         shuffleWriterProcessor = createShuffleWriteProcessor(writeMetrics))
 

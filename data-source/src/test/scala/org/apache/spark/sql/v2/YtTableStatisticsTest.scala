@@ -8,8 +8,7 @@ import org.apache.spark.sql.internal.SQLConf.{CODEGEN_FACTORY_MODE, WHOLESTAGE_C
 import org.apache.spark.sql.v2.Utils.getStatistics
 import org.mockito.scalatest.MockitoSugar
 import org.scalatest.{FlatSpec, Matchers}
-import tech.ytsaurus.spyt.YtReader
-import tech.ytsaurus.spyt.YtWriter
+import tech.ytsaurus.spyt.{SparkAdapter, YtReader, YtWriter}
 import tech.ytsaurus.spyt.test.{DynTableTestUtils, LocalSpark, TmpDir}
 import tech.ytsaurus.spyt.wrapper.YtWrapper
 
@@ -67,7 +66,9 @@ class YtTableStatisticsTest extends FlatSpec with Matchers with LocalSpark
       val expected = (0 until 100).map(x => Row(x / 20, -x / 2, 2 * (x / 20) + x % 2, "string"))
       res should contain theSameElementsAs expected
 
-      val files = findAllScans(query).map(_.getPartitions.head.files.head.filePath).map(new Path(_).getName)
+      val files = findAllScans(query).map { scan =>
+        SparkAdapter.instance.getHadoopFilePath(scan.getPartitions.head.files.head).getName
+      }
       files should contain theSameElementsAs Seq("t1", "t2", "t3")
       files shouldNot contain theSameElementsInOrderAs Seq("t1", "t2", "t3")
     }

@@ -7,11 +7,11 @@ import scala.util.Random
 
 class YtFilePartitionTest extends FlatSpec with Matchers with TableDrivenPropertyChecks {
 
-  behavior of "YtFilePartitionTest"
+  behavior of "YtFilePartition"
 
   import TestPartitionedFile._
 
-  it should "order partitionedFiles" in {
+  it should "order partitionedFiles using partitionedFilesOrdering" in {
     val expected = Seq(
       Dynamic("//path0", 1), // ordered by path
 

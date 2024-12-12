@@ -9,6 +9,7 @@ import tech.ytsaurus.spyt.wrapper.client.{YtClientConfiguration, YtClientProvide
 import tech.ytsaurus.spyt.wrapper.config.Utils.{parseRemoteConfig, remoteClusterConfigPath, remoteGlobalConfigPath, remoteVersionConfigPath}
 import tech.ytsaurus.spyt.wrapper.discovery.CypressDiscoveryService
 import tech.ytsaurus.core.cypress.YPath
+import tech.ytsaurus.spyt.SparkVersionUtils
 
 import java.io.File
 import java.util.UUID
@@ -66,7 +67,10 @@ class SubmissionClient(proxy: String,
     if (ipv6Enabled) {
       log.debug("preferIPv6Addresses was added to extraJavaOptions")
       launcher.setConf("spark.driver.extraJavaOptions", "-Djava.net.preferIPv6Addresses=true")
-      launcher.setConf("spark.executor.extraJavaOptions", "-Djava.net.preferIPv6Addresses=true")
+      if (SparkVersionUtils.lessThan("3.4.0")) {
+        // Starting from spark 3.4.0 IPv6 preference for executors is dependent on driver
+        launcher.setConf("spark.executor.extraJavaOptions", "-Djava.net.preferIPv6Addresses=true")
+      }
     }
 
     launcher.setConf("spark.master.rest.enabled", "true")

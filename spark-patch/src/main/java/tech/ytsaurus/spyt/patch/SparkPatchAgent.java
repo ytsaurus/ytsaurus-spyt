@@ -12,9 +12,13 @@ import java.io.*;
 import java.lang.instrument.ClassFileTransformer;
 import java.lang.instrument.Instrumentation;
 import java.lang.management.ManagementFactory;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.security.ProtectionDomain;
+import java.util.Arrays;
 import java.util.Map;
 import java.util.Optional;
+import java.util.function.Predicate;
 import java.util.jar.JarFile;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -50,27 +54,61 @@ public class SparkPatchAgent {
     public static void premain(String args, Instrumentation inst) {
         log.info("Starting SparkPatchAgent for hooking on jvm classloader");
 
+        String classpath = System.getProperty("java.class.path");
+        String[] classpathElements = classpath.split(File.pathSeparator);
+
+        Stream<String> adapterImplPaths = Arrays.stream(classpathElements)
+                .filter(path -> path.contains("spark-adapter-impl-") || path.contains("spark-adapter/impl"))
+                .filter(path -> path.endsWith(".jar") || path.endsWith("/classes"));
+
         String patchJarPath = ManagementFactory.getRuntimeMXBean().getInputArguments().stream()
                 .filter(arg -> arg.startsWith("-javaagent") && arg.contains("spark-yt-spark-patch"))
                 .map(arg -> arg.substring(arg.indexOf(':') + 1))
                 .findFirst()
                 .orElseThrow();
 
-        try(JarFile patchJarFile = new JarFile(patchJarPath)) {
-            Stream<String> localClasses = patchJarFile.versionedStream()
+        Stream<String> patchSearchPaths = Stream.concat(Stream.of(patchJarPath), adapterImplPaths);
+
+        Stream<String> classFiles = patchSearchPaths.flatMap(patchSearchPath -> {
+            if (patchSearchPath.endsWith(".jar")) {
+                return scanJarFile(patchSearchPath);
+            } else {
+                return scanClassesDirectory(patchSearchPath);
+            }
+        });
+
+        Map<String,String> classMappings = classFiles
+                .flatMap(fileName -> SparkPatchClassTransformer.toOriginClassName(fileName).stream())
+                .collect(Collectors.toMap(s -> s[0], s -> s[1]));
+
+        inst.addTransformer(new SparkPatchClassTransformer(classMappings));
+    }
+
+    private static Predicate<String> classFileFilter = fileName ->
+            fileName.endsWith(".class") && !fileName.startsWith("tech/ytsaurus/");
+
+    private static Stream<String> scanJarFile(String jarPath) {
+        try(JarFile jarFile = new JarFile(jarPath)) {
+            return jarFile.versionedStream()
                     .map(ZipEntry::getName)
-                    .filter(fileName -> fileName.endsWith(".class") && !fileName.startsWith("tech/ytsaurus/"));
+                    .filter(classFileFilter)
+                    .collect(Collectors.toList())
+                    .stream();
+            // Here we are collecting to list and then recreating a stream because we need to close jar file
+            // inside this method.
+        } catch (IOException e) {
+            throw new SparkPatchException(e);
+        }
+    }
 
-            Stream<String> externalClasses =
-                    resourceToString("/externalClasses.txt").lines()
-                            .filter(line -> !line.isBlank())
-                            .map(className -> className + ".class");
-
-            Map<String,String> classMappings = Streams.concat(localClasses, externalClasses)
-                    .flatMap(fileName -> SparkPatchClassTransformer.toOriginClassName(fileName).stream())
-                    .collect(Collectors.toMap(s -> s[0], s -> s[1]));
-
-            inst.addTransformer(new SparkPatchClassTransformer(classMappings));
+    private static Stream<String> scanClassesDirectory(String dirPath) {
+        Path root = Path.of(dirPath);
+        try (Stream<Path> paths = Files.walk(root)) {
+            return paths
+                    .map(path -> root.relativize(path).toString())
+                    .filter(classFileFilter)
+                    .collect(Collectors.toList())
+                    .stream(); // See above on collecting and recreating a stream
         } catch (IOException e) {
             throw new SparkPatchException(e);
         }
@@ -101,6 +139,10 @@ class SparkPatchClassTransformer implements ClassFileTransformer {
             String originClass = getOriginClass(ctClass);
             boolean isApplicable = !ctClass.hasAnnotation(Applicability.class) ||
                     checkApplicability((Applicability) ctClass.getAnnotation(Applicability.class));
+            PatchSource patchSource = (PatchSource) ctClass.getAnnotation(PatchSource.class);
+            if (patchSource != null) {
+                patchClassName = patchSource.value().replace('.', File.separatorChar);
+            }
             if (originClass != null && isApplicable) {
                 return Optional.of(new String[] {patchClassName, originClass.replace('.', File.separatorChar)});
             }
@@ -114,8 +156,8 @@ class SparkPatchClassTransformer implements ClassFileTransformer {
         OriginClass originClassAnnotaion = (OriginClass) ctClass.getAnnotation(OriginClass.class);
         if (originClassAnnotaion != null) {
             String originClass = originClassAnnotaion.value();
-            if (ctClass.getName().endsWith("$") && !originClass.endsWith("$")) {
-                originClass = originClass + "$";
+            if (originClass.endsWith("$") && !ctClass.getName().endsWith("$")) {
+                return null;
             }
             return originClass;
         }
@@ -216,12 +258,12 @@ class SparkPatchClassTransformer implements ClassFileTransformer {
                 for (CtMethod method : ctClass.getDeclaredMethods()) {
                     if (checkDecoratedMethod(method)) {
                         DecoratedMethod dmAnnotation = (DecoratedMethod) method.getAnnotation(DecoratedMethod.class);
-                        String methodName = dmAnnotation.name().isEmpty() ? method.getName() : dmAnnotation.name();
-                        String methodSignature = dmAnnotation.signature();
-                        CtMethod baseMethod = methodSignature.isEmpty()
-                                ? baseCtClass.getDeclaredMethod(methodName)
-                                : baseCtClass.getMethod(methodName, methodSignature);
-                        log.debug("Patching decorated method {}", methodName);
+                        String methodName = method.getName();
+                        CtMethod baseMethod = baseCtClass.getMethod(methodName, method.getSignature());
+                        log.debug("Patching decorated method {} with signature {}",
+                                methodName,
+                                baseMethod.getSignature()
+                        );
                         String innerMethodName = "__" + methodName;
                         baseMethod.setName(innerMethodName);
 

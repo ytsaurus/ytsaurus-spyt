@@ -1,10 +1,11 @@
 package tech.ytsaurus.spyt.serializers
 
 import org.apache.spark.sql.Row
-import org.apache.spark.sql.spyt.types.{UInt64Long, UInt64Type}
+import org.apache.spark.sql.spyt.types.UInt64Type
 import org.apache.spark.sql.types.{StructField, StructType}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
+import tech.ytsaurus.spyt.types.UInt64Long
 
 class ExtendedYsonRowConverterTest extends AnyFlatSpec with Matchers {
 

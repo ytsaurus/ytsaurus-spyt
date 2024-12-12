@@ -5,6 +5,7 @@ import io.circe.parser._
 import io.circe.syntax._
 import org.apache.log4j.Level
 import tech.ytsaurus.spyt.wrapper.Utils.parseDuration
+import tech.ytsaurus.ysontree.{YTreeNode, YTreeTextSerializer}
 
 import scala.concurrent.duration._
 
@@ -55,6 +56,7 @@ object ConfigEntry {
     }
 
     implicit val levelAdapter: ValueAdapter[Level] = (value: String) => Level.toLevel(value)
+    implicit val yTreeNodeAdapter: ValueAdapter[YTreeNode] = (value: String) => YTreeTextSerializer.deserialize(value)
   }
 
   def fromJsonTyped[S](value: String)(implicit decoder: Decoder[S]): S = {

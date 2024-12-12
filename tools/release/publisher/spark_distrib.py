@@ -18,7 +18,7 @@ def _parse_version(version):
         msg = f"Version ${version} is in invalid format"
         logger.error(msg)
         raise RuntimeError(msg)
-    return [int(match[i+1]) for i in range(3)]
+    return [int(match[i + 1]) for i in range(3)]
 
 
 def spark_download_url(version):
@@ -52,7 +52,8 @@ def validate_and_check_version(version):
         raise RuntimeError(msg)
 
 
-def upload_distributive(version, client: Client, ignore_existing: bool, distrib_bytes=None, use_cache=False):
+def upload_distributive(version, client: Client, ignore_existing: bool, distrib_bytes=None, use_cache=False,
+                        cache_path: str = "/tmp"):
     logger.info(f"Uploading Spark {version} distributive")
     tgz_url = spark_download_url(version)
     maj, min, patch = _parse_version(version)
@@ -67,10 +68,10 @@ def upload_distributive(version, client: Client, ignore_existing: bool, distrib_
 
     if distrib_bytes is None:
         if use_cache:
-            cached_file = f"/tmp/{filename}"
+            cached_file = f"{cache_path}/{filename}"
             logger.info(f"Cache is enabled. File {cached_file} will be used")
             if not os.path.exists(cached_file):
-                logger.debug("No cached archive found")
+                logger.info(f"No cached archive found, downloading it from {tgz_url}")
                 with open(cached_file, 'wb') as f:
                     f.write(requests.get(tgz_url).content)
             with open(cached_file, 'rb') as f:
@@ -82,7 +83,7 @@ def upload_distributive(version, client: Client, ignore_existing: bool, distrib_
     client.write_file(distrib_bytes, distrib_path)
 
 
-def main(versions, root, ignore_existing, use_cache):
+def main(versions, root, ignore_existing, use_cache, cache_path):
     logger.info(f"{versions} versions of Spark will be deployed")
     for version in versions:
         validate_and_check_version(version)
@@ -90,7 +91,7 @@ def main(versions, root, ignore_existing, use_cache):
     client = Client(ClientBuilder(root_path=root))
 
     for version in versions:
-        upload_distributive(version, client, ignore_existing, use_cache=use_cache)
+        upload_distributive(version, client, ignore_existing, use_cache=use_cache, cache_path=cache_path)
 
 
 if __name__ == '__main__':
@@ -100,7 +101,8 @@ if __name__ == '__main__':
                         dest='ignore_existing', help='Overwrite cluster files')
     parser.set_defaults(ignore_existing=False)
     parser.add_argument("--use-cache", action='store_true', help='Cache downloaded Spark archives')
+    parser.add_argument("--cache-path", default="/tmp", type=str, help="A directory with cached Spark archives")
     parser.add_argument("versions", metavar="version", type=str, nargs='*', help="Spark version formatted as X.X.X")
 
     args = parser.parse_args()
-    main(args.versions, args.root, args.ignore_existing, args.use_cache)
+    main(args.versions, args.root, args.ignore_existing, args.use_cache, args.cache_path)

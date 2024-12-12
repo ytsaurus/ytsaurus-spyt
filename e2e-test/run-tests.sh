@@ -12,6 +12,7 @@ root_dir=$(pwd)
 rebuild="true"
 start_yt_local="true"
 yt_local_runner_path="$root_dir/../../docker/local/run_local_cluster.sh"
+spark_cache_path=""
 deploy="true"
 
 print_usage() {
@@ -23,12 +24,14 @@ Usage: $script_name [-h|--help]
                     [--reuse-yt]
                     [--no-deploy]
                     [--yt-local-runner-path path]
+                    [--spark-cache-path path]
                     [tox-args...]
 
   --no-rebuild: Skip rebuilding SPYT artifacts
   --reuse-yt: Don't start local YTsaurus and use existing one
   --no-deploy: Skip deploying SPYT artifacts to YTsaurus cluster
   --yt-local-runner-path: Path to local YTsaurus run script
+  --spark-cache-path: Local directory with downloaded Spark distributives
 
 EOF
     exit 0
@@ -52,6 +55,10 @@ while [[ $# -gt 0 ]]; do
         ;;
         --yt-local-runner-path)
         yt_local_runner_path="$2"
+        shift 2
+        ;;
+        --spark-cache-path)
+        spark_cache_path="$2"
         shift 2
         ;;
         -h|--help)
@@ -83,11 +90,18 @@ if [ "$deploy" = "true" ]; then
     cd $root_dir/tools/release/spyt_image
     ./build.sh --spyt-version $spyt_version
 
+    spark_cache_parameter=""
+    spark_cache_mount=""
+    if [ "$spark_cache_path" ]; then
+      spark_cache_parameter="--cache-path ${spark_cache_path}"
+      spark_cache_mount="-v $spark_cache_path:$spark_cache_path"
+    fi;
     # Deploy with SPYT image
     docker run --network=host \
                -e YT_PROXY="localhost:8000" -e YT_USER="root" -e YT_TOKEN="token" \
-               -e EXTRA_SPARK_VERSIONS="--use-cache 3.2.2 3.2.4 3.3.0 3.3.4" \
+               -e EXTRA_SPARK_VERSIONS="--use-cache $spark_cache_parameter 3.2.2 3.2.4 3.3.0 3.3.4" \
                -v /tmp:/tmp \
+               $spark_cache_mount \
                --rm \
                ghcr.io/ytsaurus/spyt:$spyt_version
 fi;

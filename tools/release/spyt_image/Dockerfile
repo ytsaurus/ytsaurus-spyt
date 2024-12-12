@@ -20,11 +20,10 @@ RUN apt-get update && DEBIAN_FRONTEND=noninteractive TZ=Etc/UTC apt-get install 
   iputils-ping \
   lsb-release \
   openjdk-11-jdk \
-  python3.7 \
-  python3-pip \
-  python3.7-distutils
+  python3.12
 
-RUN python3.7 -m pip install ytsaurus-client==0.13.7
+RUN curl -sS https://bootstrap.pypa.io/get-pip.py | python3.12
+RUN python3.12 -m pip install ytsaurus-client==0.13.20
 
 COPY ${BUILD_OUTPUT_PATH}/version.json /data/
 COPY ${BUILD_OUTPUT_PATH}/conf /data/conf

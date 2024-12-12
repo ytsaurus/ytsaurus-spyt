@@ -59,7 +59,7 @@ object PythonPlugin extends AutoPlugin {
 
   override def projectSettings: Seq[Def.Setting[_]] = Seq(
     pythonCommand := "python3",
-    pythonSetupName := "setup.py",
+    pythonSetupName := "-m build",
     pythonBuildDir := target.value / "python",
 
     pythonClean := {
@@ -74,7 +74,7 @@ object PythonPlugin extends AutoPlugin {
       val deps = pythonBuildDir.value / "deps"
       createDeps(deps, pythonDeps.value)
       preProcessDeps(deps, pythonAppends.value)
-      val command = s"${pythonCommand.value} ${pythonSetupName.value} sdist bdist_wheel"
+      val command = s"${pythonCommand.value} ${pythonSetupName.value}"
       runCommand(command, pythonBuildDir.value)
       pythonBuildDir.value / "dist"
     },

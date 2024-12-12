@@ -9,7 +9,7 @@ RUN apt-get install -y curl unzip netcat socat
 RUN set -eux; \
   for VERSION in 3.9 3.11 3.12; \
   do \
-    apt-get install -y python$VERSION python$VERSION-distutils; \
+    apt-get install -y python$VERSION; \
     curl -sS https://bootstrap.pypa.io/get-pip.py | python$VERSION; \
     python$VERSION -m pip install ytsaurus-client==0.13.20 packaging==24.1; \
   done

@@ -1,0 +1,60 @@
+[build-system]
+requires = ["setuptools", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ytsaurus-spyt"
+dynamic = ["version"]
+# version = "0.0.1"  # TODO You need to replace this with dynamic fetching if required
+description = "YTsaurus SPYT high-level client"
+readme = "README.md"
+keywords = ["yt", "ytsaurus", "python", "spyt"]
+classifiers = [
+    "License :: OSI Approved :: Apache Software License"
+]
+authors = [
+    {name = "YTsaurus", email = "dev@ytsaurus.tech"}
+]
+dependencies = [
+    "pyarrow",
+    "pyyaml",
+    "packaging"
+]
+
+[project.optional-dependencies]
+all = [
+    "pyspark>=3.2.2,<3.4.0",
+    "ytsaurus-client",
+    "ytsaurus-yson"
+]
+
+[project.urls]
+Homepage = "https://github.com/ytsaurus/ytsaurus/tree/main/yt/spark/spark-over-yt"
+
+[tool.setuptools]
+packages = ["spyt", "spyt.jars", "spyt.bin", "spyt.conf"]
+script-files = [
+    "deps/bin/livy-launch-yt",
+    "deps/bin/shs-launch-yt",
+    "deps/bin/spark-discovery-yt",
+    "deps/bin/spark-launch-yt",
+    "deps/bin/spark-manage-yt",
+    "deps/bin/spark-shell-yt",
+    "deps/bin/spark-submit-yt",
+    "deps/bin/spyt-cli",
+    "deps/bin/spyt-env"
+]
+include-package-data = true
+
+[tool.setuptools.package-dir]
+"spyt" = "deps/spyt"
+"spyt.jars" = "deps/spyt/jars"
+"spyt.bin" = "deps/spyt/bin"
+"spyt.conf" = "deps/spyt/conf"
+
+
+[tool.setuptools.package-data]
+"spyt.jars" = ["*.jar"]
+
+[tool.setuptools.dynamic]
+version = {attr = "spyt.version.__version__"}

@@ -500,7 +500,7 @@
   "spyt-package/src/main/bin/spyt-env":"yt/spark/spark-over-yt/spyt-package/src/main/bin/spyt-env",
   "spyt-package/src/main/python/MANIFEST.in":"yt/spark/spark-over-yt/spyt-package/src/main/python/MANIFEST.in",
   "spyt-package/src/main/python/README.md":"yt/spark/spark-over-yt/spyt-package/src/main/python/README.md",
-  "spyt-package/src/main/python/setup.py":"yt/spark/spark-over-yt/spyt-package/src/main/python/setup.py",
+  "spyt-package/src/main/python/pyproject.toml":"yt/spark/spark-over-yt/spyt-package/src/main/python/pyproject.toml",
   "spyt-package/src/main/python/spyt/__init__.py":"yt/spark/spark-over-yt/spyt-package/src/main/python/spyt/__init__.py",
   "spyt-package/src/main/python/spyt/arcadia.py":"yt/spark/spark-over-yt/spyt-package/src/main/python/spyt/arcadia.py",
   "spyt-package/src/main/python/spyt/client.py":"yt/spark/spark-over-yt/spyt-package/src/main/python/spyt/client.py",

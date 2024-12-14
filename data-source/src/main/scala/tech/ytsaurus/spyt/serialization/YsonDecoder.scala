@@ -166,6 +166,7 @@ class YsonDecoder(bytes: Array[Byte], dataType: IndexedDataType) extends YsonBas
       case YsonTags.BINARY_DOUBLE =>
         dataType.sparkDataType match {
           case BinaryType => first +: parseRawBytes(8)
+          case FloatType => parseDouble.toFloat
           case _ => parseDouble
         }
       case YsonTags.BINARY_FALSE =>

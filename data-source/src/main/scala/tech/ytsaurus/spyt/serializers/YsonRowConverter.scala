@@ -247,6 +247,7 @@ object YsonRowConverter {
             case str: String => consumer.onString(str)
           }
         case BooleanType => consumer.onBoolean(value.asInstanceOf[Boolean])
+        case FloatType => consumer.onDouble(value.asInstanceOf[Float])
         case DoubleType => consumer.onDouble(value.asInstanceOf[Double])
         case BinaryType =>
           val bytes = value.asInstanceOf[Array[Byte]]

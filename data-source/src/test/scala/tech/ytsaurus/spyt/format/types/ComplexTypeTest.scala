@@ -4,18 +4,19 @@ import org.apache.log4j.{Level, Logger}
 import org.apache.spark.SparkException
 import org.apache.spark.sql.types._
 import org.apache.spark.sql.{Encoders, Row, SaveMode}
-import org.scalatest.{FlatSpec, Matchers}
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
+import tech.ytsaurus.core.common.Decimal.textToBinary
+import tech.ytsaurus.core.tables.{ColumnValueType, TableSchema}
 import tech.ytsaurus.spyt._
 import tech.ytsaurus.spyt.common.utils.TypeUtils
 import tech.ytsaurus.spyt.format._
-import tech.ytsaurus.spyt.test.{LocalSpark, TestUtils, TmpDir}
-import tech.ytsaurus.core.common.Decimal.textToBinary
-import tech.ytsaurus.core.tables.{ColumnValueType, TableSchema}
 import tech.ytsaurus.spyt.serialization.YsonEncoder
+import tech.ytsaurus.spyt.test.{LocalSpark, TestUtils, TmpDir}
 
 import scala.collection.mutable
 
-class ComplexTypeTest extends FlatSpec with Matchers with LocalSpark with TmpDir with TestUtils {
+class ComplexTypeTest extends AnyFlatSpec with Matchers with LocalSpark with TmpDir with TestUtils {
 
   import ComplexTypeTest._
   import spark.implicits._
@@ -535,14 +536,14 @@ class ComplexTypeTest extends FlatSpec with Matchers with LocalSpark with TmpDir
       .select('map1.cast(BinaryType), 'map2.cast(BinaryType))
       .as[(Option[Array[Byte]], Option[Array[Byte]])]
       .collect()
-      .map{case (x,y) => x.map(_.toList) -> y.map(_.toList)}
+      .map { case (x, y) => x.map(_.toList) -> y.map(_.toList) }
 
     res should contain theSameElementsAs binaryData
   }
 }
 
 object ComplexTypeTest {
-  val testRow = Test(
+  val testRow: Test = Test(
     Map("a" -> Some(Map("aa" -> Some(1L))), "b" -> None, "c" -> Some(Map("cc" -> None))),
     Map("a" -> Some(B(Some("aa"))), "b" -> None, "c" -> Some(B(None))),
     Map("a" -> Some(Seq(Some(0.1))), "b" -> None, "c" -> Some(Seq(None))),
@@ -569,7 +570,7 @@ object ComplexTypeTest {
       Some(Map("c" -> None)) -> 3L,
     ))
 
-  val testRowSmall = TestSmall(
+  val testRowSmall: TestSmall = TestSmall(
     testRow.f1,
     testRow.f4,
     testRow.f7,

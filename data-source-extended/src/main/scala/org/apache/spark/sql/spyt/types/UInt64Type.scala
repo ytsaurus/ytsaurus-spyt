@@ -8,12 +8,13 @@ import org.apache.spark.sql.expressions.UserDefinedFunction
 import org.apache.spark.sql.functions.udf
 import org.apache.spark.sql.types._
 import org.apache.spark.unsafe.types.UTF8String
+import tech.ytsaurus.spyt.SparkAdapter
 import tech.ytsaurus.spyt.types.UInt64Long
 
 import scala.math.Numeric.LongIsIntegral
 import scala.reflect.runtime.universe.typeTag
 
-class UInt64Type private() extends IntegralType {
+class UInt64Type private() extends IntegralType with NumericCompat {
   private[sql] type InternalType = Long
 
   @transient private[sql] lazy val tag = typeTag[InternalType]
@@ -31,8 +32,13 @@ class UInt64Type private() extends IntegralType {
   private[sql] val numeric = UInt64IsIntegral
 
   private[sql] val integral = UInt64IsIntegral
+}
 
-  // exactNumeric is not yet implemented for UInt64
+/**
+ * The only purpose of this trait is to make UInt64Type binary compatible with older Spark versions less than 3.5.0
+ */
+trait NumericCompat {
+  private[sql] val numeric: Numeric[_]
 }
 
 object UInt64IsIntegral extends LongIsIntegral with Ordering[Long] {
@@ -69,7 +75,7 @@ object UInt64Support {
   def cast(from: DataType): Any => Any = from match {
     case StringType => s => UInt64Long.fromString(s.asInstanceOf[UTF8String].toString)
     case BooleanType => b => if (b.asInstanceOf[Boolean]) 1L else 0L
-    case x: NumericType => b => x.numeric.asInstanceOf[Numeric[Any]].toLong(b)
+    case x: NumericType => SparkAdapter.instance.castToLong(x)
   }
 }
 

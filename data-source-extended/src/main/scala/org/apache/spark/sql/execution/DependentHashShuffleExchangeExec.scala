@@ -17,12 +17,17 @@ import tech.ytsaurus.spyt.common.utils.ExpressionTransformer
 // child data is divided by rules from dependent hash partitioning, sorting is not provided
 class DependentHashShuffleExchangeExec(dependentPartitioning: Partitioning,
                                        child: SparkPlan,
-                                       shuffleOrigin: ShuffleOrigin = REPARTITION_BY_NUM)
-  extends ShuffleExchangeExec(dependentPartitioning, child, shuffleOrigin) {
+                                       shuffleOrigin: ShuffleOrigin = REPARTITION_BY_NUM,
+                                       advisoryPartitionSize: Option[Long] = None)
+  extends ShuffleExchangeExec(dependentPartitioning, child, shuffleOrigin, advisoryPartitionSize) {
 
   override def output: Seq[Attribute] = child.output
 
   override def nodeName: String = "DependentHashExchange"
+
+  def this(outputPartitioning: Partitioning, child: SparkPlan, shuffleOrigin: ShuffleOrigin) = {
+    this(outputPartitioning, child, shuffleOrigin, None)
+  }
 
   def this(expressions: Seq[Expression],
            pivots: Seq[TuplePoint],

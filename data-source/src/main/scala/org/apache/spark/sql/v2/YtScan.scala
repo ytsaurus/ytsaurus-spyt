@@ -119,7 +119,7 @@ case class YtScan(sparkSession: SparkSession,
   }
 
   private def getSplitFiles(selectedPartitions: Seq[PartitionDirectory], maxSplitBytes: Long): Seq[PartitionedFile] = {
-    val partitionAttributes = fileIndex.partitionSchema.toAttributes
+    val partitionAttributes = SparkAdapter.instance.schemaToAttributes(fileIndex.partitionSchema)
     val attributeMap = partitionAttributes.map(a => normalizeName(a.name) -> a).toMap
     val readPartitionAttributes = readPartitionSchema.map { readField =>
       attributeMap.getOrElse(
@@ -136,7 +136,7 @@ case class YtScan(sparkSession: SparkSession,
       } else {
         partition.values
       }
-      partition.files.flatMap { file =>
+      SparkAdapter.instance.getPartitionFileStatuses(partition).flatMap { file =>
         val filePath = file.getPath
         YtFilePartition.splitFiles(
           sparkSession = sparkSession,

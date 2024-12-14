@@ -5,6 +5,7 @@ import org.apache.spark.sql.catalyst.expressions.{Cast, Expression, ExpressionIn
 import org.apache.spark.sql.types.{DataType, LongType}
 import org.apache.spark.sql.spyt.types.UInt64Type
 import org.apache.spark.sql.{Column, SparkSession}
+import tech.ytsaurus.spyt.SparkAdapter
 
 case class XxHash64ZeroSeed(children: Seq[Expression], seed: Long) extends HashExpression[Long] {
   def this(arguments: Seq[Expression]) = this(arguments, 0L)
@@ -34,7 +35,7 @@ object XxHash64ZeroSeed {
       new FunctionIdentifier("xxhash64zeroseed"),
       new ExpressionInfo("tech.ytsaurus.spyt.common.utils.XxHash64ZeroSeed", "xxhash64zeroseed"),
       (children: Seq[Expression]) =>
-        Cast(new XxHash64ZeroSeed(children), UInt64Type)
+        SparkAdapter.instance.createCast(new XxHash64ZeroSeed(children), UInt64Type)
     )
   }
 }

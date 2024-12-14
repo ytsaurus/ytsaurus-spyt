@@ -11,6 +11,7 @@ import org.apache.spark.sql.types.StructType
 import org.apache.spark.sql.v2.YtReaderOptions
 import org.apache.spark.sql.vectorized.{ColumnarBatch, YtFileFormat}
 import org.apache.spark.util.collection.BitSet
+import tech.ytsaurus.spyt.SparkAdapter
 import tech.ytsaurus.spyt.format.conf.YtTableSparkSettings
 import tech.ytsaurus.spyt.fs.YtHadoopPath
 import tech.ytsaurus.spyt.wrapper.table.OptimizeMode
@@ -99,10 +100,9 @@ class FileSourceScanExecDelegate(relation: HadoopFsRelation,
   override lazy val supportsColumnar: Boolean = {
     relation.fileFormat match {
       case yf: YtFileFormat => YtReaderOptions.supportBatch(
-        StructType.fromAttributes(output), relation.options, relation.sparkSession.sqlContext.conf
+        SparkAdapter.instance.fromAttributes(output), relation.options, relation.sparkSession.sqlContext.conf
       )
-      // TODO Pay attention here for spark 3.4.x and above
-      case f => f.supportBatch(relation.sparkSession, StructType.fromAttributes(output))
+      case f => f.supportBatch(relation.sparkSession, SparkAdapter.instance.fromAttributes(output))
     }
   }
 

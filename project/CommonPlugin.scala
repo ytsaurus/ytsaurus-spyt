@@ -6,21 +6,27 @@ import sbt.plugins.JvmPlugin
 import spyt.SpytPlugin.autoImport._
 import spyt.YtPublishPlugin
 
-import java.nio.file.Paths
-
 object CommonPlugin extends AutoPlugin {
   override def trigger = AllRequirements
 
   override def requires = JvmPlugin && YtPublishPlugin
 
   object autoImport {
+    lazy val printCompileClasspath = taskKey[Unit]("")
     lazy val printTestClasspath = taskKey[Unit]("")
+
+    lazy val CompileProvided = config("compileprovided").describedAs("Compile time dependency that is not visible in tests and not included into distributive")
+    lazy val NewCompileInternal = config("compile-internal").extend(Compile, Optional, Provided, CompileProvided)
+
+    lazy val TestProvided = config("testprovided").describedAs("Provided test time dependency that is only used for running tests")
+    lazy val NewTestInternal = config("test-internal").extend(Test, Optional, Provided, TestProvided)
   }
 
   import autoImport._
 
   override def projectSettings: Seq[Def.Setting[_]] = Seq(
     externalResolvers := Resolver.combineDefaultResolvers(resolvers.value.toVector, mavenCentral = false),
+    ivyConfigurations ++= Seq(SparkCompile, SparkRuntimeTest),
     resolvers += Resolver.mavenLocal,
     resolvers += Resolver.mavenCentral,
     resolvers += ("YTsaurusSparkReleases" at "https://repo1.maven.org/maven2"),
@@ -35,7 +41,7 @@ object CommonPlugin extends AutoPlugin {
       Developer("Alexvsalexvsalex", "Alexey Shishkin", "alex-shishkin@ytsaurus.tech", url("https://ytsaurus.tech/")),
       Developer("alextokarew", "Aleksandr Tokarev", "atokarew@ytsaurus.tech", url("https://ytsaurus.tech/")),
     ),
-    description := "Spark over YTsaurus",
+    description := "YTsaurus SPYT",
     licenses := List(
       "The Apache License, Version 2.0" -> new URL("http://www.apache.org/licenses/LICENSE-2.0.txt")
     ),
@@ -54,9 +60,13 @@ object CommonPlugin extends AutoPlugin {
     credentials += Credentials(Path.userHome / ".sbt" / ".ossrh_credentials"),
     libraryDependencies ++= testDeps,
     Test / fork := true,
-    printTestClasspath := {
-      (Test / dependencyClasspath).value.files.foreach(f => println(f.getAbsolutePath))
+    printCompileClasspath := {
+      (Compile / dependencyClasspath).value.foreach(a => println(s"${a.metadata.get(configuration.key)} - ${a.data.getAbsolutePath}"))
     },
-    Global / pgpPassphrase := gpgPassphrase.map(_.toCharArray)
+    printTestClasspath := {
+      (Test / fullClasspath).value.foreach(a => println(s"${a.metadata.get(configuration.key)} - ${a.data.getAbsolutePath}"))
+    },
+    Global / pgpPassphrase := gpgPassphrase.map(_.toCharArray),
+    ivyConfigurations := overrideConfigs(CompileProvided, TestProvided, NewCompileInternal, NewTestInternal)(ivyConfigurations.value),
   )
 }

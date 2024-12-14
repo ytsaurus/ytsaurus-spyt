@@ -5,6 +5,7 @@ import org.apache.spark.sql.catalyst.expressions.{Cast, Expression, ExpressionIn
 import org.apache.spark.sql.types.{DataType, LongType}
 import org.apache.spark.sql.spyt.types.UInt64Type
 import org.apache.spark.sql.{Column, SparkSession}
+import tech.ytsaurus.spyt.SparkAdapter
 
 case class CityHash(children: Seq[Expression], seed: Long) extends HashExpression[Long] {
   def this(arguments: Seq[Expression]) = this(arguments, 0L)
@@ -44,7 +45,7 @@ object CityHash {
       new FunctionIdentifier("cityhash"),
       new ExpressionInfo("tech.ytsaurus.spyt.common.utils.CityHash", "cityhash"),
       (children: Seq[Expression]) =>
-        Cast(new CityHash(children), UInt64Type)
+        SparkAdapter.instance.createCast(new CityHash(children), UInt64Type)
     )
   }
 }

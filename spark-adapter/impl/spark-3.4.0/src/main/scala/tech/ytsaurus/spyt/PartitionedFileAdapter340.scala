@@ -1,5 +1,5 @@
 package tech.ytsaurus.spyt
-import org.apache.hadoop.fs.Path
+
 import org.apache.spark.paths.SparkPath
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.execution.datasources.PartitionedFile

@@ -15,7 +15,6 @@ trait TypeSupport {
   def uInt64Cast(from: DataType): Any => Any
   val uInt64CastToString: Any => Any
   val uInt64CastToStringCode: CastFunction
-  def extractUint64Opt(ctx: SqlBaseParser.PrimitiveDataTypeContext): Option[DataType]
 
   val ysonDataType: DataType
   def ysonCast(from: DataType): Any => Any

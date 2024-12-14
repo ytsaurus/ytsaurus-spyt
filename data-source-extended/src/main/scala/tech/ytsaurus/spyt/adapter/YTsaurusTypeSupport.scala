@@ -19,16 +19,6 @@ class YTsaurusTypeSupport extends TypeSupport {
   override val uInt64CastToString: Any => Any = UInt64CastToString
   override val uInt64CastToStringCode: CastFunction = UInt64CastToStringCode
 
-  override def extractUint64Opt(ctx: SqlBaseParser.PrimitiveDataTypeContext): Option[DataType] = {
-    SparkAdapter.instance.parserUtilsWithOrigin(ctx) {
-      val dataType = ctx.identifier.getText.toLowerCase(Locale.ROOT)
-      dataType match {
-        case "uint64" => Some(UInt64Type)
-        case _ => None
-      }
-    }
-  }
-
   override val ysonDataType: DataType = YsonType
   override def ysonCast(from: DataType): Any => Any = YsonBinary.cast(from)
   override val ysonCastToBinary: Any => Any = YsonCastToBinary

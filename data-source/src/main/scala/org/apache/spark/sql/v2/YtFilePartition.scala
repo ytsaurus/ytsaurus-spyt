@@ -41,17 +41,22 @@ object YtFilePartition {
 
     val openCostInBytes = sparkSession.sessionState.conf.filesOpenCostInBytes
     val defaultParallelism = sparkSession.sparkContext.defaultParallelism
-    val totalBytes = selectedPartitions.flatMap(_.files.map(_.getLen + openCostInBytes)).sum
+    val totalBytes = selectedPartitions.flatMap(pd =>
+      SparkAdapter.instance.getPartitionFileStatuses(pd).map(_.getLen + openCostInBytes)
+    ).sum
     val bytesPerCore = totalBytes / defaultParallelism
 
     val maxSplitBytes = maybeReadParallelism
       .map { readParallelism => totalBytes / readParallelism + 1 }
       .getOrElse { Math.max(minSplitBytes, Math.min(defaultMaxSplitBytes, Math.max(openCostInBytes, bytesPerCore))) }
 
+    val paths = selectedPartitions.flatMap(pd =>
+      SparkAdapter.instance.getPartitionFileStatuses(pd).map(_.getPath.toString)
+    ).mkString(", ")
     log.info(s"Planning scan with bin packing, max size: $maxSplitBytes bytes, " +
       s"open cost is considered as scanning $openCostInBytes bytes, " +
       s"default parallelism is $defaultParallelism, " +
-      s"paths: ${selectedPartitions.flatMap(_.files.map(_.getPath.toString)).mkString(", ")}")
+      s"paths: $paths")
 
     maxSplitBytes
   }
@@ -179,7 +184,10 @@ object YtFilePartition {
           Some(Seq.empty)
         } else {
           val headFile = ytSplitFiles.head
-          if (ytSplitFiles.forall(headFile.filePath == _.filePath)) {
+          val tryToUseKeyPartitioning = ytSplitFiles.forall(splitFile =>
+            SparkAdapter.instance.getStringFilePath(headFile) == SparkAdapter.instance.getStringFilePath(splitFile)
+          )
+          if (tryToUseKeyPartitioning) {
             implicit val yt: CompoundClient = YtClientProvider.ytClientWithProxy(
               ytClientConfiguration(sparkSession.sessionState.conf), headFile.delegate.cluster)
             val keyPartitioning = requiredKeysO match {

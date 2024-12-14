@@ -5,10 +5,11 @@ import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.execution.datasources.PartitionedFile
 import tech.ytsaurus.spyt.adapter.StorageSupport.{instance => ssi}
-import tech.ytsaurus.spyt.patch.annotations.{Decorate, DecoratedMethod, OriginClass}
+import tech.ytsaurus.spyt.patch.annotations.{Applicability, Decorate, DecoratedMethod, OriginClass}
 
 @Decorate
 @OriginClass("org.apache.spark.sql.execution.PartitionedFileUtil$")
+@Applicability(to = "3.4.4")
 object PartitionedFileUtilDecorators {
 
   @DecoratedMethod

@@ -40,13 +40,15 @@ object Config {
     .stringConf
     .createOptional
 
-  val MAX_DRIVER_FAILURES = ConfigBuilder("spark.ytsaurus.driver.maxFailures")
+  val YTSAURUS_MAX_DRIVER_FAILURES = ConfigBuilder("spark.ytsaurus.driver.maxFailures")
     .doc("Maximum driver task failures before operation failure")
     .version("3.2.2")
     .intConf
     .createWithDefault(5)
 
-  val MAX_EXECUTOR_FAILURES = ConfigBuilder("spark.ytsaurus.executor.maxFailures")
+  // From Spark 3.5.0 there also exists an option spark.executor.maxNumFailures which also resolves to constant
+  // MAX_EXECUTOR_FAILURES
+  val YTSAURUS_MAX_EXECUTOR_FAILURES = ConfigBuilder("spark.ytsaurus.executor.maxFailures")
     .doc("Maximum executor task failures before operation failure")
     .version("3.2.2")
     .intConf

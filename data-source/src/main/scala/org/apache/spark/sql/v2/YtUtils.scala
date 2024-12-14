@@ -17,6 +17,8 @@ import tech.ytsaurus.spyt.serializers.{SchemaConverter, SchemaConverterConfig}
 import tech.ytsaurus.spyt.wrapper.YtWrapper
 import tech.ytsaurus.spyt.wrapper.client.YtClientProvider
 
+import java.lang.reflect.InvocationTargetException
+
 object YtUtils {
   object Options {
     val MERGE_SCHEMA = "mergeschema"
@@ -126,7 +128,7 @@ object YtUtils {
       fileSchemas.headOption.map {
         head =>
           val keys = getKeys(head)
-          val res = fileSchemas.map(_.schema).reduce((x, y) => x.merge(y))
+          val res = fileSchemas.map(_.schema).reduce(mergeStructTypes)
           if (fileSchemas.forall(fs => getKeys(fs) == keys)) {
             res
           } else {
@@ -147,6 +149,22 @@ object YtUtils {
         case Right(schema) => schema
       }
     }
+  }
+
+  // A workaround for Spark versions less than 3.5.1 where the second argument with default value was introduced
+  // for StructType.merge method
+  private val structMergeMethod = classOf[StructType].getMethods.find(m => m.getName == "merge").get
+  private val structMergeMethodArgCount = structMergeMethod.getParameterTypes.length
+
+  private def mergeStructTypes(x: StructType, y: StructType): StructType = try {
+    structMergeMethodArgCount match {
+      case 1 => structMergeMethod.invoke(x, y).asInstanceOf[StructType]
+      case 2 => x.merge(y)
+      case _ =>
+        throw new UnsupportedOperationException("More than 2 arguments is not supported for StructType.merge method")
+    }
+  } catch {
+    case ite: InvocationTargetException => throw ite.getTargetException
   }
 
   implicit class RichStructField(field: StructField) {

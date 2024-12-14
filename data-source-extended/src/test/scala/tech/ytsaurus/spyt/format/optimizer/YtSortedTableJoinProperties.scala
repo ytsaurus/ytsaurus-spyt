@@ -58,14 +58,17 @@ private class YtSortedTableJoinProperties extends YtSortedTableBaseProperties {
   private def isCorrectPlanWithNotProcessedJoin(test: JoinTest, plan: SparkPlan): Boolean = {
     plan match {
       case ProjectExec(_, SortMergeJoinExec(keys1, keys2, _, _,
-      SortExec(_, _, ShuffleExchangeExec(HashPartitioning(hash1, _), project1, _), _),
-      SortExec(_, _, ShuffleExchangeExec(HashPartitioning(hash2, _), project2, _), _),
+      SortExec(_, _, see1: ShuffleExchangeExec, _),
+      SortExec(_, _, see2: ShuffleExchangeExec, _),
       _)) =>
-        getColumnNames(keys1) == test.joinColumns && getColumnNames(keys2) == test.joinColumns &&
-          getColumnNames(hash1) == test.joinColumns && getColumnNames(hash2) == test.joinColumns &&
-          isCorrectInputNode(test.source1, project1) && isCorrectInputNode(test.source2, project2)
-      case _ =>
-        false
+        (see1.outputPartitioning, see1.child, see2.outputPartitioning, see2.child) match {
+          case (HashPartitioning(hash1, _), project1, HashPartitioning(hash2, _), project2) =>
+            getColumnNames(keys1) == test.joinColumns && getColumnNames(keys2) == test.joinColumns &&
+              getColumnNames(hash1) == test.joinColumns && getColumnNames(hash2) == test.joinColumns &&
+              isCorrectInputNode(test.source1, project1) && isCorrectInputNode(test.source2, project2)
+          case _ => false
+        }
+      case _ => false
     }
   }
 

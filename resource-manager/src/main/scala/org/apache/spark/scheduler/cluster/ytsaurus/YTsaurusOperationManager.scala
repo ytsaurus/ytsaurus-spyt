@@ -196,7 +196,7 @@ private[spark] class YTsaurusOperationManager(val ytClient: YTsaurusClient,
       .key("environment").value(environment)
       .endMap()
 
-    OperationParameters(spec, conf.get(MAX_DRIVER_FAILURES), "")
+    OperationParameters(spec, conf.get(YTSAURUS_MAX_DRIVER_FAILURES), "")
   }
 
   private def addRedirectToStderrIfNeeded(conf: SparkConf, cmd: String): String = {
@@ -289,7 +289,7 @@ private[spark] class YTsaurusOperationManager(val ytClient: YTsaurusClient,
     }
 
     val attemptId = s" [${sys.env.getOrElse("YT_TASK_JOB_INDEX", "0")}]"
-    OperationParameters(spec, conf.get(MAX_EXECUTOR_FAILURES) * numExecutors, attemptId)
+    OperationParameters(spec, conf.get(YTSAURUS_MAX_EXECUTOR_FAILURES) * numExecutors, attemptId)
   }
 }
 

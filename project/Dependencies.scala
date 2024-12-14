@@ -1,6 +1,10 @@
+import CommonPlugin.autoImport._
 import sbt._
 
 object Dependencies {
+  val SparkCompile = config("spark-compile")
+  val SparkRuntimeTest = config("spark-runtime-test")
+
   lazy val circeVersion = "0.12.3"
   lazy val circeYamlVersion = "0.12.0"
   lazy val shapelessVersion = "2.3.7"
@@ -11,7 +15,8 @@ object Dependencies {
   lazy val mockitoVersion = "1.14.4"
   lazy val arrowVersion = "0.17.1"
 
-  lazy val defaultSparkVersion = System.getProperty("sparkVersion", "3.2.2")
+  lazy val compileSparkVersion = "3.5.3"
+  lazy val testSparkVersion = System.getProperty("testSparkVersion", compileSparkVersion)
 
   lazy val circe = ("io.circe" %% "circe-yaml" % circeYamlVersion) +: Seq(
     "io.circe" %% "circe-core",
@@ -35,17 +40,19 @@ object Dependencies {
     "org.scalatestplus" %% "scalacheck-1-14" % "3.1.0.0" % Test
   ) ++ mockito
 
-  def spark(sparkVersion: String) = Seq("spark-core", "spark-sql").flatMap { module => Seq(
-    "org.apache.spark" %% module % sparkVersion % Provided
-  )}
+  def spark(sparkVersion: String, scope: Configuration = Provided) = Seq("spark-core", "spark-sql").map { module =>
+    "org.apache.spark" %% module % sparkVersion % scope
+  }
 
   def sparkTest(sparkVersion: String) = Seq(
     "org.apache.spark" %% "spark-core" % sparkVersion % Test classifier "tests"
   )
 
-  lazy val defaultSpark = spark(defaultSparkVersion)
+  lazy val compileSpark = spark(compileSparkVersion, CompileProvided)
 
-  lazy val defaultSparkTest = sparkTest(defaultSparkVersion)
+  lazy val runtimeTestSpark = spark(testSparkVersion, TestProvided)
+
+  lazy val sparkTestDep = sparkTest(testSparkVersion)
 
   lazy val ytsaurusClient = Seq(
     "tech.ytsaurus" % "ytsaurus-client" % ytsaurusClientVersion excludeAll(
@@ -79,5 +86,12 @@ object Dependencies {
       ExclusionRule(organization = "org.scala-lang.modules"),
       ExclusionRule(organization = "com.fasterxml.jackson.module"),
     )
+  )
+
+  // There libraries aren't actually required, it's just a workaround to allow IntelliJ IDEA to correctly
+  // import the project because of custom dependency scopes defined in CommonPlugin (CompileProvided and TestProvided).
+  lazy val intellijIdeaCompatLibraries = spark(compileSparkVersion) ++ spark(testSparkVersion) ++ Seq(
+    "io.netty" % "netty-all" % "4.1.96.Final" % Provided,
+    "io.netty" % "netty-transport-native-epoll" % "4.1.96.Final" % Provided,
   )
 }

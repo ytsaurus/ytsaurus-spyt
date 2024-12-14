@@ -88,6 +88,12 @@ lazy val `spark-submit` = (project in file("spark-submit"))
     resolvedJavaAgents := javaAgents.value
   )
 
+val snapshotPaths =
+  """
+    |spark.ytsaurus.config.releases.path                   //home/spark/conf/snapshots
+    |spark.ytsaurus.spyt.releases.path                     //home/spark/spyt/snapshots
+    |""".stripMargin
+
 lazy val `spyt-package` = (project in file("spyt-package"))
   .enablePlugins(JavaAppPackaging, PythonPlugin)
   .dependsOn(
@@ -152,10 +158,10 @@ lazy val `spyt-package` = (project in file("spyt-package"))
       binBasePath.listFiles().map(f => "bin" -> f) ++ packagePaths
     },
     pythonAppends := {
-      if (isSnapshot.value) { Seq("spyt/conf/spark-defaults.conf" -> (
-        s"spark.ytsaurus.config.releases.path                   //home/spark/conf/snapshots\n" +
-          s"spark.ytsaurus.spyt.releases.path                     //home/spark/spyt/snapshots\n"
-        ), "spyt/conf/log4j.properties" -> "log4j.rootLogger=INFO, console\n") } else {
+      if (isSnapshot.value) { Seq(
+        "spyt/conf/spark-defaults.conf" -> snapshotPaths,
+        "spyt/conf/log4j.properties" -> "log4j.rootLogger=INFO, console\n"
+      ) } else {
         Seq.empty
       }
     }
@@ -196,7 +202,15 @@ lazy val `spyt-package` = (project in file("spyt-package"))
       val basePath = versionPath(spytPath, versionValue)
 
       val clusterConfigArtifacts = spyt.ClusterConfig.artifacts(streams.value.log, versionValue,
-        (Compile / resourceDirectory).value)
+        (Compile / resourceDirectory).value).map {
+        case ytPublishFile: YtPublishFile =>
+          if (ytPublishFile.localFile.getName == "livy-client.template.conf" && isSnapshot.value) {
+            ytPublishFile.copy(append = ("\n" + snapshotPaths.trim.linesIterator.map(_.replaceAll("\\s+", " = ")).mkString("\n")).getBytes)
+          } else {
+            ytPublishFile
+          }
+        case other => other
+      }
 
       val spytPackageZip = getBuildDirectory(baseDirectory.value.getParentFile) / s"${(Universal / packageName).value}.zip"
 

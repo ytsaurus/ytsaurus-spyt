@@ -34,7 +34,7 @@ object LivyLauncher extends App with VanillaLauncher with SparkLauncher {
       val externalAddress = tcpRouter.map(_.getExternalAddress("LIVY")).getOrElse(address)
       log.info(f"Server will started on address $externalAddress")
       prepareLivyConf(address, masterAddress, maxSessions)
-      prepareLivyClientConf(driverCores, driverMemory)
+      prepareLivyClientConf(driverCores, driverMemory, ytO)
 
       withService(startLivyServer(address)) { livyServer =>
         discoveryService.registerLivy(externalAddress, clusterVersion)

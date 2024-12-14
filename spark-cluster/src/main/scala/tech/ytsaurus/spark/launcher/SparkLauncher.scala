@@ -12,10 +12,13 @@ import tech.ytsaurus.spyt.wrapper.YtWrapper
 import tech.ytsaurus.spyt.wrapper.client.YtClientConfiguration
 import tech.ytsaurus.spyt.wrapper.discovery.{Address, CompoundDiscoveryService, CypressDiscoveryService, DiscoveryServerService, DiscoveryService}
 import tech.ytsaurus.client.CompoundClient
-import tech.ytsaurus.spyt.HostAndPort
+import tech.ytsaurus.client.request.GetOperation
+import tech.ytsaurus.core.GUID
+import tech.ytsaurus.spyt.{HostAndPort, SparkVersionUtils}
 
 import java.io.File
 import java.nio.file.{Files, Path}
+import java.util
 import scala.annotation.tailrec
 import scala.collection.mutable.ArrayBuffer
 import scala.concurrent.duration._
@@ -81,25 +84,48 @@ trait SparkLauncher {
     sparkSystemProperties.get("spark.hadoop.yt.preferenceIpv6.enabled").exists(_.toBoolean)
   }
 
-  private def getLivyClientSparkConf(): Seq[String] = {
-    if (isIpv6PreferenceEnabled) {
-      Seq(
-        "spark.driver.extraJavaOptions = -Djava.net.preferIPv6Addresses=true",
-        "spark.executor.extraJavaOptions = -Djava.net.preferIPv6Addresses=true"
-      )
+  private def getLivyClientSparkConf(ytO: Option[CompoundClient]): Seq[String] = {
+    val ipv6Conf = if (isIpv6PreferenceEnabled) {
+      Seq("spark.driver.extraJavaOptions = -Djava.net.preferIPv6Addresses=true") ++ (
+        if (SparkVersionUtils.lessThan("3.4.0")) {
+          // Starting from spark 3.4.0 IPv6 preference for executors is dependent on driver
+          Seq("spark.executor.extraJavaOptions = -Djava.net.preferIPv6Addresses=true")
+        } else {
+          Nil
+        })
     } else {
       Seq()
     }
+
+    val networkProjectConf = ytO.flatMap { ytClient =>
+      sys.env.get("YT_OPERATION_ID").flatMap { ytOperationId =>
+        val req = GetOperation.builder()
+          .setOperationId(GUID.valueOf(ytOperationId))
+          .addAttribute("provided_spec")
+          .build()
+
+        val providedSpec = ytClient.getOperation(req).join()
+
+        val npOpt = providedSpec.mapNode().getMap("provided_spec")
+          .getMap("tasks")
+          .getMap("livy")
+          .getStringO("network_project")
+
+        if (npOpt.isPresent) Some(s"spark.ytsaurus.network.project = ${npOpt.get()}") else None
+      }
+    }.toSeq
+
+    ipv6Conf ++ networkProjectConf
   }
 
-  def prepareLivyClientConf(driverCores: Int, driverMemory: String): Unit = {
+  def prepareLivyClientConf(driverCores: Int, driverMemory: String, ytO: Option[CompoundClient]): Unit = {
     val src = Path.of(home, "livy-client.template.conf")
     val preparedConfPath = createFromTemplate(src.toFile) { content =>
       content
         .replaceAll("\\$LIVY_ADDRESS", ytHostnameOrIpAddress)
         .replaceAll("\\$DRIVER_CORES", driverCores.toString)
         .replaceAll("\\$DRIVER_MEMORY", driverMemory)
-        .replaceAll("\\$EXTRA_SPARK_CONF", getLivyClientSparkConf().mkString("\n"))
+        .replaceAll("\\$EXTRA_SPARK_CONF", getLivyClientSparkConf(ytO).mkString("\n"))
     }.toPath
     val dst = Path.of(livyHome, "conf", "livy-client.conf")
 

@@ -144,7 +144,13 @@ object Config {
 
   val YTSAURUS_DRIVER_WATCH = ConfigBuilder("spark.ytsaurus.driver.watch")
     .doc("Enable logging for driver operation")
-    .version("3.2.2")
+    .version("3.2.2") // TODO replace all Spark versions with SPYT versions
     .booleanConf
     .createWithDefault(true)
+
+  val YTSAURUS_NETWORK_PROJECT = ConfigBuilder("spark.ytsaurus.network.project")
+    .doc("Network project name")
+    .version("2.4.3")
+    .stringConf
+    .createOptional
 }

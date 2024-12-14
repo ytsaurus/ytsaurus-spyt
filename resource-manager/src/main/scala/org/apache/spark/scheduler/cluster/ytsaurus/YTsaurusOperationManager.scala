@@ -186,15 +186,14 @@ private[spark] class YTsaurusOperationManager(val ytClient: YTsaurusClient,
       environment.put(v._1, YTree.stringNode(v._2))
     }
 
-    val spec: Spec = (specBuilder, _, _) => specBuilder.beginMap()
-      .key("command").value(driverCommand)
-      .key("job_count").value(1)
-      .key("cpu_limit").value(conf.get(DRIVER_CORES))
-      .key("memory_limit").value(memoryLimit)
-      .key("layer_paths").value(portoLayers)
-      .key("file_paths").value(filePaths)
-      .key("environment").value(environment)
-      .endMap()
+    val spec: Spec = (specBuilder, _, _) => {
+      specBuilder.beginMap()
+        .key("command").value(driverCommand)
+        .key("job_count").value(1)
+        .key("cpu_limit").value(conf.get(DRIVER_CORES))
+        .key("memory_limit").value(memoryLimit)
+      setCommonSpecParams(specBuilder, conf).endMap()
+    }
 
     OperationParameters(spec, conf.get(MAX_DRIVER_FAILURES), "")
   }
@@ -275,19 +274,29 @@ private[spark] class YTsaurusOperationManager(val ytClient: YTsaurusClient,
         .key("job_count").value(numExecutors)
         .key("cpu_limit").value(execResources.cores)
         .key("memory_limit").value(memoryLimit)
-        .key("layer_paths").value(portoLayers)
-        .key("file_paths").value(filePaths)
-        .key("environment").value(environment)
       if (gpuLimit > 0) {
         specBuilder
           .key("gpu_limit").value(gpuLimit)
           .key("cuda_toolkit_version").value(conf.get(YTSAURUS_CUDA_VERSION).get)
       }
-      specBuilder.endMap()
+      setCommonSpecParams(specBuilder, conf).endMap()
     }
 
     val attemptId = s" [${sys.env.getOrElse("YT_TASK_JOB_INDEX", "0")}]"
     OperationParameters(spec, conf.get(MAX_EXECUTOR_FAILURES) * numExecutors, attemptId)
+  }
+
+  private def setCommonSpecParams(specBuilder: YTreeBuilder, conf: SparkConf): YTreeBuilder = {
+    specBuilder
+      .key("layer_paths").value(portoLayers)
+      .key("file_paths").value(filePaths)
+      .key("environment").value(environment)
+
+    conf.get(YTSAURUS_NETWORK_PROJECT).foreach { networkProject =>
+      specBuilder.key("network_project").value(networkProject)
+    }
+
+    specBuilder
   }
 }
 

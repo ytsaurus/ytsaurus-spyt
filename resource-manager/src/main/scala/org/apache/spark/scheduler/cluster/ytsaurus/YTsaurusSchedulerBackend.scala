@@ -3,6 +3,7 @@ package org.apache.spark.scheduler.cluster.ytsaurus
 
 import org.apache.spark.SparkContext
 import org.apache.spark.deploy.ytsaurus.Config._
+import org.apache.spark.internal.config.SUBMIT_DEPLOY_MODE
 import org.apache.spark.scheduler.TaskSchedulerImpl
 import org.apache.spark.scheduler.cluster.{CoarseGrainedSchedulerBackend, SchedulerBackendUtils}
 import org.apache.spark.util.Utils
@@ -20,7 +21,8 @@ private[spark] class YTsaurusSchedulerBackend (
   private val initialExecutors = SchedulerBackendUtils.getInitialTargetExecutorNumber(conf)
 
   def initialize(): Unit = {
-    sc.uiWebUrl.foreach { internalWebUiUrl =>
+    if (sc.conf.get(SUBMIT_DEPLOY_MODE) == "cluster" && sc.uiWebUrl.isDefined) {
+      val internalWebUiUrl = sc.uiWebUrl.get
       sys.env.get("YT_OPERATION_ID").foreach { ytOperationId =>
         val webUiUrl = if (sc.conf.get(TCP_PROXY_ENABLED)) {
           implicit val ytClient: CompoundClient = operationManager.ytClient

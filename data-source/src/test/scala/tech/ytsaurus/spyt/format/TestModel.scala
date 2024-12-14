@@ -6,6 +6,9 @@ case class B(a: Option[String])
 
 case class C(a: Map[String, Option[Long]], b: B, c: Seq[Option[Boolean]], d: Option[Double])
 
+case class Info(name: String, data: Data)
+case class Data(age: Int, weight: Float)
+
 case class Test(f1: Map[String, Option[Map[String, Option[Long]]]],
                 f2: Map[String, Option[B]],
                 f3: Map[String, Option[Seq[Option[Double]]]],

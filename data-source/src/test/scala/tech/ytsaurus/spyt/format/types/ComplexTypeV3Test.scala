@@ -14,10 +14,16 @@ import tech.ytsaurus.spyt.test.{LocalSpark, TestUtils, TmpDir}
 import tech.ytsaurus.client.rows.{UnversionedRow, UnversionedValue}
 import tech.ytsaurus.core.common.Decimal.textToBinary
 import tech.ytsaurus.core.tables.{ColumnValueType, TableSchema}
+import tech.ytsaurus.spyt.format.types.ComplexTypeV3Test.{codeDictLikeList, codeList, codeTestStruct, getMetadataBuilder, packToRow}
+import tech.ytsaurus.spyt.format.{Data, Info}
 import tech.ytsaurus.spyt.serializers.YtLogicalType
+import tech.ytsaurus.spyt.wrapper.YtWrapper
 import tech.ytsaurus.typeinfo.StructType.Member
 import tech.ytsaurus.typeinfo.TiType
+import tech.ytsaurus.yson.YsonParser
 import tech.ytsaurus.ysontree.{YTree, YTreeBuilder}
+
+import scala.collection.mutable.ListBuffer
 
 class ComplexTypeV3Test extends AnyFlatSpec with Matchers with LocalSpark with TmpDir with TestUtils {
   import spark.implicits._
@@ -32,57 +38,13 @@ class ComplexTypeV3Test extends AnyFlatSpec with Matchers with LocalSpark with T
     super.afterAll()
   }
 
-  private def codeListImpl(list: Seq[Any], transformer: (YTreeBuilder, Int, Any) => Unit): Array[Byte] = {
-    val builder = new YTreeBuilder
-    builder.onBeginList()
-    list.zipWithIndex.foreach {
-      case (value, index) =>
-        builder.onListItem()
-        transformer(builder, index, value)
-    }
-    builder.onEndList()
-    builder.build.toBinary
-  }
-
-  private def codeDictImpl(map: Map[String, Any]): Array[Byte] = {
-    val builder = new YTreeBuilder
-    builder.onBeginMap()
-    map.foreach {
-      case (key, value) =>
-        builder.key(key)
-        builder.value(value)
-    }
-    builder.onEndMap()
-    builder.build.toBinary
-  }
-
-  private def codeList(list: Seq[Any]): Array[Byte] = {
-    codeListImpl(list,
-      (builder, _, value) =>
-        builder.value(value)
-    )
-  }
-
-  private def codeUList(cVType: ColumnValueType, list: Seq[Any]): Array[Byte] = {
-    codeListImpl(list,
-      (builder, index, value) =>
-        new UnversionedValue(index, cVType, false, value)
-          .writeTo(builder)
-    )
-  }
-
-  private def packToRow(value: Any,
-                        cVType: ColumnValueType = ColumnValueType.COMPOSITE): UnversionedRow = {
-    new UnversionedRow(java.util.List.of[UnversionedValue](
-      new UnversionedValue(0, cVType, false, value)
-    ))
-  }
-
   // TODO put in TestUtils
   private def testEnabledAndDisabledArrow(f: DataFrameReader => Unit): Unit = {
+    import spark.implicits._
     f(spark.read.enableArrow)
     f(spark.read.disableArrow)
   }
+
 
   it should "read optional from yt" in {
     val data = Seq(Some(1L), Some(2L), None)
@@ -129,10 +91,6 @@ class ComplexTypeV3Test extends AnyFlatSpec with Matchers with LocalSpark with T
     res.collect() should contain theSameElementsAs data.map(Row(_))
   }
 
-  private def codeDictLikeList[T](map: Map[T, Any]): Array[Byte] = {
-    codeUList(ColumnValueType.COMPOSITE, map.map { case (a, b) => codeList(Seq(a, b)) }.toSeq)
-  }
-
   it should "read map from yt" in {
     val data = Seq(Map("1" -> true), Map("3" -> true, "4" -> false))
     writeTableFromURow(
@@ -144,10 +102,6 @@ class ComplexTypeV3Test extends AnyFlatSpec with Matchers with LocalSpark with T
 
     val res = spark.read.option(YtUtils.Options.PARSING_TYPE_V3, value = true).yt(tmpPath)
     res.collect() should contain theSameElementsAs data.map(Row(_))
-  }
-
-  private def codeTestStruct(struct: TestStruct): Array[Byte] = {
-    codeList(Seq[Any](struct.d, struct.s))
   }
 
   it should "read struct from yt" in {
@@ -221,13 +175,6 @@ class ComplexTypeV3Test extends AnyFlatSpec with Matchers with LocalSpark with T
 
     val res = spark.read.option(YtUtils.Options.PARSING_TYPE_V3, value = true).yt(tmpPath)
     res.collect() should contain theSameElementsAs data.map(x => Row(Row(x: _*)))
-  }
-
-  private def getMetadataBuilder(name: String, keyId: Int = -1): MetadataBuilder = {
-    new MetadataBuilder()
-      .putString(MetadataFields.ORIGINAL_NAME, name)
-      .putLong(MetadataFields.KEY_ID, keyId)
-      .putBoolean(MetadataFields.ARROW_SUPPORTED, true)
   }
 
   it should "read tagged from yt" in {
@@ -609,6 +556,153 @@ class ComplexTypeV3Test extends AnyFlatSpec with Matchers with LocalSpark with T
           nullable = true,
           metadata = getMetadataBuilder("a").build())))
     }
+  }
+
+  it should "write dataset with struct with float" in {
+    import spark.implicits._
+
+    List(Info("Test", Data(32, 100.0f)), Info("Test2", Data(30, 99.9f)))
+      .toDF("name", "data")
+      .write
+      .option(YtTableSparkSettings.WriteTypeV3.name, value = true)
+      .yt(tmpPath)
+
+    val schema = TableSchema.fromYTree(YtWrapper.attribute(tmpPath, "schema"))
+
+    schema shouldEqual TableSchema.builder().setUniqueKeys(false)
+      .addValue("name", TiType.optional(TiType.string()))
+      .addValue("data",  TiType.optional(TiType.struct(
+        new Member("age", TiType.int32()),
+        new Member("weight", TiType.doubleType())
+      )))
+      .build()
+
+    val readData = readTableAsYson(tmpPath).map { row =>
+      val map = row.asMap()
+      val dataBytes = map.get("data").bytesValue()
+      val ysonParser: YsonParser = new YsonParser(dataBytes)
+      val ytreeBuilder: YTreeBuilder = YTree.builder()
+      ysonParser.parseNode(ytreeBuilder)
+
+      val dataMap = ytreeBuilder.build().asList()
+      (
+        map.get("name").stringValue(),
+        dataMap.get(0).intValue(),
+        dataMap.get(1).floatValue()
+      )
+    }
+
+    readData should contain theSameElementsAs ListBuffer[(String, Int, Double)](
+      ("Test", 32, 100.0f),
+      ("Test2", 30, 99.9f),
+    )
+  }
+
+  it should "read dataset with struct with float" in {
+    val data: ListBuffer[UnversionedRow] = ListBuffer(
+      packToRow(
+        "Test", YTree.listBuilder().value(32).value(100.0f).endList().build().toBinary
+      ),
+      packToRow(
+        "Test2", YTree.listBuilder().value(30).value(99.9f).endList().build().toBinary
+      ),
+    )
+
+    val schema: TableSchema = TableSchema.builder().setUniqueKeys(false)
+      .addValue("name", TiType.optional(TiType.string()))
+      .addValue("data",  TiType.optional(TiType.struct(
+        new Member("age", TiType.int32()),
+        new Member("weight", TiType.floatType())
+      )))
+      .build()
+
+    writeTableFromURow(data, tmpPath, schema)
+
+    val df = spark.read
+      .option(YtUtils.Options.PARSING_TYPE_V3, value = true)
+      .schemaHint(
+        "name" -> StringType,
+        "data" -> StructType(Seq(
+          StructField("age", IntegerType),
+          StructField("weight", FloatType)))
+      )
+      .yt(tmpPath).as[Info]
+
+    df.collect() should contain theSameElementsAs Seq(
+      Info("Test", Data(32, 100.0f)),
+      Info("Test2", Data(30, 99.9f))
+    )
+  }
+}
+
+object ComplexTypeV3Test {
+  private def codeListImpl(list: Seq[Any], transformer: (YTreeBuilder, Int, Any) => Unit): Array[Byte] = {
+    val builder = new YTreeBuilder
+    builder.onBeginList()
+    list.zipWithIndex.foreach {
+      case (value, index) =>
+        builder.onListItem()
+        transformer(builder, index, value)
+    }
+    builder.onEndList()
+    builder.build.toBinary
+  }
+
+  private def codeDictImpl(map: Map[String, Any]): Array[Byte] = {
+    val builder = new YTreeBuilder
+    builder.onBeginMap()
+    map.foreach {
+      case (key, value) =>
+        builder.key(key)
+        builder.value(value)
+    }
+    builder.onEndMap()
+    builder.build.toBinary
+  }
+
+  private def codeList(list: Seq[Any]): Array[Byte] = {
+    codeListImpl(list,
+      (builder, _, value) =>
+        builder.value(value)
+    )
+  }
+
+  private def codeUList(cVType: ColumnValueType, list: Seq[Any]): Array[Byte] = {
+    codeListImpl(list,
+      (builder, index, value) =>
+        new UnversionedValue(index, cVType, false, value)
+          .writeTo(builder)
+    )
+  }
+
+  private def codeDictLikeList[T](map: Map[T, Any]): Array[Byte] = {
+    codeUList(ColumnValueType.COMPOSITE, map.map { case (a, b) => codeList(Seq(a, b)) }.toSeq)
+  }
+
+  private def codeTestStruct(struct: TestStruct): Array[Byte] = {
+    codeList(Seq[Any](struct.d, struct.s))
+  }
+
+  private def getMetadataBuilder(name: String, keyId: Int = -1): MetadataBuilder = {
+    new MetadataBuilder()
+      .putString(MetadataFields.ORIGINAL_NAME, name)
+      .putLong(MetadataFields.KEY_ID, keyId)
+      .putBoolean(MetadataFields.ARROW_SUPPORTED, true)
+  }
+
+
+  private def packToRow(value: Any,
+                        cVType: ColumnValueType = ColumnValueType.COMPOSITE): UnversionedRow = {
+    new UnversionedRow(java.util.List.of[UnversionedValue](
+      new UnversionedValue(0, cVType, false, value)
+    ))
+  }
+
+  def packToRow(value1: String, value2: Array[Byte]): UnversionedRow = {
+    new UnversionedRow(java.util.List.of[UnversionedValue](
+      new UnversionedValue(0, ColumnValueType.STRING, false, value1.getBytes),
+      new UnversionedValue(1, ColumnValueType.COMPOSITE, false, value2)
+    ))
   }
 }
 

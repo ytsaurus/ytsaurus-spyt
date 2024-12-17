@@ -24,12 +24,14 @@ private class YtSortedTableAggregationProperties extends YtSortedTableBaseProper
 
   private def isCorrectPlanWithRealExchange(test: AggTest, plan: SparkPlan): Boolean = {
     plan match {
-      case HashAggregateExec(_, _, _, groupingExpressions1, _, _, _, _,
-      ShuffleExchangeExec(_,
-      HashAggregateExec(_, _, _, groupingExpressions2, _, _, _, _, project), _)) =>
-        getColumnNames(groupingExpressions1) == test.groupColumns &&
-          getColumnNames(groupingExpressions2) == test.groupColumns &&
-          isCorrectInputNode(test, project)
+      case HashAggregateExec(_, _, _, groupingExpressions1, _, _, _, _, see: ShuffleExchangeExec) =>
+        see.child match {
+          case HashAggregateExec(_, _, _, groupingExpressions2, _, _, _, _, project) =>
+            getColumnNames(groupingExpressions1) == test.groupColumns &&
+              getColumnNames(groupingExpressions2) == test.groupColumns &&
+              isCorrectInputNode(test, project)
+          case _ => false
+        }
       case _ => false
     }
   }

@@ -5,7 +5,7 @@ import tech.ytsaurus.spyt.patch.annotations.{Applicability, OriginClass, Subclas
 
 @Subclass
 @OriginClass("org.apache.spark.sql.types.IntegralType")
-@Applicability(from = "3.4.0")
+@Applicability(from = "3.4.0", to = "3.4.4")
 private[sql] abstract class IntegralTypeSpyt extends IntegralType {
   override private[sql] def physicalDataType: PhysicalDataType = {
     // We're hooking to uint64 here instead of UInt64Type because this method was introduced in Spark 3.4.0 to

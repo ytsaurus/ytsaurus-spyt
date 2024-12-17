@@ -68,6 +68,7 @@ class CastBaseDecorators {
   private[this] def __nullSafeCastFunction(from: DataType, to: DataType, ctx: CodegenContext): CastFunction = ???
 
   @DecoratedMethod
+  @Applicability(to = "3.4.4")
   private[this] def castToStringCode(from: DataType, ctx: CodegenContext): CastFunction = from match {
     case ts.uInt64DataType => ts.uInt64CastToStringCode
     case _ => __castToStringCode(from, ctx)

@@ -3,17 +3,17 @@
 ### Build Requirements
 
 - jdk11 (openjdk is preferred)
-- sbt 1.5.4
-- python 3.8+
+- sbt 1.10.6
+- python 3.9+
 - pip3
 - wheel
 
 ### How to Build
 
-To build a snapshot version of YTsaurus the following sbt command can be used:
+To build YTsaurus SPYT from sources the following sbt command can be used:
 
 ```bash
-sbt -DpublishYt=false clean spytPublishSnapshot
+sbt -DconfigGeneration=False spytBuildRelease
 ```
 
 This will create a SPYT assembly archive and Python wheel package inside `build_output` directory. After that you can install the whl package into your Python environment and deploy the assembly to the cluster.
@@ -62,12 +62,17 @@ An example:
 sbt "data-source/testOnly tech.ytsaurus.spyt.format.types.DateTimeTypesConverterTest"
 ```
 
+#### Running scala unit tests over different Spark version
+
+By default unit tests are run over compile Spark version which is defined [here](project/Dependencies.scala#L18). To use different Spark version in runtime for unit tests a `-DtestSparkVersion=3.x.x` parameter should be specified for the `sbt` command. For example to test SPYT over Spark 3.2.2 the following command should be used: `sbt -DtestSparkVersion=3.2.2 test`.
+
 #### Running python integration tests
 
 Prerequisites for running python unit tests:
 - python3.9, python3.11 or python3.12
 - tox >= 4
 - wheel
+- build
 
 Python tests are located in the `e2e-test` directory. 
 
@@ -77,4 +82,4 @@ Tests are run using [tox](https://tox.wiki) python environment management tool, 
 
 `run-tests.sh` rebuilds the project by default, but if you have already built the project you can skip build stage by passing `--no-rebuild` flag to the script. Also if you don't need SPYT artifacts in cypress then option `--no-deploy` may be used.
 
-To run on specific python version pass the option `-e py39` or `-e py311`. To run a specific test pass the following option: `-- tests/test_data_types.py::test_read_uint64_type`.
+To run tests using specific python and spark versions pass the option `-e py39-spark322` or `-e py311-spark344`. All available tox environments containing specific python and spark versions can be found in [tox.ini](/e2e-test/tox.ini) file. To run a specific test pass the following option: `-- tests/test_data_types.py::test_read_uint64_type`.

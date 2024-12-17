@@ -1,11 +1,10 @@
 package tech.ytsaurus.spyt.common.utils
 
 import java.util.{ArrayList => JList}
-
 import org.apache.spark.sql._
-import org.apache.spark.sql.catalyst.encoders.RowEncoder
 import org.apache.spark.sql.functions._
 import org.apache.spark.sql.types.StructType
+import tech.ytsaurus.spyt.SparkAdapter
 
 import scala.reflect.runtime.universe.TypeTag
 
@@ -30,7 +29,7 @@ object DataFrameUtils {
               None
             }
           }
-        }(RowEncoder(df.schema))
+        }(SparkAdapter.instance.createExpressionEncoder(df.schema))
     }
 
     def joinWithHotKey(right: DataFrame, key: String, hotKey: Option[String], joinType: String, andCondition: Column = lit(true)): DataFrame = {
@@ -82,7 +81,7 @@ object DataFrameUtils {
               fields.map(maxRow.getAs[Any])
             }
           )
-        }(RowEncoder(outputSchema))
+        }(SparkAdapter.instance.createExpressionEncoder(outputSchema))
     }
 
     def selectAs[T <: Product : TypeTag]: Dataset[T] = {

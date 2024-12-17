@@ -3,6 +3,7 @@ package tech.ytsaurus.spyt.format
 import org.apache.log4j.{Level, Logger}
 import org.apache.spark.SparkException
 import org.apache.spark.sql.execution.InputAdapter
+import org.apache.spark.sql.execution.exchange.ShuffleExchangeExec
 import org.apache.spark.sql.functions.col
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.internal.SQLConf._
@@ -595,7 +596,7 @@ class YtFileFormatTest extends AnyFlatSpec with Matchers with LocalSpark
     val res = spark.read.disableArrow.yt(tmpPath).groupBy().count()
     val plan = physicalPlan(res)
     val batchEnabled = nodes(plan).collectFirst {
-      case scan: InputAdapter => scan.supportsColumnar
+      case scan: InputAdapter if !scan.child.isInstanceOf[ShuffleExchangeExec] => scan.supportsColumnar
     }.get
 
     batchEnabled shouldEqual true

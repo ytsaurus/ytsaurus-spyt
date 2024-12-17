@@ -1,19 +1,21 @@
 package tech.ytsaurus.spyt
 
 import org.antlr.v4.runtime.ParserRuleContext
-import org.apache.hadoop.fs.Path
+import org.apache.hadoop.fs.{FileStatus, Path}
 import org.apache.log4j.{Category, Level}
 import org.apache.log4j.spi.LoggingEvent
 import org.apache.spark.Partitioner
 import org.apache.spark.executor.ExecutorBackendFactory
 import org.apache.spark.sql.catalyst.InternalRow
-import org.apache.spark.sql.catalyst.expressions.Expression
-import org.apache.spark.sql.connector.read.{InputPartition, PartitionReaderFactory, ScanBuilder}
+import org.apache.spark.sql.catalyst.encoders.ExpressionEncoder
+import org.apache.spark.sql.catalyst.expressions.{Attribute, AttributeReference, Cast, Expression}
+import org.apache.spark.sql.connector.read.{InputPartition, PartitionReaderFactory, Scan, ScanBuilder}
 import org.apache.spark.sql.connector.read.partitioning.Partitioning
-import org.apache.spark.sql.execution.datasources.PartitionedFile
-import org.apache.spark.sql.execution.datasources.v2.{DataSourceRDDPartition, FileScanBuilder}
-import org.apache.spark.sql.sources
+import org.apache.spark.sql.execution.datasources.{PartitionDirectory, PartitionedFile}
+import org.apache.spark.sql.execution.datasources.v2.{DataSourceRDDPartition, DataSourceV2ScanRelation, FileScanBuilder}
+import org.apache.spark.sql.{Row, sources}
 import org.apache.spark.sql.sources.Filter
+import org.apache.spark.sql.types.{DataType, NumericType, StructType}
 import org.apache.spark.sql.v2.{PartitionReaderFactoryAdapter, ScanBuilderAdapter}
 import org.slf4j.LoggerFactory
 import tech.ytsaurus.spyt.format.YtPartitioningDelegate
@@ -29,6 +31,12 @@ trait SparkAdapter
   with YtPartitionReaderFactoryCreator
   with ShuffleAdapter
   with ResourcesAdapter
+  with EncoderAdapter
+  with SchemaAdapter
+  with PartitionDirectoryAdapter
+  with DataTypeAdapter
+  with DataSourceV2ScanRelationAdapter
+  with CastAdapter
 
 trait SparkAdapterBase {
   def createYtScanOutputPartitioning(numPartitions: Int): Partitioning
@@ -71,12 +79,43 @@ trait ResourcesAdapter {
   def getExecutorCores(execResources: Product): Int
 }
 
+trait EncoderAdapter {
+  def createExpressionEncoder(schema: StructType): ExpressionEncoder[Row]
+}
+
+trait SchemaAdapter {
+  def schemaToAttributes(schema: StructType): Seq[AttributeReference]
+}
+
+trait PartitionDirectoryAdapter {
+  def getPartitionFileStatuses(pd: PartitionDirectory): Seq[FileStatus]
+}
+
+trait DataTypeAdapter {
+  def castToLong(x: NumericType): Any => Any
+  def fromAttributes(attributes: Seq[Attribute]): StructType
+}
+
+trait DataSourceV2ScanRelationAdapter {
+  def copyDataSourceV2ScanRelation(rel: DataSourceV2ScanRelation, newScan: Scan): DataSourceV2ScanRelation
+}
+
+trait CastAdapter {
+  def createCast(expr: Expression, dataType: DataType): Cast
+}
+
 private class SparkAdapterImpl(base: SparkAdapterBase,
                                pfAdapter: PartitionedFileAdapter,
                                pfPathAdapter: PartitionedFilePathAdapter,
                                ytprfc: YtPartitionReaderFactoryCreator,
                                shuffleAdapter: ShuffleAdapter,
-                               resourcesAdapter: ResourcesAdapter
+                               resourcesAdapter: ResourcesAdapter,
+                               encoderAdapter: EncoderAdapter,
+                               schemaAdapter: SchemaAdapter,
+                               pdAdapter: PartitionDirectoryAdapter,
+                               dataTypeAdapter: DataTypeAdapter,
+                               dsv2Adapter: DataSourceV2ScanRelationAdapter,
+                               castAdapter: CastAdapter
                               ) extends SparkAdapter {
 
   override def createYtScanOutputPartitioning(numPartitions: Int): Partitioning =
@@ -123,6 +162,27 @@ private class SparkAdapterImpl(base: SparkAdapterBase,
 
   override def getExecutorCores(execResources: Product): Int =
     resourcesAdapter.getExecutorCores(execResources)
+
+  override def createExpressionEncoder(schema: StructType): ExpressionEncoder[Row] =
+    encoderAdapter.createExpressionEncoder(schema)
+
+  override def schemaToAttributes(schema: StructType): Seq[AttributeReference] =
+    schemaAdapter.schemaToAttributes(schema)
+
+  override def getPartitionFileStatuses(pd: PartitionDirectory): Seq[FileStatus] =
+    pdAdapter.getPartitionFileStatuses(pd)
+
+  override def castToLong(x: NumericType): Any => Any =
+    dataTypeAdapter.castToLong(x)
+
+  override def fromAttributes(attributes: Seq[Attribute]): StructType =
+    dataTypeAdapter.fromAttributes(attributes)
+
+  override def copyDataSourceV2ScanRelation(rel: DataSourceV2ScanRelation, newScan: Scan): DataSourceV2ScanRelation =
+    dsv2Adapter.copyDataSourceV2ScanRelation(rel, newScan)
+
+  override def createCast(expr: Expression, dataType: DataType): Cast =
+    castAdapter.createCast(expr, dataType)
 }
 
 object SparkAdapter {

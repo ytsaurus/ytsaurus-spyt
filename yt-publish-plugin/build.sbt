@@ -1,4 +1,4 @@
-crossSbtVersions := Seq("1.5.4")
+crossSbtVersions := Seq("1.10.6")
 
 sbtPlugin := true
 

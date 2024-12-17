@@ -8,6 +8,7 @@ import org.apache.spark.sql.catalyst.rules.Rule
 import org.apache.spark.sql.execution.datasources.v2.DataSourceV2ScanRelation
 import org.apache.spark.sql.v2.YtScan.ScanDescription
 import org.apache.spark.sql.v2.{YtFilePartition, YtScan}
+import tech.ytsaurus.spyt.SparkAdapter
 import tech.ytsaurus.spyt.format.conf.SparkYtConfiguration
 import tech.ytsaurus.spyt.format.optimizer.YtSortedTableMarkerRule._
 
@@ -146,7 +147,8 @@ object YtSortedTableMarkerRule {
     node match {
       case p@Project(_, child) => p.copy(child = replaceYtScan(child, newYtScan))
       case f@Filter(_, child) => f.copy(child = replaceYtScan(child, newYtScan))
-      case r: DataSourceV2ScanRelation if r.scan.isInstanceOf[YtScan] => r.copy(scan = newYtScan)
+      case r: DataSourceV2ScanRelation if r.scan.isInstanceOf[YtScan] =>
+        SparkAdapter.instance.copyDataSourceV2ScanRelation(r, newYtScan)
       case _ => throw new IllegalArgumentException("Couldn't replace yt scan, optimization broke execution plan")
     }
   }

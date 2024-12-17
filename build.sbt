@@ -8,11 +8,12 @@ import spyt.YtPublishPlugin.autoImport._
 
 lazy val `spark-adapter-api` = (project in file("spark-adapter/api"))
   .settings(
-    libraryDependencies ++= defaultSpark,
+    libraryDependencies ++= compileSpark,
+    libraryDependencies ++= runtimeTestSpark
   )
 
 lazy val `spark-patch` = (project in file("spark-patch"))
-  .dependsOn(`spark-adapter-api` % "compile->compile;test->test;provided->provided")
+  .dependsOn(`spark-adapter-api` % "compile->compile;compileprovided->compileprovided;testprovided->testprovided")
   .settings(
     libraryDependencies ++= livy,
     Compile / packageBin / packageOptions +=
@@ -45,47 +46,53 @@ lazy val `spark-adapter-impl-340` = (project in file(s"spark-adapter/impl/spark-
     libraryDependencies ++= spark("3.4.0")
   )
 
+lazy val `spark-adapter-impl-350` = (project in file(s"spark-adapter/impl/spark-3.5.0"))
+  .dependsOn(`spark-adapter-api`, `spark-patch` % Provided)
+  .settings(
+    libraryDependencies ++= spark("3.5.0")
+  )
+
 lazy val `yt-wrapper` = (project in file("yt-wrapper"))
   .enablePlugins(BuildInfoPlugin)
-  .dependsOn(`spark-adapter-api` % "compile->compile;test->test;provided->provided")
+  .dependsOn(`spark-adapter-api` % "compile->compile;test->test;provided->provided;compileprovided->compileprovided;testprovided->testprovided")
   .settings(
     libraryDependencies ++= circe,
     libraryDependencies ++= shapeless,
     libraryDependencies ++= sttp,
     libraryDependencies ++= ytsaurusClient,
     libraryDependencies ++= logging,
-    libraryDependencies ++= testDeps,
     buildInfoKeys := Seq[BuildInfoKey](version, BuildInfoKey.constant(("ytClientVersion", ytsaurusClientVersion))),
     buildInfoPackage := "tech.ytsaurus.spyt"
   )
 
 lazy val `file-system` = (project in file("file-system"))
   .enablePlugins(CommonPlugin)
-  .dependsOn(`yt-wrapper` % "compile->compile;test->test;provided->provided")
+  .dependsOn(`yt-wrapper` % "compile->compile;test->test;provided->provided;compileprovided->compileprovided;testprovided->testprovided")
 
 lazy val `data-source-base` = (project in file("data-source"))
   .dependsOn(
-    `file-system` % "compile->compile;test->test;provided->provided",
+    `file-system` % "compile->compile;test->test;provided->provided;compileprovided->compileprovided;testprovided->testprovided",
     `spark-adapter-impl-322` % Test,
     `spark-adapter-impl-330` % Test,
-    `spark-adapter-impl-340` % Test
+    `spark-adapter-impl-340` % Test,
+    `spark-adapter-impl-350` % Test
   )
 
 lazy val `data-source-extended` = (project in file("data-source-extended"))
-  .dependsOn(`data-source-base` % "compile->compile;test->test;provided->provided")
+  .dependsOn(`data-source-base` % "compile->compile;test->test;provided->provided;compileprovided->compileprovided;testprovided->testprovided")
   .enablePlugins(JavaAgent)
   .settings(
     resolvedJavaAgents := javaAgents.value
   )
 
 lazy val `resource-manager` = (project in file("resource-manager"))
-  .dependsOn(`yt-wrapper` % "compile->compile;test->test;provided->provided")
+  .dependsOn(`yt-wrapper` % "compile->compile;test->test;provided->provided;compileprovided->compileprovided;testprovided->testprovided")
   .settings(
-    libraryDependencies ++= defaultSparkTest
+    libraryDependencies ++= sparkTestDep
   )
 
 lazy val `cluster` = (project in file("spark-cluster"))
-  .dependsOn(`data-source-extended` % "compile->compile;test->test;provided->provided")
+  .dependsOn(`data-source-extended` % "compile->compile;test->test;provided->provided;compileprovided->compileprovided;testprovided->testprovided")
   .enablePlugins(JavaAgent)
   .settings(
     libraryDependencies ++= scaldingArgs,
@@ -94,7 +101,10 @@ lazy val `cluster` = (project in file("spark-cluster"))
   )
 
 lazy val `spark-submit` = (project in file("spark-submit"))
-  .dependsOn(`cluster` % "compile->compile;test->test;provided->provided", `resource-manager` % "compile->compile;test->test")
+  .dependsOn(
+    `cluster` % "compile->compile;test->test;provided->provided;compileprovided->compileprovided;testprovided->testprovided",
+    `resource-manager` % "compile->compile;test->test"
+  )
   .enablePlugins(JavaAgent)
   .settings(
     libraryDependencies ++= scaldingArgs,
@@ -110,13 +120,16 @@ val snapshotPaths =
 lazy val `spyt-package` = (project in file("spyt-package"))
   .enablePlugins(JavaAppPackaging, PythonPlugin)
   .dependsOn(
-    `spark-submit` % "compile->compile;test->test;provided->provided",
+    `spark-submit` % "compile->compile;test->test",
     `spark-patch`,
     `spark-adapter-impl-322`,
     `spark-adapter-impl-330`,
-    `spark-adapter-impl-340`
+    `spark-adapter-impl-340`,
+    `spark-adapter-impl-350`
   )
   .settings(
+
+    libraryDependencies ++= intellijIdeaCompatLibraries,
 
     // These dependencies are already provided by spark distributive
     excludeDependencies ++= Seq(
@@ -242,6 +255,7 @@ lazy val root = (project in file("."))
     `spark-adapter-impl-322`,
     `spark-adapter-impl-330`,
     `spark-adapter-impl-340`,
+    `spark-adapter-impl-350`,
     `yt-wrapper`,
     `file-system`,
     `data-source-base`,
@@ -285,6 +299,7 @@ lazy val root = (project in file("."))
         `spark-adapter-impl-322` / publishSigned,
         `spark-adapter-impl-330` / publishSigned,
         `spark-adapter-impl-340` / publishSigned,
+        `spark-adapter-impl-350` / publishSigned,
         `yt-wrapper` / publishSigned,
         `file-system` / publishSigned,
         `spark-patch` / publishSigned,

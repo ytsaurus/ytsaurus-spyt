@@ -173,7 +173,7 @@ def make_configs(sources_path: str, client_builder: ClientBuilder, versions: Ver
     logger.info(f"Launch config: {launch_config}")
     write_config(launch_config, join(conf_local_dir, 'spark-launch-conf'))
 
-    if not versions.spyt_version.is_snapshot:
+    if versions.spyt_version.release_type == "release":
         logger.debug("Global config file creation")
         global_config = prepare_global_config(os_release)
         logger.info(f"Global config: {global_config}")

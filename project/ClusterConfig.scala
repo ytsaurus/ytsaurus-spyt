@@ -38,21 +38,6 @@ object ClusterConfig {
     )
   }
 
-  def globalConfig(log: sbt.Logger, version: String, baseConfigDir: File): Seq[(String, SparkGlobalConfig)] = {
-    val isSnapshot = isSnapshotVersion(version)
-    if (!isSnapshot) {
-      log.info(s"Prepare configs for ${ytProxies.mkString(", ")}")
-      ytProxies.map { proxy =>
-        val proxyShort = proxy.split("\\.").head
-        val proxyDefaultsFile = baseConfigDir / "spark-defaults" / s"spark-defaults-$proxyShort.conf"
-        val proxyDefaults = readSparkDefaults(proxyDefaultsFile)
-        val globalConfig = SparkGlobalConfig(proxyDefaults, version)
-
-        (proxy, globalConfig)
-      }
-    } else Nil
-  }
-
   def artifacts(log: sbt.Logger, version: String, baseConfigDir: File): Seq[YtPublishArtifact] = {
     val isSnapshot = isSnapshotVersion(version)
     val versionConfPath = versionPath(sparkYtConfPath, version)
@@ -64,7 +49,6 @@ object ClusterConfig {
       spyt.ClusterConfig.sidecarConfigs(baseConfigDir)
     }
     val launchConfigYson = launchConfig(version, sidecarConfigsFiles)
-    val globalConfigYsons = globalConfig(log, version, baseConfigDir)
 
     val launchConfigPublish = YtPublishDocument(
       launchConfigYson, versionConfPath, None, "spark-launch-conf", isTtlLimited
@@ -72,11 +56,8 @@ object ClusterConfig {
     val configsPublish = sidecarConfigsFiles.map(
       file => YtPublishFile(file, versionConfPath, None, isTtlLimited = isTtlLimited)
     )
-    val globalConfigPublish = globalConfigYsons.map {
-      case (proxy, config) => YtPublishDocument(config, sparkYtConfPath, Some(proxy), "global", isTtlLimited)
-    }
 
-    configsPublish ++ (launchConfigPublish +: globalConfigPublish)
+    configsPublish :+ launchConfigPublish
   }
 
   private def readSparkDefaults(file: File): Map[String, String] = {

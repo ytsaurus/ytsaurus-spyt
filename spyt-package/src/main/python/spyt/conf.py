@@ -18,6 +18,7 @@ SPYT_BASE_PATH = SPARK_BASE_PATH.join("spyt")
 DISTRIB_BASE_PATH = SPARK_BASE_PATH.join("distrib")
 
 RELEASES_SUBDIR = "releases"
+PRE_RELEASES_SUBDIR = "pre-releases"
 SNAPSHOTS_SUBDIR = "snapshots"
 
 SELF_VERSION = __scala_version__
@@ -83,15 +84,6 @@ def validate_versions_compatibility(spyt_version, spark_cluster_version):
 def validate_mtn_config(enablers, network_project, tvm_id, tvm_secret):
     if enablers.enable_mtn and not network_project:
         raise RuntimeError("When using MTN, network_project arg must be set.")
-
-
-def latest_compatible_spyt_version(version, client=None):
-    minor_version = SpytVersion(version).get_minor()
-    spyt_versions = get_available_spyt_versions(client)
-    compatible_spyt_versions = [x for x in spyt_versions if SpytVersion(x).get_minor() == minor_version]
-    if not compatible_spyt_versions:
-        raise RuntimeError(f"No compatible SPYT versions found for specified version {version}")
-    return max(compatible_spyt_versions, key=SpytVersion)
 
 
 def worker_num_limit(global_conf):
@@ -186,7 +178,9 @@ def _get_or_else(d, key, default):
 
 
 def _version_subdir(version):
-    return SNAPSHOTS_SUBDIR if "SNAPSHOT" in version or "beta" in version or "dev" in version else RELEASES_SUBDIR
+    return SNAPSHOTS_SUBDIR if "SNAPSHOT" in version \
+        else PRE_RELEASES_SUBDIR if any(r_type in version for r_type in ["alpha", "beta", "rc"]) \
+        else RELEASES_SUBDIR
 
 
 def _get_version_conf_path(cluster_version):

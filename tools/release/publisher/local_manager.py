@@ -9,15 +9,17 @@ class PackedVersion:
     def __init__(self, json_object: Dict[str, str]):
         self.scala = json_object.get('scala')
         self.python = json_object.get('python')
-        self.is_snapshot = "SNAPSHOT" in self.scala
-        if self.python is not None and self.is_snapshot != ("b" in self.python):
+        self.release_type = "snapshot" if "SNAPSHOT" in self.scala \
+            else "pre-release" if any(r_type in self.scala for r_type in ["alpha", "beta", "rc"]) \
+            else "release"
+        if self.python is not None and self.release_type == "release" and "b" in self.python:
             raise RuntimeError("Incorrect release mode of version")
 
     def __repr__(self):
         return f"Scala = {self.scala}. Python = {self.python}"
 
     def get_release_mode(self) -> str:
-        return "snapshots" if self.is_snapshot else "releases"
+        return f"{self.release_type}s"
 
     def get_scala_version(self) -> str:
         return self.scala

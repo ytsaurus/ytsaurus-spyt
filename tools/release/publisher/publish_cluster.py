@@ -21,7 +21,7 @@ def upload_livy(uploader: Client, sources_path: str):
 
 def upload_spyt(uploader: Client, versions: Versions, sources_path: str, publish_conf: PublishConfig):
     logger.info("Uploading SPYT files")
-    ttl = publish_conf.snapshot_ttl if versions.spyt_version.is_snapshot else None
+    ttl = publish_conf.snapshot_ttl if versions.spyt_version.release_type == "snapshot" else None
     uploader.mkdir(spyt_remote_dir(versions), ttl=ttl, ignore_existing=publish_conf.ignore_existing)
     uploader.mkdir(conf_remote_dir(versions), ttl=ttl, ignore_existing=publish_conf.ignore_existing)
 
@@ -38,7 +38,7 @@ def upload_spyt(uploader: Client, versions: Versions, sources_path: str, publish
     for config_name in listdir(sidecar_configs_dir):
         sidecar_config_file = join(sidecar_configs_dir, config_name)
         uploader.write_file(sidecar_config_file, f"{conf_remote_dir(versions)}/{config_name}")
-    if not versions.spyt_version.is_snapshot:
+    if versions.spyt_version.release_type == "release":
         global_conf_file_name = publish_conf.specific_global_file or 'global'
         global_conf_file = join(conf_local_dir, global_conf_file_name)
         uploader.write_document(global_conf_file, "conf/global")

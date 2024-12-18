@@ -17,7 +17,7 @@ def download_spyt(downloader: Client, versions: Versions, sources_path: str):
     for config_name in downloader.list_dir(conf_remote_dir(versions)):
         sidecar_config_file = join(sidecar_configs_dir, config_name)
         downloader.read_file(f"{conf_remote_dir(versions)}/{config_name}", sidecar_config_file)
-    if not versions.spyt_version.is_snapshot:
+    if versions.spyt_version.release_type == "release":
         global_conf_file = join(conf_local_dir, 'global')
         downloader.read_document("conf/global", global_conf_file)
     spyt_package_zip = join(sources_path, 'spyt-package.zip')

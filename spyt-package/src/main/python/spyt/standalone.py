@@ -24,7 +24,7 @@ except Exception:
         import process_operation_unsuccesful_finish_state as process_operation_unsuccessful_finish_state
 
 from .conf import read_remote_conf, validate_cluster_version, \
-    latest_compatible_spyt_version, update_config_inplace, validate_custom_params, validate_mtn_config, \
+    update_config_inplace, validate_custom_params, validate_mtn_config, \
     latest_ytserver_proxy_path, read_global_conf, \
     worker_num_limit, validate_worker_num, read_cluster_conf, validate_ssd_config, cuda_toolkit_version  # noqa: E402
 from .utils import get_spark_master, base_spark_conf, SparkDiscovery, SparkCluster, call_get_proxy_address_url, \
@@ -310,7 +310,7 @@ def start_livy_server(operation_alias=None, discovery_path=None, pool=None, enab
                        "please provide the option `--spark-master-address ytsaurus://<ytsaurus-proxy>`")
 
     if spark_cluster_version is None:
-        spark_cluster_version = latest_compatible_spyt_version(__scala_version__, client=client)
+        spark_cluster_version = __scala_version__
 
     validate_cluster_version(spark_cluster_version, client=client)
     validate_custom_params(params)
@@ -355,7 +355,7 @@ def start_history_server(operation_alias=None, discovery_path=None, pool=None, e
 
     global_conf = read_global_conf(client=client)
     if spark_cluster_version is None:
-        spark_cluster_version = latest_compatible_spyt_version(__scala_version__, client=client)
+        spark_cluster_version = __scala_version__
 
     validate_cluster_version(spark_cluster_version, client=client)
     validate_custom_params(params)
@@ -507,7 +507,7 @@ def start_spark_cluster(worker_cores, worker_memory, worker_num, worker_cores_ov
     ytserver_proxy_path = latest_ytserver_proxy_path(spark_cluster_version, client=client)
     global_conf = read_global_conf(client=client)
     if spark_cluster_version is None:
-        spark_cluster_version = latest_compatible_spyt_version(__scala_version__, client=client)
+        spark_cluster_version = __scala_version__
     logger.info(f"{spark_cluster_version} cluster version will be launched")
 
     if enable_history_server and not advanced_event_log:

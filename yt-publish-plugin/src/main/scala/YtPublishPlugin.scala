@@ -75,8 +75,7 @@ object YtPublishPlugin extends AutoPlugin {
                              remoteName: Option[String] = None,
                              override val isTtlLimited: Boolean = false,
                              override val forcedTTL: Option[Long] = None,
-                             isExecutable: Boolean = false,
-                             append: Array[Byte] = Array.empty) extends YtPublishArtifact {
+                             isExecutable: Boolean = false) extends YtPublishArtifact {
       private def dstName: String = remoteName.getOrElse(localFile.getName)
 
       override def publish(proxyName: String, log: sbt.Logger)(implicit yt: YTsaurusClient): Unit = {
@@ -116,10 +115,6 @@ object YtPublishPlugin extends AutoPlugin {
                 writtenBytes += res
                 res
               }.dropWhile(_ > 0)
-              if (append.length > 0) {
-                System.arraycopy(append, 0, buffer, 0, append.length)
-                write(append.length)
-              }
             } finally {
               is.close()
             }

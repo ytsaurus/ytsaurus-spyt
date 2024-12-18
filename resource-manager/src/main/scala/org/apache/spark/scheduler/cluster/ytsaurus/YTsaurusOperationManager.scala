@@ -462,12 +462,6 @@ private[spark] object YTsaurusOperationManager extends Logging {
     }
   }
 
-  private def parseVersion(version: String): SpytVersion = {
-    val array = version.split("\\.").map(_.toInt)
-    require(array.length == 3, s"Release version ($version) must have 3 numbers")
-    SpytVersion(array(0), array(1), array(2))
-  }
-
   private[ytsaurus] case class ApplicationFile(ytPath: String,
                                                targetName: Option[String] = None,
                                                isArchive: Boolean = false,
@@ -612,11 +606,3 @@ private[spark] object YTsaurusOperationManager extends Logging {
 private[spark] case class YTsaurusOperation(id: GUID)
 
 private[spark] case class OperationParameters(taskSpec: Spec, maxFailedJobCount: Int, attemptId: String)
-
-private case class SpytVersion(major: Int, minor: Int, patch: Int) extends Comparable[SpytVersion] {
-  override def compareTo(o: SpytVersion): Int = {
-    100 * (major - o.major).signum + 10 * (minor - o.minor).signum + (patch - o.patch).signum
-  }
-
-  override def toString: String = s"$major.$minor.$patch"
-}

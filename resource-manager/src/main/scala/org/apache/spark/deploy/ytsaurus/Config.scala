@@ -2,6 +2,7 @@
 package org.apache.spark.deploy.ytsaurus
 
 import org.apache.spark.internal.config.ConfigBuilder
+import tech.ytsaurus.spyt.BuildInfo
 
 object Config {
   val GLOBAL_CONFIG_PATH = ConfigBuilder("spark.ytsaurus.config.global.path")
@@ -10,17 +11,21 @@ object Config {
     .stringConf
     .createWithDefault("//home/spark/conf/global")
 
+  private val releaseTypeDirectory: String = {
+    if (BuildInfo.version.endsWith("-SNAPSHOT")) {
+      "snapshots"
+    } else if (Seq("alpha", "beta", "rc").exists(rt => BuildInfo.version.contains(rt))) {
+      "pre-releases"
+    } else {
+      "releases"
+    }
+  }
+
   val RELEASE_CONFIG_PATH = ConfigBuilder("spark.ytsaurus.config.releases.path")
     .doc("Root path for SPYT releases configuration")
     .version("3.2.2")
     .stringConf
-    .createWithDefault("//home/spark/conf/releases")
-
-  val RELEASE_SPYT_PATH = ConfigBuilder("spark.ytsaurus.spyt.releases.path")
-    .doc("Root path for SPYT releases configuration")
-    .version("3.2.2")
-    .stringConf
-    .createWithDefault("//home/spark/spyt/releases")
+    .createWithDefault(s"//home/spark/conf/$releaseTypeDirectory")
 
   val SPARK_DISTRIBUTIVES_PATH = ConfigBuilder("spark.ytsaurus.distributives.path")
     .doc("Root path for Spark distributives")

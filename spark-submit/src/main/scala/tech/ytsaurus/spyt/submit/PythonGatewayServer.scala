@@ -1,12 +1,12 @@
 package tech.ytsaurus.spyt.submit
 
+import org.apache.hadoop.shaded.org.apache.commons.codec.binary.Hex
+
 import java.io.{DataOutputStream, File, FileOutputStream}
 import java.net.InetAddress
 import java.nio.charset.StandardCharsets.UTF_8
 import java.nio.file.Files
 import java.security.SecureRandom
-
-import org.apache.commons.codec.binary.Hex
 import org.slf4j.LoggerFactory
 
 object PythonGatewayServer extends App {

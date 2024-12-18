@@ -2,7 +2,7 @@ package org.apache.spark.deploy.yt.metrics
 
 import com.codahale.metrics.{Gauge, MetricRegistry}
 import io.netty.channel.nio.NioEventLoopGroup
-import org.apache.commons.io.FileUtils
+import org.apache.hadoop.shaded.org.apache.commons.io.FileUtils
 import org.apache.spark.deploy.worker.Worker
 import org.apache.spark.metrics.source.Source
 

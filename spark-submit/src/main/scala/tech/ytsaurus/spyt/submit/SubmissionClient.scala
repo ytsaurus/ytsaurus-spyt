@@ -1,7 +1,7 @@
 package tech.ytsaurus.spyt.submit
 
 import io.netty.channel.DefaultEventLoopGroup
-import org.apache.commons.io.FileUtils
+import org.apache.hadoop.shaded.org.apache.commons.io.FileUtils
 import org.apache.spark.deploy.rest._
 import org.apache.spark.launcher.InProcessLauncher
 import org.slf4j.LoggerFactory

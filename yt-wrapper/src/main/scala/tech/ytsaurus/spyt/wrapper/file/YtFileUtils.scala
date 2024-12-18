@@ -1,8 +1,8 @@
 package tech.ytsaurus.spyt.wrapper.file
 
-import org.apache.commons.codec.digest.DigestUtils
-import org.apache.commons.io.IOUtils
 import org.apache.commons.lang3.RandomStringUtils
+import org.apache.hadoop.shaded.org.apache.commons.codec.digest.DigestUtils
+import org.apache.hadoop.shaded.org.apache.commons.io.IOUtils
 import org.slf4j.LoggerFactory
 import tech.ytsaurus.spyt.wrapper.YtJavaConverters._
 import tech.ytsaurus.spyt.wrapper.client.{YtClientUtils, YtRpcClient}

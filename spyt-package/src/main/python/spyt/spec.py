@@ -124,6 +124,7 @@ class LivyConfig(NamedTuple):
     livy_max_sessions: int = SparkDefaultArguments.LIVY_MAX_SESSIONS
     spark_master_address: str = None
     master_group_id: str = None
+    network_project: str = None
 
 
 class CommonSpecParams(NamedTuple):
@@ -181,6 +182,8 @@ def build_livy_spec(builder: VanillaSpecBuilder, common_params: CommonSpecParams
     ]
     if config.spark_master_address is not None:
         livy_launcher_opts.append(f"--master-address {config.spark_master_address}")
+    if config.network_project is not None:
+        livy_launcher_opts.append(f"--network-project {config.network_project}")
     extra_java_opts = common_params.extra_java_opts + spark_conf_to_opts(common_params.spark_conf)
     livy_command = _launcher_command("Livy", common_params, additional_parameters=["--enable-livy"],
                                      extra_java_opts=extra_java_opts, launcher_opts=" ".join(livy_launcher_opts))

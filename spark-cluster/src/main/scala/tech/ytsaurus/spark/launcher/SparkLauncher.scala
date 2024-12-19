@@ -84,7 +84,7 @@ trait SparkLauncher {
     sparkSystemProperties.get("spark.hadoop.yt.preferenceIpv6.enabled").exists(_.toBoolean)
   }
 
-  private def getLivyClientSparkConf(ytO: Option[CompoundClient]): Seq[String] = {
+  private def getLivyClientSparkConf(networkProject: Option[String]): Seq[String] = {
     val ipv6Conf = if (isIpv6PreferenceEnabled) {
       Seq("spark.driver.extraJavaOptions = -Djava.net.preferIPv6Addresses=true") ++ (
         if (SparkVersionUtils.lessThan("3.4.0")) {
@@ -94,38 +94,24 @@ trait SparkLauncher {
           Nil
         })
     } else {
-      Seq()
+      Nil
     }
 
-    val networkProjectConf = ytO.flatMap { ytClient =>
-      sys.env.get("YT_OPERATION_ID").flatMap { ytOperationId =>
-        val req = GetOperation.builder()
-          .setOperationId(GUID.valueOf(ytOperationId))
-          .addAttribute("provided_spec")
-          .build()
-
-        val providedSpec = ytClient.getOperation(req).join()
-
-        val npOpt = providedSpec.mapNode().getMap("provided_spec")
-          .getMap("tasks")
-          .getMap("livy")
-          .getStringO("network_project")
-
-        if (npOpt.isPresent) Some(s"spark.ytsaurus.network.project = ${npOpt.get()}") else None
-      }
-    }.toSeq
+    val networkProjectConf = networkProject.toSeq.map { np =>
+      s"spark.ytsaurus.network.project = $np"
+    }
 
     ipv6Conf ++ networkProjectConf
   }
 
-  def prepareLivyClientConf(driverCores: Int, driverMemory: String, ytO: Option[CompoundClient]): Unit = {
+  def prepareLivyClientConf(driverCores: Int, driverMemory: String, networkProject: Option[String]): Unit = {
     val src = Path.of(home, "livy-client.template.conf")
     val preparedConfPath = createFromTemplate(src.toFile) { content =>
       content
         .replaceAll("\\$LIVY_ADDRESS", ytHostnameOrIpAddress)
         .replaceAll("\\$DRIVER_CORES", driverCores.toString)
         .replaceAll("\\$DRIVER_MEMORY", driverMemory)
-        .replaceAll("\\$EXTRA_SPARK_CONF", getLivyClientSparkConf(ytO).mkString("\n"))
+        .replaceAll("\\$EXTRA_SPARK_CONF", getLivyClientSparkConf(networkProject).mkString("\n"))
     }.toPath
     val dst = Path.of(livyHome, "conf", "livy-client.conf")
 

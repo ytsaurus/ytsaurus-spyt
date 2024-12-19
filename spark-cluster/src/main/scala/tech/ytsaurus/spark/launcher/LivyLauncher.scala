@@ -34,7 +34,7 @@ object LivyLauncher extends App with VanillaLauncher with SparkLauncher {
       val externalAddress = tcpRouter.map(_.getExternalAddress("LIVY")).getOrElse(address)
       log.info(f"Server will started on address $externalAddress")
       prepareLivyConf(address, masterAddress, maxSessions)
-      prepareLivyClientConf(driverCores, driverMemory, ytO)
+      prepareLivyClientConf(driverCores, driverMemory, networkProject)
 
       withService(startLivyServer(address)) { livyServer =>
         discoveryService.registerLivy(externalAddress, clusterVersion)
@@ -64,7 +64,7 @@ case class LivyLauncherArgs(port: Int, ytConfigO: Option[YtClientConfiguration],
                             driverCores: Int, driverMemory: String, maxSessions: Int,
                             groupId: Option[String], masterGroupId: Option[String],
                             baseDiscoveryPath: Option[String], waitMasterTimeout: Duration,
-                            fixedMasterAddress: Option[String])
+                            fixedMasterAddress: Option[String], networkProject: Option[String])
 
 object LivyLauncherArgs {
   def apply(args: Args): LivyLauncherArgs = LivyLauncherArgs(
@@ -79,6 +79,7 @@ object LivyLauncherArgs {
     args.optional("base-discovery-path").orElse(sys.env.get("SPARK_BASE_DISCOVERY_PATH")),
     args.optional("wait-master-timeout").map(parseDuration).getOrElse(5 minutes),
     args.optional("master-address"),
+    args.optional("network-project")
   )
 
   def apply(args: Array[String]): LivyLauncherArgs = LivyLauncherArgs(Args(args))

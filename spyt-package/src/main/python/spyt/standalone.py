@@ -332,7 +332,8 @@ def start_livy_server(operation_alias=None, discovery_path=None, pool=None, enab
         tcp_proxy_range_size, enable_stderr_table, "livy", spark_discovery, group_id
     )
     livy_config = LivyConfig(
-        livy_driver_cores, livy_driver_memory, livy_max_sessions, spark_master_address, master_group_id
+        livy_driver_cores, livy_driver_memory, livy_max_sessions, spark_master_address,
+        master_group_id, network_project
     )
     livy_builder = build_spark_operation_spec(config=dynamic_config, client=client, job_types=['livy'],
                                               common_config=common_config, livy_config=livy_config)
@@ -579,7 +580,8 @@ def start_spark_cluster(worker_cores, worker_memory, worker_num, worker_cores_ov
         history_server_memory_limit, history_server_cpu_limit, history_server_memory_overhead, shs_location,
         advanced_event_log
     )
-    livy_config = LivyConfig(livy_driver_cores, livy_driver_memory, livy_max_sessions)
+    livy_config = LivyConfig(livy_driver_cores, livy_driver_memory, livy_max_sessions,
+                             network_project=network_project)
     args = {
         'config': dynamic_config,
         'client': client,

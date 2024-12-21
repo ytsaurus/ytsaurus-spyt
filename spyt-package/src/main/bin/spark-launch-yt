@@ -9,7 +9,7 @@ from spyt.enabler import SpytEnablers  # noqa: E402
 from spyt.launch_utils import add_default_launch_options, add_hs_options, add_livy_options, add_parser_group  # noqa: E402
 from spyt.spec import SparkDefaultArguments  # noqa: E402
 from spyt.standalone import start_spark_cluster  # noqa: E402
-from spyt.utils import default_token, default_tvm_id, default_tvm_secret, get_default_arg_parser, parse_args  # noqa: E402
+from spyt.utils import default_token, default_tvm_id, default_tvm_secret, get_default_arg_parser, parse_args, show_unspecified_args  # noqa: E402
 
 
 def main(raw_args=None):
@@ -100,6 +100,7 @@ def main(raw_args=None):
     add_livy_options(subgroup)
 
     args, unknown_args = parse_args(parser, raw_args=raw_args)
+    show_unspecified_args(unknown_args)
 
     yt_client = YtClient(proxy=args.proxy, token=default_token())
 

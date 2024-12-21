@@ -290,6 +290,9 @@ def parse_args(parser=None, parser_arguments=None, raw_args=None, client=None):
     args.discovery_path = args.discovery_path or args.discovery_dir or default_discovery_dir(client=client)
     return args, unknown_args
 
+def show_unspecified_args(unknown_args):
+    if unknown_args:
+        print("Unspecified arguments are ignored: %s" % ', '.join(unknown_arg.split('=')[0] for unknown_arg in unknown_args))
 
 # backward compatibility
 def tuple(element_types):

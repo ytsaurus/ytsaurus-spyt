@@ -58,6 +58,7 @@
   "data-source-extended/src/test/scala/tech/ytsaurus/spyt/format/types/YsonTypeTest.scala":"yt/spark/spark-over-yt/data-source-extended/src/test/scala/tech/ytsaurus/spyt/format/types/YsonTypeTest.scala",
   "data-source-extended/src/test/scala/tech/ytsaurus/spyt/fs/YtSparkSQLTest.scala":"yt/spark/spark-over-yt/data-source-extended/src/test/scala/tech/ytsaurus/spyt/fs/YtSparkSQLTest.scala",
   "data-source-extended/src/test/scala/tech/ytsaurus/spyt/serialization/ExtendedYsonDecoderTest.scala":"yt/spark/spark-over-yt/data-source-extended/src/test/scala/tech/ytsaurus/spyt/serialization/ExtendedYsonDecoderTest.scala",
+  "data-source-extended/src/test/scala/tech/ytsaurus/spyt/serializers/ExtendedDataFrameSerializerTest.scala":"yt/spark/spark-over-yt/data-source-extended/src/test/scala/tech/ytsaurus/spyt/serializers/ExtendedDataFrameSerializerTest.scala",
   "data-source-extended/src/test/scala/tech/ytsaurus/spyt/serializers/ExtendedSchemaConverterTest.scala":"yt/spark/spark-over-yt/data-source-extended/src/test/scala/tech/ytsaurus/spyt/serializers/ExtendedSchemaConverterTest.scala",
   "data-source-extended/src/test/scala/tech/ytsaurus/spyt/serializers/ExtendedYsonRowConverterTest.scala":"yt/spark/spark-over-yt/data-source-extended/src/test/scala/tech/ytsaurus/spyt/serializers/ExtendedYsonRowConverterTest.scala",
   "data-source/debian/changelog":"yt/spark/spark-over-yt/data-source/debian/changelog",

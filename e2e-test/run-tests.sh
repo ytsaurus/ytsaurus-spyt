@@ -99,13 +99,12 @@ if [ "$deploy" = "true" ]; then
     # Deploy with SPYT image
     docker run --network=host \
                -e YT_PROXY="localhost:8000" -e YT_USER="root" -e YT_TOKEN="token" \
-               -e EXTRA_SPARK_VERSIONS="--use-cache $spark_cache_parameter 3.2.2 3.2.4 3.3.0 3.3.4 3.4.0 3.4.4 3.5.0 3.5.3" \
+               -e EXTRA_SPARK_VERSIONS="--use-cache $spark_cache_parameter 3.2.2 3.2.4 3.3.0 3.3.4 3.4.0 3.4.4 3.5.0 3.5.4" \
                -v /tmp:/tmp \
                $spark_cache_mount \
                --rm \
                ghcr.io/ytsaurus/spyt:$spyt_version
 fi;
-# TODO change 3.5.3 to 3.5.4
 
 # Run tests
 cd $cur_dir

@@ -144,7 +144,9 @@ class ArrowColumnVector(dataType: IndexedDataType,
 
     final def close(): Unit = {
       keys.foreach(_.close())
-      values.close()
+      if (values != null) {
+        values.close()
+      }
     }
 
     def getBoolean(rowId: Int): Boolean = throw new UnsupportedOperationException

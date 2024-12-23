@@ -15,7 +15,7 @@ object Dependencies {
   lazy val mockitoVersion = "1.14.4"
   lazy val arrowVersion = "0.17.1"
 
-  lazy val compileSparkVersion = "3.5.3"
+  lazy val compileSparkVersion = "3.5.4"
   lazy val testSparkVersion = System.getProperty("testSparkVersion", compileSparkVersion)
 
   lazy val circe = ("io.circe" %% "circe-yaml" % circeYamlVersion) +: Seq(

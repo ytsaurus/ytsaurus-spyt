@@ -21,7 +21,7 @@ class ExtendedYtsaurusTypes extends YTsaurusTypes {
   override def serializeValue(dataType: DataType, row: Row, i: Int, boxValue: BoxValue): UnversionedValue = {
     dataType match {
       case YsonType => boxValue(i, row.getAs[YsonBinary](i).bytes)
-      case UInt64Type => boxValue(i, row.getLong(i))
+      case UInt64Type => boxValue(i, row.getAs[UInt64Long](i).toLong)
       case _ => throw new IllegalArgumentException(s"Data type $dataType is not supported.")
     }
   }

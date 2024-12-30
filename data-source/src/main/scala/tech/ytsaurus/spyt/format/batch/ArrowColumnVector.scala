@@ -16,50 +16,49 @@ import tech.ytsaurus.yson.YsonTags
 
 import java.nio.charset.StandardCharsets
 
+// This is a copypaste of org.apache.spark.sql.vectorized.ArrowColumnVector, but with some extensions to
+// ArrowVectorAccessor subclasses that allows reading more types without casting.
 class ArrowColumnVector(dataType: IndexedDataType,
                         vector: ValueVector,
                         dictionary: Option[Dictionary],
-                        isNullVector: Boolean,
                         columnType: ColumnValueType) extends ColumnVector(dataType.sparkDataType) {
+
   private val accessor: ArrowVectorAccessor = {
-    if (isNullVector) {
-      NullAccessor
-    } else {
-      val keys = dictionary.map { _ =>
-        vector match {
-          case v: BaseIntVector => v
-          case e => throw new UnsupportedOperationException(
-            f"Unexpected vector for column `${e.getName}`: ${e.getClass}"
-          )
-        }
+    val keys = dictionary.map { _ =>
+      vector match {
+        case v: BaseIntVector => v
+        case e => throw new UnsupportedOperationException(
+          f"Unexpected vector for column `${e.getName}`: ${e.getClass}"
+        )
       }
+    }
 
-      val values = dictionary.map(_.getVector).getOrElse(vector)
+    val values = dictionary.map(_.getVector).getOrElse(vector)
 
-      values match {
-        case v: BitVector => BooleanAccessor(keys, v)
-        case v: TinyIntVector => ByteAccessor(keys, v)
-        case v: SmallIntVector => ShortAccessor(keys, v)
-        case v: IntVector => IntAccessor(keys, v)
-        case v: UInt1Vector => UInt1Accessor(keys, v)
-        case v: UInt2Vector => UInt2Accessor(keys, v)
-        case v: UInt4Vector => UInt4Accessor(keys, v)
-        case v: UInt8Vector => UInt8Accessor(keys, v)
-        case v: BigIntVector => LongAccessor(keys, v)
-        case v: Float4Vector => FloatAccessor(keys, v)
-        case v: Float8Vector => DoubleAccessor(keys, v)
-        case v: DecimalVector => DecimalAccessor(keys, v)
-        case v: VarCharVector => StringAccessor(keys, v)
-        case v: VarBinaryVector
-          if columnType == ColumnValueType.STRING && !dataType.sparkDataType.isInstanceOf[DecimalType] =>
-          BinaryAccessor(keys, v)
-        case v: VarBinaryVector => YsonAccessor(keys, v)
-        case v: DateDayVector => DateAccessor(keys, v)
-        case v: TimeStampMicroTZVector => TimestampAccessor(keys, v)
-        case v: ListVector => ArrayAccessor(keys, v)
-        case v: StructVector => StructAccessor(keys, v)
-        case _ => throw new UnsupportedOperationException
-      }
+    values match {
+      case v: BitVector => BooleanAccessor(keys, v)
+      case v: TinyIntVector => ByteAccessor(keys, v)
+      case v: SmallIntVector => ShortAccessor(keys, v)
+      case v: IntVector => IntAccessor(keys, v)
+      case v: UInt1Vector => UInt1Accessor(keys, v)
+      case v: UInt2Vector => UInt2Accessor(keys, v)
+      case v: UInt4Vector => UInt4Accessor(keys, v)
+      case v: UInt8Vector => UInt8Accessor(keys, v)
+      case v: BigIntVector => LongAccessor(keys, v)
+      case v: Float4Vector => FloatAccessor(keys, v)
+      case v: Float8Vector => DoubleAccessor(keys, v)
+      case v: DecimalVector => DecimalAccessor(keys, v)
+      case v: VarCharVector => StringAccessor(keys, v)
+      case v: VarBinaryVector
+        if columnType == ColumnValueType.STRING && !dataType.sparkDataType.isInstanceOf[DecimalType] =>
+        BinaryAccessor(keys, v)
+      case v: VarBinaryVector => YsonAccessor(keys, v)
+      case v: DateDayVector => DateAccessor(keys, v)
+      case v: TimeStampMicroTZVector => TimestampAccessor(keys, v)
+      case v: ListVector => ArrayAccessor(keys, v)
+      case v: StructVector => StructAccessor(keys, v)
+      case v: NullVector => NullAccessor(keys, v)
+      case _ => throw new UnsupportedOperationException
     }
   }
 
@@ -79,6 +78,8 @@ class ArrowColumnVector(dataType: IndexedDataType,
     }
     accessor.close()
   }
+
+  override def closeIfFreeable(): Unit = ()
 
   override def isNullAt(rowId: Int): Boolean = accessor.isNullAt(rowId)
 
@@ -144,9 +145,7 @@ class ArrowColumnVector(dataType: IndexedDataType,
 
     final def close(): Unit = {
       keys.foreach(_.close())
-      if (values != null) {
-        values.close()
-      }
+      values.close()
     }
 
     def getBoolean(rowId: Int): Boolean = throw new UnsupportedOperationException
@@ -335,7 +334,7 @@ class ArrowColumnVector(dataType: IndexedDataType,
     if (keys.nonEmpty) throw new UnsupportedOperationException
 
     private val dt = dataType.asInstanceOf[IArrayType]
-    final private val arrayData = new ArrowColumnVector(dt.element, values.getDataVector, None, false, null)
+    final private val arrayData = new ArrowColumnVector(dt.element, values.getDataVector, None, null)
 
     override final def isNullAt(rowId: Int): Boolean = { // TODO: Workaround if vector has all non-null values, see ARROW-1948
       if (values.getValueCount > 0 && values.getValidityBuffer.capacity == 0) false
@@ -390,11 +389,7 @@ class ArrowColumnVector(dataType: IndexedDataType,
     }
   }
 
-  private case object NullAccessor extends ArrowVectorAccessor {
-    override def keys: Option[BaseIntVector] = None
-
-    override def values: ValueVector = null
-
+  private case class NullAccessor(keys: Option[BaseIntVector], values: NullVector) extends ArrowVectorAccessor {
     override val vector: ValueVector = null
 
     override def isNullAt(rowId: Int): Boolean = true
@@ -426,11 +421,6 @@ class ArrowColumnVector(dataType: IndexedDataType,
 
 object ArrowColumnVector {
   def nullVector(dataType: IndexedDataType): ArrowColumnVector = {
-    new ArrowColumnVector(dataType, null, None, isNullVector = true, null)
-  }
-
-  def dataType(vector: ValueVector, dictionary: Option[Dictionary]): DataType = {
-    val arrowField = dictionary.map(_.getVector.getField).getOrElse(vector.getField)
-    ArrowUtils.fromArrowField(arrowField)
+    new ArrowColumnVector(dataType, new NullVector(), None, null)
   }
 }

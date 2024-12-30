@@ -7,7 +7,7 @@ import org.apache.arrow.vector.{FieldVector, VectorSchemaRoot}
 import org.apache.spark.sql.types.StructType
 import org.apache.spark.sql.vectorized.{ColumnVector, ColumnarBatch}
 import org.slf4j.LoggerFactory
-import tech.ytsaurus.core.tables.{ColumnSchema, ColumnValueType, TableSchema}
+import tech.ytsaurus.core.tables.{ColumnValueType, TableSchema}
 import tech.ytsaurus.spyt.serializers.SchemaConverter.MetadataFields
 import tech.ytsaurus.spyt.wrapper.LogLazy
 import tech.ytsaurus.spyt.serialization.IndexedDataType
@@ -90,15 +90,12 @@ class ArrowBatchReader(stream: YtArrowInputStream, schema: StructType,
 
   private def createArrowColumnVector(vector: FieldVector, dataType: IndexedDataType,
                                       columnType: ColumnValueType): ArrowColumnVector = {
-    val isNullVector = vector.getNullCount == vector.getValueCount
     val dict = Option(vector.getField.getDictionary).flatMap { encoding =>
       if (_dictionaries.containsKey(encoding.getId)) {
         Some(_dictionaries.get(encoding.getId))
-      } else if (!isNullVector) {
-        throw new UnsupportedOperationException
       } else None
     }
-    new ArrowColumnVector(dataType, vector, dict, isNullVector, columnType)
+    new ArrowColumnVector(dataType, vector, dict, columnType)
   }
 
   private def updateBatch(): Unit = {

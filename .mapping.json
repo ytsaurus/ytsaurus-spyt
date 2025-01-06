@@ -694,6 +694,7 @@
   "yt-wrapper/src/main/scala/tech/ytsaurus/spyt/wrapper/transaction/YtTransactionUtils.scala":"yt/spark/spark-over-yt/yt-wrapper/src/main/scala/tech/ytsaurus/spyt/wrapper/transaction/YtTransactionUtils.scala",
   "yt-wrapper/src/test/resources/file_to_upload":"yt/spark/spark-over-yt/yt-wrapper/src/test/resources/file_to_upload",
   "yt-wrapper/src/test/resources/log4j.properties":"yt/spark/spark-over-yt/yt-wrapper/src/test/resources/log4j.properties",
+  "yt-wrapper/src/test/scala/org/apache/spark/sql/SparkSqlTestHelper.scala":"yt/spark/spark-over-yt/yt-wrapper/src/test/scala/org/apache/spark/sql/SparkSqlTestHelper.scala",
   "yt-wrapper/src/test/scala/tech/ytsaurus/spyt/HostAndPortTest.scala":"yt/spark/spark-over-yt/yt-wrapper/src/test/scala/tech/ytsaurus/spyt/HostAndPortTest.scala",
   "yt-wrapper/src/test/scala/tech/ytsaurus/spyt/test/DynTableTestUtils.scala":"yt/spark/spark-over-yt/yt-wrapper/src/test/scala/tech/ytsaurus/spyt/test/DynTableTestUtils.scala",
   "yt-wrapper/src/test/scala/tech/ytsaurus/spyt/test/LocalYtClient.scala":"yt/spark/spark-over-yt/yt-wrapper/src/test/scala/tech/ytsaurus/spyt/test/LocalYtClient.scala",

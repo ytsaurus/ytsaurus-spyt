@@ -20,10 +20,14 @@ trait ToStringBaseDecorators {
 
   @DecoratedMethod
   protected final def castToStringCode(from: DataType, ctx: CodegenContext): (ExprValue, ExprValue) => Block = from match {
-    case ts.uInt64DataType => ts.uInt64CastToStringCode.apply(_, _, null)
+    case ts.uInt64DataType => ToStringBaseDecorators.castToStringCodeUInt64
     case _ => __castToStringCode(from, ctx)
   }
 
   protected final def __castToStringCode(from: DataType, ctx: CodegenContext): (ExprValue, ExprValue) => Block = ???
 
+}
+
+object ToStringBaseDecorators {
+  val castToStringCodeUInt64: (ExprValue, ExprValue) => Block = ts.uInt64CastToStringCode.apply(_, _, null)
 }

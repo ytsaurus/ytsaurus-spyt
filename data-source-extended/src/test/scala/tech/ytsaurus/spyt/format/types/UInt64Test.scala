@@ -1,6 +1,6 @@
 package tech.ytsaurus.spyt.format.types
 
-import org.apache.spark.sql.{DataFrame, Row}
+import org.apache.spark.sql.{DataFrame, Row, SparkSqlTestHelper}
 import org.apache.spark.sql.functions._
 import org.apache.spark.sql.types.{LongType, Metadata, StringType, StructField}
 import org.apache.spark.sql.spyt.types.UInt64Support.{fromStringUdf, toStringUdf}
@@ -18,7 +18,7 @@ class UInt64Test extends FlatSpec with Matchers with LocalSpark with TmpDir with
 
   import spark.implicits._
 
-  private def readTestTemplate(dfTransformer: DataFrame => DataFrame): Unit = {
+  private def createSampleTable(): Unit = {
     val tableSchema = TableSchema.builder()
       .addValue("id", ColumnValueType.UINT64)
       .addValue("value", ColumnValueType.STRING)
@@ -32,6 +32,10 @@ class UInt64Test extends FlatSpec with Matchers with LocalSpark with TmpDir with
       """{id = 9223372036854775813u; value = "value 5"}""",
       """{id = 18446744073709551615u; value = "value 6"}""" // 2^64 - 1
     ), tmpPath, tableSchema)
+  }
+
+  private def readTestTemplate(dfTransformer: DataFrame => DataFrame): Unit = {
+    createSampleTable()
 
     val df = dfTransformer(spark.read.yt(tmpPath))
     df.schema.fields.map(_.copy(metadata = Metadata.empty)) should contain theSameElementsInOrderAs Seq(
@@ -60,6 +64,28 @@ class UInt64Test extends FlatSpec with Matchers with LocalSpark with TmpDir with
     it should s"work correctly with persisting dataframes containing uint64 columns using $storageLevel StorageLevel" in {
       readTestTemplate(_.persist(StorageLevel.fromString(storageLevel)))
     }
+  }
+
+  it should "correctly call show method for dataframe with uint64 columns" in {
+    createSampleTable()
+
+    val df = spark.read.yt(tmpPath)
+
+    val result = SparkSqlTestHelper.showString(df, 6)
+    val expected =
+      """|+--------------------+-------+
+         ||                  id|  value|
+         |+--------------------+-------+
+         ||                   1|value 1|
+         ||                   2|value 2|
+         ||                   3|value 3|
+         || 9223372036854775816|value 4|
+         || 9223372036854775813|value 5|
+         ||18446744073709551615|value 6|
+         |+--------------------+-------+
+         |""".stripMargin
+
+    result shouldEqual expected
   }
 
   it should "write to a table with uint64 column" in {

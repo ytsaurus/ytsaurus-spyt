@@ -8,6 +8,7 @@ import org.apache.spark.sql.catalyst.rules.Rule
 import org.apache.spark.sql.execution.datasources.v2.DataSourceV2Relation
 import org.apache.spark.sql.execution.ui.SparkListenerSQLExecutionEnd
 import org.apache.spark.sql.v2.YtTable
+import org.apache.spark.sql.yt.ReadTransactionStrategy.ypathEnriched
 import tech.ytsaurus.client.{ApiServiceTransaction, CompoundClient}
 import tech.ytsaurus.spyt.format.GlobalTransactionUtils
 import tech.ytsaurus.spyt.fs.path.YPathEnriched
@@ -59,8 +60,8 @@ class ReadTransactionStrategy(sparkSession: SparkSession) extends Rule[LogicalPl
       plan
     }
   }
+}
 
-  private def ypathEnriched(path: String): YPathEnriched = {
-    YPathEnriched.fromPath(new Path(path))
-  }
+object ReadTransactionStrategy {
+  def ypathEnriched(path: String): YPathEnriched = YPathEnriched.fromPath(new Path(path))
 }

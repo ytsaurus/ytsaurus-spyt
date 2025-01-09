@@ -30,11 +30,11 @@ class ReadTransactionStrategy(sparkSession: SparkSession) extends Rule[LogicalPl
       case DataSourceV2Relation(table: YtTable, _, _, _, _) => table.paths.exists(ypathEnriched(_).transaction.isEmpty)
       case _ => false
     }) {
-      val transaction = new SparkListener() {
+      val listener = new SparkListener() {
         {
           sparkSession.sparkContext.addSparkListener(this)
         }
-        private implicit val ytClient: CompoundClient = YtClientProvider.ytClient(
+        implicit val ytClient: CompoundClient = YtClientProvider.ytClient(
           tech.ytsaurus.spyt.fs.YtClientConfigurationConverter.ytClientConfiguration(sparkSession.sessionState.conf)
         )
         val transaction: ApiServiceTransaction = YtWrapper.createTransaction(None, 2.minutes)
@@ -44,12 +44,12 @@ class ReadTransactionStrategy(sparkSession: SparkSession) extends Rule[LogicalPl
             Using.resources(ytClient, transaction) { (_, _) => sparkSession.sparkContext.removeSparkListener(this) }
           case _ =>
         }
-      }.transaction.getId.toString
+      }
       plan.transform { case relation@DataSourceV2Relation(table: YtTable, _, _, _, _) =>
         relation.copy(table = table.copy(paths = table.paths.map(path => {
           val yPathEnriched = ypathEnriched(path)
           if (yPathEnriched.transaction.isEmpty) {
-            yPathEnriched.withTransaction(transaction).toStringPath
+            yPathEnriched.withTransaction(listener.transaction.getId.toString).lock()(listener.ytClient).toStringPath
           } else {
             path
           }

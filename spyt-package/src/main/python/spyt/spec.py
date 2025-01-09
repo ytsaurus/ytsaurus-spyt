@@ -465,7 +465,7 @@ def build_spark_operation_spec(config: dict, client: YtClient,
         secure_vault["SPARK_TVM_SECRET"] = common_config.tvm_secret
 
     if entrypoint := getitem(config, 'entrypoint'):
-        common_task_spec['command'] = shlex.quote(entrypoint) if isinstance(entrypoint, str) else shlex.join(entrypoint)
+        common_task_spec['command'] = entrypoint if isinstance(entrypoint, str) else shlex.join(entrypoint)
     common_params = CommonSpecParams(
         spark_home, spark_distributive_tgz, environment["JAVA_HOME"], extra_java_opts,
         environment, spark_conf_common, common_task_spec, common_config

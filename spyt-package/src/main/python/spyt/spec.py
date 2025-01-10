@@ -162,7 +162,7 @@ def _launcher_command(component: str, common_params: CommonSpecParams, additiona
                                         additional_parameters)
 
     java_bin = os.path.join(common_params.java_home, 'bin', 'java')
-    if command := getitem(common_params.task_spec, 'command'):
+    if command := common_params.task_spec.get('command'):
         java_bin = f'{command} {java_bin}'
     classpath = (f'{common_params.spark_home}/spyt-package/conf/:'
                  f'{common_params.spark_home}/spyt-package/jars/*:'
@@ -464,7 +464,7 @@ def build_spark_operation_spec(config: dict, client: YtClient,
         secure_vault["SPARK_TVM_ID"] = common_config.tvm_id
         secure_vault["SPARK_TVM_SECRET"] = common_config.tvm_secret
 
-    if entrypoint := getitem(config, 'entrypoint'):
+    if entrypoint := config.get('entrypoint'):
         common_task_spec['command'] = entrypoint if isinstance(entrypoint, str) else shlex.join(entrypoint)
     common_params = CommonSpecParams(
         spark_home, spark_distributive_tgz, environment["JAVA_HOME"], extra_java_opts,

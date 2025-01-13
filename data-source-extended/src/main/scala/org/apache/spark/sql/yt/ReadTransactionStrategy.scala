@@ -10,9 +10,9 @@ import org.apache.spark.sql.execution.ui.SparkListenerSQLExecutionEnd
 import org.apache.spark.sql.v2.YtTable
 import org.apache.spark.sql.yt.ReadTransactionStrategy.ypathEnriched
 import tech.ytsaurus.client.{ApiServiceTransaction, CompoundClient}
-import tech.ytsaurus.spyt.TryWithResources
 import tech.ytsaurus.spyt.format.GlobalTransactionUtils
 import tech.ytsaurus.spyt.fs.path.YPathEnriched
+import tech.ytsaurus.spyt.wrapper.Utils.tryWithResources
 import tech.ytsaurus.spyt.wrapper.YtWrapper
 import tech.ytsaurus.spyt.wrapper.client.YtClientProvider
 
@@ -41,8 +41,8 @@ class ReadTransactionStrategy(sparkSession: SparkSession) extends Rule[LogicalPl
 
         override def onOtherEvent(event: SparkListenerEvent): Unit = event match {
           case sqlExecutionEnd: SparkListenerSQLExecutionEnd if sqlExecutionEnd.executionId == executionId =>
-            TryWithResources(ytClient) { _ =>
-              TryWithResources(transaction) { _ => sparkSession.sparkContext.removeSparkListener(this) }
+            tryWithResources(ytClient) { _ =>
+              tryWithResources(transaction) { _ => sparkSession.sparkContext.removeSparkListener(this) }
             }
           case _ =>
         }

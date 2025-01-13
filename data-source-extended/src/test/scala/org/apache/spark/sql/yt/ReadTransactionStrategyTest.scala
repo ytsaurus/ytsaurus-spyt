@@ -2,8 +2,9 @@ package org.apache.spark.sql.yt
 
 import org.scalatest.{FlatSpec, Matchers}
 import tech.ytsaurus.core.tables.TableSchema
-import tech.ytsaurus.spyt.{TryWithResources, YtReader}
+import tech.ytsaurus.spyt.YtReader
 import tech.ytsaurus.spyt.test.{DynTableTestUtils, LocalSpark, TestUtils, TmpDir}
+import tech.ytsaurus.spyt.wrapper.Utils.tryWithResources
 
 class ReadTransactionStrategyTest extends FlatSpec with Matchers with LocalSpark with TestUtils with TmpDir with DynTableTestUtils {
   override def beforeAll(): Unit = {
@@ -13,7 +14,7 @@ class ReadTransactionStrategyTest extends FlatSpec with Matchers with LocalSpark
 
   it should "be able to read removed table" in {
     writeTableFromYson(Seq("""{}"""), tmpPath, TableSchema.builder().build())
-    TryWithResources(sparkSessionBuilder.withExtensions { extensions =>
+    tryWithResources(sparkSessionBuilder.withExtensions { extensions =>
       extensions.injectPreCBORule(new ReadTransactionStrategy(_))
       extensions.injectPreCBORule { _ =>
         plan => {

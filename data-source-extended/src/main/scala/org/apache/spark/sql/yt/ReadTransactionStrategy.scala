@@ -10,13 +10,13 @@ import org.apache.spark.sql.execution.ui.SparkListenerSQLExecutionEnd
 import org.apache.spark.sql.v2.YtTable
 import org.apache.spark.sql.yt.ReadTransactionStrategy.ypathEnriched
 import tech.ytsaurus.client.{ApiServiceTransaction, CompoundClient}
+import tech.ytsaurus.spyt.TryWithResources
 import tech.ytsaurus.spyt.format.GlobalTransactionUtils
 import tech.ytsaurus.spyt.fs.path.YPathEnriched
 import tech.ytsaurus.spyt.wrapper.YtWrapper
 import tech.ytsaurus.spyt.wrapper.client.YtClientProvider
 
 import scala.concurrent.duration.DurationInt
-import scala.util.Using
 
 class ReadTransactionStrategy(sparkSession: SparkSession) extends Rule[LogicalPlan] {
   override def apply(plan: LogicalPlan): LogicalPlan = {
@@ -26,10 +26,10 @@ class ReadTransactionStrategy(sparkSession: SparkSession) extends Rule[LogicalPl
       return plan
     }
     val executionId = executionIdString.toLong
-    if (GlobalTransactionUtils.getGlobalTransactionId(sparkSession).isEmpty && plan.exists {
+    if (GlobalTransactionUtils.getGlobalTransactionId(sparkSession).isEmpty && plan.find {
       case DataSourceV2Relation(table: YtTable, _, _, _, _) => table.paths.exists(ypathEnriched(_).transaction.isEmpty)
       case _ => false
-    }) {
+    }.isDefined) {
       val listener = new SparkListener() {
         {
           sparkSession.sparkContext.addSparkListener(this)
@@ -41,7 +41,9 @@ class ReadTransactionStrategy(sparkSession: SparkSession) extends Rule[LogicalPl
 
         override def onOtherEvent(event: SparkListenerEvent): Unit = event match {
           case sqlExecutionEnd: SparkListenerSQLExecutionEnd if sqlExecutionEnd.executionId == executionId =>
-            Using.resources(ytClient, transaction) { (_, _) => sparkSession.sparkContext.removeSparkListener(this) }
+            TryWithResources(ytClient) { _ =>
+              TryWithResources(transaction) { _ => sparkSession.sparkContext.removeSparkListener(this) }
+            }
           case _ =>
         }
       }

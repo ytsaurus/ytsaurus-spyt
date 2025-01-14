@@ -7,7 +7,9 @@ import tech.ytsaurus.spyt.wrapper._
 import tech.ytsaurus.client.request.{ReadFile, ReadTable, StartOperation, StartTransaction, TransactionType, TransactionalOptions, TransactionalRequest, WriteFile}
 import tech.ytsaurus.client.{ApiServiceTransaction, CompoundClient}
 import tech.ytsaurus.core.GUID
+import tech.ytsaurus.ysontree.YTree
 
+import java.util.Collections
 import scala.annotation.tailrec
 import scala.concurrent.duration._
 import scala.concurrent.{CancellationException, ExecutionContext, Future, Promise}
@@ -24,8 +26,10 @@ trait YtTransactionUtils {
     createTransaction(None, toScalaDuration(timeout), sticky)
   }
 
-  def createTransaction(parent: Option[String], timeout: Duration,
-                        sticky: Boolean = false, pingPeriod: Duration = 30 seconds)
+  def createTransaction(
+                         parent: Option[String], timeout: Duration, sticky: Boolean = false,
+                         title: Option[String] = None, pingPeriod: Duration = 30 seconds,
+                       )
                        (implicit yt: CompoundClient): ApiServiceTransaction = {
     log.debugLazy(s"Start transaction, parent $parent, timeout $timeout, sticky $sticky")
     val request = new StartTransaction(if (sticky) TransactionType.Tablet else TransactionType.Master).toBuilder
@@ -33,6 +37,7 @@ trait YtTransactionUtils {
       .setTimeout(toJavaDuration(timeout))
       .setPing(true)
       .setPingPeriod(toJavaDuration(pingPeriod))
+    title.foreach(title => request.setAttributes(Collections.singletonMap("title", YTree.stringNode(title))))
 
     parent.foreach(p => request.setParentId(GUID.valueOf(p)))
     val tr = yt.startTransaction(request.build()).join()

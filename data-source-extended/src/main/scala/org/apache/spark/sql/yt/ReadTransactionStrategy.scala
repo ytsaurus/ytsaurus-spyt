@@ -14,7 +14,6 @@ import tech.ytsaurus.spyt.format.GlobalTransactionUtils
 import tech.ytsaurus.spyt.fs.path.YPathEnriched
 import tech.ytsaurus.spyt.wrapper.Utils.tryWithResources
 import tech.ytsaurus.spyt.wrapper.YtWrapper
-import tech.ytsaurus.spyt.wrapper.client.YtClientProvider
 
 import scala.collection.mutable
 import scala.concurrent.duration.DurationInt
@@ -38,7 +37,7 @@ class ReadTransactionStrategy(sparkSession: SparkSession) extends Rule[LogicalPl
         {
           sparkSession.sparkContext.addSparkListener(this)
         }
-        private val ytRpcClient = YtClientProvider.ytRpcClient(configuration.replaceProxy(Some(proxy)), proxy)
+        private val ytRpcClient = YtWrapper.createRpcClient(proxy, configuration.replaceProxy(Some(proxy)))
         private implicit val ytClient: CompoundClient = ytRpcClient.yt
         private val transaction: ApiServiceTransaction = YtWrapper.createTransaction(None, 2.minutes)
 

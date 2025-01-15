@@ -16,6 +16,7 @@ import tech.ytsaurus.spyt.wrapper.Utils.tryWithResources
 import tech.ytsaurus.spyt.wrapper.YtWrapper
 import tech.ytsaurus.spyt.wrapper.client.YtClientProvider
 
+import scala.collection.mutable
 import scala.concurrent.duration.DurationInt
 
 class ReadTransactionStrategy(sparkSession: SparkSession) extends Rule[LogicalPlan] {
@@ -30,33 +31,39 @@ class ReadTransactionStrategy(sparkSession: SparkSession) extends Rule[LogicalPl
       case DataSourceV2Relation(table: YtTable, _, _, _, _) => table.paths.exists(ypathEnriched(_).transaction.isEmpty)
       case _ => false
     }.isDefined) {
-      val listener = new SparkListener() {
+      val configuration = tech.ytsaurus.spyt.fs.YtClientConfigurationConverter.ytClientConfiguration(
+        sparkSession.sessionState.conf
+      )
+      class Transaction(proxy: String) extends SparkListener {
         {
           sparkSession.sparkContext.addSparkListener(this)
         }
-        implicit val ytClient: CompoundClient = YtClientProvider.ytClient(
-          tech.ytsaurus.spyt.fs.YtClientConfigurationConverter.ytClientConfiguration(sparkSession.sessionState.conf)
-        )
-        val transaction: ApiServiceTransaction = YtWrapper.createTransaction(None, 2.minutes)
+        private val ytRpcClient = YtClientProvider.ytRpcClient(configuration.replaceProxy(Some(proxy)), proxy)
+        private implicit val ytClient: CompoundClient = ytRpcClient.yt
+        private val transaction: ApiServiceTransaction = YtWrapper.createTransaction(None, 2.minutes)
 
         override def onOtherEvent(event: SparkListenerEvent): Unit = event match {
           case sqlExecutionEnd: SparkListenerSQLExecutionEnd if sqlExecutionEnd.executionId == executionId =>
-            tryWithResources(ytClient) { _ =>
+            tryWithResources(ytRpcClient) { _ =>
               tryWithResources(transaction) { _ => sparkSession.sparkContext.removeSparkListener(this) }
             }
           case _ =>
         }
+
+        def apply(yPathEnriched: YPathEnriched): YPathEnriched =
+          if (yPathEnriched.transaction.isEmpty) {
+            yPathEnriched.withTransaction(transaction.getId.toString).lock()
+          } else {
+            yPathEnriched
+          }
       }
+      val transactions = mutable.HashMap[String, Transaction]()
+      val proxyTransaction = { proxy: String => transactions.getOrElseUpdate(proxy, new Transaction(proxy)) }
       plan.transform { case relation@DataSourceV2Relation(table: YtTable, _, _, _, _) =>
         relation.copy(table = table.copy(paths = table.paths.map(path => {
           val yPathEnriched = ypathEnriched(path)
-          if (yPathEnriched.transaction.isEmpty) {
-            yPathEnriched.withTransaction(listener.transaction.getId.toString).lock()(listener.ytClient).toStringPath
-          } else {
-            path
-          }
-        }
-        )))
+          proxyTransaction(yPathEnriched.cluster.getOrElse(configuration.proxy))(yPathEnriched).toStringPath
+        })))
       }
     } else {
       plan

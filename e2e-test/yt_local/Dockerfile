@@ -1,4 +1,4 @@
-FROM ghcr.io/ytsaurus/local:stable
+FROM ghcr.io/ytsaurus/local:stable-spyt
 
 WORKDIR /tmp
 

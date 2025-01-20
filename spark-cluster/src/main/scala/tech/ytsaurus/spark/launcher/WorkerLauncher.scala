@@ -26,7 +26,9 @@ object WorkerLauncher extends App with VanillaLauncher with SparkLauncher with B
   import workerArgs._
 
   prepareProfiler()
-  prepareLog4jConfig(workerLogConfig.exists(_.enableJson))
+  private val extraEnv = Map(
+    "SPARK_JAVA_LOG4J_CONFIG" -> log4jConfigJavaOption(workerLogConfig.exists(_.enableJson))
+  )
 
 
   def startWorkerLogService(client: CompoundClient): Option[Service] = {
@@ -41,7 +43,7 @@ object WorkerLauncher extends App with VanillaLauncher with SparkLauncher with B
           cypressDiscovery.registerWorker(operationId)
 
           log.info(s"Starting worker for master $masterAddress")
-          withService(startWorker(masterAddress, cores, memory)) { worker =>
+          withService(startWorker(masterAddress, cores, memory, extraEnv, enableSquashfs)) { worker =>
             withOptionalService(startSolomonAgent(args, "worker", worker.address.port)) { solomonAgent =>
               def isAlive: Boolean = {
                 val isMasterAlive = DiscoveryService.isAlive(masterAddress.webUiHostAndPort, 3)
@@ -70,7 +72,9 @@ case class WorkerLauncherArgs(cores: Int,
                               ytConfig: YtClientConfiguration,
                               baseDiscoveryPath: String,
                               waitMasterTimeout: Duration,
-                              operationId: String)
+                              operationId: String,
+                              enableSquashfs: Boolean
+                             )
 
 object WorkerLauncherArgs {
   def apply(args: Args): WorkerLauncherArgs = WorkerLauncherArgs(
@@ -79,7 +83,8 @@ object WorkerLauncherArgs {
     YtClientConfiguration(args.optional),
     args.optional("base-discovery-path").getOrElse(sys.env("SPARK_BASE_DISCOVERY_PATH")),
     args.optional("wait-master-timeout").map(parseDuration).getOrElse(5 minutes),
-    args.optional("operation-id").getOrElse(sys.env("YT_OPERATION_ID"))
+    args.optional("operation-id").getOrElse(sys.env("YT_OPERATION_ID")),
+    args.boolean("enable-squashfs")
   )
 
   def apply(args: Array[String]): WorkerLauncherArgs = WorkerLauncherArgs(Args(args))

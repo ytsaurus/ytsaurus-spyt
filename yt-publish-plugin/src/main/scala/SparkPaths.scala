@@ -5,6 +5,7 @@ object SparkPaths {
 
   val sparkYtConfPath = s"$sparkYtBasePath/conf"
   val sparkYtDeltaLayerPath = s"$sparkYtBasePath/delta"
+  val sparkYtSquashfsLayerPath = s"$sparkYtBasePath/squashfs"
   val spytPath = s"$sparkYtBasePath/spyt"
 
   val ytPortoLayersPath = "//porto_layers"

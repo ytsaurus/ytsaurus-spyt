@@ -30,7 +30,7 @@ import scala.concurrent.duration.DurationInt
 
 private[spark] class YTsaurusOperationManager(val ytClient: YTsaurusClient,
                                               user: String, token: String,
-                                              portoLayers: YTreeNode,
+                                              layerPaths: YTreeNode,
                                               filePaths: YTreeNode,
                                               environment: YTreeMapNode,
                                               home: String,
@@ -290,7 +290,7 @@ private[spark] class YTsaurusOperationManager(val ytClient: YTsaurusClient,
 
   private def setCommonSpecParams(specBuilder: YTreeBuilder, conf: SparkConf): YTreeBuilder = {
     specBuilder
-      .key("layer_paths").value(portoLayers)
+      .key("layer_paths").value(layerPaths)
       .key("file_paths").value(filePaths)
       .key("environment").value(environment)
 
@@ -311,6 +311,7 @@ private[spark] object YTsaurusOperationManager extends Logging {
     try {
       val globalConfigPath = conf.get(GLOBAL_CONFIG_PATH)
       val globalConfig: YTreeMapNode = getDocument(ytClient, globalConfigPath)
+      val isSquashFs = conf.get(YTSAURUS_SQUASHFS_ENABLED)
 
       if (!conf.contains(SPYT_VERSION)) {
         conf.set(SPYT_VERSION, BuildInfo.version)
@@ -325,15 +326,21 @@ private[spark] object YTsaurusOperationManager extends Logging {
 
       val releaseConfig: YTreeMapNode = getDocument(ytClient, releaseConfigPath)
 
-      val portoLayers = getPortoLayers(conf, releaseConfig.getListO("layer_paths").orElse(YTree.listBuilder().buildList()))
-
       val sv = org.apache.spark.SPARK_VERSION_SHORT
       val (svMajor, svMinor, svPatch) = VersionUtils.majorMinorPatchVersion(sv).get
       val distrRootPath = Seq(conf.get(SPARK_DISTRIBUTIVES_PATH), svMajor, svMinor, svPatch).mkString("/")
-      val distrTgzOpt = Some(distrRootPath).filter(path => ytClient.existsNode(path).join()).flatMap { path =>
+      val distrExtension = if (isSquashFs) ".squashfs" else ".tgz"
+      val distrPathOpt = Some(distrRootPath).filter(path => ytClient.existsNode(path).join()).flatMap { path =>
         val distrRootContents = ytClient.listNode(path).join().asList()
-        distrRootContents.asScala.find(_.stringValue().endsWith(".tgz"))
+        distrRootContents.asScala.find(_.stringValue().endsWith(distrExtension))
       }
+
+      if (distrPathOpt.isEmpty) {
+        throw new SparkException(s"Spark $sv ${distrExtension.substring(1)} distributive doesn't exist " +
+          s"at path $distrRootPath on cluster $ytProxy")
+      }
+
+      val sparkDistr = distrPathOpt.get.stringValue()
 
       val filePaths = if (conf.contains(DRIVER_OPERATION_ID)) {
         val driverOpId = conf.get(DRIVER_OPERATION_ID)
@@ -351,22 +358,26 @@ private[spark] object YTsaurusOperationManager extends Logging {
           filePathsList.add(node)
         }
 
-        distrTgzOpt match {
-          case Some(sparkTgz) => filePathsList.add(YTree.stringNode(s"$distrRootPath/${sparkTgz.stringValue()}"))
-          case _ => throw new SparkException(s"Spark $sv tgz distributive doesn't exist " +
-            s"at path $distrRootPath on cluster $ytProxy")
+        if (isSquashFs) {
+          val spytPackagePosOpt = (0 until filePathsList.size())
+            .find(i => filePathsList.getString(i).endsWith("spyt-package.zip"))
+          spytPackagePosOpt.foreach(pos => filePathsList.remove(pos))
+        } else {
+          filePathsList.add(YTree.stringNode(s"$distrRootPath/$sparkDistr"))
         }
 
         filePathsList
       }
+
+      val layerPaths = getLayerPaths(conf, releaseConfig, s"$distrRootPath/$sparkDistr")
 
       enrichSparkConf(conf, releaseConfig)
       enrichSparkConf(conf, globalConfig)
 
       val javaCommand = s"$javaHome/bin/java"
       val home = "."
-      val sparkHome = s"$home/spark"
-      val spytHome = s"$home/spyt-package"
+      val sparkHome = if (isSquashFs) "/usr/lib/spark" else s"$home/spark"
+      val spytHome = if (isSquashFs) "/usr/lib/spyt" else s"$home/spyt-package"
       val sparkClassPath = s"$home/*:$spytHome/conf/:$spytHome/jars/*:$sparkHome/jars/*"
       environment.put("SPARK_HOME", YTree.stringNode(sparkHome))
 
@@ -400,15 +411,20 @@ private[spark] object YTsaurusOperationManager extends Logging {
         conf.set(YTSAURUS_CUDA_VERSION, cudaVersion)
       }
 
-      val sparkTgz = distrTgzOpt.get.stringValue()
-      val prepareEnvCommand = s"./setup-spyt-env.sh --spark-home $home --spark-distributive $sparkTgz" +
+      val prepareEnvParameters = if (isSquashFs) {
+        "--use-squashfs"
+      } else {
+        s"--spark-home $home --spark-distributive $sparkDistr"
+      }
+
+      val prepareEnvCommand = s"./setup-spyt-env.sh $prepareEnvParameters " +
         "&& export SPARK_LOCAL_DIRS=\"${YT_SPARK_LOCAL_DIRS:-/tmp}/${YT_OPERATION_ID}\"" // TODO: make a pretty filling
 
       new YTsaurusOperationManager(
         ytClient,
         user,
         token,
-        portoLayers,
+        layerPaths,
         filePaths,
         environment,
         home,
@@ -429,28 +445,40 @@ private[spark] object YTsaurusOperationManager extends Logging {
     ytClient.getOperation(request).join()
   }
 
-  private[ytsaurus] def getPortoLayers(conf: SparkConf, defaultLayers: YTreeListNode): YTreeNode = {
-    val portoLayers = YTree.listBuilder().buildList()
+  private[ytsaurus] def getLayerPaths(conf: SparkConf,
+                                      releaseConfig: YTreeMapNode,
+                                      sparkDistr: String): YTreeNode = {
+    val layerPaths = YTree.listBuilder().buildList()
 
-    conf.get(YTSAURUS_EXTRA_PORTO_LAYER_PATHS).foreach(extraPortoLayers => {
-      extraPortoLayers.split(',').foreach(layer => {
-        portoLayers.add(YTree.stringNode(layer))
+    conf.get(YTSAURUS_EXTRA_PORTO_LAYER_PATHS).foreach(extraLayers => {
+      extraLayers.split(',').foreach(layer => {
+        layerPaths.add(YTree.stringNode(layer))
       })
     })
+
+    var layerPathsKey = "layer_paths"
+
+    if (conf.get(YTSAURUS_SQUASHFS_ENABLED)) {
+      layerPaths.add(YTree.stringNode(s"${releaseConfig.getString("spark_yt_base_path")}/spyt-package.squashfs"))
+      layerPaths.add(YTree.stringNode(sparkDistr))
+      layerPathsKey = "squashfs_layer_paths"
+    }
+
+    val defaultLayers: YTreeListNode = releaseConfig.getListO(layerPathsKey).orElse(YTree.listBuilder().buildList())
 
     if (conf.contains(YTSAURUS_PORTO_LAYER_PATHS)) {
       conf.get(YTSAURUS_PORTO_LAYER_PATHS).foreach(layers => {
         layers.split(',').foreach(layer => {
-          portoLayers.add(YTree.stringNode(layer))
+          layerPaths.add(YTree.stringNode(layer))
         })
       })
     } else {
       defaultLayers.forEach(layer => {
-        portoLayers.add(YTree.stringNode(layer.stringValue()))
+        layerPaths.add(YTree.stringNode(layer.stringValue()))
       })
     }
 
-    portoLayers
+    layerPaths
   }
 
   private[ytsaurus] def getDocument(ytClient: YTsaurusClient, path: String): YTreeMapNode = {

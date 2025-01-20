@@ -61,17 +61,8 @@ trait VanillaLauncher {
     }
   }
 
-  def prepareLog4jConfig(logJson: Boolean): Unit = {
+  def log4jConfigJavaOption(logJson: Boolean): String = {
     val log4jProperties = if (logJson) "log4j.clusterLogJson.properties" else "log4j.clusterLog.properties"
-
-    val path = Files.copy(
-      Path.of(spytHome, "conf", log4jProperties),
-      Path.of(sparkHome, "conf", "log4j.properties"),
-      StandardCopyOption.REPLACE_EXISTING
-    )
-
-    if (path == null) {
-      throw new RuntimeException("Couldn't replace log4j properties")
-    }
+    s"-Dlog4j.configuration=file://$spytHome/conf/$log4jProperties"
   }
 }

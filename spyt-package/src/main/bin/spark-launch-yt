@@ -148,7 +148,8 @@ def main(raw_args=None):
                             enable_mtn=args.enable_mtn,
                             enable_solomon_agent=args.enable_solomon_agent,
                             enable_preference_ipv6=args.enable_preference_ipv6,
-                            enable_tcp_proxy=args.enable_tcp_proxy
+                            enable_tcp_proxy=args.enable_tcp_proxy,
+                            enable_squashfs=args.enable_squashfs
                         ),
                         client=yt_client,
                         preemption_mode=args.preemption_mode,

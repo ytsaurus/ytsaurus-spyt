@@ -112,7 +112,8 @@ def prepare_launch_config(conf_local_dir: str, client: Client, versions: Version
         "spark.hadoop.yt.byop.enabled": not os_release,
         "spark.hadoop.yt.solomonAgent.enabled": not os_release,
         "spark.hadoop.yt.mtn.enabled": not os_release,
-        "spark.hadoop.yt.tcpProxy.enabled": os_release
+        "spark.hadoop.yt.tcpProxy.enabled": os_release,
+        "spark.ytsaurus.squashfs.enabled": not os_release
     }
     if not os_release:
         launch_config['layer_paths'] = [
@@ -123,6 +124,16 @@ def prepare_launch_config(conf_local_dir: str, client: Client, versions: Version
             client.resolve_from_root("delta/python/layer_with_python39_focal_v002.tar.gz"),
             client.resolve_from_root("delta/python/layer_with_python38_focal_v002.tar.gz"),
             client.resolve_from_root("delta/python/layer_with_python37_focal_yandexyt0131.tar.gz"),
+            "//porto_layers/base/focal/porto_layer_search_ubuntu_focal_app_lastest.tar.gz"
+        ]
+        launch_config['squashfs_layer_paths'] = [
+            client.resolve_from_root("squashfs/layer_with_solomon_agent.squashfs"),
+            client.resolve_from_root("squashfs/jdk/layer_with_jdk_latest.squashfs"),
+            client.resolve_from_root("squashfs/python/layer_with_python312_focal_v002.squashfs"),
+            client.resolve_from_root("squashfs/python/layer_with_python311_focal_v002.squashfs"),
+            client.resolve_from_root("squashfs/python/layer_with_python39_focal_v002.squashfs"),
+            client.resolve_from_root("squashfs/python/layer_with_python38_focal_v002.squashfs"),
+            client.resolve_from_root("squashfs/python/layer_with_python37_focal_yandexyt0131.squashfs"),
             "//porto_layers/base/focal/porto_layer_search_ubuntu_focal_app_lastest.tar.gz"
         ]
         ytserver_proxy_path = client.yt_client.get(f"{YTSERVER_PROXY}&/@target_path")

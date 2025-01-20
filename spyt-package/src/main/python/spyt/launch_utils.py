@@ -41,6 +41,9 @@ def add_default_launch_options(parser):
 
     parser.add_argument('--group-id', required=False, type=str)
 
+    add_parser_group(parser, '--enable-squashfs', '--disable-squashfs', 'enable_squashfs',
+                     default_enablers.enable_squashfs)
+
 
 def add_livy_options(parser):
     parser.add_argument('--livy-driver-cores', required=False,

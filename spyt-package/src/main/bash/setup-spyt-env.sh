@@ -18,6 +18,10 @@ while [[ $# -gt 0 ]]; do
       enable_livy=1
       shift
       ;;
+    --use-squashfs)
+      use_squashfs=1
+      shift
+      ;;
     *)
       echo "Unknown argument $1"
       exit 1
@@ -25,30 +29,30 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-if [[ -z $spark_home ]]; then
-  echo "Parameter --spark-home should be set"
-  exit 1
-fi
+if [ ! $use_squashfs ]; then
+  if [[ -z $spark_home ]]; then
+    echo "Parameter --spark-home should be set"
+    exit 1
+  fi
 
-if [[ -z $spark_distr ]]; then
-  echo "Parameter --spark-distributive should be set"
-  exit 1
-fi
+  if [[ -z $spark_distr ]]; then
+    echo "Parameter --spark-distributive should be set"
+    exit 1
+  fi
 
-spyt_home=$(realpath "$spark_home/spyt-package")
+  spyt_home=$(realpath "$spark_home/spyt-package")
 
-mkdir -p $spark_home
-tar --warning=no-unknown-keyword -xf "$spark_distr" -C "$spark_home"
-mv "$spark_home/${spark_distr:0:-4}" "$spark_home/spark"
+  mkdir -p $spark_home
+  tar --warning=no-unknown-keyword -xf "$spark_distr" -C "$spark_home"
+  mv "$spark_home/${spark_distr:0:-4}" "$spark_home/spark"
 
-if [ -f spyt-package.zip ]; then
   unzip -o spyt-package.zip -d "$spark_home"
   javaagent_opt="-javaagent:$(ls $spyt_home/jars/*spark-yt-spark-patch*)"
   echo "$javaagent_opt" > $spyt_home/conf/java-opts
-fi
 
-if [ $enable_livy ]; then
-  tar --warning=no-unknown-keyword -xf livy.tgz -C $spark_home
+  if [ $enable_livy ]; then
+    tar --warning=no-unknown-keyword -xf livy.tgz -C $spark_home
+  fi
 fi
 
 for file in $(ls); do

@@ -129,8 +129,10 @@ class LivyConfig(NamedTuple):
 
 
 class CommonSpecParams(NamedTuple):
+    container_home: str
     spark_home: str
-    spark_distributive_tgz: str
+    spyt_home: str
+    spark_distributive: str
     java_home: str
     extra_java_opts: List[str]
     environment: dict
@@ -148,8 +150,13 @@ def spark_conf_to_opts(config: dict):
     return ["-D{}={}".format(key, value) for key, value in config.items()]
 
 
-def setup_spyt_env(spark_home: str, spark_distributive: str, additional_parameters: List[str]):
-    cmd = ["./setup-spyt-env.sh", "--spark-home", spark_home, "--spark-distributive", spark_distributive]
+def setup_spyt_env(container_home: str, spark_distributive: str, enable_squashfs: bool,
+                   additional_parameters: List[str]):
+    cmd = ["./setup-spyt-env.sh"]
+    if enable_squashfs:
+        cmd += ["--use-squashfs"]
+    else:
+        cmd += ["--spark-home", container_home, "--spark-distributive", spark_distributive]
     return " ".join(cmd + additional_parameters)
 
 
@@ -157,16 +164,17 @@ def _launcher_command(component: str, common_params: CommonSpecParams, additiona
                       xmx: str = "512m", extra_java_opts: List[str] = None, launcher_opts: str = ""):
     additional_parameters = additional_parameters or []
     extra_java_opts = extra_java_opts or []
-    setup_spyt_env_cmd = setup_spyt_env(common_params.spark_home,
-                                        common_params.spark_distributive_tgz,
+    setup_spyt_env_cmd = setup_spyt_env(common_params.container_home,
+                                        common_params.spark_distributive,
+                                        common_params.config.enablers.enable_squashfs,
                                         additional_parameters)
 
     java_bin = os.path.join(common_params.java_home, 'bin', 'java')
     if command := common_params.task_spec.get('command'):
         java_bin = f'{command} {java_bin}'
-    classpath = (f'{common_params.spark_home}/spyt-package/conf/:'
-                 f'{common_params.spark_home}/spyt-package/jars/*:'
-                 f'{common_params.spark_home}/spark/jars/*')
+    classpath = (f'{common_params.spyt_home}/conf/:'
+                 f'{common_params.spyt_home}/jars/*:'
+                 f'{common_params.spark_home}/jars/*')
     extra_java_opts_str = " ".join(extra_java_opts)
     run_launcher = "{} -Xmx{} -cp {} {}".format(java_bin, xmx, classpath, extra_java_opts_str)
 
@@ -183,22 +191,32 @@ def build_livy_spec(builder: VanillaSpecBuilder, common_params: CommonSpecParams
         f"--driver-memory {config.livy_driver_memory}",
         f"--max-sessions {config.livy_max_sessions}",
     ]
+    enable_squashfs = common_params.config.enablers.enable_squashfs
     if config.spark_master_address is not None:
         livy_launcher_opts.append(f"--master-address {config.spark_master_address}")
     if config.network_project is not None:
         livy_launcher_opts.append(f"--network-project {config.network_project}")
+    if enable_squashfs:
+        livy_launcher_opts.append("--enable-squashfs")
     extra_java_opts = common_params.extra_java_opts + spark_conf_to_opts(common_params.spark_conf)
     livy_command = _launcher_command("Livy", common_params, additional_parameters=["--enable-livy"],
                                      extra_java_opts=extra_java_opts, launcher_opts=" ".join(livy_launcher_opts))
 
+    livy_work_dir = "$HOME/{}/livy".format(common_params.container_home)
     livy_environment = {
-        "LIVY_HOME": "$HOME/{}/livy".format(common_params.spark_home),
+        "LIVY_HOME": "/usr/lib/livy" if enable_squashfs else livy_work_dir,
+        "LIVY_WORK_DIR": livy_work_dir
     }
     _put_if_not_none(livy_environment, "SPARK_MASTER_DISCOVERY_GROUP_ID", config.master_group_id)
     livy_environment = update(common_params.environment, livy_environment)
 
+    livy_layer_paths = copy.copy(common_params.task_spec["layer_paths"])
     livy_file_paths = copy.copy(common_params.task_spec["file_paths"])
-    livy_file_paths.append("//home/spark/livy/livy.tgz")
+
+    if enable_squashfs:
+        livy_layer_paths.append("//home/spark/livy/livy.squashfs")
+    else:
+        livy_file_paths.append("//home/spark/livy/livy.tgz")
 
     livy_task_spec = copy.deepcopy(common_params.task_spec)
     livy_task_spec["environment"] = livy_environment
@@ -211,6 +229,7 @@ def build_livy_spec(builder: VanillaSpecBuilder, common_params: CommonSpecParams
         .cpu_limit(1 + config.livy_driver_cores * config.livy_max_sessions) \
         .spec(livy_task_spec) \
         .file_paths(livy_file_paths) \
+        .layer_paths(livy_layer_paths) \
         .end_task()
 
 
@@ -267,7 +286,7 @@ def build_master_spec(builder: VanillaSpecBuilder, common_params: CommonSpecPara
 def build_worker_spec(builder: VanillaSpecBuilder, job_type: str, ytserver_proxy_path: str, tvm_enabled: bool,
                       common_params: CommonSpecParams, config: WorkerConfig):
     def _script_absolute_path(script):
-        return "{}/{}".format(common_params.spark_home, script)
+        return "{}/{}".format(common_params.container_home, script)
 
     spark_conf_worker = common_params.spark_conf.copy()
 
@@ -296,10 +315,12 @@ def build_worker_spec(builder: VanillaSpecBuilder, job_type: str, ytserver_proxy
 
     worker_launcher_opts = \
         "--cores {0} --memory {1} --wait-master-timeout {2} --wlog-service-enabled {3} --wlog-enable-json {4} " \
-        "--wlog-update-interval {5} --wlog-table-ttl {6}".format(
+        "--wlog-update-interval {5} --wlog-table-ttl {6} {7}".format(
             config.res.cores, config.res.memory,
             config.res.timeout, config.worker_log_transfer, config.worker_log_json_mode,
-            config.worker_log_update_interval, config.worker_log_table_ttl)
+            config.worker_log_update_interval, config.worker_log_table_ttl,
+            "--enable-squashfs" if common_params.config.enablers.enable_squashfs else ""
+        )
     extra_java_opts = common_params.extra_java_opts + spark_conf_to_opts(spark_conf_worker)
     worker_command = _launcher_command("Worker", common_params, xmx="2g", extra_java_opts=extra_java_opts,
                                        launcher_opts=worker_launcher_opts)
@@ -375,8 +396,11 @@ def build_spark_operation_spec(config: dict, client: YtClient,
     if job_types == [] or job_types is None:
         job_types = ['master', 'history', 'worker']
 
-    spark_home = "./tmpfs" if common_config.enable_tmpfs else "."
-    spark_distributive_tgz, spark_distributive_path = get_spark_distributive(client)
+    enable_squashfs = common_config.enablers.enable_squashfs
+    container_home = "./tmpfs" if common_config.enable_tmpfs else "."
+    spark_home = "/usr/lib/spark" if enable_squashfs else "$HOME/{}/spark".format(container_home)
+    spyt_home = "/usr/lib/spyt" if enable_squashfs else "$HOME/{}/spyt-package".format(container_home)
+    spark_distributive, spark_distributive_path = get_spark_distributive(client, common_config.enablers.enable_squashfs)
 
     extra_java_opts = ["-Dlog4j.loglevel={}".format(common_config.cluster_log_level)]
     if common_config.enablers.enable_preference_ipv6:
@@ -422,8 +446,8 @@ def build_spark_operation_spec(config: dict, client: YtClient,
     if common_config.spark_discovery is not None:
         environment["SPARK_BASE_DISCOVERY_PATH"] = str(common_config.spark_discovery.base_discovery_path)
         environment["SPARK_DISCOVERY_PATH"] = str(common_config.spark_discovery.discovery())  # COMPAT(alex-shishkin)
-    environment["SPARK_HOME"] = "$HOME/{}/spark".format(spark_home)
-    environment["SPYT_HOME"] = "$HOME/{}/spyt-package".format(spark_home)
+    environment["SPARK_HOME"] = spark_home
+    environment["SPYT_HOME"] = spyt_home
     environment["SPARK_CLUSTER_VERSION"] = config["cluster_version"]  # TODO Rename to SPYT_CLUSTER_VERSION
     environment["SPYT_CLUSTER_VERSION"] = config["cluster_version"]
     environment["SPARK_YT_SOLOMON_ENABLED"] = str(common_config.enablers.enable_solomon_agent)
@@ -440,13 +464,23 @@ def build_spark_operation_spec(config: dict, client: YtClient,
         environment["SPARK_YT_TCP_PROXY_RANGE_START"] = str(common_config.tcp_proxy_range_start)
         environment["SPARK_YT_TCP_PROXY_RANGE_SIZE"] = str(common_config.tcp_proxy_range_size)
 
-    file_paths = copy.copy(config["file_paths"])
-    file_paths.append(spark_distributive_path)
+    file_paths = [path for path in config["file_paths"] if
+                  not common_config.enablers.enable_squashfs or
+                  not path.endswith('spyt-package.zip')]
+    layer_paths = []
+
+    if common_config.enablers.enable_squashfs:
+        layer_paths.append(f"{config['spark_yt_base_path']}/spyt-package.squashfs")
+        layer_paths.append(spark_distributive_path)
+    else:
+        file_paths.append(spark_distributive_path)
+
+    layer_paths += config["squashfs_layer_paths" if common_config.enablers.enable_squashfs else "layer_paths"]
 
     common_task_spec = {
         "restart_completed_jobs": True,
         "file_paths": file_paths,
-        "layer_paths": config["layer_paths"],
+        "layer_paths": layer_paths,
         "environment": environment,
         "memory_reserve_factor": 1.0,
         "enable_rpc_proxy_in_job_proxy": common_config.rpc_job_proxy,
@@ -467,8 +501,8 @@ def build_spark_operation_spec(config: dict, client: YtClient,
     if entrypoint := config.get('entrypoint'):
         common_task_spec['command'] = entrypoint if isinstance(entrypoint, str) else shlex.join(entrypoint)
     common_params = CommonSpecParams(
-        spark_home, spark_distributive_tgz, environment["JAVA_HOME"], extra_java_opts,
-        environment, spark_conf_common, common_task_spec, common_config
+        container_home, spark_home, spyt_home, spark_distributive, environment["JAVA_HOME"],
+        extra_java_opts, environment, spark_conf_common, common_task_spec, common_config
     )
     builder = VanillaSpecBuilder()
     if "master" in job_types:

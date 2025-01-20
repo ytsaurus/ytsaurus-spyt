@@ -160,4 +160,9 @@ object Config {
     .version("2.4.3")
     .stringConf
     .createOptional
+
+  val YTSAURUS_SQUASHFS_ENABLED = ConfigBuilder("spark.ytsaurus.squashfs.enabled")
+    .version("2.6.0")
+    .booleanConf
+    .createWithDefault(false)
 }

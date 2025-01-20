@@ -52,18 +52,19 @@ trait SparkLauncher {
   def absolutePath(string: String) = if (string == null) null else new File(string).getAbsolutePath
 
   private val livyHome: String = absolutePath(env("LIVY_HOME", "./livy"))
+  private val livyWorkDir: String = absolutePath(env("LIVY_WORK_DIR", "./livy"))
 
   private val javaHome: String = absolutePath(env("JAVA_HOME", null))
 
   val clusterVersion: String = sys.env("SPYT_CLUSTER_VERSION")
 
-  private def prepareSparkConf(): Unit = {
-    copyToSparkConfIfExists("metrics.properties")
+  def createLivyWorkDir(): Unit = {
+    Files.createDirectories(Path.of(livyWorkDir, "conf"))
   }
 
   def prepareLivyLog4jConfig(): Unit = {
     val src = Path.of(spytHome, "conf", "log4j.livy.properties")
-    val dst = Path.of(livyHome, "conf", "log4j.properties")
+    val dst = Path.of(livyWorkDir, "conf", "log4j.properties")
     Files.copy(src, dst)
   }
 
@@ -75,7 +76,7 @@ trait SparkLauncher {
         .replaceAll("\\$MASTER_ADDRESS", masterAddress)
         .replaceAll("\\$MAX_SESSIONS", maxSessions.toString)
     }.toPath
-    val dst = Path.of(livyHome, "conf", "livy.conf")
+    val dst = Path.of(livyWorkDir, "conf", "livy.conf")
 
     Files.copy(preparedConfPath, dst)
   }
@@ -84,7 +85,7 @@ trait SparkLauncher {
     sparkSystemProperties.get("spark.hadoop.yt.preferenceIpv6.enabled").exists(_.toBoolean)
   }
 
-  private def getLivyClientSparkConf(networkProject: Option[String]): Seq[String] = {
+  private def getLivyClientSparkConf(networkProject: Option[String], enableSquashfs: Boolean): Seq[String] = {
     val ipv6Conf = if (isIpv6PreferenceEnabled) {
       Seq("spark.driver.extraJavaOptions = -Djava.net.preferIPv6Addresses=true") ++ (
         if (SparkVersionUtils.lessThan("3.4.0")) {
@@ -101,19 +102,24 @@ trait SparkLauncher {
       s"spark.ytsaurus.network.project = $np"
     }
 
-    ipv6Conf ++ networkProjectConf
+    val squashfsConf = Seq("spark.ytsaurus.squashfs.enabled = true").filter(_ => enableSquashfs)
+
+    ipv6Conf ++ networkProjectConf ++ squashfsConf
   }
 
-  def prepareLivyClientConf(driverCores: Int, driverMemory: String, networkProject: Option[String]): Unit = {
+  def prepareLivyClientConf(driverCores: Int,
+                            driverMemory: String,
+                            networkProject: Option[String],
+                            enableSquashfs: Boolean): Unit = {
     val src = Path.of(home, "livy-client.template.conf")
     val preparedConfPath = createFromTemplate(src.toFile) { content =>
       content
         .replaceAll("\\$LIVY_ADDRESS", ytHostnameOrIpAddress)
         .replaceAll("\\$DRIVER_CORES", driverCores.toString)
         .replaceAll("\\$DRIVER_MEMORY", driverMemory)
-        .replaceAll("\\$EXTRA_SPARK_CONF", getLivyClientSparkConf(networkProject).mkString("\n"))
+        .replaceAll("\\$EXTRA_SPARK_CONF", getLivyClientSparkConf(networkProject, enableSquashfs).mkString("\n"))
     }.toPath
-    val dst = Path.of(livyHome, "conf", "livy-client.conf")
+    val dst = Path.of(livyWorkDir, "conf", "livy-client.conf")
 
     Files.copy(preparedConfPath, dst)
   }
@@ -126,19 +132,9 @@ trait SparkLauncher {
     }
   }
 
-  private def copyToSparkConfIfExists(filename: String): Unit = {
-    val src = Path.of(home, filename)
-    val dst = Path.of(spytHome, "conf", filename)
-    if (Files.exists(src)) {
-      Files.deleteIfExists(dst)
-      Files.copy(src, dst)
-    }
-  }
-
   def startMaster(reverseProxyUrl: Option[String]): MasterService = {
     log.info("Start Spark master")
     val config = SparkDaemonConfig.fromProperties("master", "512M")
-    prepareSparkConf()
     reverseProxyUrl.foreach(url => log.info(f"Reverse proxy url is $url"))
     val reverseProxyUrlProp = reverseProxyUrl.map(url => f"-Dspark.ui.reverseProxyUrl=$url")
     val thread = runSparkThread(
@@ -151,9 +147,12 @@ trait SparkLauncher {
     MasterService("Master", address, thread)
   }
 
-  def startWorker(master: Address, cores: Int, memory: String): BasicService = {
+  def startWorker(master: Address,
+                  cores: Int,
+                  memory: String,
+                  extraEnv: Map[String, String],
+                  enableSquashfs: Boolean): BasicService = {
     val config = SparkDaemonConfig.fromProperties("worker", "512M")
-    prepareSparkConf()
     val thread = runSparkThread(
       workerClass,
       config.memory,
@@ -161,9 +160,10 @@ trait SparkLauncher {
         "cores" -> cores.toString,
         "memory" -> memory,
         "host" -> ytHostnameOrIpAddress
-      ),
+      ) ++ (if (enableSquashfs) Map("work-dir" -> s"$home/work") else Map()),
       positionalArgs = Seq(s"spark://${master.hostAndPort}"),
-      systemProperties = commonJavaOpts
+      systemProperties = commonJavaOpts,
+      extraEnv = extraEnv
     )
     val address = readAddressOrDie("worker", config.startTimeout, thread)
 
@@ -178,7 +178,6 @@ trait SparkLauncher {
     )
     val config = SparkDaemonConfig.fromProperties("history", memory)
 
-    prepareSparkConf()
     val thread = runSparkThread(
       historyServerClass,
       config.memory,
@@ -189,7 +188,7 @@ trait SparkLauncher {
   }
 
   private def readLivyLogs(): String = {
-    Seq("bash", "-c", """cat "$0"/logs/livy-*-server.out""", livyHome).!!
+    Seq("bash", "-c", """cat "$0"/logs/livy-*-server.out""", livyWorkDir).!!
   }
 
   private def runLivyProcess(log: Logger): Process = {
@@ -199,7 +198,9 @@ trait SparkLauncher {
     val extraEnv = ArrayBuffer(
       "SPARK_HOME" -> sparkHome,
       "SPARK_CONF_DIR" -> s"$spytHome/conf",
-      "LIVY_PID_DIR" -> livyHome,
+      "LIVY_PID_DIR" -> livyWorkDir,
+      "LIVY_CONF_DIR" -> s"$livyWorkDir/conf",
+      "LIVY_LOG_DIR" -> s"$livyWorkDir/logs",
       "PYSPARK_PYTHON" -> "python3",
       "LIVY_SERVER_JAVA_OPTS" -> livyJavaOpts,
       "CLASSPATH" -> s"$spytHome/jars/*:$sparkHome/jars/*",
@@ -212,9 +213,9 @@ trait SparkLauncher {
     val startProcessCode = startProcess.exitValue()
     log.info(f"Server started. Code: $startProcessCode")
     if (startProcessCode == 0) {
-      val pid = Seq("bash", "-c", """cat "$0"/livy-*-server.pid""", livyHome).!!.trim
+      val pid = Seq("bash", "-c", """cat "$0"/livy-*-server.pid""", livyWorkDir).!!.trim
       log.info(f"Attaching to livy process with pid $pid...")
-      Process("bash", Seq("-c", """tail -f -n 0 "$0"/logs/livy-*-server.out""", livyHome)).run(ProcessLogger(log.info(_)))
+      Process("bash", Seq("-c", """tail -f -n 0 "$0"/logs/livy-*-server.out""", livyWorkDir)).run(ProcessLogger(log.info(_)))
       Process("bash", Seq("-c", """tail --pid="$0" -f /dev/null""", pid)).run(ProcessLogger(log.info(_)))
     } else {
       startProcess
@@ -274,12 +275,13 @@ trait SparkLauncher {
                              memory: String,
                              systemProperties: Seq[String] = Nil,
                              namedArgs: Map[String, String] = Map.empty,
-                             positionalArgs: Seq[String] = Nil): Thread = {
+                             positionalArgs: Seq[String] = Nil,
+                             extraEnv: Map[String, String] = Map.empty): Thread = {
     runDaemonThread(() => {
       var process: Process = null
       try {
         val log = LoggerFactory.getLogger(self.getClass)
-        process = runSparkClass(className, systemProperties, namedArgs, positionalArgs, memory, log)
+        process = runSparkClass(className, systemProperties, namedArgs, positionalArgs, memory, log, extraEnv)
         log.warn(s"Spark exit value: ${process.exitValue()}")
       } catch {
         case e: Throwable =>
@@ -302,7 +304,8 @@ trait SparkLauncher {
                             namedArgs: Map[String, String],
                             positionalArgs: Seq[String],
                             memory: String,
-                            log: Logger): Process = {
+                            log: Logger,
+                            extraEnv: Map[String, String]): Process = {
     val command = s"$sparkHome/bin/spark-class " +
       s"$className " +
       s"${namedArgs.map { case (k, v) => s"--$k $v" }.mkString(" ")} " +
@@ -313,7 +316,7 @@ trait SparkLauncher {
     val workerLog4j = s"-Dlog4j.configuration=file://$spytHome/conf/log4j.worker.properties"
     val sparkLocalDirs = env("SPARK_LOCAL_DIRS", "./tmpfs")
     val javaOpts = (workerLog4j +: (systemProperties ++ sparkSystemProperties.map { case (k, v) => s"-D$k=$v" })).mkString(" ")
-    val extraEnv = ArrayBuffer(
+    val processExtraEnv = ArrayBuffer(
       "SPARK_HOME" -> sparkHome,
       "SPARK_CONF_DIR" -> s"$spytHome/conf",
       "PYTHONPATH" -> s"$spytHome/python",
@@ -324,9 +327,10 @@ trait SparkLauncher {
       "SPARK_DAEMON_JAVA_OPTS" -> javaOpts,
     )
     if (javaHome != null) {
-      extraEnv += ("JAVA_HOME" -> javaHome)
+      processExtraEnv += ("JAVA_HOME" -> javaHome)
     }
-    Process(command, new File("."), extraEnv: _*).run(ProcessLogger(log.info(_)))
+    processExtraEnv ++= extraEnv.toList
+    Process(command, new File("."), processExtraEnv: _*).run(ProcessLogger(log.info(_)))
   }
 
   @tailrec

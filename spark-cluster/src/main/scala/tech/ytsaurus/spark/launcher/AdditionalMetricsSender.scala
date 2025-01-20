@@ -50,7 +50,6 @@ object AdditionalMetricsSender {
 
       private val DEFAULT_PREFIX = "*"
       private val INSTANCE_REGEX = "^(\\*|[a-zA-Z]+)\\.(.+)".r
-      private val DEFAULT_METRICS_CONF_FILENAME = "metrics.properties"
 
       val properties = new Properties()
       private var perInstanceSubProperties: mutable.HashMap[String, Properties] = null
@@ -69,12 +68,9 @@ object AdditionalMetricsSender {
       def initialize(): Unit = {
         // Add default properties in case there's no properties file
         setDefaultProperties(properties)
-        val spytHome = sys.env.get("SPYT_HOME").map(p => p.replaceAll("\\$HOME", sys.env.getOrElse("HOME", "")))
+        val home = sys.env("HOME")
         // constant from config package replaced with plain string
-        loadPropertiesFromFile(
-          systemProps.get("spark.metrics.conf")
-            .orElse(spytHome.map(p => s"$p/conf/metrics.properties"))
-        )
+        loadPropertiesFromFile(systemProps.getOrElse("spark.metrics.conf", s"$home/metrics.properties"))
 
         // Also look for the properties in provided Spark configuration
         val prefix = "spark.metrics.conf."
@@ -147,22 +143,14 @@ object AdditionalMetricsSender {
        * Loads configuration from a config file. If no config file is provided, try to get file
        * in class path.
        */
-      private[this] def loadPropertiesFromFile(path: Option[String]): Unit = {
+      private[this] def loadPropertiesFromFile(path: String): Unit = {
         var is: InputStream = null
         try {
-          is = path match {
-            case Some(f) => new FileInputStream(f)
-            // changed to this class classloader
-            case None => getClass.getClassLoader.getResourceAsStream(DEFAULT_METRICS_CONF_FILENAME)
-          }
-
-          if (is != null) {
-            properties.load(is)
-          }
+          is = new FileInputStream(path)
+          properties.load(is)
         } catch {
           case e: Exception =>
-            val file = path.getOrElse(DEFAULT_METRICS_CONF_FILENAME)
-            log.error(s"Error loading configuration file $file", e)
+            log.error(s"Error loading configuration file $path", e)
         } finally {
           if (is != null) {
             is.close()

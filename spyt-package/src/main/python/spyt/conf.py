@@ -163,14 +163,15 @@ def ytserver_proxy_attributes(path, client=None):
     return get("{}/@user_attributes".format(path), client=client)
 
 
-def get_spark_distributive(client):
+def get_spark_distributive(client, enable_squashfs):
     distrib_root = DISTRIB_BASE_PATH.join(spark_version.replace('.', '/'))
     distrib_root_contents = yt_list(distrib_root, client=client)
-    spark_tgz = [x for x in distrib_root_contents if x.endswith('.tgz')]
-    if len(spark_tgz) == 0:
-        raise RuntimeError(f"Spark {spark_version} tgz distributive doesn't exist "
+    extension = '.squashfs' if enable_squashfs else '.tgz'
+    spark_distributive = [x for x in distrib_root_contents if x.endswith(extension)]
+    if len(spark_distributive) == 0:
+        raise RuntimeError(f"Spark {spark_version} {extension} distributive doesn't exist "
                            f"at path {distrib_root} on cluster {client.config['proxy']['url']}")
-    return (spark_tgz[0], distrib_root.join(spark_tgz[0]))
+    return (spark_distributive[0], distrib_root.join(spark_distributive[0]))
 
 
 def _get_or_else(d, key, default):

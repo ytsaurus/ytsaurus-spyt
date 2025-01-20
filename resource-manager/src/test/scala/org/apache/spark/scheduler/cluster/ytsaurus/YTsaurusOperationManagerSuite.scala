@@ -89,7 +89,8 @@ class YTsaurusOperationManagerSuite extends SparkFunSuite with BeforeAndAfter wi
     conf.set(SPARK_PRIMARY_RESOURCE, "spark-shell")
     conf.set(YTSAURUS_PORTO_LAYER_PATHS, "//path/to/layers/1,//path/to/layers/2")
 
-    val result = YTsaurusOperationManager.getPortoLayers(conf, YTree.listBuilder().buildList()).asList().asScala.map(x => x.stringValue())
+    val result = YTsaurusOperationManager.getLayerPaths(conf, YTree.mapBuilder().buildMap(), "spark.tgz")
+      .asList().asScala.map(x => x.stringValue())
 
     result should contain theSameElementsAs Seq("//path/to/layers/1", "//path/to/layers/2")
   }
@@ -97,11 +98,13 @@ class YTsaurusOperationManagerSuite extends SparkFunSuite with BeforeAndAfter wi
   test("Test layer_paths override + extra layers") {
     val conf = new SparkConf()
     conf.set(SPARK_PRIMARY_RESOURCE, "spark-shell")
-    val defaultLayers: YTreeListNode = YTree.listBuilder().value("//path/to/default_layers/1").value("//path/to/default_layers/2").buildList()
+    val releaseConfig: YTreeMapNode = YTree.mapBuilder()
+      .key("layer_paths").beginList().value("//path/to/default_layers/1").value("//path/to/default_layers/2").endList()
+      .buildMap()
     conf.set(YTSAURUS_PORTO_LAYER_PATHS, "//path/to/layers/1,//path/to/layers/2")
     conf.set(YTSAURUS_EXTRA_PORTO_LAYER_PATHS, "//path/to/extra_layers/3,//path/to/extra_layers/4")
 
-    val result = YTsaurusOperationManager.getPortoLayers(conf, defaultLayers).asList().asScala.map(x => x.stringValue())
+    val result = YTsaurusOperationManager.getLayerPaths(conf, releaseConfig, "spark.tgz").asList().asScala.map(x => x.stringValue())
 
     result should contain theSameElementsAs Seq(
       "//path/to/extra_layers/3",
@@ -115,15 +118,37 @@ class YTsaurusOperationManagerSuite extends SparkFunSuite with BeforeAndAfter wi
     val conf = new SparkConf()
     conf.set(SPARK_PRIMARY_RESOURCE, "spark-shell")
     conf.set(YTSAURUS_EXTRA_PORTO_LAYER_PATHS, "//path/to/extra_layers/3,//path/to/extra_layers/4")
+    val releaseConfig: YTreeMapNode = YTree.mapBuilder()
+      .key("layer_paths").beginList().value("//path/to/default_layers/1").value("//path/to/default_layers/2").endList()
+      .buildMap()
 
-    val defaultLayers: YTreeListNode = YTree.listBuilder().value("//path/to/default_layers/1").value("//path/to/default_layers/2").buildList()
-    val result = YTsaurusOperationManager.getPortoLayers(conf, defaultLayers).asList().asScala.map(x => x.stringValue())
+    val result = YTsaurusOperationManager.getLayerPaths(conf, releaseConfig, "spark.tgz").asList().asScala.map(x => x.stringValue())
 
     result should contain theSameElementsAs Seq(
       "//path/to/extra_layers/3",
       "//path/to/extra_layers/4",
       "//path/to/default_layers/1",
       "//path/to/default_layers/2",
+    )
+  }
+
+  test("Test layer_paths and file_paths for enables squashfs") {
+    val conf = new SparkConf()
+    conf.set(YTSAURUS_SQUASHFS_ENABLED, true)
+
+    val releaseConfig: YTreeMapNode = YTree.mapBuilder()
+      .key("spark_yt_base_path").value("//base/path")
+      .key("layer_paths").beginList().value("//path/to/default_layers/1").value("//path/to/default_layers/2").endList()
+      .key("squashfs_layer_paths").beginList().value("//path/to/squashfs_layers/1").value("//path/to/squashfs_layers/2").endList()
+      .buildMap()
+
+    val result = YTsaurusOperationManager.getLayerPaths(conf, releaseConfig, "//path/to/spark.squashfs").asList().asScala.map(x => x.stringValue())
+
+    result should contain theSameElementsAs Seq(
+      "//base/path/spyt-package.squashfs",
+      "//path/to/spark.squashfs",
+      "//path/to/squashfs_layers/1",
+      "//path/to/squashfs_layers/2",
     )
   }
 

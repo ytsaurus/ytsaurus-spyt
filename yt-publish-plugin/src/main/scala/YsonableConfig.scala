@@ -84,6 +84,7 @@ case class SparkLaunchConfig(spark_yt_base_path: String,
                              enablers: SpytEnablers = SpytEnablers(),
                              ytserver_proxy_path: Option[String] = None,
                              layer_paths: Seq[String] = SparkLaunchConfig.defaultLayers,
+                             squashfs_layer_paths: Seq[String] = SparkLaunchConfig.squashFsLayers,
                              environment: Map[String, String] = Map.empty) extends YsonableConfig {
   override def resolveSymlinks(implicit yt: YTsaurusClient): YsonableConfig = {
     import SparkLaunchConfig._
@@ -96,13 +97,15 @@ case class SparkLaunchConfig(spark_yt_base_path: String,
 case class SpytEnablers(enable_byop: Boolean = true,
                         enable_mtn: Boolean = true,
                         enable_solomon_agent: Boolean = true,
-                        enable_tcp_proxy: Boolean = true) extends YsonableConfig {
+                        enable_tcp_proxy: Boolean = true,
+                        enable_squashfs: Boolean = true) extends YsonableConfig {
   override def toYson(builder: YTreeBuilder): YTreeBuilder = {
     builder.beginMap()
       .key("spark.hadoop.yt.byop.enabled").value(enable_byop)
       .key("spark.hadoop.yt.mtn.enabled").value(enable_mtn)
       .key("spark.hadoop.yt.solomonAgent.enabled").value(enable_solomon_agent)
       .key("spark.hadoop.yt.tcpProxy.enabled").value(enable_tcp_proxy)
+      .key("spark.ytsaurus.squashfs.enabled").value(enable_squashfs)
       .endMap()
   }
 }
@@ -116,6 +119,17 @@ object SparkLaunchConfig {
     s"$sparkYtDeltaLayerPath/python/layer_with_python39_focal_v002.tar.gz",
     s"$sparkYtDeltaLayerPath/python/layer_with_python38_focal_v002.tar.gz",
     s"$sparkYtDeltaLayerPath/python/layer_with_python37_focal_yandexyt0131.tar.gz",
+    s"$ytPortoBaseLayersPath/focal/porto_layer_search_ubuntu_focal_app_lastest.tar.gz"
+  )
+
+  val squashFsLayers = Seq(
+    s"$sparkYtSquashfsLayerPath/layer_with_solomon_agent.squashfs",
+    s"$sparkYtSquashfsLayerPath/jdk/layer_with_jdk_latest.squashfs",
+    s"$sparkYtSquashfsLayerPath/python/layer_with_python312_focal_v002.squashfs",
+    s"$sparkYtSquashfsLayerPath/python/layer_with_python311_focal_v002.squashfs",
+    s"$sparkYtSquashfsLayerPath/python/layer_with_python39_focal_v002.squashfs",
+    s"$sparkYtSquashfsLayerPath/python/layer_with_python38_focal_v002.squashfs",
+    s"$sparkYtSquashfsLayerPath/python/layer_with_python37_focal_yandexyt0131.squashfs",
     s"$ytPortoBaseLayersPath/focal/porto_layer_search_ubuntu_focal_app_lastest.tar.gz"
   )
 

@@ -462,4 +462,9 @@ class YtSparkSQLTest extends FlatSpec with Matchers with LocalSpark with TmpDir
     val res2 = spark.sql(s"""SELECT * FROM yt.`ytTable:/<cluster="${LocalYt.proxy}">$tmpPath`""")
     res2.collect() should contain theSameElementsAs Seq(Row(1, "q"), Row(3, "c"))
   }
+
+  it should "cast some expression to string without any errors" in  {
+    val df = spark.sql(s"""SELECT cast((date('2025-01-17') - INTERVAL 2 WEEK) AS STRING) AS some_date""")
+    df.collect() should contain theSameElementsAs Seq(Row("2025-01-03"))
+  }
 }

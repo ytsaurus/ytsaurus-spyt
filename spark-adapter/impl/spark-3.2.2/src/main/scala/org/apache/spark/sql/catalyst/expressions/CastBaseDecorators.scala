@@ -32,6 +32,7 @@ class CastBaseDecorators {
   protected[this] type CastFunction = (ExprValue, ExprValue, ExprValue) => Block
 
   @DecoratedMethod
+  @Applicability(to = "3.4.4")
   private[this] def castToString(from: DataType): Any => Any = from match {
     case ts.uInt64DataType => ts.uInt64CastToString
     case _ => __castToString(from)

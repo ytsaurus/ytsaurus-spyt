@@ -192,7 +192,7 @@ private[spark] class YTsaurusOperationManager(val ytClient: YTsaurusClient,
         .key("job_count").value(1)
         .key("cpu_limit").value(conf.get(DRIVER_CORES))
         .key("memory_limit").value(memoryLimit)
-      setCommonSpecParams(specBuilder, conf).endMap()
+      setCommonSpecParams(specBuilder, conf, DRIVER_TASK).endMap()
     }
 
     OperationParameters(spec, conf.get(YTSAURUS_MAX_DRIVER_FAILURES), "")
@@ -272,23 +272,36 @@ private[spark] class YTsaurusOperationManager(val ytClient: YTsaurusClient,
 
     val spec: Spec = (specBuilder, _, _) => {
       specBuilder.beginMap()
-        .key("command").value(executorCommand)
+
+      setCommonSpecParams(specBuilder, conf, EXECUTOR_TASK)
+
+      specBuilder.key("command").value(executorCommand)
         .key("job_count").value(numExecutors)
         .key("cpu_limit").value(execCores)
         .key("memory_limit").value(memoryLimit)
+
       if (gpuLimit > 0) {
         specBuilder
           .key("gpu_limit").value(gpuLimit)
           .key("cuda_toolkit_version").value(conf.get(YTSAURUS_CUDA_VERSION).get)
       }
-      setCommonSpecParams(specBuilder, conf).endMap()
+
+      specBuilder.endMap()
     }
 
     val attemptId = s" [${sys.env.getOrElse("YT_TASK_JOB_INDEX", "0")}]"
     OperationParameters(spec, conf.get(YTSAURUS_MAX_EXECUTOR_FAILURES) * numExecutors, attemptId)
   }
 
-  private def setCommonSpecParams(specBuilder: YTreeBuilder, conf: SparkConf): YTreeBuilder = {
+  private def setCommonSpecParams(specBuilder: YTreeBuilder, conf: SparkConf, taskName: String): YTreeBuilder = {
+    if (conf.contains(s"spark.ytsaurus.$taskName.task.parameters")) {
+      val customParametersString = conf.get(s"spark.ytsaurus.$taskName.task.parameters")
+      val customParameters = YTreeTextSerializer.deserialize(customParametersString).asMap().asScala
+      customParameters.foreach { case (key, value) =>
+        specBuilder.key(key).value(value)
+      }
+    }
+
     specBuilder
       .key("layer_paths").value(layerPaths)
       .key("file_paths").value(filePaths)

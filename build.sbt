@@ -54,7 +54,13 @@ lazy val `spark-adapter-impl-350` = (project in file(s"spark-adapter/impl/spark-
 
 lazy val `yt-wrapper` = (project in file("yt-wrapper"))
   .enablePlugins(BuildInfoPlugin)
-  .dependsOn(`spark-adapter-api` % "compile->compile;test->test;provided->provided;compileprovided->compileprovided;testprovided->testprovided")
+  .dependsOn(
+    `spark-adapter-api` % "compile->compile;test->test;provided->provided;compileprovided->compileprovided;testprovided->testprovided",
+    `spark-adapter-impl-322` % Test,
+    `spark-adapter-impl-330` % Test,
+    `spark-adapter-impl-340` % Test,
+    `spark-adapter-impl-350` % Test
+  )
   .settings(
     libraryDependencies ++= circe,
     libraryDependencies ++= shapeless,
@@ -71,11 +77,7 @@ lazy val `file-system` = (project in file("file-system"))
 
 lazy val `data-source-base` = (project in file("data-source"))
   .dependsOn(
-    `file-system` % "compile->compile;test->test;provided->provided;compileprovided->compileprovided;testprovided->testprovided",
-    `spark-adapter-impl-322` % Test,
-    `spark-adapter-impl-330` % Test,
-    `spark-adapter-impl-340` % Test,
-    `spark-adapter-impl-350` % Test
+    `file-system` % "compile->compile;test->test;provided->provided;compileprovided->compileprovided;testprovided->testprovided"
   )
 
 lazy val `data-source-extended` = (project in file("data-source-extended"))

@@ -2,18 +2,53 @@
 package org.apache.spark.scheduler.cluster.ytsaurus
 
 import org.apache.spark.deploy.ytsaurus.Config._
-import org.apache.spark.internal.config.{ARCHIVES, FILES, JARS, SUBMIT_PYTHON_FILES}
+import org.apache.spark.internal.config.{ARCHIVES, DRIVER_HOST_ADDRESS, DRIVER_PORT, FILES, JARS, SUBMIT_PYTHON_FILES}
 import org.apache.spark.launcher.SparkLauncher
+import org.apache.spark.resource.ResourceProfile
 import org.apache.spark.scheduler.cluster.ytsaurus.YTsaurusOperationManager.{ApplicationFile, DRIVER_TASK, EXECUTOR_TASK}
 import org.apache.spark.{SparkConf, SparkFunSuite}
 import org.scalatest.BeforeAndAfter
 import org.scalatest.matchers.should.Matchers
+import tech.ytsaurus.client.YTsaurusClient
+import tech.ytsaurus.client.operations.VanillaSpec
 import tech.ytsaurus.spyt.wrapper.file.YtFileUtils
 import tech.ytsaurus.ysontree._
 
 import scala.collection.JavaConverters._
 
 class YTsaurusOperationManagerSuite extends SparkFunSuite with BeforeAndAfter with Matchers {
+
+  private val testSparkConf: SparkConf = {
+    new SparkConf()
+      .set(DRIVER_HOST_ADDRESS, "some-host")
+      .set(DRIVER_PORT, 12345)
+  }
+
+  private val testResourceProfile: ResourceProfile = ResourceProfile.getOrCreateDefaultProfile(testSparkConf)
+
+  private def createYTsaurusOperationManagerStub(
+    ytClient: YTsaurusClient = null,
+    user: String = "testUser",
+    token: String = "testToken",
+    layerPaths: YTreeNode = YTree.listBuilder().buildList(),
+    filePaths: YTreeNode = YTree.listBuilder().buildList(),
+    environment: YTreeMapNode = YTree.mapBuilder().buildMap(),
+    home: String = ".",
+    prepareEnvCommand: String = "./setup-spyt-env.sh --some-key some-value",
+    sparkClassPath: String = "./*:/usr/lib/spyt/conf/:/usr/lib/spyt/jars/*:/usr/lib/spark/jars/*",
+    javaCommand: String = "/usr/bin/java",
+    ytsaurusJavaOptions: Seq[String] = Seq.empty[String]
+  ): YTsaurusOperationManager = {
+    new YTsaurusOperationManager(ytClient, user, token, layerPaths, filePaths, environment, home,
+      prepareEnvCommand, sparkClassPath, javaCommand, ytsaurusJavaOptions)
+  }
+
+  private val expectedExecutorCommand = "./setup-spyt-env.sh --some-key some-value && " +
+    "/usr/bin/java -cp ./*:/usr/lib/spyt/conf/:/usr/lib/spyt/jars/*:/usr/lib/spark/jars/* -Xmx1024m " +
+    "-Dspark.driver.port=\"12345\"  " +
+    "org.apache.spark.executor.YTsaurusCoarseGrainedExecutorBackend " +
+    "--driver-url spark://CoarseGrainedScheduler@some-host:12345 " +
+    "--executor-id $YT_TASK_JOB_INDEX --cores 1 --app-id appId --hostname $HOSTNAME"
 
   test("Generate application files for python spark-submit in cluster mode") {
     val conf = new SparkConf()
@@ -80,7 +115,7 @@ class YTsaurusOperationManagerSuite extends SparkFunSuite with BeforeAndAfter wi
     val result = YTsaurusOperationManager.applicationFiles(conf, uploader)
 
     result should contain theSameElementsAs Seq(
-      ApplicationFile("uploaded-dep.py", Some("dep.py")), ApplicationFile("uploaded-my-job.py",Some("my-job.py"))
+      ApplicationFile("uploaded-dep.py", Some("dep.py")), ApplicationFile("uploaded-my-job.py", Some("my-job.py"))
     )
   }
 
@@ -173,36 +208,63 @@ class YTsaurusOperationManagerSuite extends SparkFunSuite with BeforeAndAfter wi
     val driverAnnotationsYtree = SpecificationUtils.getAnnotationsAsYTreeMapNode(conf, DRIVER_TASK)
     driverAnnotationsYtree shouldBe YTree.mapBuilder()
       .key("key1").value(
-      YTree.mapBuilder()
-        .key("n1").value(123)
-        .key("n2").value("common_annotation_n2")
-        .key("n3").value(456)
-        .key("n4").value("common_driver_annotation_n4")
-        .buildMap()
-    )
+        YTree.mapBuilder()
+          .key("n1").value(123)
+          .key("n2").value("common_annotation_n2")
+          .key("n3").value(456)
+          .key("n4").value("common_driver_annotation_n4")
+          .buildMap()
+      )
       .key("key2").value(
-      YTree.listBuilder()
-        .value(YTree.stringNode("driver_annotation"))
-        .value(YTree.stringNode("driver_annotation_2"))
-        .value(YTree.stringNode("driver_annotation_3"))
-        .value(YTree.stringNode("driver_annotation_4"))
-        .buildList()
-    )
+        YTree.listBuilder()
+          .value(YTree.stringNode("driver_annotation"))
+          .value(YTree.stringNode("driver_annotation_2"))
+          .value(YTree.stringNode("driver_annotation_3"))
+          .value(YTree.stringNode("driver_annotation_4"))
+          .buildList()
+      )
       .key("key5").value("value_5")
       .buildMap()
 
     val executorAnnotationsYtree = SpecificationUtils.getAnnotationsAsYTreeMapNode(conf, EXECUTOR_TASK)
     executorAnnotationsYtree shouldBe YTree.mapBuilder()
       .key("key1").value(
-      YTree.mapBuilder()
-        .key("n1").value(123)
-        .key("n2").value("common_annotation_n2")
-        .buildMap()
-    )
+        YTree.mapBuilder()
+          .key("n1").value(123)
+          .key("n2").value("common_annotation_n2")
+          .buildMap()
+      )
       .key("key3").value(true)
       .key("key4").value("executors_annotation_2")
       .key("key10").value(true)
       .buildMap()
+  }
+
+  test("Generate executor task specification with additional parameters") {
+    val conf = testSparkConf.clone()
+    conf.set("spark.ytsaurus.executor.task.parameters", "{ disk_request={ disk_space=536870912000 } }")
+
+    val opManager = createYTsaurusOperationManagerStub()
+    val execOpParams = opManager.executorParams(conf, "appId", testResourceProfile, 5)
+    val result = execOpParams.taskSpec.prepare(YTree.builder(), null, null).build().asMap()
+    result.containsKey("disk_request") shouldBe true
+    result.get("disk_request").asMap().get("disk_space").longValue() shouldBe 536870912000L
+    result.get("command").stringValue() shouldEqual expectedExecutorCommand
+  }
+
+  test("Additional task parameters should not override base task parameters") {
+    val conf = testSparkConf.clone()
+    conf.set(
+      "spark.ytsaurus.executor.task.parameters",
+      """{ command="/some/malicious/command"; disk_request={ disk_space=536870912000 } }"""
+    )
+
+    val opManager = createYTsaurusOperationManagerStub()
+    val execOpParams = opManager.executorParams(conf, "appId", testResourceProfile, 5)
+    val result = execOpParams.taskSpec.prepare(YTree.builder(), null, null).build().asMap()
+    result.containsKey("disk_request") shouldBe true
+    result.get("disk_request").asMap().get("disk_space").longValue() shouldBe 536870912000L
+    result.get("command").stringValue() shouldEqual expectedExecutorCommand
   }
 
   def confForAnnotationTests(): SparkConf = {

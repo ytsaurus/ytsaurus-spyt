@@ -9,15 +9,14 @@ import org.apache.spark.sql.execution.datasources.OutputWriter
 import org.apache.spark.sql.types.StructType
 import org.slf4j.LoggerFactory
 import tech.ytsaurus.client.request.{TransactionalOptions, WriteSerializationContext, WriteTable}
-import tech.ytsaurus.client.{ArrowWriteSerializationContext, CompoundClient, TableWriter}
+import tech.ytsaurus.client.{ArrowTableRowsSerializer, ArrowWriteSerializationContext, CompoundClient, TableWriter}
 import tech.ytsaurus.core.GUID
-import tech.ytsaurus.spyt.format.conf.{SparkYtWriteConfiguration, YtTableSparkSettings}
 import tech.ytsaurus.spyt.format.conf.YtTableSparkSettings._
-import tech.ytsaurus.spyt.wrapper.config._
+import tech.ytsaurus.spyt.format.conf.{SparkYtWriteConfiguration, YtTableSparkSettings}
 import tech.ytsaurus.spyt.fs.path.YPathEnriched
 import tech.ytsaurus.spyt.serializers.{InternalRowSerializer, WriteSchemaConverter}
 import tech.ytsaurus.spyt.wrapper.LogLazy
-import tech.ytsaurus.ysontree.YTree
+import tech.ytsaurus.spyt.wrapper.config._
 
 import java.util
 import java.util.concurrent.{CompletableFuture, TimeUnit}
@@ -163,11 +162,11 @@ class YtOutputWriter(richPath: YPathEnriched,
             throw new RuntimeException("arrow writer is only supported with typeV3")
           }
           new ArrowWriteSerializationContext[InternalRow](
-            schema.fields.zipWithIndex.map { case (field, i) =>
+            new ArrowTableRowsSerializer[InternalRow](schema.fields.zipWithIndex.map { case (field, i) =>
               util.Map.entry(field.name, writeSchemaConverter.ytLogicalTypeV3(field).ytGettersFromStruct(
                 field.dataType, i
               ))
-            }.toSeq.asJava
+            }.toSeq.asJava)
           )
         } else {
           new WriteSerializationContext(new InternalRowSerializer(schema, WriteSchemaConverter(options)))

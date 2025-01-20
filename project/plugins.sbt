@@ -1,3 +1,4 @@
+resolvers += "oss.sonatype.org-snapshot" at "https://s01.oss.sonatype.org/content/repositories/snapshots/"
 resolvers += MavenCache("local-maven", Path.userHome / ".m2" / "repository")
 
 addSbtPlugin("com.github.sbt" % "sbt-native-packager" % "1.9.16")

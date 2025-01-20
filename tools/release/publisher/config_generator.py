@@ -166,7 +166,8 @@ def prepare_global_config(os_release: bool) -> Dict[str, Any]:
         global_config['ytserver_proxy_path'] = YTSERVER_PROXY
     else:
         python_cluster_paths = {
-            "3.7": "/opt/conda/bin/python3.7"
+            "3.7": "/usr/bin/python3.7",
+            "3.8": "/usr/bin/python3.8"
         }
     global_config['python_cluster_paths'] = python_cluster_paths
     return global_config

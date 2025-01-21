@@ -291,6 +291,11 @@ def parse_args(parser=None, parser_arguments=None, raw_args=None, client=None):
     return args, unknown_args
 
 
+def show_unspecified_args(unknown_args):
+    if unknown_args:
+        print("Unspecified arguments are ignored: %s" % ', '.join(unknown_arg.split('=')[0] for unknown_arg in unknown_args))
+
+
 # backward compatibility
 def tuple(element_types):
     from .types import tuple_type

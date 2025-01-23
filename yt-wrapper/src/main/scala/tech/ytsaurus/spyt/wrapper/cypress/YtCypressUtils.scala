@@ -31,7 +31,9 @@ trait YtCypressUtils {
   @tailrec
   final def formatPath(path: String): String = {
     log.debugLazy(s"Formatting path $path")
-    if (!path.startsWith("/")) {
+    if (path.startsWith("#")) {
+      path
+    } else if (!path.startsWith("/")) {
       if (path.contains(":/")) {
         formatPath(path.split(":", 2).last)
       } else {

@@ -39,4 +39,6 @@ object Utils {
   def ytHostnameOrIpAddress: String = {
     if (ytNetworkProjectEnabled) ytHostIp else InetAddress.getLocalHost.getHostName
   }
+
+  def tryWithResources[R <: AutoCloseable, A](resource: R)(body: R => A): A = TryWithResourcesJava.apply(resource, body)
 }

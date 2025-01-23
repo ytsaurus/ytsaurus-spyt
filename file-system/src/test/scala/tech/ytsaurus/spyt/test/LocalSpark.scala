@@ -27,13 +27,14 @@ trait LocalSpark extends LocalYtClient {
     if (LocalSpark.spark != null) {
       LocalSpark.spark
     } else {
-      LocalSpark.spark = SparkSession.builder()
-        .master(s"local[$numExecutors]")
-        .config(sparkConf)
-        .getOrCreate()
+      LocalSpark.spark = sparkSessionBuilder.getOrCreate()
       LocalSpark.spark
     }
   }
+
+  protected def sparkSessionBuilder: SparkSession.Builder = SparkSession.builder()
+    .master(s"local[$numExecutors]")
+    .config(sparkConf)
 
   override protected def ytRpcClient: YtRpcClient = {
     YtClientProvider.ytRpcClient(ytClientConfiguration(spark), "test")

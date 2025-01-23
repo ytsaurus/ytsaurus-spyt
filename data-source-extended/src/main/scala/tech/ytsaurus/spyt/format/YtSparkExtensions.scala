@@ -1,5 +1,6 @@
 package tech.ytsaurus.spyt.format
 
+import org.apache.spark.sql.yt.ReadTransactionStrategy
 import org.apache.spark.sql.{SparkSessionExtensions, SparkSessionExtensionsProvider}
 import org.slf4j.LoggerFactory
 import tech.ytsaurus.spyt.format.optimizer.{YtSortedTableStrategy, YtSourceStrategy}
@@ -10,6 +11,7 @@ class YtSparkExtensions extends SparkSessionExtensionsProvider {
   override def apply(extensions: SparkSessionExtensions): Unit = {
     log.info("Apply YtSparkExtensions")
     extensions.injectPlannerStrategy(YtSortedTableStrategy(_))
+    extensions.injectPreCBORule(new ReadTransactionStrategy(_))
     extensions.injectPlannerStrategy(_ => new YtSourceStrategy())
   }
 }

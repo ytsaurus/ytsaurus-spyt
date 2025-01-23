@@ -67,35 +67,37 @@ public class ArrowTableRowsSerializer<Row> extends TableRowsSerializerBase<Row> 
                 ? (YTGetters.FromListToOptional<Array>) getter
                 : null;
         var nonEmptyGetter = optionalGetter != null ? optionalGetter.getNotEmptyGetter() : getter;
-        var arrowGetter = nonComplexArrowGetter(name, nonEmptyGetter);
-        if (arrowGetter != null) {
-            return optionalGetter == null ? arrowGetter : new ArrowGetterFromList<>(new Field(name, new FieldType(
-                    true, arrowGetter.field.getType(), null
-            ), arrowGetter.field.getChildren())) {
-                @Override
-                public ArrowWriterFromList<Array> writer(ValueVector valueVector) {
-                    var nonOptionalWriter = arrowGetter.writer(valueVector);
-                    return (array, i) -> nonOptionalWriter.setFromList(optionalGetter.isEmpty(array, i) ? null : array, i);
+        var arrowGetter = Objects.requireNonNullElseGet(nonComplexArrowGetter(name, nonEmptyGetter), () ->
+                new ArrowGetterFromList<Array>(new Field(name, new FieldType(
+                        false, new ArrowType.Binary(), null
+                ), new ArrayList<>())) {
+                    @Override
+                    public ArrowWriterFromList<Array> writer(ValueVector valueVector) {
+                        var varBinaryVector = (VarBinaryVector) valueVector;
+                        return (array, i) -> {
+                            var byteArrayOutputStream = new ByteArrayOutputStream();
+                            try (var ysonBinaryWriter = new YsonBinaryWriter(byteArrayOutputStream)) {
+                                nonEmptyGetter.getYson(array, i, ysonBinaryWriter);
+                            }
+                            varBinaryVector.setSafe(varBinaryVector.getValueCount(), byteArrayOutputStream.toByteArray());
+                        };
+                    }
                 }
-            };
-        }
+        );
         return new ArrowGetterFromList<>(new Field(name, new FieldType(
-                optionalGetter != null, new ArrowType.Binary(), null
-        ), new ArrayList<>())) {
+                optionalGetter != null, arrowGetter.field.getType(), null
+        ), arrowGetter.field.getChildren())) {
             @Override
             public ArrowWriterFromList<Array> writer(ValueVector valueVector) {
-                var varBinaryVector = (VarBinaryVector) valueVector;
+                var nonOptionalWriter = arrowGetter.writer(valueVector);
+                var fieldVector = optionalGetter == null ? null : (FieldVector) valueVector;
                 return (array, i) -> {
                     if (optionalGetter != null && optionalGetter.isEmpty(array, i)) {
-                        varBinaryVector.setNull(varBinaryVector.getValueCount());
+                        fieldVector.setNull(valueVector.getValueCount());
                     } else {
-                        var byteArrayOutputStream = new ByteArrayOutputStream();
-                        try (var ysonBinaryWriter = new YsonBinaryWriter(byteArrayOutputStream)) {
-                            nonEmptyGetter.getYson(array, i, ysonBinaryWriter);
-                        }
-                        varBinaryVector.setSafe(varBinaryVector.getValueCount(), byteArrayOutputStream.toByteArray());
+                        nonOptionalWriter.setFromList(array, i);
                     }
-                    varBinaryVector.setValueCount(varBinaryVector.getValueCount() + 1);
+                    valueVector.setValueCount(valueVector.getValueCount() + 1);
                 };
             }
         };
@@ -106,39 +108,40 @@ public class ArrowTableRowsSerializer<Row> extends TableRowsSerializerBase<Row> 
                 ? (YTGetters.FromStructToOptional<Struct>) getter
                 : null;
         var nonEmptyGetter = optionalGetter != null ? optionalGetter.getNotEmptyGetter() : getter;
-        var arrowGetter = nonComplexArrowGetter(name, nonEmptyGetter);
-        if (arrowGetter != null) {
-            return optionalGetter == null ? arrowGetter : new ArrowGetterFromStruct<>(new Field(name, new FieldType(
-                    true, arrowGetter.field.getType(), null
-            ), arrowGetter.field.getChildren())) {
-                @Override
-                public ArrowWriterFromStruct<Struct> writer(ValueVector valueVector) {
-                    var nonOptionalWriter = arrowGetter.writer(valueVector);
-                    return struct -> nonOptionalWriter.setFromStruct(optionalGetter.isEmpty(struct) ? null : struct);
-                }
-            };
-        } else {
-            return new ArrowGetterFromStruct<>(new Field(name, new FieldType(
-                    optionalGetter != null, new ArrowType.Binary(), null
-            ), new ArrayList<>())) {
-                @Override
-                public ArrowWriterFromStruct<Struct> writer(ValueVector valueVector) {
-                    var varBinaryVector = (VarBinaryVector) valueVector;
-                    return struct -> {
-                        if (optionalGetter != null && optionalGetter.isEmpty(struct)) {
-                            varBinaryVector.setNull(varBinaryVector.getValueCount());
-                        } else {
+        var arrowGetter = Objects.requireNonNullElseGet(nonComplexArrowGetter(name, nonEmptyGetter), () ->
+                new ArrowGetterFromStruct<Struct>(new Field(name, new FieldType(
+                        false, new ArrowType.Binary(), null
+                ), new ArrayList<>())) {
+                    @Override
+                    public ArrowWriterFromStruct<Struct> writer(ValueVector valueVector) {
+                        var varBinaryVector = (VarBinaryVector) valueVector;
+                        return struct -> {
                             var byteArrayOutputStream = new ByteArrayOutputStream();
                             try (var ysonBinaryWriter = new YsonBinaryWriter(byteArrayOutputStream)) {
                                 nonEmptyGetter.getYson(struct, ysonBinaryWriter);
                             }
                             varBinaryVector.setSafe(varBinaryVector.getValueCount(), byteArrayOutputStream.toByteArray());
-                        }
-                        varBinaryVector.setValueCount(varBinaryVector.getValueCount() + 1);
-                    };
+                        };
+                    }
                 }
-            };
-        }
+        );
+        return new ArrowGetterFromStruct<>(new Field(name, new FieldType(
+                optionalGetter != null, arrowGetter.field.getType(), null
+        ), arrowGetter.field.getChildren())) {
+            @Override
+            public ArrowWriterFromStruct<Struct> writer(ValueVector valueVector) {
+                var nonOptionalWriter = arrowGetter.writer(valueVector);
+                var fieldVector = optionalGetter == null ? null : (FieldVector) valueVector;
+                return struct -> {
+                    if (optionalGetter != null && optionalGetter.isEmpty(struct)) {
+                        fieldVector.setNull(valueVector.getValueCount());
+                    } else {
+                        nonOptionalWriter.setFromStruct(struct);
+                    }
+                    valueVector.setValueCount(valueVector.getValueCount() + 1);
+                };
+            }
+        };
     }
 
     private Field field(String name, ArrowType arrowType) {
@@ -155,8 +158,7 @@ public class ArrowTableRowsSerializer<Row> extends TableRowsSerializerBase<Row> 
                 ) {
                     @Override
                     public ArrowWriterFromList<Array> writer(ValueVector valueVector) {
-                        var nullVector = (NullVector) valueVector;
-                        return (list, i) -> nullVector.setValueCount(nullVector.getValueCount() + 1);
+                        return (list, i) -> {};
                     }
                 };
             }
@@ -170,16 +172,11 @@ public class ArrowTableRowsSerializer<Row> extends TableRowsSerializerBase<Row> 
                     public ArrowWriterFromList<Array> writer(ValueVector valueVector) {
                         var varBinaryVector = (VarBinaryVector) valueVector;
                         return (list, i) -> {
-                            if (list == null) {
-                                varBinaryVector.setNull(varBinaryVector.getValueCount());
-                            } else {
-                                var byteBuffer = stringGetter.getString(list, i);
-                                varBinaryVector.setSafe(
-                                        varBinaryVector.getValueCount(),
-                                        byteBuffer, byteBuffer.position(), byteBuffer.remaining()
-                                );
-                            }
-                            varBinaryVector.setValueCount(varBinaryVector.getValueCount() + 1);
+                            var byteBuffer = stringGetter.getString(list, i);
+                            varBinaryVector.setSafe(
+                                    varBinaryVector.getValueCount(),
+                                    byteBuffer, byteBuffer.position(), byteBuffer.remaining()
+                            );
                         };
                     }
                 };
@@ -190,14 +187,8 @@ public class ArrowTableRowsSerializer<Row> extends TableRowsSerializerBase<Row> 
                     @Override
                     public ArrowWriterFromList<Array> writer(ValueVector valueVector) {
                         var tinyIntVector = (TinyIntVector) valueVector;
-                        return (list, i) -> {
-                            if (list == null) {
-                                tinyIntVector.setNull(tinyIntVector.getValueCount());
-                            } else {
+                        return (list, i) ->
                                 tinyIntVector.set(tinyIntVector.getValueCount(), byteGetter.getByte(list, i));
-                            }
-                            tinyIntVector.setValueCount(tinyIntVector.getValueCount() + 1);
-                        };
                     }
                 };
             }
@@ -207,14 +198,8 @@ public class ArrowTableRowsSerializer<Row> extends TableRowsSerializerBase<Row> 
                     @Override
                     public ArrowWriterFromList<Array> writer(ValueVector valueVector) {
                         var uInt1Vector = (UInt1Vector) valueVector;
-                        return (list, i) -> {
-                            if (list == null) {
-                                uInt1Vector.setNull(uInt1Vector.getValueCount());
-                            } else {
+                        return (list, i) ->
                                 uInt1Vector.set(uInt1Vector.getValueCount(), byteGetter.getByte(list, i));
-                            }
-                            uInt1Vector.setValueCount(uInt1Vector.getValueCount() + 1);
-                        };
                     }
                 };
             }
@@ -224,14 +209,8 @@ public class ArrowTableRowsSerializer<Row> extends TableRowsSerializerBase<Row> 
                     @Override
                     public ArrowWriterFromList<Array> writer(ValueVector valueVector) {
                         var smallIntVector = (SmallIntVector) valueVector;
-                        return (list, i) -> {
-                            if (list == null) {
-                                smallIntVector.setNull(smallIntVector.getValueCount());
-                            } else {
+                        return (list, i) ->
                                 smallIntVector.set(smallIntVector.getValueCount(), shortGetter.getShort(list, i));
-                            }
-                            smallIntVector.setValueCount(smallIntVector.getValueCount() + 1);
-                        };
                     }
                 };
             }
@@ -241,14 +220,8 @@ public class ArrowTableRowsSerializer<Row> extends TableRowsSerializerBase<Row> 
                     @Override
                     public ArrowWriterFromList<Array> writer(ValueVector valueVector) {
                         var uInt2Vector = (UInt2Vector) valueVector;
-                        return (list, i) -> {
-                            if (list == null) {
-                                uInt2Vector.setNull(uInt2Vector.getValueCount());
-                            } else {
+                        return (list, i) ->
                                 uInt2Vector.set(uInt2Vector.getValueCount(), shortGetter.getShort(list, i));
-                            }
-                            uInt2Vector.setValueCount(uInt2Vector.getValueCount() + 1);
-                        };
                     }
                 };
             }
@@ -258,14 +231,8 @@ public class ArrowTableRowsSerializer<Row> extends TableRowsSerializerBase<Row> 
                     @Override
                     public ArrowWriterFromList<Array> writer(ValueVector valueVector) {
                         var intVector = (IntVector) valueVector;
-                        return (list, i) -> {
-                            if (list == null) {
-                                intVector.setNull(intVector.getValueCount());
-                            } else {
+                        return (list, i) ->
                                 intVector.set(intVector.getValueCount(), intGetter.getInt(list, i));
-                            }
-                            intVector.setValueCount(intVector.getValueCount() + 1);
-                        };
                     }
                 };
             }
@@ -275,14 +242,8 @@ public class ArrowTableRowsSerializer<Row> extends TableRowsSerializerBase<Row> 
                     @Override
                     public ArrowWriterFromList<Array> writer(ValueVector valueVector) {
                         var uInt4Vector = (UInt4Vector) valueVector;
-                        return (list, i) -> {
-                            if (list == null) {
-                                uInt4Vector.setNull(uInt4Vector.getValueCount());
-                            } else {
+                        return (list, i) ->
                                 uInt4Vector.set(uInt4Vector.getValueCount(), intGetter.getInt(list, i));
-                            }
-                            uInt4Vector.setValueCount(uInt4Vector.getValueCount() + 1);
-                        };
                     }
                 };
             }
@@ -294,14 +255,8 @@ public class ArrowTableRowsSerializer<Row> extends TableRowsSerializerBase<Row> 
                     @Override
                     public ArrowWriterFromList<Array> writer(ValueVector valueVector) {
                         var bigIntVector = (BigIntVector) valueVector;
-                        return (list, i) -> {
-                            if (list == null) {
-                                bigIntVector.setNull(bigIntVector.getValueCount());
-                            } else {
+                        return (list, i) ->
                                 bigIntVector.set(bigIntVector.getValueCount(), longGetter.getLong(list, i));
-                            }
-                            bigIntVector.setValueCount(bigIntVector.getValueCount() + 1);
-                        };
                     }
                 };
             }
@@ -311,14 +266,8 @@ public class ArrowTableRowsSerializer<Row> extends TableRowsSerializerBase<Row> 
                     @Override
                     public ArrowWriterFromList<Array> writer(ValueVector valueVector) {
                         var uInt8Vector = (UInt8Vector) valueVector;
-                        return (list, i) -> {
-                            if (list == null) {
-                                uInt8Vector.setNull(uInt8Vector.getValueCount());
-                            } else {
+                        return (list, i) ->
                                 uInt8Vector.set(uInt8Vector.getValueCount(), longGetter.getLong(list, i));
-                            }
-                            uInt8Vector.setValueCount(uInt8Vector.getValueCount() + 1);
-                        };
                     }
                 };
             }
@@ -328,14 +277,8 @@ public class ArrowTableRowsSerializer<Row> extends TableRowsSerializerBase<Row> 
                     @Override
                     public ArrowWriterFromList<Array> writer(ValueVector valueVector) {
                         var bitVector = (BitVector) valueVector;
-                        return (list, i) -> {
-                            if (list == null) {
-                                bitVector.setNull(bitVector.getValueCount());
-                            } else {
+                        return (list, i) ->
                                 bitVector.set(bitVector.getValueCount(), booleanGetter.getBoolean(list, i) ? 1 : 0);
-                            }
-                            bitVector.setValueCount(bitVector.getValueCount() + 1);
-                        };
                     }
                 };
             }
@@ -345,14 +288,8 @@ public class ArrowTableRowsSerializer<Row> extends TableRowsSerializerBase<Row> 
                     @Override
                     public ArrowWriterFromList<Array> writer(ValueVector valueVector) {
                         var float4Vector = (Float4Vector) valueVector;
-                        return (list, i) -> {
-                            if (list == null) {
-                                float4Vector.setNull(float4Vector.getValueCount());
-                            } else {
+                        return (list, i) ->
                                 float4Vector.set(float4Vector.getValueCount(), floatGetter.getFloat(list, i));
-                            }
-                            float4Vector.setValueCount(float4Vector.getValueCount() + 1);
-                        };
                     }
                 };
             }
@@ -362,14 +299,8 @@ public class ArrowTableRowsSerializer<Row> extends TableRowsSerializerBase<Row> 
                     @Override
                     public ArrowWriterFromList<Array> writer(ValueVector valueVector) {
                         var float8Vector = (Float8Vector) valueVector;
-                        return (list, i) -> {
-                            if (list == null) {
-                                float8Vector.setNull(float8Vector.getValueCount());
-                            } else {
+                        return (list, i) ->
                                 float8Vector.set(float8Vector.getValueCount(), doubleGetter.getDouble(list, i));
-                            }
-                            float8Vector.setValueCount(float8Vector.getValueCount() + 1);
-                        };
                     }
                 };
             }
@@ -382,14 +313,8 @@ public class ArrowTableRowsSerializer<Row> extends TableRowsSerializerBase<Row> 
                     @Override
                     public ArrowWriterFromList<Array> writer(ValueVector valueVector) {
                         var decimalVector = (DecimalVector) valueVector;
-                        return (list, i) -> {
-                            if (list == null) {
-                                decimalVector.setNull(decimalVector.getValueCount());
-                            } else {
+                        return (list, i) ->
                                 decimalVector.set(decimalVector.getValueCount(), decimalGetter.getBigDecimal(list, i));
-                            }
-                            decimalVector.setValueCount(decimalVector.getValueCount() + 1);
-                        };
                     }
                 };
             }
@@ -400,14 +325,8 @@ public class ArrowTableRowsSerializer<Row> extends TableRowsSerializerBase<Row> 
                     @Override
                     public ArrowWriterFromList<Array> writer(ValueVector valueVector) {
                         var dateDayVector = (DateDayVector) valueVector;
-                        return (list, i) -> {
-                            if (list == null) {
-                                dateDayVector.setNull(dateDayVector.getValueCount());
-                            } else {
+                        return (list, i) ->
                                 dateDayVector.set(dateDayVector.getValueCount(), intGetter.getInt(list, i));
-                            }
-                            dateDayVector.setValueCount(dateDayVector.getValueCount() + 1);
-                        };
                     }
                 };
             }
@@ -418,14 +337,8 @@ public class ArrowTableRowsSerializer<Row> extends TableRowsSerializerBase<Row> 
                     @Override
                     public ArrowWriterFromList<Array> writer(ValueVector valueVector) {
                         var dateMilliVector = (DateMilliVector) valueVector;
-                        return (list, i) -> {
-                            if (list == null) {
-                                dateMilliVector.setNull(dateMilliVector.getValueCount());
-                            } else {
+                        return (list, i) ->
                                 dateMilliVector.set(dateMilliVector.getValueCount(), longGetter.getLong(list, i));
-                            }
-                            dateMilliVector.setValueCount(dateMilliVector.getValueCount() + 1);
-                        };
                     }
                 };
             }
@@ -436,14 +349,8 @@ public class ArrowTableRowsSerializer<Row> extends TableRowsSerializerBase<Row> 
                     @Override
                     public ArrowWriterFromList<Array> writer(ValueVector valueVector) {
                         var timeStampMicroVector = (TimeStampMicroVector) valueVector;
-                        return (list, i) -> {
-                            if (list == null) {
-                                timeStampMicroVector.setNull(timeStampMicroVector.getValueCount());
-                            } else {
+                        return (list, i) ->
                                 timeStampMicroVector.set(timeStampMicroVector.getValueCount(), longGetter.getLong(list, i));
-                            }
-                            timeStampMicroVector.setValueCount(timeStampMicroVector.getValueCount() + 1);
-                        };
                     }
                 };
             }
@@ -481,18 +388,11 @@ public class ArrowTableRowsSerializer<Row> extends TableRowsSerializerBase<Row> 
                     membersWriters.add(membersGetters.get(i).writer(structVector.getChildByOrdinal(i)));
                 }
                 return (list, i) -> {
-                    if (list == null) {
-                        for (int j = 0; j < members.size(); j++) {
-                            membersWriters.get(j).setFromStruct(null);
-                        }
-                    } else {
-                        var struct = structGetter.getStruct(list, i);
-                        structVector.setIndexDefined(structVector.getValueCount());
-                        for (int j = 0; j < members.size(); j++) {
-                            membersWriters.get(j).setFromStruct(struct);
-                        }
+                    var struct = structGetter.getStruct(list, i);
+                    structVector.setIndexDefined(structVector.getValueCount());
+                    for (int j = 0; j < members.size(); j++) {
+                        membersWriters.get(j).setFromStruct(struct);
                     }
-                    structVector.setValueCount(structVector.getValueCount() + 1);
                 };
             }
         };
@@ -521,21 +421,18 @@ public class ArrowTableRowsSerializer<Row> extends TableRowsSerializerBase<Row> 
                 var keyWriter = keyGetter.writer(structVector.getChildByOrdinal(0));
                 var valueWriter = valueGetter.writer(structVector.getChildByOrdinal(1));
                 return (list, i) -> {
-                    var dict = list == null ? null : dictGetter.getDict(list, i);
-                    if (dict != null) {
-                        int size = fromDictGetter.getSize(dict);
-                        var keys = fromDictGetter.getKeys(dict);
-                        var values = fromDictGetter.getValues(dict);
-                        mapVector.startNewValue(mapVector.getValueCount());
-                        for (int j = 0; j < size; j++) {
-                            structVector.setIndexDefined(structVector.getValueCount());
-                            keyWriter.setFromList(keys, j);
-                            valueWriter.setFromList(values, j);
-                            structVector.setValueCount(structVector.getValueCount() + 1);
-                        }
-                        mapVector.endValue(mapVector.getValueCount(), size);
+                    var dict = dictGetter.getDict(list, i);
+                    int size = fromDictGetter.getSize(dict);
+                    var keys = fromDictGetter.getKeys(dict);
+                    var values = fromDictGetter.getValues(dict);
+                    mapVector.startNewValue(mapVector.getValueCount());
+                    for (int j = 0; j < size; j++) {
+                        structVector.setIndexDefined(structVector.getValueCount());
+                        keyWriter.setFromList(keys, j);
+                        valueWriter.setFromList(values, j);
+                        structVector.setValueCount(structVector.getValueCount() + 1);
                     }
-                    mapVector.setValueCount(mapVector.getValueCount() + 1);
+                    mapVector.endValue(mapVector.getValueCount(), size);
                 };
             }
         };
@@ -554,16 +451,13 @@ public class ArrowTableRowsSerializer<Row> extends TableRowsSerializerBase<Row> 
                 var listVector = (ListVector) valueVector;
                 var dataWriter = itemGetter.writer(listVector.getDataVector());
                 return (list, i) -> {
-                    var value = list == null ? null : listGetter.getList(list, i);
-                    if (value != null) {
-                        int size = elementGetter.getSize(value);
-                        listVector.startNewValue(listVector.getValueCount());
-                        for (int j = 0; j < size; j++) {
-                            dataWriter.setFromList(value, j);
-                        }
-                        listVector.endValue(listVector.getValueCount(), size);
+                    var value = listGetter.getList(list, i);
+                    int size = elementGetter.getSize(value);
+                    listVector.startNewValue(listVector.getValueCount());
+                    for (int j = 0; j < size; j++) {
+                        dataWriter.setFromList(value, j);
                     }
-                    listVector.setValueCount(listVector.getValueCount() + 1);
+                    listVector.endValue(listVector.getValueCount(), size);
                 };
             }
         };
@@ -579,8 +473,7 @@ public class ArrowTableRowsSerializer<Row> extends TableRowsSerializerBase<Row> 
                 ) {
                     @Override
                     public ArrowWriterFromStruct<Struct> writer(ValueVector valueVector) {
-                        var nullVector = (NullVector) valueVector;
-                        return struct -> nullVector.setValueCount(nullVector.getValueCount() + 1);
+                        return struct -> {};
                     }
                 };
             }
@@ -592,16 +485,11 @@ public class ArrowTableRowsSerializer<Row> extends TableRowsSerializerBase<Row> 
                     public ArrowWriterFromStruct<Struct> writer(ValueVector valueVector) {
                         var varBinaryVector = (VarBinaryVector) valueVector;
                         return struct -> {
-                            if (struct == null) {
-                                varBinaryVector.setNull(varBinaryVector.getValueCount());
-                            } else {
-                                var byteBuffer = stringGetter.getString(struct);
-                                varBinaryVector.setSafe(
-                                        varBinaryVector.getValueCount(),
-                                        byteBuffer, byteBuffer.position(), byteBuffer.remaining()
-                                );
-                            }
-                            varBinaryVector.setValueCount(varBinaryVector.getValueCount() + 1);
+                            var byteBuffer = stringGetter.getString(struct);
+                            varBinaryVector.setSafe(
+                                    varBinaryVector.getValueCount(),
+                                    byteBuffer, byteBuffer.position(), byteBuffer.remaining()
+                            );
                         };
                     }
                 };
@@ -612,14 +500,7 @@ public class ArrowTableRowsSerializer<Row> extends TableRowsSerializerBase<Row> 
                     @Override
                     public ArrowWriterFromStruct<Struct> writer(ValueVector valueVector) {
                         var tinyIntVector = (TinyIntVector) valueVector;
-                        return struct -> {
-                            if (struct == null) {
-                                tinyIntVector.setNull(tinyIntVector.getValueCount());
-                            } else {
-                                tinyIntVector.set(tinyIntVector.getValueCount(), byteGetter.getByte(struct));
-                            }
-                            tinyIntVector.setValueCount(tinyIntVector.getValueCount() + 1);
-                        };
+                        return struct -> tinyIntVector.set(tinyIntVector.getValueCount(), byteGetter.getByte(struct));
                     }
                 };
             }
@@ -629,14 +510,8 @@ public class ArrowTableRowsSerializer<Row> extends TableRowsSerializerBase<Row> 
                     @Override
                     public ArrowWriterFromStruct<Struct> writer(ValueVector valueVector) {
                         var uInt1Vector = (UInt1Vector) valueVector;
-                        return struct -> {
-                            if (struct == null) {
-                                uInt1Vector.setNull(uInt1Vector.getValueCount());
-                            } else {
+                        return struct ->
                                 uInt1Vector.set(uInt1Vector.getValueCount(), byteGetter.getByte(struct));
-                            }
-                            uInt1Vector.setValueCount(uInt1Vector.getValueCount() + 1);
-                        };
                     }
                 };
             }
@@ -646,14 +521,8 @@ public class ArrowTableRowsSerializer<Row> extends TableRowsSerializerBase<Row> 
                     @Override
                     public ArrowWriterFromStruct<Struct> writer(ValueVector valueVector) {
                         var smallIntVector = (SmallIntVector) valueVector;
-                        return struct -> {
-                            if (struct == null) {
-                                smallIntVector.setNull(smallIntVector.getValueCount());
-                            } else {
+                        return struct ->
                                 smallIntVector.set(smallIntVector.getValueCount(), shortGetter.getShort(struct));
-                            }
-                            smallIntVector.setValueCount(smallIntVector.getValueCount() + 1);
-                        };
                     }
                 };
             }
@@ -663,14 +532,7 @@ public class ArrowTableRowsSerializer<Row> extends TableRowsSerializerBase<Row> 
                     @Override
                     public ArrowWriterFromStruct<Struct> writer(ValueVector valueVector) {
                         var uInt2Vector = (UInt2Vector) valueVector;
-                        return struct -> {
-                            if (struct == null) {
-                                uInt2Vector.setNull(uInt2Vector.getValueCount());
-                            } else {
-                                uInt2Vector.set(uInt2Vector.getValueCount(), shortGetter.getShort(struct));
-                            }
-                            uInt2Vector.setValueCount(uInt2Vector.getValueCount() + 1);
-                        };
+                        return struct -> uInt2Vector.set(uInt2Vector.getValueCount(), shortGetter.getShort(struct));
                     }
                 };
             }
@@ -680,14 +542,7 @@ public class ArrowTableRowsSerializer<Row> extends TableRowsSerializerBase<Row> 
                     @Override
                     public ArrowWriterFromStruct<Struct> writer(ValueVector valueVector) {
                         var intVector = (IntVector) valueVector;
-                        return struct -> {
-                            if (struct == null) {
-                                intVector.setNull(intVector.getValueCount());
-                            } else {
-                                intVector.set(intVector.getValueCount(), intGetter.getInt(struct));
-                            }
-                            intVector.setValueCount(intVector.getValueCount() + 1);
-                        };
+                        return struct -> intVector.set(intVector.getValueCount(), intGetter.getInt(struct));
                     }
                 };
             }
@@ -697,14 +552,7 @@ public class ArrowTableRowsSerializer<Row> extends TableRowsSerializerBase<Row> 
                     @Override
                     public ArrowWriterFromStruct<Struct> writer(ValueVector valueVector) {
                         var uInt4Vector = (UInt4Vector) valueVector;
-                        return struct -> {
-                            if (struct == null) {
-                                uInt4Vector.setNull(uInt4Vector.getValueCount());
-                            } else {
-                                uInt4Vector.set(uInt4Vector.getValueCount(), intGetter.getInt(struct));
-                            }
-                            uInt4Vector.setValueCount(uInt4Vector.getValueCount() + 1);
-                        };
+                        return struct -> uInt4Vector.set(uInt4Vector.getValueCount(), intGetter.getInt(struct));
                     }
                 };
             }
@@ -716,14 +564,7 @@ public class ArrowTableRowsSerializer<Row> extends TableRowsSerializerBase<Row> 
                     @Override
                     public ArrowWriterFromStruct<Struct> writer(ValueVector valueVector) {
                         var bigIntVector = (BigIntVector) valueVector;
-                        return struct -> {
-                            if (struct == null) {
-                                bigIntVector.setNull(bigIntVector.getValueCount());
-                            } else {
-                                bigIntVector.set(bigIntVector.getValueCount(), longGetter.getLong(struct));
-                            }
-                            bigIntVector.setValueCount(bigIntVector.getValueCount() + 1);
-                        };
+                        return struct -> bigIntVector.set(bigIntVector.getValueCount(), longGetter.getLong(struct));
                     }
                 };
             }
@@ -733,14 +574,7 @@ public class ArrowTableRowsSerializer<Row> extends TableRowsSerializerBase<Row> 
                     @Override
                     public ArrowWriterFromStruct<Struct> writer(ValueVector valueVector) {
                         var uInt8Vector = (UInt8Vector) valueVector;
-                        return struct -> {
-                            if (struct == null) {
-                                uInt8Vector.setNull(uInt8Vector.getValueCount());
-                            } else {
-                                uInt8Vector.set(uInt8Vector.getValueCount(), longGetter.getLong(struct));
-                            }
-                            uInt8Vector.setValueCount(uInt8Vector.getValueCount() + 1);
-                        };
+                        return struct -> uInt8Vector.set(uInt8Vector.getValueCount(), longGetter.getLong(struct));
                     }
                 };
             }
@@ -750,14 +584,7 @@ public class ArrowTableRowsSerializer<Row> extends TableRowsSerializerBase<Row> 
                     @Override
                     public ArrowWriterFromStruct<Struct> writer(ValueVector valueVector) {
                         var bitVector = (BitVector) valueVector;
-                        return struct -> {
-                            if (struct == null) {
-                                bitVector.setNull(bitVector.getValueCount());
-                            } else {
-                                bitVector.set(bitVector.getValueCount(), booleanGetter.getBoolean(struct) ? 1 : 0);
-                            }
-                            bitVector.setValueCount(bitVector.getValueCount() + 1);
-                        };
+                        return struct -> bitVector.set(bitVector.getValueCount(), booleanGetter.getBoolean(struct) ? 1 : 0);
                     }
                 };
             }
@@ -767,14 +594,7 @@ public class ArrowTableRowsSerializer<Row> extends TableRowsSerializerBase<Row> 
                     @Override
                     public ArrowWriterFromStruct<Struct> writer(ValueVector valueVector) {
                         var float4Vector = (Float4Vector) valueVector;
-                        return struct -> {
-                            if (struct == null) {
-                                float4Vector.setNull(float4Vector.getValueCount());
-                            } else {
-                                float4Vector.set(float4Vector.getValueCount(), floatGetter.getFloat(struct));
-                            }
-                            float4Vector.setValueCount(float4Vector.getValueCount() + 1);
-                        };
+                        return struct -> float4Vector.set(float4Vector.getValueCount(), floatGetter.getFloat(struct));
                     }
                 };
             }
@@ -784,14 +604,7 @@ public class ArrowTableRowsSerializer<Row> extends TableRowsSerializerBase<Row> 
                     @Override
                     public ArrowWriterFromStruct<Struct> writer(ValueVector valueVector) {
                         var float8Vector = (Float8Vector) valueVector;
-                        return struct -> {
-                            if (struct == null) {
-                                float8Vector.setNull(float8Vector.getValueCount());
-                            } else {
-                                float8Vector.set(float8Vector.getValueCount(), doubleGetter.getDouble(struct));
-                            }
-                            float8Vector.setValueCount(float8Vector.getValueCount() + 1);
-                        };
+                        return struct -> float8Vector.set(float8Vector.getValueCount(), doubleGetter.getDouble(struct));
                     }
                 };
             }
@@ -804,14 +617,8 @@ public class ArrowTableRowsSerializer<Row> extends TableRowsSerializerBase<Row> 
                     @Override
                     public ArrowWriterFromStruct<Struct> writer(ValueVector valueVector) {
                         var decimalVector = (DecimalVector) valueVector;
-                        return struct -> {
-                            if (struct == null) {
-                                decimalVector.setNull(decimalVector.getValueCount());
-                            } else {
+                        return struct ->
                                 decimalVector.set(decimalVector.getValueCount(), decimalGetter.getBigDecimal(struct));
-                            }
-                            decimalVector.setValueCount(decimalVector.getValueCount() + 1);
-                        };
                     }
                 };
             }
@@ -822,14 +629,7 @@ public class ArrowTableRowsSerializer<Row> extends TableRowsSerializerBase<Row> 
                     @Override
                     public ArrowWriterFromStruct<Struct> writer(ValueVector valueVector) {
                         var dateDayVector = (DateDayVector) valueVector;
-                        return struct -> {
-                            if (struct == null) {
-                                dateDayVector.setNull(dateDayVector.getValueCount());
-                            } else {
-                                dateDayVector.set(dateDayVector.getValueCount(), intGetter.getInt(struct));
-                            }
-                            dateDayVector.setValueCount(dateDayVector.getValueCount() + 1);
-                        };
+                        return struct -> dateDayVector.set(dateDayVector.getValueCount(), intGetter.getInt(struct));
                     }
                 };
             }
@@ -840,14 +640,7 @@ public class ArrowTableRowsSerializer<Row> extends TableRowsSerializerBase<Row> 
                     @Override
                     public ArrowWriterFromStruct<Struct> writer(ValueVector valueVector) {
                         var dateMilliVector = (DateMilliVector) valueVector;
-                        return struct -> {
-                            if (struct == null) {
-                                dateMilliVector.setNull(dateMilliVector.getValueCount());
-                            } else {
-                                dateMilliVector.set(dateMilliVector.getValueCount(), longGetter.getLong(struct));
-                            }
-                            dateMilliVector.setValueCount(dateMilliVector.getValueCount() + 1);
-                        };
+                        return struct -> dateMilliVector.set(dateMilliVector.getValueCount(), longGetter.getLong(struct));
                     }
                 };
             }
@@ -858,14 +651,8 @@ public class ArrowTableRowsSerializer<Row> extends TableRowsSerializerBase<Row> 
                     @Override
                     public ArrowWriterFromStruct<Struct> writer(ValueVector valueVector) {
                         var timeStampMicroVector = (TimeStampMicroVector) valueVector;
-                        return struct -> {
-                            if (struct == null) {
-                                timeStampMicroVector.setNull(timeStampMicroVector.getValueCount());
-                            } else {
+                        return struct ->
                                 timeStampMicroVector.set(timeStampMicroVector.getValueCount(), longGetter.getLong(struct));
-                            }
-                            timeStampMicroVector.setValueCount(timeStampMicroVector.getValueCount() + 1);
-                        };
                     }
                 };
             }
@@ -903,18 +690,11 @@ public class ArrowTableRowsSerializer<Row> extends TableRowsSerializerBase<Row> 
                     membersWriters.add(membersGetters.get(i).writer(structVector.getChildByOrdinal(i)));
                 }
                 return row -> {
-                    if (row == null) {
-                        for (int i = 0; i < members.size(); i++) {
-                            membersWriters.get(i).setFromStruct(null);
-                        }
-                    } else {
-                        var value = structGetter.getStruct(row);
-                        structVector.setIndexDefined(structVector.getValueCount());
-                        for (int i = 0; i < members.size(); i++) {
-                            membersWriters.get(i).setFromStruct(value);
-                        }
+                    var value = structGetter.getStruct(row);
+                    structVector.setIndexDefined(structVector.getValueCount());
+                    for (int i = 0; i < members.size(); i++) {
+                        membersWriters.get(i).setFromStruct(value);
                     }
-                    structVector.setValueCount(structVector.getValueCount() + 1);
                 };
             }
         };
@@ -943,21 +723,18 @@ public class ArrowTableRowsSerializer<Row> extends TableRowsSerializerBase<Row> 
                 var keyWriter = keyGetter.writer(structVector.getChildByOrdinal(0));
                 var valueWriter = valueGetter.writer(structVector.getChildByOrdinal(1));
                 return struct -> {
-                    var dict = struct == null ? null : dictGetter.getDict(struct);
-                    if (dict != null) {
-                        int size = fromDictGetter.getSize(dict);
-                        var keys = fromDictGetter.getKeys(dict);
-                        var values = fromDictGetter.getValues(dict);
-                        mapVector.startNewValue(mapVector.getValueCount());
-                        for (int i = 0; i < size; i++) {
-                            structVector.setIndexDefined(structVector.getValueCount());
-                            keyWriter.setFromList(keys, i);
-                            valueWriter.setFromList(values, i);
-                            structVector.setValueCount(structVector.getValueCount() + 1);
-                        }
-                        mapVector.endValue(mapVector.getValueCount(), size);
+                    var dict = dictGetter.getDict(struct);
+                    int size = fromDictGetter.getSize(dict);
+                    var keys = fromDictGetter.getKeys(dict);
+                    var values = fromDictGetter.getValues(dict);
+                    mapVector.startNewValue(mapVector.getValueCount());
+                    for (int i = 0; i < size; i++) {
+                        structVector.setIndexDefined(structVector.getValueCount());
+                        keyWriter.setFromList(keys, i);
+                        valueWriter.setFromList(values, i);
+                        structVector.setValueCount(structVector.getValueCount() + 1);
                     }
-                    mapVector.setValueCount(mapVector.getValueCount() + 1);
+                    mapVector.endValue(mapVector.getValueCount(), size);
                 };
             }
         };
@@ -976,16 +753,13 @@ public class ArrowTableRowsSerializer<Row> extends TableRowsSerializerBase<Row> 
                 var listVector = (ListVector) valueVector;
                 var dataWriter = itemGetter.writer(listVector.getDataVector());
                 return struct -> {
-                    var list = struct == null ? null : listGetter.getList(struct);
-                    if (list != null) {
-                        int size = elementGetter.getSize(list);
-                        listVector.startNewValue(listVector.getValueCount());
-                        for (int i = 0; i < size; i++) {
-                            dataWriter.setFromList(list, i);
-                        }
-                        listVector.endValue(listVector.getValueCount(), size);
+                    var list = listGetter.getList(struct);
+                    int size = elementGetter.getSize(list);
+                    listVector.startNewValue(listVector.getValueCount());
+                    for (int i = 0; i < size; i++) {
+                        dataWriter.setFromList(list, i);
                     }
-                    listVector.setValueCount(listVector.getValueCount() + 1);
+                    listVector.endValue(listVector.getValueCount(), size);
                 };
             }
         };

@@ -54,11 +54,14 @@ private[spark] class YTsaurusOperationManager(val ytClient: YTsaurusClient,
                      appId: String,
                      resourceProfile: ResourceProfile,
                      numExecutors: Int): YTsaurusOperation = {
+    logDebug(s"[AppId: $appId] Requesting executors")
     val opParams = executorParams(sc.conf, appId, resourceProfile, numExecutors)
+    logDebug(s"[AppId: $appId] Executor parameters ")
     val operation = startVanillaOperation(sc.conf, EXECUTOR_TASK, opParams)
+    logDebug(s"[AppId: $appId] Vanilla operation has been successfully started")
     // TODO 2. autoscaling with multiple operations
     sc.conf.set(Config.EXECUTOR_OPERATION_ID, operation.id.toString)
-    logInfo(s"Executor operation ID: ${operation.id}")
+    logInfo(s"[AppId: $appId] Executor operation ID: ${operation.id}")
     operation
   }
 
@@ -318,12 +321,17 @@ private[spark] class YTsaurusOperationManager(val ytClient: YTsaurusClient,
 private[spark] object YTsaurusOperationManager extends Logging {
 
   def create(ytProxy: String, conf: SparkConf, networkName: Option[String], proxyRole: Option[String]): YTsaurusOperationManager = {
+    logDebug("Entering YTsaurusOperationManager.create")
     val (user, token) = YTsaurusUtils.userAndToken(conf)
+    logDebug("User and token were retrieved, now creating YTsaurus client")
     val ytClient: YTsaurusClient = buildClient(ytProxy, user, token, networkName, proxyRole)
+    logDebug("YTsaurus client has been successfully created")
 
     try {
       val globalConfigPath = conf.get(GLOBAL_CONFIG_PATH)
+      logDebug("Retrieving global SPYT config")
       val globalConfig: YTreeMapNode = getDocument(ytClient, globalConfigPath)
+      logDebug("Global SPYT config has been successfully retrieved")
       val isSquashFs = conf.get(YTSAURUS_SQUASHFS_ENABLED)
 
       if (!conf.contains(SPYT_VERSION)) {
@@ -337,12 +345,15 @@ private[spark] object YTsaurusOperationManager extends Logging {
 
       val releaseConfigPath = s"${conf.get(RELEASE_CONFIG_PATH)}/$spytVersion/${conf.get(LAUNCH_CONF_FILE)}"
 
+      logDebug("Retrieving release SPYT config")
       val releaseConfig: YTreeMapNode = getDocument(ytClient, releaseConfigPath)
+      logDebug("Release SPYT config has been successfully retrieved")
 
       val sv = org.apache.spark.SPARK_VERSION_SHORT
       val (svMajor, svMinor, svPatch) = VersionUtils.majorMinorPatchVersion(sv).get
       val distrRootPath = Seq(conf.get(SPARK_DISTRIBUTIVES_PATH), svMajor, svMinor, svPatch).mkString("/")
       val distrExtension = if (isSquashFs) ".squashfs" else ".tgz"
+      logDebug("Looking for SPYT distributive path on cypress")
       val distrPathOpt = Some(distrRootPath).filter(path => ytClient.existsNode(path).join()).flatMap { path =>
         val distrRootContents = ytClient.listNode(path).join().asList()
         distrRootContents.asScala.find(_.stringValue().endsWith(distrExtension))
@@ -354,6 +365,7 @@ private[spark] object YTsaurusOperationManager extends Logging {
       }
 
       val sparkDistr = distrPathOpt.get.stringValue()
+      logDebug(s"SPYT distributive was found at ${sparkDistr}")
 
       val filePaths = if (conf.contains(DRIVER_OPERATION_ID)) {
         val driverOpId = conf.get(DRIVER_OPERATION_ID)
@@ -433,6 +445,7 @@ private[spark] object YTsaurusOperationManager extends Logging {
       val prepareEnvCommand = s"./setup-spyt-env.sh $prepareEnvParameters " +
         "&& export SPARK_LOCAL_DIRS=\"${YT_SPARK_LOCAL_DIRS:-/tmp}/${YT_OPERATION_ID}\"" // TODO: make a pretty filling
 
+      logDebug("Creating YTsaurusOperationManager instance")
       new YTsaurusOperationManager(
         ytClient,
         user,
@@ -520,6 +533,7 @@ private[spark] object YTsaurusOperationManager extends Logging {
 
   def localFileToCacheUploader(conf: SparkConf, ytClient: YTsaurusClient): UploadToCache = (path: String) => {
     val remoteTempFilesDirectory = conf.get(Config.YTSAURUS_REMOTE_TEMP_FILES_DIRECTORY)
+    logDebug(s"Uploading ${path} to cypress cache at ${remoteTempFilesDirectory}")
     YtWrapper.uploadFileToCache(path, 7.days, remoteTempFilesDirectory)(ytClient)
   }
 

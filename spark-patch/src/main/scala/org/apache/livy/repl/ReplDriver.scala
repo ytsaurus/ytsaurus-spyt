@@ -9,6 +9,13 @@ import tech.ytsaurus.spyt.patch.annotations.{OriginClass, Subclass}
 @Subclass
 @OriginClass("org.apache.livy.repl.ReplDriver")
 class ReplDriverSpyt(conf: SparkConf, livyConf: RSCConf) extends ReplDriver(conf, livyConf) {
+
+  // Removing spark.jars and spark.submit.pyFiles value because by default livy submits all it's dependencies
+  // to executors which aren't needed because they're exist in the environment already.
+  conf.remove("spark.jars")
+  conf.remove("spark.submit.pyFiles")
+  conf.remove("spark.files")
+
   override def handle(ctx: ChannelHandlerContext, msg: BaseProtocol.GetReplJobResults): ReplJobResults = {
     val jobResults = super.handle(ctx, msg)
     jobResults.statements.foreach { s =>

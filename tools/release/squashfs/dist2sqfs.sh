@@ -10,14 +10,20 @@ Usage: $script_name [-h|--help]
                     [--proxy proxy address]
                     [--path distributive path]
                     [--kind spark|spyt]
+                    [--enable-nbd]
+                    [--replication-factor number]
 
   --proxy: YT proxy address
   --path: Path to distributive on Cypress
   --kind: distributive type: spark or spyt
+  --enable-nbd: use squashfs layer as nbd image
+  --replication-factor: replication factor for nbd layers (default 10)
 
 EOF
     exit 0
 }
+
+replication_factor="10"
 
 # Parse options
 while [[ $# -gt 0 ]]; do
@@ -33,6 +39,14 @@ while [[ $# -gt 0 ]]; do
         ;;
         --kind)
         kind="$2"
+        shift 2
+        ;;
+        --enable-nbd)
+        enable_nbd=1
+        shift
+        ;;
+        --replication-factor)
+        replication_factor="$2"
         shift 2
         ;;
         -h|--help)
@@ -94,5 +108,10 @@ sqfsfilepath="$tmpdir/$sqfsfilename"
 mksquashfs "$tmpdir/root" $sqfsfilepath
 
 targetpath=${path/"$filename"/"$sqfsfilename"}
+if [ $enable_nbd ]; then
+  yt --proxy $proxy create --type file \
+  --attributes "{primary_medium=ssd_blobs;account=sys;replication_factor=$replication_factor;access_method=nbd}" \
+  --path $targetpath
+fi
 yt --proxy $proxy write-file $targetpath < $sqfsfilepath
 yt --proxy $proxy set $targetpath/@filesystem squashfs

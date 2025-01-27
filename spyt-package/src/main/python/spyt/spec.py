@@ -210,13 +210,15 @@ def build_livy_spec(builder: VanillaSpecBuilder, common_params: CommonSpecParams
     _put_if_not_none(livy_environment, "SPARK_MASTER_DISCOVERY_GROUP_ID", config.master_group_id)
     livy_environment = update(common_params.environment, livy_environment)
 
-    livy_layer_paths = copy.copy(common_params.task_spec["layer_paths"])
+    livy_layer_paths = []
     livy_file_paths = copy.copy(common_params.task_spec["file_paths"])
 
     if enable_squashfs:
         livy_layer_paths.append("//home/spark/livy/livy.squashfs")
     else:
         livy_file_paths.append("//home/spark/livy/livy.tgz")
+
+    livy_layer_paths += common_params.task_spec["layer_paths"]
 
     livy_task_spec = copy.deepcopy(common_params.task_spec)
     livy_task_spec["environment"] = livy_environment

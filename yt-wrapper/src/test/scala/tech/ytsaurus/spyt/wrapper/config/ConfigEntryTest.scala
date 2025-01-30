@@ -1,4 +1,4 @@
-package tech.ytsaurus.spyt.fs.conf
+package tech.ytsaurus.spyt.wrapper.config
 
 import org.apache.spark.SparkConf
 import org.scalatest.flatspec.AnyFlatSpec
@@ -6,7 +6,7 @@ import org.scalatest.matchers.should.Matchers
 
 class ConfigEntryTest extends AnyFlatSpec with Matchers {
   import ConfigEntry.implicits._
-  import tech.ytsaurus.spyt.fs.conf._
+  import tech.ytsaurus.spyt.wrapper.config._
 
   "ConfigEntry" should "retrieve configuration value" in {
     object SampleIntOption extends ConfigEntry[Int]("sample.int.option", Some(500))

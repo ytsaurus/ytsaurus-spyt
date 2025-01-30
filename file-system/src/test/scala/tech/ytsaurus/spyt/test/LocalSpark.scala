@@ -8,8 +8,8 @@ import org.apache.spark.sql.{DataFrame, SparkSession}
 import org.apache.spark.yt.test.Utils
 import org.apache.spark.yt.test.Utils.{SparkConfigEntry, defaultConfValue}
 import org.scalatest.TestSuite
-import tech.ytsaurus.spyt.fs.YtClientConfigurationConverter._
-import tech.ytsaurus.spyt.fs.conf.ConfigEntry
+import tech.ytsaurus.spyt.wrapper.client.YtClientConfigurationConverter._
+import tech.ytsaurus.spyt.wrapper.config.ConfigEntry
 import tech.ytsaurus.spyt.test.LocalSpark.defaultSparkConf
 import tech.ytsaurus.spyt.wrapper.client.{YtClientProvider, YtRpcClient}
 

@@ -7,7 +7,7 @@ case class KeyPartitioningConfig(enabled: Boolean,
 
 object KeyPartitioningConfig {
   def apply(spark: SparkSession): KeyPartitioningConfig = {
-    import tech.ytsaurus.spyt.fs.conf._
+    import tech.ytsaurus.spyt.wrapper.config._
     KeyPartitioningConfig(
       enabled = spark.ytConf(SparkYtConfiguration.Read.KeyPartitioning.Enabled),
       unionLimit = spark.ytConf(SparkYtConfiguration.Read.KeyPartitioning.UnionLimit)

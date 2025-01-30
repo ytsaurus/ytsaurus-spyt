@@ -9,7 +9,7 @@ import org.apache.spark.util.SerializableConfiguration
 import org.slf4j.LoggerFactory
 import tech.ytsaurus.client.CompoundClient
 import tech.ytsaurus.core.cypress.YPath
-import tech.ytsaurus.spyt.fs.YtClientConfigurationConverter.ytClientConfiguration
+import tech.ytsaurus.spyt.wrapper.client.YtClientConfigurationConverter.ytClientConfiguration
 import tech.ytsaurus.spyt.fs.path.YPathEnriched
 import tech.ytsaurus.spyt.fs.{YtFileSystemBase, YtHadoopPath}
 import tech.ytsaurus.spyt.serializers.SchemaConverter.MetadataFields

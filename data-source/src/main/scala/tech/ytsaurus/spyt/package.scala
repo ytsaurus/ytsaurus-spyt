@@ -3,12 +3,12 @@ package tech.ytsaurus
 import org.apache.spark.sql._
 import org.apache.spark.sql.types._
 import tech.ytsaurus.spyt.format.conf.YtTableSparkSettings._
-import tech.ytsaurus.spyt.fs.YtClientConfigurationConverter.ytClientConfiguration
-import tech.ytsaurus.spyt.fs.conf._
+import tech.ytsaurus.spyt.wrapper.client.YtClientConfigurationConverter.ytClientConfiguration
+import tech.ytsaurus.spyt.wrapper.config._
 import tech.ytsaurus.spyt.serializers.SchemaConverter
 import tech.ytsaurus.spyt.wrapper.table.OptimizeMode
 import tech.ytsaurus.client.CompoundClient
-import tech.ytsaurus.spyt.fs.conf.ConfigEntry
+import tech.ytsaurus.spyt.wrapper.config.ConfigEntry
 import tech.ytsaurus.spyt.serializers.{SchemaConverter, YtLogicalType}
 import tech.ytsaurus.spyt.wrapper.client.YtClientProvider
 

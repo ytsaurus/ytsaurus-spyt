@@ -2,7 +2,7 @@ package tech.ytsaurus.spyt;
 
 import org.apache.spark.SparkConf;
 import org.apache.spark.sql.SparkSession;
-import tech.ytsaurus.spyt.fs.YtClientConfigurationConverter;
+import tech.ytsaurus.spyt.wrapper.client.YtClientConfigurationConverter;
 import tech.ytsaurus.spyt.wrapper.client.YtClientProvider;
 import tech.ytsaurus.client.CompoundClient;
 

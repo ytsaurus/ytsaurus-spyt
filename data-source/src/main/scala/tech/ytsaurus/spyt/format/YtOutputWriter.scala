@@ -9,7 +9,7 @@ import org.apache.spark.sql.execution.datasources.OutputWriter
 import org.apache.spark.sql.types.StructType
 import org.slf4j.LoggerFactory
 import tech.ytsaurus.spyt.format.conf.YtTableSparkSettings._
-import tech.ytsaurus.spyt.fs.conf._
+import tech.ytsaurus.spyt.wrapper.config._
 import tech.ytsaurus.spyt.fs.path.YPathEnriched
 import tech.ytsaurus.spyt.serializers.{InternalRowSerializer, WriteSchemaConverter}
 import tech.ytsaurus.spyt.wrapper.LogLazy

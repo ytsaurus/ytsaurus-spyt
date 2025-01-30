@@ -18,7 +18,7 @@ class YtDataSourceV2 extends FileDataSourceV2 with SessionConfigSupport {
 
   override protected def getPaths(options: CaseInsensitiveStringMap): Seq[String] = {
     import tech.ytsaurus.spyt.format.conf.YtTableSparkSettings._
-    import tech.ytsaurus.spyt.fs.conf._
+    import tech.ytsaurus.spyt.wrapper.config._
 
     val paths = super.getPaths(options)
     val transaction = options.getYtConf(Transaction).orElse(GlobalTransactionUtils.getGlobalTransactionId(sparkSession))

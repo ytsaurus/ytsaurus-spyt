@@ -6,7 +6,7 @@ import org.apache.spark.sql.execution.streaming.Sink
 import org.apache.spark.sql.{DataFrame, SQLContext}
 import tech.ytsaurus.spyt.format.YtDynamicTableWriter
 import tech.ytsaurus.spyt.format.conf.SparkYtWriteConfiguration
-import tech.ytsaurus.spyt.fs.YtClientConfigurationConverter.ytClientConfiguration
+import tech.ytsaurus.spyt.wrapper.client.YtClientConfigurationConverter.ytClientConfiguration
 import tech.ytsaurus.spyt.fs.path.YPathEnriched
 import tech.ytsaurus.spyt.wrapper.client.YtClientProvider
 

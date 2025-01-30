@@ -1,4 +1,4 @@
-package tech.ytsaurus.spyt.fs.conf
+package tech.ytsaurus.spyt.wrapper.config
 
 class MultiConfigEntry[T](val prefix: String,
                           val postfix: String,

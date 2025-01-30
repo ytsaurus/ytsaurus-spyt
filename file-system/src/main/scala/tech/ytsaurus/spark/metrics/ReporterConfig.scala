@@ -4,7 +4,7 @@ import com.codahale.metrics.MetricFilter
 
 import java.util.Properties
 import java.util.concurrent.TimeUnit
-import tech.ytsaurus.spyt.fs.conf.PropertiesConf
+import tech.ytsaurus.spyt.wrapper.config.PropertiesConf
 
 case class ReporterConfig(
                            enabled: Boolean,

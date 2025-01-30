@@ -14,6 +14,7 @@ import tech.ytsaurus.spyt.format.GlobalTransactionUtils
 import tech.ytsaurus.spyt.fs.path.YPathEnriched
 import tech.ytsaurus.spyt.wrapper.Utils.tryWithResources
 import tech.ytsaurus.spyt.wrapper.YtWrapper
+import tech.ytsaurus.spyt.wrapper.client.YtClientConfigurationConverter
 
 import scala.collection.mutable
 import scala.concurrent.duration.DurationInt
@@ -30,7 +31,7 @@ class ReadTransactionStrategy(sparkSession: SparkSession) extends Rule[LogicalPl
       case DataSourceV2Relation(table: YtTable, _, _, _, _) => table.paths.exists(ypathEnriched(_).transaction.isEmpty)
       case _ => false
     }.isDefined) {
-      val configuration = tech.ytsaurus.spyt.fs.YtClientConfigurationConverter.ytClientConfiguration(
+      val configuration = YtClientConfigurationConverter.ytClientConfiguration(
         sparkSession.sessionState.conf
       )
       class Transaction(proxy: String) extends SparkListener {

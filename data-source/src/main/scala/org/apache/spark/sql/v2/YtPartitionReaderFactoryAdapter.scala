@@ -21,9 +21,9 @@ import tech.ytsaurus.spyt.format.YtInputSplit
 import tech.ytsaurus.spyt.format.YtPartitionedFileDelegate.YtPartitionedFile
 import tech.ytsaurus.spyt.format.conf.FilterPushdownConfig
 import tech.ytsaurus.spyt.format.conf.SparkYtConfiguration.Read.{CountOptimizationEnabled, VectorizedCapacity}
-import tech.ytsaurus.spyt.fs.YtClientConfigurationConverter.ytClientConfiguration
+import tech.ytsaurus.spyt.wrapper.client.YtClientConfigurationConverter.ytClientConfiguration
 import tech.ytsaurus.spyt.fs.YtHadoopPath
-import tech.ytsaurus.spyt.fs.conf._
+import tech.ytsaurus.spyt.wrapper.config._
 import tech.ytsaurus.spyt.logger.{TaskInfo, YtDynTableLoggerConfig}
 import tech.ytsaurus.spyt.serializers.InternalRowDeserializer
 import tech.ytsaurus.spyt.wrapper.YtWrapper

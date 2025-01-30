@@ -1,4 +1,4 @@
-package tech.ytsaurus.spyt.fs
+package tech.ytsaurus.spyt.wrapper
 
 import org.apache.hadoop.conf.Configuration
 import org.apache.spark.SparkConf
@@ -12,7 +12,7 @@ import scala.annotation.tailrec
 import scala.collection.JavaConverters.asScalaSetConverter
 import scala.util.Try
 
-package object conf {
+package object config {
   val YT_MIN_PARTITION_BYTES = "spark.yt.minPartitionBytes"
 
   trait ConfProvider {

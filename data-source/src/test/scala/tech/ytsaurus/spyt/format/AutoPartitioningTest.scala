@@ -8,7 +8,7 @@ import org.apache.spark.sql.v2.TestPartitionedFile
 import org.apache.spark.{Partition, Partitioner}
 import org.scalatest.{FlatSpec, Matchers}
 import tech.ytsaurus.spyt._
-import tech.ytsaurus.spyt.fs.conf.YT_MIN_PARTITION_BYTES
+import tech.ytsaurus.spyt.wrapper.config.YT_MIN_PARTITION_BYTES
 import tech.ytsaurus.spyt.test.{LocalSpark, TmpDir}
 import tech.ytsaurus.spyt.wrapper.YtWrapper
 import tech.ytsaurus.spyt.test.{DynTableTestUtils, TestRow}

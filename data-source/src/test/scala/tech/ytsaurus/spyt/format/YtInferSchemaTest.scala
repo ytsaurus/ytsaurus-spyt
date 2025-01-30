@@ -10,7 +10,7 @@ import org.mockito.scalatest.MockitoSugar
 import org.scalatest.{FlatSpec, Matchers}
 import tech.ytsaurus.spyt.test.{LocalSpark, TestUtils, TmpDir}
 import tech.ytsaurus.spyt._
-import tech.ytsaurus.spyt.fs.YtClientConfigurationConverter.ytClientConfiguration
+import tech.ytsaurus.spyt.wrapper.client.YtClientConfigurationConverter.ytClientConfiguration
 import tech.ytsaurus.spyt.serializers.SchemaConverter.MetadataFields
 import tech.ytsaurus.spyt.wrapper.YtWrapper
 import tech.ytsaurus.client.CompoundClient

@@ -16,7 +16,7 @@ import scala.annotation.tailrec
 
 class YtSortedTableMarkerRule(spark: SparkSession) extends Rule[LogicalPlan] {
   override def apply(plan: LogicalPlan): LogicalPlan = {
-    import tech.ytsaurus.spyt.fs.conf._
+    import tech.ytsaurus.spyt.wrapper.config._
     if (spark.ytConf(SparkYtConfiguration.Read.PlanOptimizationEnabled)) {
       logInfo("Plan optimization try")
       transformPlan(plan)

@@ -8,7 +8,7 @@ import org.slf4j.LoggerFactory
 import tech.ytsaurus.TError
 import tech.ytsaurus.client.CompoundClient
 import tech.ytsaurus.core.common.YTsaurusError
-import tech.ytsaurus.spyt.fs.YtClientConfigurationConverter._
+import tech.ytsaurus.spyt.wrapper.client.YtClientConfigurationConverter._
 import tech.ytsaurus.spyt.fs.path.YPathEnriched
 import tech.ytsaurus.spyt.wrapper.client.{YtClientConfiguration, YtClientProvider, YtRpcClient}
 import tech.ytsaurus.spyt.wrapper.{LogLazy, YtWrapper}

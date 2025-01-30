@@ -5,8 +5,8 @@ import org.apache.spark.scheduler.{SparkListener, SparkListenerApplicationEnd, S
 import org.apache.spark.sql.SparkSession
 import org.slf4j.LoggerFactory
 import tech.ytsaurus.spyt.format.conf.SparkYtConfiguration.GlobalTransaction
-import tech.ytsaurus.spyt.fs.YtClientConfigurationConverter.ytClientConfiguration
-import tech.ytsaurus.spyt.fs.conf._
+import tech.ytsaurus.spyt.wrapper.client.YtClientConfigurationConverter.ytClientConfiguration
+import tech.ytsaurus.spyt.wrapper.config._
 import tech.ytsaurus.spyt.wrapper.YtWrapper
 import tech.ytsaurus.spyt.wrapper.client.YtClientProvider
 

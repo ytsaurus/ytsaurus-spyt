@@ -24,7 +24,7 @@ import tech.ytsaurus.spyt.format.YtPartitionedFileDelegate.YtPartitionedFile
 import tech.ytsaurus.spyt.format._
 import tech.ytsaurus.spyt.format.conf.SparkYtConfiguration.Read._
 import tech.ytsaurus.spyt.format.conf.{FilterPushdownConfig, SparkYtWriteConfiguration}
-import tech.ytsaurus.spyt.fs.YtClientConfigurationConverter.ytClientConfiguration
+import tech.ytsaurus.spyt.wrapper.client.YtClientConfigurationConverter.ytClientConfiguration
 import tech.ytsaurus.spyt.logger.YtDynTableLoggerConfig
 import tech.ytsaurus.spyt.serializers.InternalRowDeserializer
 import tech.ytsaurus.spyt.streaming.{YtStreamingSink, YtStreamingSource}
@@ -58,7 +58,7 @@ class YtFileFormat extends FileFormat with DataSourceRegister with StreamSourceP
                                               filters: Seq[Filter],
                                               options: Map[String, String],
                                               hadoopConf: Configuration): PartitionedFile => Iterator[InternalRow] = {
-    import tech.ytsaurus.spyt.fs.conf._
+    import tech.ytsaurus.spyt.wrapper.config._
     val ytClientConf = ytClientConfiguration(hadoopConf)
 
     val sqlConf = sparkSession.sqlContext.conf

@@ -1,11 +1,10 @@
-package tech.ytsaurus.spyt.fs
+package tech.ytsaurus.spyt.wrapper.client
 
 import org.apache.hadoop.conf.Configuration
 import org.apache.spark.SparkConf
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.internal.SQLConf
-import tech.ytsaurus.spyt.fs.conf._
-import tech.ytsaurus.spyt.wrapper.client.YtClientConfiguration
+import tech.ytsaurus.spyt.wrapper.config._
 
 object YtClientConfigurationConverter {
   def ytClientConfiguration(spark: SparkSession): YtClientConfiguration = {

@@ -7,15 +7,15 @@ import org.apache.spark.internal.io.FileCommitProtocol
 import org.slf4j.LoggerFactory
 import tech.ytsaurus.spyt.format.conf.YtTableSparkSettings._
 import tech.ytsaurus.spyt.format.conf.{SparkYtConfiguration, YtTableSparkSettings}
-import tech.ytsaurus.spyt.fs.YtClientConfigurationConverter.ytClientConfiguration
-import tech.ytsaurus.spyt.fs.conf._
+import tech.ytsaurus.spyt.wrapper.client.YtClientConfigurationConverter.ytClientConfiguration
+import tech.ytsaurus.spyt.wrapper.config._
 import tech.ytsaurus.spyt.fs.path.YPathEnriched
 import tech.ytsaurus.spyt.wrapper.YtWrapper
 import tech.ytsaurus.client.{ApiServiceTransaction, CompoundClient}
 import tech.ytsaurus.spyt.exceptions._
 import tech.ytsaurus.spyt.format.YtOutputCommitProtocol._
 import tech.ytsaurus.spyt.format.conf.SparkYtConfiguration.Write.DynBatchSize
-import tech.ytsaurus.spyt.fs.conf.ConfigEntry
+import tech.ytsaurus.spyt.wrapper.config.ConfigEntry
 import tech.ytsaurus.spyt.wrapper.client.YtClientProvider
 
 class YtOutputCommitProtocol(jobId: String,

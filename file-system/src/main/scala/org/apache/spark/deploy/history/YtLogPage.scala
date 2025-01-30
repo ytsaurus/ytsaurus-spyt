@@ -4,9 +4,8 @@ import org.apache.spark.SparkConf
 import org.apache.spark.deploy.history.WorkerLogReader.getLogMeta
 import org.apache.spark.internal.Logging
 import org.apache.spark.ui.{UIUtils, WebUIPage}
-import tech.ytsaurus.spyt.fs.YtClientConfigurationConverter
 import tech.ytsaurus.spyt.wrapper.YtWrapper
-import tech.ytsaurus.spyt.wrapper.client.YtClientConfiguration
+import tech.ytsaurus.spyt.wrapper.client.{YtClientConfiguration, YtClientConfigurationConverter}
 import tech.ytsaurus.spyt.wrapper.model.WorkerLogBlock
 import tech.ytsaurus.spyt.wrapper.model.WorkerLogSchema.getMetaPath
 import tech.ytsaurus.client.CompoundClient

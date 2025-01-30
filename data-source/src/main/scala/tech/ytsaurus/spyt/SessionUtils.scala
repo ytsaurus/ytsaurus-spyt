@@ -4,7 +4,7 @@ import org.apache.spark.SparkConf
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.internal.SQLConf.FILES_MAX_PARTITION_BYTES
 import org.slf4j.LoggerFactory
-import tech.ytsaurus.spyt.fs.YtClientConfigurationConverter.ytClientConfiguration
+import tech.ytsaurus.spyt.wrapper.client.YtClientConfigurationConverter.ytClientConfiguration
 import tech.ytsaurus.spyt.wrapper.config.Utils.{parseRemoteConfig, remoteGlobalConfigPath, remoteVersionConfigPath}
 import tech.ytsaurus.spyt.wrapper.YtJavaConverters._
 import tech.ytsaurus.spyt.wrapper.YtWrapper

@@ -9,7 +9,7 @@ case class FilterPushdownConfig(enabled: Boolean,
 object FilterPushdownConfig {
   def apply(spark: SparkSession): FilterPushdownConfig = {
     import tech.ytsaurus.spyt.format.conf.{SparkYtConfiguration => SparkSettings}
-    import tech.ytsaurus.spyt.fs.conf._
+    import tech.ytsaurus.spyt.wrapper.config._
     FilterPushdownConfig(
       enabled = spark.ytConf(SparkSettings.Read.KeyColumnsFilterPushdown.Enabled),
       unionEnabled = spark.ytConf(SparkSettings.Read.KeyColumnsFilterPushdown.UnionEnabled),

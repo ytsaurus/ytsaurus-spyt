@@ -9,8 +9,8 @@ import org.apache.spark.sql.types.StructType
 import org.slf4j.LoggerFactory
 import tech.ytsaurus.spyt.common.utils.TuplePoint
 import tech.ytsaurus.spyt.format.{YtInputSplit, YtPartitionedFileDelegate}
-import tech.ytsaurus.spyt.fs.YtClientConfigurationConverter.ytClientConfiguration
-import tech.ytsaurus.spyt.fs.conf.{SparkYtSparkSession, YT_MIN_PARTITION_BYTES}
+import tech.ytsaurus.spyt.wrapper.client.YtClientConfigurationConverter.ytClientConfiguration
+import tech.ytsaurus.spyt.wrapper.config.{SparkYtSparkSession, YT_MIN_PARTITION_BYTES}
 import tech.ytsaurus.spyt.fs.path.YPathEnriched
 import tech.ytsaurus.spyt.serializers.{InternalRowDeserializer, PivotKeysConverter}
 import tech.ytsaurus.spyt.wrapper.YtWrapper

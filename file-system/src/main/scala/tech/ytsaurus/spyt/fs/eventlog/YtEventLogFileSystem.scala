@@ -5,9 +5,9 @@ import org.apache.hadoop.fs._
 import org.apache.hadoop.fs.permission.FsPermission
 import org.apache.hadoop.util.Progressable
 import org.slf4j.LoggerFactory
-import tech.ytsaurus.spyt.fs.conf._
+import tech.ytsaurus.spyt.wrapper.config._
 import tech.ytsaurus.spyt.fs.PathUtils.{getMetaPath, hadoopPathToYt}
-import tech.ytsaurus.spyt.fs.YtClientConfigurationConverter.ytClientConfiguration
+import tech.ytsaurus.spyt.wrapper.client.YtClientConfigurationConverter.ytClientConfiguration
 import tech.ytsaurus.spyt.wrapper.{LogLazy, YtWrapper}
 import tech.ytsaurus.spyt.wrapper.client.{YtClientConfiguration, YtClientProvider, YtRpcClient}
 import tech.ytsaurus.spyt.wrapper.cypress.PathType

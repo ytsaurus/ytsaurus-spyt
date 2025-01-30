@@ -11,7 +11,7 @@ import org.apache.spark.sql.types._
 import org.apache.spark.sql.util.CaseInsensitiveStringMap
 import tech.ytsaurus.spyt.SparkAdapter
 import tech.ytsaurus.spyt.format.conf.SparkYtConfiguration.Schema.ForcingNullableIfNoMetadata
-import tech.ytsaurus.spyt.fs.conf.SparkYtSparkSession
+import tech.ytsaurus.spyt.wrapper.config.SparkYtSparkSession
 import tech.ytsaurus.spyt.serializers.SchemaConverter
 import tech.ytsaurus.spyt.types.YTsaurusTypes
 

@@ -1,7 +1,7 @@
 package tech.ytsaurus.spyt.logger
 
 import org.apache.log4j.Level
-import tech.ytsaurus.spyt.fs.conf._
+import tech.ytsaurus.spyt.wrapper.config._
 
 object SparkYtLogConfiguration {
   import ConfigEntry.implicits._

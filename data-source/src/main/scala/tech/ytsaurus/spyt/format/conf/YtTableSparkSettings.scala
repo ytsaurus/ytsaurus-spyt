@@ -2,11 +2,11 @@ package tech.ytsaurus.spyt.format.conf
 
 import org.apache.hadoop.conf.Configuration
 import org.apache.spark.sql.types.{DataType, StructType}
-import tech.ytsaurus.spyt.fs.conf._
+import tech.ytsaurus.spyt.wrapper.config._
 import tech.ytsaurus.spyt.serializers.SchemaConverter.{SortOption, Sorted, Unordered}
 import tech.ytsaurus.spyt.serializers.{SchemaConverter, WriteSchemaConverter, YtLogicalType}
 import tech.ytsaurus.spyt.wrapper.table.YtTableSettings
-import tech.ytsaurus.spyt.fs.conf.ConfigEntry
+import tech.ytsaurus.spyt.wrapper.config.ConfigEntry
 import tech.ytsaurus.spyt.serializers.YtLogicalTypeSerializer.{deserializeTypeV3, serializeTypeV3}
 import tech.ytsaurus.ysontree.YTreeNode
 import tech.ytsaurus.ysontree.YTreeTextSerializer

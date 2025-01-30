@@ -2,7 +2,7 @@ package tech.ytsaurus.spark.metrics
 
 import org.slf4j.{Logger, LoggerFactory}
 import SolomonConfig.Encoding
-import tech.ytsaurus.spyt.fs.conf.PropertiesConf
+import tech.ytsaurus.spyt.wrapper.config.PropertiesConf
 import tech.ytsaurus.spyt.HostAndPort
 
 import java.util.Properties

@@ -1,6 +1,6 @@
 package tech.ytsaurus.spark.metrics
 
-import tech.ytsaurus.spyt.fs.conf.ConfigEntry
+import tech.ytsaurus.spyt.wrapper.config.ConfigEntry
 
 import scala.concurrent.duration.{Duration, DurationInt}
 

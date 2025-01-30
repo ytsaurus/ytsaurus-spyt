@@ -2,7 +2,7 @@ package tech.ytsaurus.spyt.format.conf
 
 import org.apache.spark.sql.SQLContext
 import org.apache.spark.sql.internal.SQLConf
-import tech.ytsaurus.spyt.fs.conf._
+import tech.ytsaurus.spyt.wrapper.config._
 
 import scala.concurrent.duration.Duration
 

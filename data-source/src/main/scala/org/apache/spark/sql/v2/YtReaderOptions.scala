@@ -7,7 +7,7 @@ import tech.ytsaurus.spyt.serializers.SchemaConverter.MetadataFields
 
 object YtReaderOptions {
   def optimizedForScan(options: Map[String, String]): Boolean = {
-    import tech.ytsaurus.spyt.fs.conf._
+    import tech.ytsaurus.spyt.wrapper.config._
     options.getYtConf(YtTableSparkSettings.OptimizedForScan).exists(identity)
   }
 
@@ -20,7 +20,7 @@ object YtReaderOptions {
   }
 
   def arrowEnabled(options: Map[String, String], conf: SQLConf): Boolean = {
-    import tech.ytsaurus.spyt.fs.conf._
+    import tech.ytsaurus.spyt.wrapper.config._
     options.ytConf(YtTableSparkSettings.ArrowEnabled) && conf.ytConf(SparkYtConfiguration.Read.ArrowEnabled) &&
       !options.getYtConf(YtTableSparkSettings.KeyPartitioned).exists(identity)
   }

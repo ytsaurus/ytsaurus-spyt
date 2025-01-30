@@ -8,7 +8,7 @@ import org.apache.spark.sql.execution.datasources.{OutputWriter, OutputWriterFac
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.types.{DataType, StructType}
 import tech.ytsaurus.spyt.format.YtOutputWriterFactory
-import tech.ytsaurus.spyt.fs.YtClientConfigurationConverter.ytClientConfiguration
+import tech.ytsaurus.spyt.wrapper.client.YtClientConfigurationConverter.ytClientConfiguration
 import tech.ytsaurus.spyt.format.conf.SparkYtWriteConfiguration
 
 case class YtWrite(paths: Seq[String],

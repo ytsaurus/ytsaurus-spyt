@@ -4,7 +4,7 @@ import org.apache.spark.sql.SparkSession
 import org.scalatest.{FlatSpec, Matchers}
 import tech.ytsaurus.spyt._
 import tech.ytsaurus.spyt.format.conf.SparkYtConfiguration.GlobalTransaction
-import tech.ytsaurus.spyt.fs.conf.{SparkYtSparkConf, SparkYtSparkSession}
+import tech.ytsaurus.spyt.wrapper.config.{SparkYtSparkConf, SparkYtSparkSession}
 import tech.ytsaurus.spyt.test.{LocalSpark, TestUtils, TmpDir}
 import tech.ytsaurus.spyt.wrapper.YtWrapper
 import tech.ytsaurus.spyt.test.LocalYtClient

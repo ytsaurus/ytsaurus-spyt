@@ -1,4 +1,4 @@
-package tech.ytsaurus.spyt.fs.conf
+package tech.ytsaurus.spyt.wrapper.config
 
 import io.circe._
 import io.circe.parser._

@@ -3,7 +3,7 @@ package tech.ytsaurus.spyt.serializers
 import org.apache.spark.SparkConf
 import org.apache.spark.sql.SparkSession
 import tech.ytsaurus.spyt.format.conf.SparkYtConfiguration
-import tech.ytsaurus.spyt.fs.conf.{SparkYtSparkConf, SparkYtSparkSession}
+import tech.ytsaurus.spyt.wrapper.config.{SparkYtSparkConf, SparkYtSparkSession}
 
 case class SchemaConverterConfig(parsingTypeV3: Boolean)
 

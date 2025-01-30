@@ -2,7 +2,7 @@ package tech.ytsaurus.spyt.logger
 
 import org.apache.log4j.Level
 import org.apache.spark.sql.SparkSession
-import tech.ytsaurus.spyt.fs.YtClientConfigurationConverter.ytClientConfiguration
+import tech.ytsaurus.spyt.wrapper.client.YtClientConfigurationConverter.ytClientConfiguration
 import tech.ytsaurus.spyt.wrapper.YtWrapper
 import tech.ytsaurus.spyt.wrapper.client.YtClientConfiguration
 import tech.ytsaurus.client.CompoundClient
@@ -29,7 +29,7 @@ case class YtDynTableLoggerConfig(ytConfig: YtClientConfiguration,
 object YtDynTableLoggerConfig {
 
   import SparkYtLogConfiguration._
-  import tech.ytsaurus.spyt.fs.conf._
+  import tech.ytsaurus.spyt.wrapper.config._
 
   def fromSpark(spark: SparkSession): Option[YtDynTableLoggerConfig] = {
     if (!spark.ytConf(Enabled)) {

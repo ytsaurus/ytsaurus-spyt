@@ -1,13 +1,13 @@
-package tech.ytsaurus.spyt.fs.conf
+package tech.ytsaurus.spyt.wrapper.config
 
 import org.apache.hadoop.conf.Configuration
 import org.apache.log4j.Level
 import org.apache.spark.SparkConf
+import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.util.CaseInsensitiveStringMap
 import org.scalatest.{FlatSpec, Matchers}
-import tech.ytsaurus.spyt.test.LocalSpark
 
-class MultiConfigEntryTest extends FlatSpec with Matchers with LocalSpark {
+class MultiConfigEntryTest extends FlatSpec with Matchers {
   import ConfigEntry.implicits._
 
   private val entry = new MultiConfigEntry("log", "level", Some(Level.INFO),
@@ -37,11 +37,15 @@ class MultiConfigEntryTest extends FlatSpec with Matchers with LocalSpark {
   }
 
   it should "get value from spark and sql context" in {
-    withConf("spark.yt.log.level", "INFO", None) {
-      withConf("spark.yt.log.test2.level", "WARN", None) {
-        test(spark.sqlContext)
-        test(spark)
-      }
+    val sparkConf = new SparkConf
+    sparkConf.set("spark.yt.log.level", "INFO")
+    sparkConf.set("spark.yt.log.test2.level", "WARN")
+    val spark = SparkSession.builder().master("local").config(sparkConf).getOrCreate()
+    try {
+      test(spark.sqlContext)
+      test(spark)
+    } finally {
+      spark.stop()
     }
   }
 

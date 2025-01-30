@@ -15,7 +15,7 @@ import scala.language.postfixOps
 class YtDynTableLoggerTest extends FlatSpec with Matchers with LocalSpark with TmpDir with DynTableTestUtils with TestUtils {
 
   import SparkComponent._
-  import tech.ytsaurus.spyt.fs.conf._
+  import tech.ytsaurus.spyt.wrapper.config._
   import spark.implicits._
 
   val tmpPathGlobal = s"$testDir/test-${UUID.randomUUID()}"

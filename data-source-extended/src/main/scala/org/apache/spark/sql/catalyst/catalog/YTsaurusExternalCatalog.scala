@@ -6,7 +6,7 @@ import org.apache.spark.internal.Logging
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.analysis.NoSuchTableException
 import org.apache.spark.sql.types.StructType
-import tech.ytsaurus.spyt.fs.YtClientConfigurationConverter.ytClientConfiguration
+import tech.ytsaurus.spyt.wrapper.client.YtClientConfigurationConverter.ytClientConfiguration
 import tech.ytsaurus.spyt.fs.path.YPathEnriched
 import tech.ytsaurus.spyt.serializers.SchemaConverter.{Sorted, Unordered}
 import tech.ytsaurus.spyt.serializers.{SchemaConverter, SchemaConverterConfig, WriteSchemaConverter}

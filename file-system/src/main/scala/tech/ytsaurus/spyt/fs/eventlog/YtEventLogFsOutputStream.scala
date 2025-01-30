@@ -2,7 +2,7 @@ package tech.ytsaurus.spyt.fs.eventlog
 
 import org.apache.hadoop.conf.Configuration
 import org.slf4j.LoggerFactory
-import tech.ytsaurus.spyt.fs.conf._
+import tech.ytsaurus.spyt.wrapper.config._
 import tech.ytsaurus.spyt.fs.PathUtils.getMetaPath
 import tech.ytsaurus.spyt.wrapper.YtWrapper
 import tech.ytsaurus.spyt.wrapper.model.EventLogSchema.{metaSchema, schema}

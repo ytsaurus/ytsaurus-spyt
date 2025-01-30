@@ -61,7 +61,7 @@ case class YtScanBuilderAdapter(sparkSession: SparkSession,
   }
 
   private def logPushdownDetails()(implicit ytLog: YtLogger): Unit = {
-    import tech.ytsaurus.spyt.fs.conf._
+    import tech.ytsaurus.spyt.wrapper.config._
 
     val pushdownEnabled = sparkSession.ytConf(KeyColumnsFilterPushdown.Enabled)
     val keyColumns = SchemaConverter.keys(schema)

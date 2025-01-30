@@ -6,7 +6,7 @@ import org.apache.spark.sql.types._
 import tech.ytsaurus.core.tables.{ColumnSortOrder, TableSchema}
 import tech.ytsaurus.spyt.common.utils.TypeUtils.{isTuple, isVariant, isVariantOverTuple}
 import tech.ytsaurus.spyt.format.conf.YtTableSparkSettings.{StringToUtf8, WriteSchemaHint, WriteTypeV3}
-import tech.ytsaurus.spyt.fs.conf.{OptionsConf, SparkYtHadoopConfiguration}
+import tech.ytsaurus.spyt.wrapper.config.{OptionsConf, SparkYtHadoopConfiguration}
 import tech.ytsaurus.spyt.serializers.SchemaConverter.{SortOption, Unordered, applyYtLimitToSparkDecimal, wrapSparkAttributes}
 import tech.ytsaurus.spyt.serializers.YtLogicalTypeSerializer.{serializeType, serializeTypeV3}
 import tech.ytsaurus.spyt.types.YTsaurusTypes

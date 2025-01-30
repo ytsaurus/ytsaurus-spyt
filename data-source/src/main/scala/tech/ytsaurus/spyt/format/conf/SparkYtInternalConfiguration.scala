@@ -1,6 +1,6 @@
 package tech.ytsaurus.spyt.format.conf
 
-import tech.ytsaurus.spyt.fs.conf.ConfigEntry
+import tech.ytsaurus.spyt.wrapper.config.ConfigEntry
 
 object SparkYtInternalConfiguration {
   import ConfigEntry.implicits._

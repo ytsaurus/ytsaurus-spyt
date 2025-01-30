@@ -2,7 +2,7 @@ package org.apache.spark.deploy.master
 
 import org.apache.spark.SparkConf
 import org.apache.spark.serializer.Serializer
-import tech.ytsaurus.spyt.fs.YtClientConfigurationConverter.ytClientConfiguration
+import tech.ytsaurus.spyt.wrapper.client.YtClientConfigurationConverter.ytClientConfiguration
 import tech.ytsaurus.spyt.wrapper.client.YtClientProvider
 
 class YtRecoveryModeFactory(conf: SparkConf, serializer: Serializer)

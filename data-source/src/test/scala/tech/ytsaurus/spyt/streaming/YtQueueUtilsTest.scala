@@ -1,11 +1,12 @@
 package tech.ytsaurus.spyt.streaming
 
 import org.apache.spark.sql.execution.streaming.SerializedOffset
-import org.scalatest.{FlatSpec, Matchers}
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
 
 import scala.collection.SortedMap
 
-class YtQueueUtilsTest extends FlatSpec with Matchers {
+class YtQueueUtilsTest extends AnyFlatSpec with Matchers {
   it should "throw exception when partition list is sparse" in {
     YtQueueOffset("", "", SortedMap(0 -> 0L, 1 -> 1L, 2 -> 2L, 3 -> 3L))
     a[IllegalArgumentException] should be thrownBy {

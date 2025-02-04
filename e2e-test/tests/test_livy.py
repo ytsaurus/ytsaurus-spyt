@@ -60,3 +60,24 @@ def test_livy_server(yt_client, tmp_dir, livy_server):
     assert extract_data(output) == 'NwAAAAAAAAAKMwoCaWQQEEgAWil7InR5cGVfbmFtZSI9Im9wdGlvbmFsIjsiaXRlbSI9InN0cm' \
                                    'luZyI7fRgAAAIAAAAAAAAAAQAAAAAAAAAAAAAAAAAAAAUAAAAAAAAAMHgxMjMAAAABAAAAAAAA' \
                                    'AAAAAAAAAAAACQAAAAAAAAAweEFCQUNBQkEAAAAAAAAA'
+
+
+def test_read_non_latin_symbols(yt_client, tmp_dir, livy_server):
+    table = f"{tmp_dir}/non_latin_table"
+    yt_client.create("table", table, attributes={"schema": [{"name": "id", "type": "int64"},
+                                                            {"name": "value", "type": "string"}]})
+    yt_client.write_table(table, [{"id": 1, "value": "Номер один"},
+                                  {"id": 2, "value": "Номер два"},
+                                  {"id": 3, "value": "Что то ещё"}])
+
+    host = "http://" + livy_server.rest()
+    session_url = create_session(host)
+
+    query = f"select * from yt.`ytTable:/{table}` WHERE value LIKE 'Номер%' ORDER BY id"
+    output = run_code(host, session_url, wrap_sql_query(query))
+    # The expected result is the same as in DataFrameSerializerTest::"serialize non-latin symbols in unicode" unit test
+    assert extract_data(output) == 'bgAAAAAAAAAKMgoCaWQQA0gAWih7InR5cGVfbmFtZSI9Im9wdGlvbmFsIjsiaXRlbSI9ImludD' \
+                                   'Y0Ijt9CjYKBXZhbHVlEBBIAFopeyJ0eXBlX25hbWUiPSJvcHRpb25hbCI7Iml0ZW0iPSJzdHJp' \
+                                   'bmciO30YAAAAAgAAAAAAAAACAAAAAAAAAAAAAAAAAAAAAQAAAAAAAAATAAAAAAAAANCd0L7QvN' \
+                                   'C10YAg0L7QtNC40L0AAAAAAAIAAAAAAAAAAAAAAAAAAAACAAAAAAAAABEAAAAAAAAA0J3QvtC8' \
+                                   '0LXRgCDQtNCy0LAAAAAAAAAA'

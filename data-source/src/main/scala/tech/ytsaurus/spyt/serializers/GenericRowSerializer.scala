@@ -9,6 +9,7 @@ import tech.ytsaurus.spyt.serialization.YsonEncoder
 import tech.ytsaurus.spyt.serializers.SchemaConverter.Unordered
 import tech.ytsaurus.spyt.types.YTsaurusTypes
 
+import java.nio.charset.StandardCharsets
 import java.util.Base64
 
 // TODO(alex-shishkin): Supported type v1 only
@@ -27,7 +28,7 @@ class GenericRowSerializer(schema: StructType) {
       sparkField.dataType match {
         case BinaryType => boxValue(i, row.getAs[Array[Byte]](i))
 
-        case StringType => boxValue(i, row.getString(i).getBytes)
+        case StringType => boxValue(i, row.getString(i).getBytes(StandardCharsets.UTF_8))
         case t@(ArrayType(_, _) | StructType(_) | MapType(_, _, _)) =>
           val skipNulls = sparkField.metadata.contains("skipNulls") && sparkField.metadata.getBoolean("skipNulls")
           boxValue(i, YsonEncoder.encode(row.get(i), t, skipNulls))

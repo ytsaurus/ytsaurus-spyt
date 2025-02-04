@@ -20,6 +20,11 @@ class DataFrameSerializerTest extends FlatSpec with Matchers with LocalSpark
     .addValue("value", ColumnValueType.ANY)
     .build()
 
+  private val nonLatinSchema = TableSchema.builder()
+    .addValue("id", ColumnValueType.INT64)
+    .addValue("value", ColumnValueType.STRING)
+    .build()
+
   it should "serialize dataframe to byte array" in {
     writeTableFromYson(Seq(
       """{a = 0; b = #; c = 0.0}"""
@@ -89,5 +94,22 @@ class DataFrameSerializerTest extends FlatSpec with Matchers with LocalSpark
         "AAAAAAAABEAAAAAAAAAewECMz0BAjQ7AQIxPQECMn0AAAAAAAAAAQAAAAAAAAAAAAAAAAAAABEAAAAAAAAAewECNz0BAjg7AQI1PQECNn0AAAAAAAAA"
     )
     tableBytes should contain theSameElementsAs answer
+  }
+
+  it should "serialize non-latin symbols in unicode" in {
+    writeTableFromYson(Seq(
+      """{id = 1; value = "Номер один"}""",
+      """{id = 2; value = "Номер два"}"""
+    ), tmpPath, nonLatinSchema)
+
+    val res = spark.read.yt(tmpPath)
+    val resultBase64 = GenericRowSerializer.dfToYTFormatWithBase64(res)
+
+    resultBase64 should contain theSameElementsAs Seq(
+      "bgAAAAAAAAAKMgoCaWQQA0gAWih7InR5cGVfbmFtZSI9Im9wdGlvbmFsIjsiaXRlbSI9ImludDY0Ijt9CjYKBXZhbHVlEBBIAFopeyJ0e" +
+        "XBlX25hbWUiPSJvcHRpb25hbCI7Iml0ZW0iPSJzdHJpbmciO30YAAAAAgAAAAAAAAACAAAAAAAAAAAAAAAAAAAAAQAAAAAAAAATAAAA" +
+        "AAAAANCd0L7QvNC10YAg0L7QtNC40L0AAAAAAAIAAAAAAAAAAAAAAAAAAAACAAAAAAAAABEAAAAAAAAA0J3QvtC80LXRgCDQtNCy0LA" +
+        "AAAAAAAAA"
+    )
   }
 }

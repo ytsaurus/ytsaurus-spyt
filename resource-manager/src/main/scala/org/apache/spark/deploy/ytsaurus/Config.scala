@@ -4,6 +4,8 @@ package org.apache.spark.deploy.ytsaurus
 import org.apache.spark.internal.config.ConfigBuilder
 import tech.ytsaurus.spyt.BuildInfo
 
+import java.util.concurrent.TimeUnit
+
 object Config {
   val GLOBAL_CONFIG_PATH = ConfigBuilder("spark.ytsaurus.config.global.path")
     .doc("Path to global Spark configuration for the whole YTsaurus cluster")
@@ -165,4 +167,9 @@ object Config {
     .version("2.6.0")
     .booleanConf
     .createWithDefault(false)
+
+  val YTSAURUS_CLIENT_TIMEOUT = ConfigBuilder("spark.ytsaurus.client.rpc.timeout")
+    .version("2.6.0")
+    .timeConf(TimeUnit.MILLISECONDS)
+    .createOptional
 }

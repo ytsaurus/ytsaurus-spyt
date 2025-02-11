@@ -12,10 +12,10 @@ import org.apache.spark.rpc.RpcEndpointAddress
 import org.apache.spark.scheduler.cluster.CoarseGrainedSchedulerBackend
 import org.apache.spark.util.{Utils, VersionUtils}
 import org.apache.spark.{SparkConf, SparkContext, SparkException}
-import tech.ytsaurus.client.YTsaurusClient
+import tech.ytsaurus.client.{YTsaurusClient, YTsaurusClientConfig}
 import tech.ytsaurus.client.operations.{Spec, VanillaSpec}
 import tech.ytsaurus.client.request.{CompleteOperation, GetOperation, UpdateOperationParameters, VanillaOperation}
-import tech.ytsaurus.client.rpc.YTsaurusClientAuth
+import tech.ytsaurus.client.rpc.{RpcOptions, YTsaurusClientAuth}
 import tech.ytsaurus.core.GUID
 import tech.ytsaurus.spyt.{BuildInfo, SparkAdapter, SparkVersionUtils}
 import tech.ytsaurus.spyt.wrapper.YtWrapper
@@ -23,6 +23,7 @@ import tech.ytsaurus.ysontree._
 
 import java.net.URI
 import java.nio.file.Paths
+import java.time.Duration
 import scala.collection.JavaConverters._
 import scala.collection.mutable.ArrayBuffer
 import scala.concurrent.duration.DurationInt
@@ -324,7 +325,7 @@ private[spark] object YTsaurusOperationManager extends Logging {
     logDebug("Entering YTsaurusOperationManager.create")
     val (user, token) = YTsaurusUtils.userAndToken(conf)
     logDebug("User and token were retrieved, now creating YTsaurus client")
-    val ytClient: YTsaurusClient = buildClient(ytProxy, user, token, networkName, proxyRole)
+    val ytClient: YTsaurusClient = buildClient(ytProxy, user, token, networkName, proxyRole, conf)
     logDebug("YTsaurus client has been successfully created")
 
     try {
@@ -646,9 +647,19 @@ private[spark] object YTsaurusOperationManager extends Logging {
                           user: String,
                           token: String,
                           networkName: Option[String],
-                          proxyRole: Option[String]): YTsaurusClient = {
+                          proxyRole: Option[String],
+                          conf: SparkConf
+                         ): YTsaurusClient = {
     val builder: YTsaurusClient.ClientBuilder[_ <: YTsaurusClient, _] = YTsaurusClient.builder()
     builder.setCluster(ytProxy)
+    conf.get(YTSAURUS_CLIENT_TIMEOUT).foreach { timeoutMilis =>
+      val rpcOptions = new RpcOptions
+      val timeoutDuration = Duration.ofMillis(timeoutMilis)
+      rpcOptions.setGlobalTimeout(timeoutDuration)
+      rpcOptions.setStreamingReadTimeout(timeoutDuration)
+      rpcOptions.setStreamingWriteTimeout(timeoutDuration)
+      builder.setConfig(YTsaurusClientConfig.builder().setRpcOptions(rpcOptions).build())
+    }
     networkName.foreach(nn => builder.setProxyNetworkName(nn))
     proxyRole.foreach(pr => builder.setProxyRole(pr))
     if (user != null && token != null) {

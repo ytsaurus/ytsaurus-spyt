@@ -10,7 +10,6 @@ import org.slf4j.LoggerFactory
 import tech.ytsaurus.client.TableWriter
 import tech.ytsaurus.client.rows.{WireProtocolWriteable, WireRowSerializer}
 import tech.ytsaurus.core.tables.{ColumnValueType, TableSchema}
-import tech.ytsaurus.spyt.format.conf.YtTableSparkSettings.{WriteSchemaHint, WriteTypeV3}
 import tech.ytsaurus.spyt.serialization.YsonEncoder
 import tech.ytsaurus.spyt.serializers.InternalRowSerializer._
 import tech.ytsaurus.spyt.serializers.SchemaConverter.{Unordered, decimalToBinary}

@@ -80,7 +80,7 @@ object YtTableSparkSettings {
 
   case object SortColumns extends ConfigEntry[Seq[String]]("sort_columns", Some(Nil))
 
-  case object WriteTableConfig extends ConfigEntry[YTreeNode](s"write_table_config", Some(null))
+  case object WriteTableConfig extends ConfigEntry[YTreeNode](s"write_table_config")
 
   case object UniqueKeys extends ConfigEntry[Boolean]("unique_keys", Some(false))
 

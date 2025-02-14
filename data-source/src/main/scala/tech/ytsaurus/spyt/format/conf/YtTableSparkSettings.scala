@@ -80,6 +80,8 @@ object YtTableSparkSettings {
 
   case object SortColumns extends ConfigEntry[Seq[String]]("sort_columns", Some(Nil))
 
+  case object TableWriterConfig extends ConfigEntry[YTreeNode]("table_writer")
+
   case object UniqueKeys extends ConfigEntry[Boolean]("unique_keys", Some(false))
 
   case object InconsistentDynamicWrite extends ConfigEntry[Boolean]("inconsistent_dynamic_write", Some(false))
@@ -111,7 +113,7 @@ object YtTableSparkSettings {
       }.getOrElse(str)
     }
 
-    val excludeOptions: Set[String] = Set(SortColumns, Schema, WriteTypeV3, NullTypeAllowed, Path).map(_.name)
+    val excludeOptions: Set[String] = Set(SortColumns, Schema, WriteTypeV3, NullTypeAllowed, Path, TableWriterConfig).map(_.name)
   }
 
   def isTable(configuration: Configuration): Boolean = {

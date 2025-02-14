@@ -71,6 +71,18 @@ class YtOutputWriterTest extends FlatSpec with TmpDir with LocalSpark with Match
     YtDataCheck.yPathShouldContainExpectedData(yPath, sampleData)(_.getValues.get(0).longValue())
   }
 
+  it should "be able to configure table writer" in {
+    import spark.implicits._
+    val sampleData = Seq(SampleRow(1, 1.0, "F" * (16 << 20)))
+
+    val df = spark.createDataset(sampleData)
+    df.write.format("yt").option("table_writer", "{max_row_weight=20000000}").save("ytTable:/" + tmpPath)
+
+    val yPath = YPath.simple(YtWrapper.formatPath(tmpPath))
+
+    YtDataCheck.yPathShouldContainExpectedData(yPath, sampleData)(_.getValues.get(0).longValue())
+  }
+
   it should "correctly serialize time to YSON" in {
     import spark.implicits._
     val sampleData = (1 to 1000).map(n => SampleRow2(Nested(

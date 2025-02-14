@@ -152,6 +152,7 @@ class YtOutputWriter(richPath: YPathEnriched,
     val appendPath = richPath.withAttr("append", "true").toYPath
     log.debugLazy(s"Initialize new write: $appendPath, transaction: $transactionGuid")
     val request = WriteTable.builder[InternalRow]()
+      .setConfig(options.getYtConf(TableWriterConfig).orNull)
       .setPath(appendPath)
       .setSerializationContext(new WriteSerializationContext(new InternalRowSerializer(schema, WriteSchemaConverter(options))))
       .setTransactionalOptions(new TransactionalOptions(GUID.valueOf(transactionGuid)))

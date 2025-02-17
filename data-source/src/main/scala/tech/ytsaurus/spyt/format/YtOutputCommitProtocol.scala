@@ -108,7 +108,10 @@ class YtOutputCommitProtocol(jobId: String,
     initWrittenTables()  // Executors will have null value after deserialization
     if (!isDynamicTable(conf)) {
       val parent = YtOutputCommitProtocol.getGlobalWriteTransaction(conf)
-      createTransaction(conf, Transaction, Some(parent), title = s"Spark JobID ${taskContext.getJobID}")
+      createTransaction(
+        conf, Transaction, Some(parent),
+        title = Some(s"YT Operation ID ${System.getenv("YT_OPERATION_ID")}, YT Job ID ${System.getenv("YT_JOB_ID")}, Spark ${taskContext.getTaskAttemptID}"),
+      )
     }
   }
 
@@ -238,7 +241,7 @@ object YtOutputCommitProtocol {
     }
   }
 
-  def createTransaction(conf: Configuration, confEntry: ConfigEntry[String], parent: Option[String], title: String = null)
+  def createTransaction(conf: Configuration, confEntry: ConfigEntry[String], parent: Option[String], title: Option[String])
                        (implicit yt: CompoundClient): String = {
     val transactionTimeout = conf.ytConf(SparkYtConfiguration.Transaction.Timeout)
     val transaction = YtWrapper.createTransaction(parent, transactionTimeout, title = title)

@@ -25,7 +25,7 @@ trait YtTransactionUtils {
     createTransaction(None, toScalaDuration(timeout), sticky)
   }
 
-  def createTransaction(parent: Option[String], timeout: Duration, sticky: Boolean = false, title: String = null)
+  def createTransaction(parent: Option[String], timeout: Duration, sticky: Boolean = false, title: Option[String] = None)
                        (implicit yt: CompoundClient): ApiServiceTransaction = {
     log.debugLazy(s"Start transaction, parent $parent, timeout $timeout, sticky $sticky")
     val request = new StartTransaction(if (sticky) TransactionType.Tablet else TransactionType.Master).toBuilder
@@ -33,9 +33,7 @@ trait YtTransactionUtils {
       .setTimeout(toJavaDuration(timeout))
       .setPing(true)
       .setPingPeriod(toJavaDuration(30 seconds))
-    if (title != null) {
-      request.setAttributes(Collections.singletonMap("title", title))
-    }
+    title.foreach(title => request.setAttributes(Collections.singletonMap("title", title)))
 
     parent.foreach(p => request.setParentId(GUID.valueOf(p)))
     val tr = yt.startTransaction(request).join()

@@ -53,13 +53,12 @@ def test_livy_server(yt_client, tmp_dir, livy_server):
     assert extract_data(output) == '3'
 
     output = run_code(host, session_url, wrap_sql_query("select 1"))
-    assert extract_data(output) == 'NQAAAAAAAAAKMQoBMRADSABaKHsidHlwZV9uYW1lIj0ib3B0aW9uYWwiOyJpdGVtIj0iaW50Nj' \
-                                   'QiO30YAAAAAAEAAAAAAAAAAQAAAAAAAAAAAAAAAAAAAAEAAAAAAAAA'
+    assert extract_data(output) == 'FQAAAAAAAAAKDwoBMRADQIUgSAFSAwiFIBABGAAAAAABAAAAAAAAAAEAAAAAAAAAAAAAAAAAAA' \
+                                   'ABAAAAAAAAAA=='
 
     output = run_code(host, session_url, wrap_sql_query(f"select * from yt.`ytTable:/{table}`"))
-    assert extract_data(output) == 'NwAAAAAAAAAKMwoCaWQQEEgAWil7InR5cGVfbmFtZSI9Im9wdGlvbmFsIjsiaXRlbSI9InN0cm' \
-                                   'luZyI7fRgAAAIAAAAAAAAAAQAAAAAAAAAAAAAAAAAAAAUAAAAAAAAAMHgxMjMAAAABAAAAAAAA' \
-                                   'AAAAAAAAAAAACQAAAAAAAAAweEFCQUNBQkEAAAAAAAAA'
+    assert extract_data(output) == 'FgAAAAAAAAAKEAoCaWQQEEAQSABSBBICCBAQARgAAAACAAAAAAAAAAEAAAAAAAAAAAAAAAAAAA' \
+                                   'AFAAAAAAAAADB4MTIzAAAAAQAAAAAAAAAAAAAAAAAAAAkAAAAAAAAAMHhBQkFDQUJBAAAAAAAAAA=='
 
 
 def test_read_non_latin_symbols(yt_client, tmp_dir, livy_server):
@@ -76,8 +75,7 @@ def test_read_non_latin_symbols(yt_client, tmp_dir, livy_server):
     query = f"select * from yt.`ytTable:/{table}` WHERE value LIKE 'Номер%' ORDER BY id"
     output = run_code(host, session_url, wrap_sql_query(query))
     # The expected result is the same as in DataFrameSerializerTest::"serialize non-latin symbols in unicode" unit test
-    assert extract_data(output) == 'bgAAAAAAAAAKMgoCaWQQA0gAWih7InR5cGVfbmFtZSI9Im9wdGlvbmFsIjsiaXRlbSI9ImludD' \
-                                   'Y0Ijt9CjYKBXZhbHVlEBBIAFopeyJ0eXBlX25hbWUiPSJvcHRpb25hbCI7Iml0ZW0iPSJzdHJp' \
-                                   'bmciO30YAAAAAgAAAAAAAAACAAAAAAAAAAAAAAAAAAAAAQAAAAAAAAATAAAAAAAAANCd0L7QvN' \
-                                   'C10YAg0L7QtNC40L0AAAAAAAIAAAAAAAAAAAAAAAAAAAACAAAAAAAAABEAAAAAAAAA0J3QvtC8' \
-                                   '0LXRgCDQtNCy0LAAAAAAAAAA'
+    assert extract_data(output) == 'KwAAAAAAAAAKEAoCaWQQA0ADSABSBBICCAMKEwoFdmFsdWUQEEAQSABSBBICCBAQARgAAAAAAA' \
+                                   'ACAAAAAAAAAAIAAAAAAAAAAAAAAAAAAAABAAAAAAAAABMAAAAAAAAA0J3QvtC80LXRgCDQvtC0' \
+                                   '0LjQvQAAAAAAAgAAAAAAAAAAAAAAAAAAAAIAAAAAAAAAEQAAAAAAAADQndC+0LzQtdGAINC00L' \
+                                   'LQsAAAAAAAAAA='

@@ -48,8 +48,6 @@ class SpytEnablers(object):
         self.enable_solomon_agent = self._get_enabler(self.enable_solomon_agent, "enable_solomon_agent",
                                                       self.SOLOMON_AGENT_KEY)
         self.enable_tcp_proxy = self._get_enabler(self.enable_tcp_proxy, "enable_tcp_proxy", self.TCP_PROXY_KEY)
-        self.enable_preference_ipv6 = self._get_enabler(self.enable_preference_ipv6, "enable_preference_ipv6",
-                                                        self.IPV6_KEY)
         self.enable_squashfs = self._get_enabler(self.enable_squashfs, "enable_squashfs", self.SQUASHFS_KEY)
 
     def __str__(self):

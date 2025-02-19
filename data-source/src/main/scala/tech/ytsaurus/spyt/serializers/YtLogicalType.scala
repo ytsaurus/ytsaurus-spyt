@@ -126,10 +126,10 @@ object YtLogicalType {
 
   case object Void extends AtomicYtLogicalType("void", 0x100c, ColumnValueType.NULL, TiType.voidType(), NullType) //?
 
-  case object Date32 extends AtomicYtLogicalType("date32", 0x1018, ColumnValueType.INT64, TiType.date32(), new Date32Type(), arrowSupported = false)
-  case object Datetime64 extends AtomicYtLogicalType("datetime64", 0x1019, ColumnValueType.INT64, TiType.datetime64(), new Datetime64Type(), arrowSupported = false)
-  case object Timestamp64 extends AtomicYtLogicalType("timestamp64", 0x101a, ColumnValueType.INT64, TiType.timestamp64(), new Timestamp64Type(), arrowSupported = false)
-  case object Interval64 extends AtomicYtLogicalType("interval64", 0x101b, ColumnValueType.INT64, TiType.interval64(), new Interval64Type(), arrowSupported = false)
+  case object Date32 extends AtomicYtLogicalType("date32", 0x1010, ColumnValueType.INT64, TiType.date32(), new Date32Type(), arrowSupported = false)
+  case object Datetime64 extends AtomicYtLogicalType("datetime64", 0x1011, ColumnValueType.INT64, TiType.datetime64(), new Datetime64Type(), arrowSupported = false)
+  case object Timestamp64 extends AtomicYtLogicalType("timestamp64", 0x1012, ColumnValueType.INT64, TiType.timestamp64(), new Timestamp64Type(), arrowSupported = false)
+  case object Interval64 extends AtomicYtLogicalType("interval64", 0x1013, ColumnValueType.INT64, TiType.interval64(), new Interval64Type(), arrowSupported = false)
 
 
   case class Decimal(precision: Int, scale: Int) extends CompositeYtLogicalType {

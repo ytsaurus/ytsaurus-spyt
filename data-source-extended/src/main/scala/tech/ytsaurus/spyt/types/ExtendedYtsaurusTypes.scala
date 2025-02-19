@@ -7,7 +7,7 @@ import org.apache.spark.sql.types.DataType
 import tech.ytsaurus.client.rows.{UnversionedValue, WireProtocolWriteable}
 import tech.ytsaurus.core.tables.ColumnValueType
 import tech.ytsaurus.spyt.serializers.InternalRowSerializer.{writeBytes, writeHeader}
-import tech.ytsaurus.spyt.serializers.YtLogicalType
+import tech.ytsaurus.spyt.serializers.{YsonRowConverter, YtLogicalType}
 import tech.ytsaurus.spyt.types.YTsaurusTypes.{AddValue, BoxValue}
 import tech.ytsaurus.typeinfo.{TiType, TypeName}
 import tech.ytsaurus.yson.YsonConsumer
@@ -91,10 +91,7 @@ class ExtendedYtsaurusTypes extends YTsaurusTypes {
   }
 
   override def toYsonField(dataType: DataType, value: Any, consumer: YsonConsumer): Unit = dataType match {
-    case UInt64Type => value match {
-      case v: Long => consumer.onUnsignedInteger(v)
-      case UInt64Long(v) => consumer.onUnsignedInteger(v)
-    }
+    case UInt64Type => consumer.onUnsignedInteger(YsonRowConverter.extractValue[Long, UInt64Long](value, _.toLong))
   }
 
   override def sparkTypeFor(tiType: TiType): DataType = tiType.getTypeName match {

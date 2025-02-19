@@ -1,23 +1,27 @@
 package tech.ytsaurus.spyt.serializers
 
+import NYT.NTableClient.NProto.ChunkMeta.TLogicalType._
+import NYT.NTableClient.NProto.ChunkMeta.{TColumnSchema, TLogicalType, TTableSchemaExt}
 import org.apache.spark.sql.spyt.types._
 import org.apache.spark.sql.types._
 import org.apache.spark.sql.{DataFrame, Row}
 import tech.ytsaurus.client.rows.{UnversionedRow, UnversionedValue, WireProtocolWriter}
 import tech.ytsaurus.core.tables.ColumnValueType
 import tech.ytsaurus.spyt.serialization.YsonEncoder
-import tech.ytsaurus.spyt.serializers.SchemaConverter.Unordered
 import tech.ytsaurus.spyt.types.YTsaurusTypes
 
 import java.nio.charset.StandardCharsets
 import java.util.Base64
 
-// TODO(alex-shishkin): Supported type v1 only
 class GenericRowSerializer(schema: StructType) {
-  private val tableSchema = new WriteSchemaConverter().tableSchema(schema, Unordered)
+  private val converter = new WriteSchemaConverter(typeV3Format = true)
+
+  private def toYtLogicalType(field: StructField): YtLogicalType = {
+    converter.ytLogicalTypeV3(field)
+  }
 
   private def boxValue(i: Int, value: Any): UnversionedValue = {
-    new UnversionedValue(i, tableSchema.getColumnType(i), false, value)
+    new UnversionedValue(i, toYtLogicalType(schema(i)).columnValueType, false, value)
   }
 
   def serializeValue(row: Row, i: Int): UnversionedValue = {
@@ -25,13 +29,13 @@ class GenericRowSerializer(schema: StructType) {
       new UnversionedValue(i, ColumnValueType.NULL, false, null)
     } else {
       val sparkField = schema(i)
+      val skipNulls = sparkField.metadata.contains("skipNulls") && sparkField.metadata.getBoolean("skipNulls")
       sparkField.dataType match {
         case BinaryType => boxValue(i, row.getAs[Array[Byte]](i))
 
         case StringType => boxValue(i, row.getString(i).getBytes(StandardCharsets.UTF_8))
         case t@(ArrayType(_, _) | StructType(_) | MapType(_, _, _)) =>
-          val skipNulls = sparkField.metadata.contains("skipNulls") && sparkField.metadata.getBoolean("skipNulls")
-          boxValue(i, YsonEncoder.encode(row.get(i), t, skipNulls))
+          boxValue(i, YsonEncoder.encode(row.get(i), t, skipNulls, typeV3Format = true, Some(toYtLogicalType(sparkField).tiType)))
         case ByteType => boxValue(i, row.getByte(i).toLong)
         case ShortType => boxValue(i, row.getShort(i).toLong)
         case IntegerType => boxValue(i, row.getInt(i).toLong)
@@ -46,9 +50,93 @@ class GenericRowSerializer(schema: StructType) {
         case _: Datetime64Type => boxValue(i, row.getLong(i))
         case _: Timestamp64Type => boxValue(i, row.getLong(i))
         case _: Interval64Type => boxValue(i, row.getLong(i))
+        case dt: DecimalType => boxValue(i, SchemaConverter.decimalToBinary(None, dt, Decimal(row.getDecimal(i))))
         case otherType => YTsaurusTypes.instance.serializeValue(otherType, row, i, boxValue)
       }
     }
+  }
+
+  private def toProtobufLogicalType(ytLogicalType: YtLogicalType): (TLogicalType.Builder, Option[Int]) = {
+    val logicalType: TLogicalType.Builder = TLogicalType.newBuilder()
+    var simpleType: Option[Int] = None
+
+    def recurse(ytLogicalType: YtLogicalType): TLogicalType.Builder = toProtobufLogicalType(ytLogicalType)._1
+
+    ytLogicalType match {
+      case atomicType: AtomicYtLogicalType =>
+        simpleType = Some(atomicType.value)
+        logicalType.setSimple(atomicType.value)
+
+      case YtLogicalType.Optional(inner) => logicalType.setOptional(recurse(inner))
+
+      case YtLogicalType.Array(inner) => logicalType.setList(recurse(inner))
+
+      case YtLogicalType.Struct(fields) =>
+        val structLogicalType = fields.foldLeft(TStructLogicalType.newBuilder()) { case (builder, (name, ytType, _)) =>
+          builder.addFields(TStructField.newBuilder().setName(name).setType(recurse(ytType)))
+        }
+        logicalType.setStruct(structLogicalType)
+
+      case YtLogicalType.Tuple(fields) =>
+        val tupleLogicalType = fields.foldLeft(TTupleLogicalType.newBuilder()) { case (builder, (ytType, _)) =>
+          builder.addElements(recurse(ytType))
+        }
+        logicalType.setTuple(tupleLogicalType)
+
+      case YtLogicalType.VariantOverTuple(fields) =>
+        val variantTupleLT = fields.foldLeft(TVariantTupleLogicalType.newBuilder()) { case (builder, (ytType, _)) =>
+          builder.addElements(recurse(ytType))
+        }
+        logicalType.setVariantTuple(variantTupleLT)
+
+      case YtLogicalType.VariantOverStruct(fields) =>
+        val variantStructLT = fields.foldLeft(TVariantStructLogicalType.newBuilder()) { case (builder, (name, ytType, _)) =>
+          builder.addFields(TStructField.newBuilder().setName(name).setType(recurse(ytType)))
+        }
+        logicalType.setVariantStruct(variantStructLT)
+
+      case YtLogicalType.Dict(keyType, valueType) => logicalType.setDict(
+        TDictLogicalType.newBuilder().setKey(recurse(keyType)).setValue(recurse(valueType))
+      )
+
+      case YtLogicalType.Tagged(inner, tag) => logicalType.setTagged(
+        TTaggedLogicalType.newBuilder().setElement(recurse(inner)).setTag(tag)
+      )
+
+      case YtLogicalType.Decimal(precision, scale) => logicalType.setDecimal(
+        TDecimalLogicalType.newBuilder().setPrecision(precision).setScale(scale)
+      )
+    }
+    (logicalType, simpleType)
+  }
+
+  private def serializeTableSchemaExt(): TTableSchemaExt = {
+    val schemaBuilder = TTableSchemaExt.newBuilder()
+    schemaBuilder.setStrict(true)
+    schemaBuilder.setUniqueKeys(false)
+
+    schema.fields.foreach { field =>
+      val columnBuilder = TColumnSchema.newBuilder()
+      val ytLogicalType = toYtLogicalType(field)
+      val required = !field.nullable
+      columnBuilder.setName(field.name)
+      columnBuilder.setType(ytLogicalType.columnValueType.getValue)
+      columnBuilder.setRequired(required)
+
+      var (logicalType, simpleTypeOpt) = toProtobufLogicalType(ytLogicalType)
+
+      simpleTypeOpt.foreach(simpleType => columnBuilder.setSimpleLogicalType(simpleType))
+
+      if (!required) {
+        logicalType = TLogicalType.newBuilder().setOptional(logicalType)
+      }
+
+      columnBuilder.setLogicalType(logicalType)
+
+      schemaBuilder.addColumns(columnBuilder)
+    }
+
+    schemaBuilder.build()
   }
 
   def serializeRow(row: Row): UnversionedRow = {
@@ -59,7 +147,7 @@ class GenericRowSerializer(schema: StructType) {
   def serializeTable(rows: Array[Row]): Seq[Array[Byte]] = {
     import scala.collection.JavaConverters._
     val writer = new WireProtocolWriter
-    writer.writeTableSchema(tableSchema)
+    writer.writeMessage(serializeTableSchemaExt())
     writer.writeSchemafulRowset(rows.map(serializeRow).toList.asJava)
     val result = writer.finish
     result.asScala

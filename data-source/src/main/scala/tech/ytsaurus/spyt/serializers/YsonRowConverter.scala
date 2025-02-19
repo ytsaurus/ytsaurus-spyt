@@ -1,5 +1,6 @@
 package tech.ytsaurus.spyt.serializers
 
+import org.apache.commons.lang3.ClassUtils
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.{GenericRowWithSchema, UnsafeArrayData, UnsafeMapData, UnsafeRow}
@@ -19,6 +20,8 @@ import tech.ytsaurus.ysontree._
 import java.io.{ByteArrayInputStream, ByteArrayOutputStream}
 import scala.annotation.tailrec
 import scala.collection.mutable
+import scala.reflect.ClassTag
+import scala.runtime.{BoxedUnit, BoxesRunTime}
 
 class YsonRowConverter(schema: StructType, ytSchema: YtTypeHolder,
                        config: YsonEncoderConfig) extends YTreeSerializer[Row] {
@@ -229,6 +232,15 @@ object YsonRowConverter {
     }
   }
 
+  def extractValue[TRes: ClassTag, TAlt](value: Any, convert: TAlt => TRes): TRes = {
+    val tResClass = implicitly[ClassTag[TRes]].runtimeClass
+    if (tResClass.isInstance(value) || ClassUtils.isAssignable(value.getClass, tResClass, true)) {
+      value.asInstanceOf[TRes]
+    } else {
+      convert(value.asInstanceOf[TAlt])
+    }
+  }
+
   def serializeValue(value: Any, dataType: DataType, config: YsonEncoderConfig, consumer: YsonConsumer,
                      ytType: YtTypeHolder = YtTypeHolder.empty): Unit = {
     if (isNull(value)) {
@@ -256,7 +268,7 @@ object YsonRowConverter {
           if (!config.typeV3Format) {
             throw new IllegalArgumentException("Writing decimal type without enabled type_v3 is not supported")
           }
-          val decimalValue = value.asInstanceOf[Decimal]
+          val decimalValue = extractValue[Decimal, java.math.BigDecimal](value, Decimal(_))
           val binary = decimalToBinary(ytType.ytType, d, decimalValue)
           consumer.onString(binary, 0, binary.length)
         case array: ArrayType =>
@@ -265,13 +277,13 @@ object YsonRowConverter {
           YsonRowConverter.getOrCreate(t, ytType, config).serializeStruct(value, consumer)
         case map: MapType =>
           serializeMap(value, map, ytType, config, consumer)
-        case _: DatetimeType => consumer.onUnsignedInteger(value.asInstanceOf[Long])
+        case _: DatetimeType => consumer.onUnsignedInteger(extractValue[Long, Datetime](value, _.toLong))
         case DateType => consumer.onUnsignedInteger(value.asInstanceOf[Int])
         case TimestampType => consumer.onUnsignedInteger(value.asInstanceOf[Long])
-        case _: Date32Type => consumer.onInteger(value.asInstanceOf[Int])
-        case _: Datetime64Type => consumer.onInteger(value.asInstanceOf[Long])
-        case _: Timestamp64Type => consumer.onInteger(value.asInstanceOf[Long])
-        case _: Interval64Type => consumer.onInteger(value.asInstanceOf[Long])
+        case _: Date32Type => consumer.onInteger(extractValue[Int, Date32](value, _.toInt))
+        case _: Datetime64Type => consumer.onInteger(extractValue[Long, Datetime64](value, _.toLong))
+        case _: Timestamp64Type => consumer.onInteger(extractValue[Long, Timestamp64](value, _.toLong))
+        case _: Interval64Type => consumer.onInteger(extractValue[Long, Interval64](value, _.toLong))
         case otherType => YTsaurusTypes.instance.toYsonField(otherType, value, consumer)
       }
     }

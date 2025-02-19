@@ -1,5 +1,8 @@
 package tech.ytsaurus.spyt.serializers
 
+import NYT.NTableClient.NProto.ChunkMeta.TTableSchemaExt
+import org.apache.commons.codec.binary.Hex
+import org.apache.spark.sql.Row
 import org.apache.spark.sql.types._
 import org.scalatest.{FlatSpec, Matchers}
 import tech.ytsaurus.core.tables.{ColumnValueType, TableSchema}
@@ -32,14 +35,10 @@ class DataFrameSerializerTest extends FlatSpec with Matchers with LocalSpark
 
     val res = spark.read.yt(tmpPath)
     val tableBytes = GenericRowSerializer.dfToYTFormat(res)
-    val answer = Array(Array(-99, 0, 0, 0, 0, 0, 0, 0, 10, 49, 10, 1, 97, 16, 3, 72, 0, 90, 40, 123, 34, 116, 121,
-      112, 101, 95, 110, 97, 109, 101, 34, 61, 34, 111, 112, 116, 105, 111, 110, 97, 108, 34, 59, 34, 105, 116, 101,
-      109, 34, 61, 34, 105, 110, 116, 54, 52, 34, 59, 125, 10, 50, 10, 1, 98, 16, 16, 72, 0, 90, 41, 123, 34, 116, 121,
-      112, 101, 95, 110, 97, 109, 101, 34, 61, 34, 111, 112, 116, 105, 111, 110, 97, 108, 34, 59, 34, 105, 116, 101,
-      109, 34, 61, 34, 115, 116, 114, 105, 110, 103, 34, 59, 125, 10, 50, 10, 1, 99, 16, 5, 72, 0, 90, 41, 123, 34,
-      116, 121, 112, 101, 95, 110, 97, 109, 101, 34, 61, 34, 111, 112, 116, 105, 111, 110, 97, 108, 34, 59, 34, 105,
-      116, 101, 109, 34, 61, 34, 100, 111, 117, 98, 108, 101, 34, 59, 125, 24, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 3,
-      0, 0, 0, 0, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0))
+    val answer = Array(Array(55, 0, 0, 0, 0, 0, 0, 0, 10, 15, 10, 1, 97, 16, 3, 64, 3, 72, 0, 82, 4, 18, 2, 8, 3, 10,
+      15, 10, 1, 98, 16, 16, 64, 16, 72, 0, 82, 4, 18, 2, 8, 16, 10, 15, 10, 1, 99, 16, 5, 64, 5, 72, 0, 82, 4, 18,
+      2, 8, 5, 16, 1, 24, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 3, 0, 0, 0, 0, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+      0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0))
     tableBytes should contain theSameElementsAs answer
   }
 
@@ -52,10 +51,9 @@ class DataFrameSerializerTest extends FlatSpec with Matchers with LocalSpark
     val res = spark.read.yt(tmpPath)
     val tableBytes = GenericRowSerializer.dfToYTFormatWithBase64(res)
     val answer = Array(
-      "nQAAAAAAAAAKMQoBYRADSABaKHsidHlwZV9uYW1lIj0ib3B0aW9uYWwiOyJpdGVtIj0iaW50NjQiO30KMgoBYhAQSABaKXsidHlwZV9uYW1l" +
-        "Ij0ib3B0aW9uYWwiOyJpdGVtIj0ic3RyaW5nIjt9CjIKAWMQBUgAWil7InR5cGVfbmFtZSI9Im9wdGlvbmFsIjsiaXRlbSI9ImRvdWJsZSI" +
-        "7fRgAAAAAAgAAAAAAAAADAAAAAAAAAAAAAAAAAAAAAQAAAAAAAAABAAAAAAAAAGEAAAAAAAAAMzMzMzMz0z8DAAAAAAAAAAAAAAAAAAAAAgA" +
-        "AAAAAAAABAAAAAAAAAGIAAAAAAAAAAAAAAAAA4D8="
+      "NwAAAAAAAAAKDwoBYRADQANIAFIEEgIIAwoPCgFiEBBAEEgAUgQSAggQCg8KAWMQBUAFSABSBBICCAUQARgAAAIAAAAAAAAAAw" +
+        "AAAAAAAAAAAAAAAAAAAAEAAAAAAAAAAQAAAAAAAABhAAAAAAAAADMzMzMzM9M/AwAAAAAAAAAAAAAAAAAAAAIAAAAAAAAAAQ" +
+        "AAAAAAAABiAAAAAAAAAAAAAAAAAOA/"
     )
     tableBytes should contain theSameElementsAs answer
   }
@@ -72,8 +70,8 @@ class DataFrameSerializerTest extends FlatSpec with Matchers with LocalSpark
 
     val tableBytes = GenericRowSerializer.dfToYTFormatWithBase64(res)
     val answer = Array(
-      "OAAAAAAAAAAKNAoFdmFsdWUQEUgAWid7InR5cGVfbmFtZSI9Im9wdGlvbmFsIjsiaXRlbSI9Inlzb24iO30YAAIAAAAAAAAAAQAAAAAAAAA" +
-        "AAAAAAAAAAA4AAAAAAAAAW1sCAl07WwIEOwIGXV0AAAEAAAAAAAAAAAAAAAAAAAAIAAAAAAAAAFtbAghdOyNd"
+      "HwAAAAAAAAAKGQoFdmFsdWUQEUgAUgwSChoIEgYaBBICCAMQARgAAAIAAAAAAAAAAQAAAAAAAAAAAAAAAAAAAA4AAAAAAAAAW1" +
+        "sCAl07WwIEOwIGXV0AAAEAAAAAAAAAAAAAAAAAAAAIAAAAAAAAAFtbAghdOyNd"
     )
     tableBytes should contain theSameElementsAs answer
   }
@@ -90,8 +88,8 @@ class DataFrameSerializerTest extends FlatSpec with Matchers with LocalSpark
 
     val tableBytes = GenericRowSerializer.dfToYTFormatWithBase64(res)
     val answer = Array(
-      "OAAAAAAAAAAKNAoFdmFsdWUQEUgAWid7InR5cGVfbmFtZSI9Im9wdGlvbmFsIjsiaXRlbSI9Inlzb24iO30YAAIAAAAAAAAAAQAAAAAAAAAAA" +
-        "AAAAAAAABEAAAAAAAAAewECMz0BAjQ7AQIxPQECMn0AAAAAAAAAAQAAAAAAAAAAAAAAAAAAABEAAAAAAAAAewECNz0BAjg7AQI1PQECNn0AAAAAAAAA"
+      "IQAAAAAAAAAKGwoFdmFsdWUQEUgAUg4SDEIKCgIIAxIEEgIIEBABGAAAAAAAAAAAAgAAAAAAAAABAAAAAAAAAAAAAAAAAAAAEwAAAAAA" +
+        "AABbWwIGOwECNF07WwICOwECMl1dAAAAAAABAAAAAAAAAAAAAAAAAAAAEwAAAAAAAABbWwIOOwECOF07WwIKOwECNl1dAAAAAAA="
     )
     tableBytes should contain theSameElementsAs answer
   }
@@ -106,10 +104,47 @@ class DataFrameSerializerTest extends FlatSpec with Matchers with LocalSpark
     val resultBase64 = GenericRowSerializer.dfToYTFormatWithBase64(res)
 
     resultBase64 should contain theSameElementsAs Seq(
-      "bgAAAAAAAAAKMgoCaWQQA0gAWih7InR5cGVfbmFtZSI9Im9wdGlvbmFsIjsiaXRlbSI9ImludDY0Ijt9CjYKBXZhbHVlEBBIAFopeyJ0e" +
-        "XBlX25hbWUiPSJvcHRpb25hbCI7Iml0ZW0iPSJzdHJpbmciO30YAAAAAgAAAAAAAAACAAAAAAAAAAAAAAAAAAAAAQAAAAAAAAATAAAA" +
-        "AAAAANCd0L7QvNC10YAg0L7QtNC40L0AAAAAAAIAAAAAAAAAAAAAAAAAAAACAAAAAAAAABEAAAAAAAAA0J3QvtC80LXRgCDQtNCy0LA" +
-        "AAAAAAAAA"
+      "KwAAAAAAAAAKEAoCaWQQA0ADSABSBBICCAMKEwoFdmFsdWUQEEAQSABSBBICCBAQARgAAAAAAAACAAAAAAAAAAIAAAAAAAAAAAAAAAAA" +
+        "AAABAAAAAAAAABMAAAAAAAAA0J3QvtC80LXRgCDQvtC00LjQvQAAAAAAAgAAAAAAAAAAAAAAAAAAAAIAAAAAAAAAEQAAAAAAAADQnd" +
+        "C+0LzQtdGAINC00LLQsAAAAAAAAAA="
+    )
+  }
+
+  it should "serialize decimal values" in {
+    import spark.implicits._
+
+    val df = spark.createDataset(Seq((1L, 10.0), (2L, 10.2), (3L, 10.003)))
+      .toDF().select($"_1".as("id"), $"_2".cast(DecimalType(9, 4)).as("value"))
+
+    val resultBase64 = GenericRowSerializer.dfToYTFormatWithBase64(df)
+    resultBase64 should contain theSameElementsAs Seq(
+      "KwAAAAAAAAAKDgoCaWQQA0ADSAFSAggDChUKBXZhbHVlEBFIAFIIEgZSBAgJEAQQARgAAAAAAAADAAAAAAAAAAIAAAAAAAAAAAAAAAAAA" +
+        "AABAAAAAAAAAAQAAAAAAAAAgAGGoAAAAAACAAAAAAAAAAAAAAAAAAAAAgAAAAAAAAAEAAAAAAAAAIABjnAAAAAAAgAAAAAAAAAAAAAA" +
+        "AAAAAAMAAAAAAAAABAAAAAAAAACAAYa+AAAAAA=="
+    )
+  }
+
+  it should "serialize inner decimal values" in {
+    val schema = StructType(Seq(
+      StructField("rec", StructType(Seq(
+        StructField("key", StringType),
+        StructField("value", DecimalType(9, 4))
+      )))
+    ))
+
+    val data = Seq(
+      Row(Row("key1", java.math.BigDecimal.valueOf(10.01))),
+      Row(Row("key2", java.math.BigDecimal.valueOf(10.002))),
+      Row(Row("key3", java.math.BigDecimal.valueOf(10.0003))),
+    )
+
+    val df = spark.createDataFrame(spark.sparkContext.parallelize(data), schema)
+
+    val resultBase64 = GenericRowSerializer.dfToYTFormatWithBase64(df)
+    resultBase64 should contain theSameElementsAs Seq(
+      "NQAAAAAAAAAKLwoDcmVjEBFIAFIkEiIiIAoLCgNrZXkSBBICCBAKEQoFdmFsdWUSCBIGUgQICRAEEAEYAAAAAAMAAAAAAAAAAQAAAAAAA" +
+        "AAAAAAAAAAAAA8AAAAAAAAAWwEIa2V5MTsBCIABhwRdAAEAAAAAAAAAAAAAAAAAAAAPAAAAAAAAAFsBCGtleTI7AQiAAYa0XQABAAAA" +
+        "AAAAAAAAAAAAAAAADwAAAAAAAABbAQhrZXkzOwEIgAGGo10A"
     )
   }
 }

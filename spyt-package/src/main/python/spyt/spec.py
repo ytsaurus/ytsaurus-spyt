@@ -222,6 +222,8 @@ def build_livy_spec(builder: VanillaSpecBuilder, common_params: CommonSpecParams
 
     livy_task_spec = copy.deepcopy(common_params.task_spec)
     livy_task_spec["environment"] = livy_environment
+    livy_task_spec["file_paths"] = livy_file_paths
+    livy_task_spec["layer_paths"] = livy_layer_paths
 
     builder.begin_task("livy") \
         .job_count(1) \
@@ -230,8 +232,6 @@ def build_livy_spec(builder: VanillaSpecBuilder, common_params: CommonSpecParams
                       parse_memory(config.livy_driver_memory) * config.livy_max_sessions) \
         .cpu_limit(1 + config.livy_driver_cores * config.livy_max_sessions) \
         .spec(livy_task_spec) \
-        .file_paths(livy_file_paths) \
-        .layer_paths(livy_layer_paths) \
         .end_task()
 
 

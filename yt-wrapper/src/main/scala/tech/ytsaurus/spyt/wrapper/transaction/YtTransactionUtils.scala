@@ -7,6 +7,7 @@ import tech.ytsaurus.spyt.wrapper._
 import tech.ytsaurus.client.request.{ReadFile, ReadTable, StartOperation, StartTransaction, TransactionType, TransactionalOptions, TransactionalRequest, WriteFile}
 import tech.ytsaurus.client.{ApiServiceTransaction, CompoundClient}
 import tech.ytsaurus.core.GUID
+import tech.ytsaurus.ysontree.YTree
 
 import java.util.Collections
 import scala.annotation.tailrec
@@ -33,7 +34,7 @@ trait YtTransactionUtils {
       .setTimeout(toJavaDuration(timeout))
       .setPing(true)
       .setPingPeriod(toJavaDuration(30 seconds))
-    title.foreach(title => request.setAttributes(Collections.singletonMap("title", title)))
+    title.foreach(title => request.setAttributes(Collections.singletonMap("title", YTree.stringNode(title))))
 
     parent.foreach(p => request.setParentId(GUID.valueOf(p)))
     val tr = yt.startTransaction(request).join()

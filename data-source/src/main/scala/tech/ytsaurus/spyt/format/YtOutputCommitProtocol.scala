@@ -241,7 +241,7 @@ object YtOutputCommitProtocol {
     }
   }
 
-  def createTransaction(conf: Configuration, confEntry: ConfigEntry[String], parent: Option[String], title: Option[String])
+  def createTransaction(conf: Configuration, confEntry: ConfigEntry[String], parent: Option[String], title: Option[String] = None)
                        (implicit yt: CompoundClient): String = {
     val transactionTimeout = conf.ytConf(SparkYtConfiguration.Transaction.Timeout)
     val transaction = YtWrapper.createTransaction(parent, transactionTimeout, title = title)

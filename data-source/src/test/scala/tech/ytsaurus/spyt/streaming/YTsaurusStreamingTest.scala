@@ -170,7 +170,6 @@ class YTsaurusStreamingTest extends AnyFlatSpec with Matchers with LocalSpark wi
         appendChunksToTestTable(queuePath, Seq(getTestData()), sorted = false, remount = false)
         Thread.sleep(2000)
         currentCount = spark.read.option("enable_inconsistent_read", "true").yt(resultPath).count()
-        print(currentCount)
       }
     }(scala.concurrent.ExecutionContext.Implicits.global)
 

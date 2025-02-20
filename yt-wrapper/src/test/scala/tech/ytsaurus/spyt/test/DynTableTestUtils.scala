@@ -1,8 +1,8 @@
 package tech.ytsaurus.spyt.test
 
+import tech.ytsaurus.core.tables.{ColumnSchema, ColumnSortOrder, ColumnValueType, TableSchema}
 import tech.ytsaurus.spyt.wrapper.YtWrapper.{createTable, insertRows, mountTableSync, reshardTable, unmountTableSync}
 import tech.ytsaurus.spyt.wrapper.table.YtTableSettings
-import tech.ytsaurus.core.tables.{ColumnSchema, ColumnSortOrder, ColumnValueType, TableSchema}
 import tech.ytsaurus.ysontree.YTreeNode
 
 import scala.concurrent.duration._
@@ -56,6 +56,15 @@ trait DynTableTestUtils {
   def appendChunksToTestTable(path: String, data: Seq[Seq[TestRow]], sorted: Boolean = true,
                               remount: Boolean = true): Unit = {
     val schema = getTestSchema(sorted)
+    data.foreach(chunk => insertRows(path, schema, chunk.map(r => r.productIterator.toList)))
+    if (remount) {
+      unmountTableSync(path)
+      mountTableSync(path)
+    }
+  }
+
+  def appendChunksToTestTable[T <: Product](path: String, schema: TableSchema, data: Seq[Seq[T]], sorted: Boolean,
+                              remount: Boolean): Unit = {
     data.foreach(chunk => insertRows(path, schema, chunk.map(r => r.productIterator.toList)))
     if (remount) {
       unmountTableSync(path)

@@ -66,6 +66,7 @@
   "data-source-extended/src/test/scala/tech/ytsaurus/spyt/serializers/ExtendedDataFrameSerializerTest.scala":"yt/spark/spark-over-yt/data-source-extended/src/test/scala/tech/ytsaurus/spyt/serializers/ExtendedDataFrameSerializerTest.scala",
   "data-source-extended/src/test/scala/tech/ytsaurus/spyt/serializers/ExtendedSchemaConverterTest.scala":"yt/spark/spark-over-yt/data-source-extended/src/test/scala/tech/ytsaurus/spyt/serializers/ExtendedSchemaConverterTest.scala",
   "data-source-extended/src/test/scala/tech/ytsaurus/spyt/serializers/ExtendedYsonRowConverterTest.scala":"yt/spark/spark-over-yt/data-source-extended/src/test/scala/tech/ytsaurus/spyt/serializers/ExtendedYsonRowConverterTest.scala",
+  "data-source-extended/src/test/scala/tech/ytsaurus/spyt/streaming/ExtendedYTsaurusStreamingTest.scala":"yt/spark/spark-over-yt/data-source-extended/src/test/scala/tech/ytsaurus/spyt/streaming/ExtendedYTsaurusStreamingTest.scala",
   "data-source/debian/changelog":"yt/spark/spark-over-yt/data-source/debian/changelog",
   "data-source/service.yaml":"yt/spark/spark-over-yt/data-source/service.yaml",
   "data-source/src/main/java/tech/ytsaurus/spyt/SparkAppJava.java":"yt/spark/spark-over-yt/data-source/src/main/java/tech/ytsaurus/spyt/SparkAppJava.java",

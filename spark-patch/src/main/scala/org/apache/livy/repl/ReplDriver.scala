@@ -6,6 +6,9 @@ import org.apache.livy.rsc.{BaseProtocol, RSCConf, ReplJobResults}
 import org.apache.spark.{SparkConf, StoreUtils}
 import tech.ytsaurus.spyt.patch.annotations.{OriginClass, Subclass}
 
+import java.nio.charset.StandardCharsets.UTF_8
+import java.util.Base64
+
 @Subclass
 @OriginClass("org.apache.livy.repl.ReplDriver")
 class ReplDriverSpyt(conf: SparkConf, livyConf: RSCConf) extends ReplDriver(conf, livyConf) {
@@ -48,8 +51,9 @@ class ReplDriverSpyt(conf: SparkConf, livyConf: RSCConf) extends ReplDriver(conf
       val sqlStore = entries.sparkSession().sharedState.statusStore
       val metrics = sqlStore.executionMetrics(executionId)
       val graph = sqlStore.planGraph(executionId)
-      val dotContent = graph.makeDotFile(metrics)
-      val metadata = graph.allNodes.sortBy(_.id).map(_.desc)
+      val enc = Base64.getEncoder
+      val dotContent = enc.encodeToString(graph.makeDotFile(metrics).getBytes(UTF_8));
+      val metadata = graph.allNodes.sortBy(_.id).map(n => enc.encodeToString(n.desc.getBytes(UTF_8)))
       new QueryPlan(dotContent, metadata.toArray)
     }
   }

@@ -155,7 +155,20 @@ class GenericRowSerializer(schema: StructType) {
 }
 
 object GenericRowSerializer {
-  def dfToYTFormatWithBase64(df: DataFrame): Seq[String] = dfToYTFormat(df).map(Base64.getEncoder.encodeToString)
 
-  def dfToYTFormat(df: DataFrame): Seq[Array[Byte]] = new GenericRowSerializer(df.schema).serializeTable(df.collect())
+  // COMPAT(atokarew):
+  @deprecated(
+    message = "Left here for older query tracker versions, subject to remove later",
+    since = "2.6.0"
+  )
+  def dfToYTFormatWithBase64(df: DataFrame): Seq[String] = {
+    dfToYTFormatWithBase64(df, 10000).tail
+  }
+
+  def dfToYTFormatWithBase64(df: DataFrame, rowCountLimit: Int): Seq[String] = {
+    val result = df.collect()
+    val isTruncated = if (result.length > rowCountLimit) "T" else "F"
+    val wireResult = new GenericRowSerializer(df.schema).serializeTable(result.take(rowCountLimit))
+    Seq(isTruncated) ++ wireResult.map(Base64.getEncoder.encodeToString)
+  }
 }

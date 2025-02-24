@@ -24,7 +24,7 @@ def wrap_sql_query(sql_query):
     return '{{' \
            'import tech.ytsaurus.spyt.serializers.GenericRowSerializer;' \
            'val df = spark.sql(\"{0}\");' \
-           'println(GenericRowSerializer.dfToYTFormatWithBase64(df).mkString(\"\\n\"))' \
+           'println(GenericRowSerializer.dfToYTFormatWithBase64(df, 10).mkString(\"\\n\"))' \
            '}}'.format(sql_query)
 
 
@@ -53,11 +53,11 @@ def test_livy_server(yt_client, tmp_dir, livy_server):
     assert extract_data(output) == '3'
 
     output = run_code(host, session_url, wrap_sql_query("select 1"))
-    assert extract_data(output) == 'FQAAAAAAAAAKDwoBMRADQIUgSAFSAwiFIBABGAAAAAABAAAAAAAAAAEAAAAAAAAAAAAAAAAAAA' \
+    assert extract_data(output) == 'F\nFQAAAAAAAAAKDwoBMRADQIUgSAFSAwiFIBABGAAAAAABAAAAAAAAAAEAAAAAAAAAAAAAAAAAAA' \
                                    'ABAAAAAAAAAA=='
 
     output = run_code(host, session_url, wrap_sql_query(f"select * from yt.`ytTable:/{table}`"))
-    assert extract_data(output) == 'FgAAAAAAAAAKEAoCaWQQEEAQSABSBBICCBAQARgAAAACAAAAAAAAAAEAAAAAAAAAAAAAAAAAAA' \
+    assert extract_data(output) == 'F\nFgAAAAAAAAAKEAoCaWQQEEAQSABSBBICCBAQARgAAAACAAAAAAAAAAEAAAAAAAAAAAAAAAAAAA' \
                                    'AFAAAAAAAAADB4MTIzAAAAAQAAAAAAAAAAAAAAAAAAAAkAAAAAAAAAMHhBQkFDQUJBAAAAAAAAAA=='
 
 
@@ -75,7 +75,7 @@ def test_read_non_latin_symbols(yt_client, tmp_dir, livy_server):
     query = f"select * from yt.`ytTable:/{table}` WHERE value LIKE 'Номер%' ORDER BY id"
     output = run_code(host, session_url, wrap_sql_query(query))
     # The expected result is the same as in DataFrameSerializerTest::"serialize non-latin symbols in unicode" unit test
-    assert extract_data(output) == 'KwAAAAAAAAAKEAoCaWQQA0ADSABSBBICCAMKEwoFdmFsdWUQEEAQSABSBBICCBAQARgAAAAAAA' \
+    assert extract_data(output) == 'F\nKwAAAAAAAAAKEAoCaWQQA0ADSABSBBICCAMKEwoFdmFsdWUQEEAQSABSBBICCBAQARgAAAAAAA' \
                                    'ACAAAAAAAAAAIAAAAAAAAAAAAAAAAAAAABAAAAAAAAABMAAAAAAAAA0J3QvtC80LXRgCDQvtC0' \
                                    '0LjQvQAAAAAAAgAAAAAAAAAAAAAAAAAAAAIAAAAAAAAAEQAAAAAAAADQndC+0LzQtdGAINC00L' \
                                    'LQsAAAAAAAAAA='

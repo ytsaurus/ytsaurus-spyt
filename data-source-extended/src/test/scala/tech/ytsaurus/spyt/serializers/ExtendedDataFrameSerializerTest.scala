@@ -21,8 +21,9 @@ class ExtendedDataFrameSerializerTest  extends FlatSpec with Matchers with Local
     ), tmpPath, schema)
 
     val result = spark.read.yt(tmpPath)
-    val tableBytes = GenericRowSerializer.dfToYTFormatWithBase64(result)
+    val tableBytes = GenericRowSerializer.dfToYTFormatWithBase64(result, 10)
     val answer = Array(
+      "F",
       "RgAAAAAAAAAKEAoCaWQQA0ADSABSBBICCAMKGQoLZGVzY3JpcHRpb24QEEAQSABSBBICCBAKEwoFdmFsdWUQBEAESABSBBICCAQQARgAAA" +
         "ACAAAAAAAAAAMAAAAAAAAAAAAAAAAAAAABAAAAAAAAAAEAAAAAAAAAYQAAAAAAAAABAAAAAAAAAAMAAAAAAAAAAAAAAAAAAAACAAAAAA" +
         "AAAAEAAAAAAAAAYgAAAAAAAAAIAAAAAAAAgA=="

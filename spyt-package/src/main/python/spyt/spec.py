@@ -139,6 +139,7 @@ class CommonSpecParams(NamedTuple):
     spark_conf: dict
     task_spec: dict
     config: CommonComponentConfig
+    entrypoint: str = ''
 
 
 def _put_if_not_none(d, key, value):
@@ -170,8 +171,8 @@ def _launcher_command(component: str, common_params: CommonSpecParams, additiona
                                         additional_parameters)
 
     java_bin = os.path.join(common_params.java_home, 'bin', 'java')
-    if command := common_params.task_spec.get('command'):
-        java_bin = f'{command} {java_bin}'
+    if entrypoint := common_params.entrypoint:
+        java_bin = f'{entrypoint} {java_bin}'
     classpath = (f'{common_params.spyt_home}/conf/:'
                  f'{common_params.spyt_home}/jars/*:'
                  f'{common_params.spark_home}/jars/*')
@@ -500,11 +501,12 @@ def build_spark_operation_spec(config: dict, client: YtClient,
         secure_vault["SPARK_TVM_ID"] = common_config.tvm_id
         secure_vault["SPARK_TVM_SECRET"] = common_config.tvm_secret
 
-    if entrypoint := config.get('entrypoint'):
-        common_task_spec['command'] = entrypoint if isinstance(entrypoint, str) else shlex.join(entrypoint)
+    entrypoint = config.get('entrypoint', '')
+    if not isinstance(entrypoint, str):
+        entrypoint = shlex.join(entrypoint)
     common_params = CommonSpecParams(
         container_home, spark_home, spyt_home, spark_distributive, environment["JAVA_HOME"],
-        extra_java_opts, environment, spark_conf_common, common_task_spec, common_config
+        extra_java_opts, environment, spark_conf_common, common_task_spec, common_config, entrypoint,
     )
     builder = VanillaSpecBuilder()
     if "master" in job_types:

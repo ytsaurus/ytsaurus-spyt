@@ -149,11 +149,23 @@ class LivyServer(ClusterBase):
 
 
 @contextmanager
-def direct_spark_session(proxy, extra_conf=None):
+def direct_spark_session(proxy, extra_conf=None, dump_dir=None):
     extra_conf = extra_conf or {}
-    conf = default_conf().set("spark.hadoop.yt.proxy", proxy).setAll(extra_conf.items())
+    conf = (default_conf()
+            .set("spark.hadoop.yt.proxy", proxy)
+            .set("spark.ytsaurus.config.releases.path", "//home/spark/conf/releases")
+            .set("spark.ytsaurus.spyt.version", VERSION)
+            .setAll(extra_conf.items()))
     with spyt.direct_spark_session(proxy, conf) as session:
-        yield session
+        op_id = session.conf.get("spark.ytsaurus.executor.operation.id")
+        try:
+            yield session
+        finally:
+            try:
+                yt_client = YtClient(proxy=proxy, token="token")
+                dump_debug_data(dump_dir, op_id=op_id, yt_client=yt_client)
+            except Exception:
+                logger.warning("Fail in dumping debug data", exc_info=True)
 
 
 class DirectSubmitter:

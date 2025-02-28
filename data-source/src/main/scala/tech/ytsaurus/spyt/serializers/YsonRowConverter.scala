@@ -374,7 +374,7 @@ object YsonRowConverter {
       new YsonRowConverter(schema, ytSchema, config))
   }
 
-  private def getMapData(value: Any, keyType: DataType, valueType: DataType): Iterable[(Any, Any)] = {
+  def getMapData(value: Any, keyType: DataType, valueType: DataType): Iterable[(Any, Any)] = {
     keyType match {
       case StringType =>
         sortMapData(value, valueType)

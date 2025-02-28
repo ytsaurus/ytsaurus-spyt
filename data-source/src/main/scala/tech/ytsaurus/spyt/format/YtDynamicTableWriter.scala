@@ -5,15 +5,15 @@ import org.apache.spark.metrics.yt.YtMetricsRegister.ytMetricsSource._
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.execution.datasources.OutputWriter
 import org.apache.spark.sql.types.StructType
-import org.apache.spark.unsafe.types.UTF8String
-import org.slf4j.LoggerFactory
 import tech.ytsaurus.client.CompoundClient
 import tech.ytsaurus.client.request.ModifyRowsRequest
+import tech.ytsaurus.core.tables.TableSchema
 import tech.ytsaurus.spyt.format.conf.SparkYtWriteConfiguration
 import tech.ytsaurus.spyt.fs.path.YPathEnriched
 import tech.ytsaurus.spyt.serializers.SchemaConverter.Unordered
-import tech.ytsaurus.spyt.serializers.WriteSchemaConverter
+import tech.ytsaurus.spyt.serializers.{DynTableRowConverter, WriteSchemaConverter}
 import tech.ytsaurus.spyt.wrapper.YtWrapper
+import org.slf4j.LoggerFactory
 
 import scala.collection.JavaConverters._
 
@@ -22,20 +22,25 @@ class YtDynamicTableWriter(richPath: YPathEnriched,
                            wConfig: SparkYtWriteConfiguration,
                            options: Map[String, String])
                           (implicit ytClient: CompoundClient) extends OutputWriter {
+
   import YtDynamicTableWriter._
 
   override val path: String = richPath.toStringPath
 
   private val writeSchemaConverter = WriteSchemaConverter(options)
+  private val typeV3: Boolean = writeSchemaConverter.typeV3Format
+  private val tableSchema: TableSchema = writeSchemaConverter.tableSchema(schema, Unordered)
+  private val rowConverter: DynTableRowConverter = new DynTableRowConverter(schema, tableSchema, typeV3)
 
-  private val tableSchema = writeSchemaConverter.tableSchema(schema, Unordered)
   private var count = 0
   private var modifyRowsRequestBuilder: ModifyRowsRequest.Builder = _
 
   initialize()
 
   def write(row: Seq[Any]): Unit = {
-    modifyRowsRequestBuilder.addInsert(row.map(toPrimitives).asJava)
+    val preparedRow = rowConverter.convertRow(row)
+    modifyRowsRequestBuilder.addInsert(preparedRow.asJava)
+
     count += 1
     if (count == wConfig.dynBatchSize) {
       commitBatch()
@@ -77,9 +82,4 @@ class YtDynamicTableWriter(richPath: YPathEnriched,
 
 object YtDynamicTableWriter {
   private val log = LoggerFactory.getLogger(getClass)
-
-  private def toPrimitives(value: Any): Any = value match {
-      case v: UTF8String => v.getBytes
-      case _ => value
-  }
 }

@@ -75,6 +75,7 @@ def test_worker_spec_builder():
                 'job_count': 4,
                 'command': expected_command,
                 'memory_limit': 9 * 1024 * 1024 * 1024,
+                'tmpfs_size': 1024 * 1024 * 1024,
                 'cpu_limit': 3,
                 'file_paths': ['//home/job.jar'],
                 'environment': {

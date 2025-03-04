@@ -39,28 +39,29 @@ def test_format_memory():
     assert format_memory(256 * 1024 * 1024 * 1024) == "256G"
 
 
+def build_spec(enable_tmpfs=False):
+    enablers = SpytEnablers(enable_byop=False, enable_profiling=False)
+    discovery = SparkDiscovery("//home/cluster")
+    common_config = CommonComponentConfig(
+        enable_tmpfs=enable_tmpfs, enablers=enablers, rpc_job_proxy_thread_pool_size=6, spark_discovery=discovery)
+    common_params = CommonSpecParams(
+        container_home="./spark", spyt_home="$HOME/./spark/spark",spark_home="$HOME/./spark/spyt-package",
+        spark_distributive="spark-3.2.2-bin-hadoop3.2.tgz", java_home="/opt/jdk",
+        extra_java_opts=["-Dtest=true"], environment={"TEST_ENV": "True"}, spark_conf={"spark.yt.option": "2024"},
+        task_spec={"file_paths": ["//home/job.jar"]}, config=common_config)
+    resources = WorkerResources(cores=2, memory="8Gb", num=4, cores_overhead=1, timeout="1m", memory_overhead="1Gb")
+    worker_config = WorkerConfig(
+        tmpfs_limit="1G", res=resources, worker_port=27072, driver_op_discovery_script=None, extra_metrics_enabled=True,
+        autoscaler_enabled=False, worker_log_transfer=False, worker_log_json_mode=False,
+        worker_log_update_interval="5m", worker_log_table_ttl="5d", worker_disk_name="default", worker_gpu_limit=1,
+        cuda_toolkit_version="11.0")
+
+    builder = VanillaSpecBuilder()
+    build_worker_spec(builder, "workers", None, False, common_params, worker_config)
+    return builder.build()
+
+
 def test_worker_spec_builder():
-    def build_spec(enable_tmpfs=False):
-        enablers = SpytEnablers(enable_byop=False, enable_profiling=False)
-        discovery = SparkDiscovery("//home/cluster")
-        common_config = CommonComponentConfig(
-            enable_tmpfs=enable_tmpfs, enablers=enablers, rpc_job_proxy_thread_pool_size=6, spark_discovery=discovery)
-        common_params = CommonSpecParams(
-            container_home="./spark", spyt_home="$HOME/./spark/spark",spark_home="$HOME/./spark/spyt-package",
-            spark_distributive="spark-3.2.2-bin-hadoop3.2.tgz", java_home="/opt/jdk",
-            extra_java_opts=["-Dtest=true"], environment={"TEST_ENV": "True"}, spark_conf={"spark.yt.option": "2024"},
-            task_spec={"file_paths": ["//home/job.jar"]}, config=common_config)
-        resources = WorkerResources(cores=2, memory="8Gb", num=4, cores_overhead=1, timeout="1m", memory_overhead="1Gb")
-        worker_config = WorkerConfig(
-            tmpfs_limit="1G", res=resources, worker_port=27072, driver_op_discovery_script=None, extra_metrics_enabled=True,
-            autoscaler_enabled=False, worker_log_transfer=False, worker_log_json_mode=False,
-            worker_log_update_interval="5m", worker_log_table_ttl="5d", worker_disk_name="default", worker_gpu_limit=1,
-            cuda_toolkit_version="11.0")
-
-        builder = VanillaSpecBuilder()
-        build_worker_spec(builder, "workers", None, False, common_params, worker_config)
-        return builder.build()
-
     spec = build_spec()
     expected_command = \
         './setup-spyt-env.sh --spark-home ./spark --spark-distributive spark-3.2.2-bin-hadoop3.2.tgz && ' \
@@ -94,6 +95,8 @@ def test_worker_spec_builder():
 
     assert update(spec, expected_spec) == spec, f"{update(spec, expected_spec)} != {spec}"
 
+
+def test_worker_spec_builder_enable_tmpfs():
     spec = build_spec(enable_tmpfs=True)
     expected_command = \
         './setup-spyt-env.sh --spark-home ./spark --spark-distributive spark-3.2.2-bin-hadoop3.2.tgz && ' \

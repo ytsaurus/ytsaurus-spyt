@@ -367,7 +367,9 @@ def build_worker_spec(builder: VanillaSpecBuilder, job_type: str, ytserver_proxy
             "medium_name": config.worker_disk_name
         }
     elif common_params.config.enable_tmpfs:
-        worker_ram_memory += parse_memory(config.tmpfs_limit)
+        tmpfs_limit = parse_memory(config.tmpfs_limit)
+        worker_ram_memory += tmpfs_limit
+        worker_task_spec['tmpfs_size'] = tmpfs_limit
         worker_local_dirs = "./tmpfs"
     worker_environment["SPARK_LOCAL_DIRS"] = worker_local_dirs
 

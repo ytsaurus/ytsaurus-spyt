@@ -30,26 +30,25 @@ class YtStreamingSource(sqlContext: SQLContext,
 
   private var latestOffset: Option[YtQueueOffset] = None
 
-  override def getDefaultReadLimit: ReadLimit = {
-    parameters.get("max_rows_per_partition") match {
-      case Some(maxRows) => ReadLimit.compositeLimit(Array(ReadLimit.maxRows(maxRows.toLong)))
-      case None => ReadLimit.allAvailable()
-    }
+  override def getDefaultReadLimit: ReadLimit = parameters.get("max_rows_per_partition") match {
+    case Some(maxRows) => ReadLimit.compositeLimit(Array(ReadLimit.maxRows(maxRows.toLong)))
+    case None => ReadLimit.allAvailable()
   }
 
   override def latestOffset(startOffset: streaming.Offset, limit: ReadLimit): streaming.Offset = {
+    val startYtQueueOffset: YtQueueOffset = if (startOffset != null) YtQueueOffset(startOffset) else null
+
     val limits: Seq[ReadLimit] = limit match {
       case rows: CompositeReadLimit => rows.getReadLimits
       case rows => Seq(rows)
     }
 
     val maxOffsetInQueue = getOffset.get.asInstanceOf[YtQueueOffset]
-
     val maxRowsOpt = limits.collectFirst { case rmr: ReadMaxRows => rmr }
     if (maxRowsOpt.isDefined) {
       val maxRows = maxRowsOpt.get.maxRows()
       val partitionSeq = maxOffsetInQueue.partitions.toSeq.map { case (i, upperIndex) =>
-        val realStartIndex = startOffset match {
+        val realStartIndex = startYtQueueOffset match {
           case YtQueueOffset(_, _, partitions) => partitions.getOrElse(i, -1L)
           case _ => -1L
         }
@@ -105,6 +104,5 @@ class YtStreamingSource(sqlContext: SQLContext,
     logDebug("Close YtStreamingSource")
     YtClientProvider.close(id)
   }
-
 
 }

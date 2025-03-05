@@ -231,12 +231,11 @@ class YTsaurusStreamingTest extends AnyFlatSpec with Matchers with LocalSpark wi
     queryForOptionCheck.stop()
   }
 
-  it should "correct results using streaming" in {
-    val maxRowsPerPartition = 6
-    val recordCountLimit = 30L
+  def doStreamLaunches(launchesParams: Seq[(Int, Int, Boolean)], maxRowsPerPartition: Long): String = {
     val consumerPath = s"$tmpPath/consumer-${UUID.randomUUID()}"
     val queuePath = s"$tmpPath/inputQueue-${UUID.randomUUID()}"
     val resultPath = s"$tmpPath/result-${UUID.randomUUID()}"
+    val checkpointLocation = f"yt:/$tmpPath/stateStore-${UUID.randomUUID()}"
 
     YtWrapper.createDir(tmpPath)
     prepareOrderedTestTable(queuePath, enableDynamicStoreRead = true)
@@ -254,33 +253,51 @@ class YTsaurusStreamingTest extends AnyFlatSpec with Matchers with LocalSpark wi
       .option("max_rows_per_partition", maxRowsPerPartition)
       .load(queuePath)
 
-    val queryForResultTableCheck = df
-      .writeStream
-      .option("checkpointLocation", f"yt:/$tmpPath/stateStore_1")
-      .trigger(ProcessingTime(2000))
-      .format("yt")
-      .option("path", resultPath)
-      .start()
+    def runStreamUntilAchieveRecordCountLimit(startIndex: Int, iterations: Int, readUntilFullDataDelivery: Boolean = false): Unit = {
+      val queryForResultTableCheck = df
+        .writeStream
+        .option("checkpointLocation", checkpointLocation)
+        .trigger(ProcessingTime(2000))
+        .format("yt")
+        .option("path", resultPath)
+        .start()
 
-    val recordFuture = Future[Unit] {
-      var lowerIndex = 0
-      for (_ <- 0 to 2) {
-        val data = getTestData(lowerIndex, lowerIndex + 9)
-        appendChunksToTestTable(queuePath, Seq(data), sorted = false, remount = false)
-        lowerIndex += 10
-      }
+      val recordFuture = Future[Unit] {
+        var lowerIndex = startIndex
+        for (_ <- 0 until iterations) {
+          val data = getTestData(lowerIndex, lowerIndex + 9)
+          appendChunksToTestTable(queuePath, Seq(data), sorted = false, remount = false)
+          lowerIndex += 10
+        }
 
-      var currentCount = 0L
-      while (currentCount < recordCountLimit) {
-        Thread.sleep(3000)
-        currentCount = spark.read.option("enable_inconsistent_read", "true").yt(resultPath).count()
-      }
-    }(scala.concurrent.ExecutionContext.Implicits.global)
+        if (readUntilFullDataDelivery) {
+          val recordCountLimit = startIndex + iterations * 10
+          var currentCount = 0L
 
-    Await.result(recordFuture, 120 seconds)
-    queryForResultTableCheck.stop()
+          while (currentCount < recordCountLimit) {
+            Thread.sleep(2000)
+            currentCount = spark.read.option("enable_inconsistent_read", "true").yt(resultPath).count()
+          }
+        }
+      }(scala.concurrent.ExecutionContext.Implicits.global)
 
-    val expectedData: Seq[TestRow] = getTestData(0, recordCountLimit.toInt - 1)
+      Await.result(recordFuture, 120 seconds)
+      queryForResultTableCheck.stop()
+    }
+
+    for (launchParams <- launchesParams) {
+      runStreamUntilAchieveRecordCountLimit(launchParams._1, launchParams._2, launchParams._3)
+    }
+
+    resultPath
+  }
+
+  it should "one streaming launch - exactly-once guarantee" in {
+    val maxRowsPerPartition = 6
+    val launchesParams: Seq[(Int, Int, Boolean)] = Seq((0, 3, true))
+    val resultPath: String = doStreamLaunches(launchesParams, maxRowsPerPartition)
+
+    val expectedData: Seq[TestRow] = getTestData(0, 29)
     val expectedDF: DataFrame = spark.createDataFrame(expectedData)
 
     val resultDF = spark.read
@@ -289,12 +306,25 @@ class YTsaurusStreamingTest extends AnyFlatSpec with Matchers with LocalSpark wi
       .orderBy("a")
 
     resultDF.collect() should contain theSameElementsAs expectedDF.collect()
+  }
 
-    val duplicatesCount = resultDF
-      .groupBy("a", "b", "c")
-      .count()
-      .filter("count > 1")
-      .count()
-    assert(duplicatesCount == 0, s"Found $duplicatesCount duplicate rows in the result set.")
+  it should "several streaming launches - at-least-once guarantee" in {
+    val maxRowsPerPartition = 8
+    val launchesParams: Seq[(Int, Int, Boolean)] = Seq(
+      (0, 3, false),
+      (30, 3, false),
+      (60, 3, true)
+    )
+    val resultPath: String = doStreamLaunches(launchesParams, maxRowsPerPartition)
+
+    val resultDF = spark.read
+      .option("enable_inconsistent_read", "true")
+      .yt(resultPath)
+      .orderBy("a")
+
+    val expectedData: Seq[TestRow] = getTestData(0, 89)
+    val expectedDF: DataFrame = spark.createDataFrame(expectedData)
+
+    resultDF.dropDuplicates().collect() should contain theSameElementsAs expectedDF.collect()
   }
 }

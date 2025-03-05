@@ -4,6 +4,7 @@ import io.circe._
 import io.circe.generic.semiauto.{deriveDecoder, deriveEncoder}
 import io.circe.parser._
 import io.circe.syntax._
+import org.apache.spark.sql.connector.read.streaming
 import org.apache.spark.sql.execution.streaming.{Offset, SerializedOffset}
 import tech.ytsaurus.client.CompoundClient
 import tech.ytsaurus.core.cypress.YPath
@@ -31,7 +32,7 @@ object YtQueueOffset {
 
   private implicit val offsetDecoder: Decoder[YtQueueOffset] = deriveDecoder[YtQueueOffset]
 
-  def apply(offset: Offset): YtQueueOffset = offset match {
+  def apply(offset: streaming.Offset): YtQueueOffset = offset match {
     case v: YtQueueOffset => v
     case sv: SerializedOffset =>
       decode(sv.json) match {

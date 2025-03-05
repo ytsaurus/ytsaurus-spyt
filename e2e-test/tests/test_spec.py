@@ -39,11 +39,11 @@ def test_format_memory():
     assert format_memory(256 * 1024 * 1024 * 1024) == "256G"
 
 
-def test_worker_spec_builder():
+def build_spec(enable_tmpfs=False):
     enablers = SpytEnablers(enable_byop=False, enable_profiling=False)
     discovery = SparkDiscovery("//home/cluster")
     common_config = CommonComponentConfig(
-        enable_tmpfs=False, enablers=enablers, rpc_job_proxy_thread_pool_size=6, spark_discovery=discovery)
+        enable_tmpfs=enable_tmpfs, enablers=enablers, rpc_job_proxy_thread_pool_size=6, spark_discovery=discovery)
     common_params = CommonSpecParams(
         container_home="./spark", spyt_home="$HOME/./spark/spark",spark_home="$HOME/./spark/spyt-package",
         spark_distributive="spark-3.2.2-bin-hadoop3.2.tgz", java_home="/opt/jdk",
@@ -58,8 +58,11 @@ def test_worker_spec_builder():
 
     builder = VanillaSpecBuilder()
     build_worker_spec(builder, "workers", None, False, common_params, worker_config)
-    spec = builder.build()
+    return builder.build()
 
+
+def test_worker_spec_builder():
+    spec = build_spec()
     expected_command = \
         './setup-spyt-env.sh --spark-home ./spark --spark-distributive spark-3.2.2-bin-hadoop3.2.tgz && ' \
         '/opt/jdk/bin/java -Xmx2g ' \
@@ -90,4 +93,40 @@ def test_worker_spec_builder():
         }
     }
 
-    assert update(spec, expected_spec) == spec
+    assert update(spec, expected_spec) == spec, f"{update(spec, expected_spec)} != {spec}"
+
+
+def test_worker_spec_builder_enable_tmpfs():
+    spec = build_spec(enable_tmpfs=True)
+    expected_command = \
+        './setup-spyt-env.sh --spark-home ./spark --spark-distributive spark-3.2.2-bin-hadoop3.2.tgz && ' \
+        '/opt/jdk/bin/java -Xmx2g ' \
+        '-cp $HOME/./spark/spark/conf/:$HOME/./spark/spark/jars/*:$HOME/./spark/spyt-package/jars/* ' \
+        '-Dtest=true -Dspark.yt.option=2024 -Dspark.workerLog.tablePath=yt:///home/cluster/logs/worker_log ' \
+        '-Dspark.ui.prometheus.enabled=true -Dspark.worker.resource.gpu.amount=1 ' \
+        '-Dspark.worker.resource.gpu.discoveryScript=./spark/spyt-package/bin/getGpusResources.sh ' \
+        'tech.ytsaurus.spark.launcher.WorkerLauncher --cores 2 --memory 8Gb --wait-master-timeout 1m ' \
+        '--wlog-service-enabled False --wlog-enable-json False --wlog-update-interval 5m --wlog-table-ttl 5d '
+    expected_spec = {
+        'tasks': {
+            'workers': {
+                'job_count': 4,
+                'command': expected_command,
+                'memory_limit': 10 * 1024 * 1024 * 1024,
+                'tmpfs_size': 1024 * 1024 * 1024,
+                'cpu_limit': 3,
+                'file_paths': ['//home/job.jar'],
+                'environment': {
+                    'TEST_ENV': 'True',
+                    'SPARK_YT_BYOP_ENABLED': 'False',
+                    'SPARK_WORKER_PORT': '27072',
+                    'SPARK_YT_CLUSTER_CONF_PATH': '//home/cluster/discovery/conf',
+                    'SPARK_LOCAL_DIRS': './tmpfs'},
+                'rpc_proxy_worker_thread_pool_size': 6,
+                'cuda_toolkit_version': '11.0',
+                'gpu_limit': 1
+            }
+        }
+    }
+
+    assert update(spec, expected_spec) == spec, f"{update(spec, expected_spec)} != {spec}"

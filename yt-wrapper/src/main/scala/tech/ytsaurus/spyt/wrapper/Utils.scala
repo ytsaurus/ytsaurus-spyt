@@ -36,9 +36,20 @@ object Utils {
     }
   }
 
-  def ytHostnameOrIpAddress: String = {
-    if (ytNetworkProjectEnabled) ytHostIp else InetAddress.getLocalHost.getHostName
+  lazy val sparkSystemProperties: Map[String, String] = {
+    import scala.collection.JavaConverters._
+    System.getProperties.stringPropertyNames().asScala.collect {
+      case name if name.startsWith("spark.") => name -> System.getProperty(name)
+    }.toMap
   }
+
+  def ytHostnameOrIpAddress: String =
+    if (ytNetworkProjectEnabled)
+      ytHostIp
+    else if (sparkSystemProperties.get("spark.yt.use_fqdn").exists(_.toBoolean))
+      InetAddress.getLocalHost.getCanonicalHostName
+    else
+      InetAddress.getLocalHost.getHostName
 
   def tryWithResources[R <: AutoCloseable, A](resource: R)(body: R => A): A = TryWithResourcesJava.apply(resource, body)
 }

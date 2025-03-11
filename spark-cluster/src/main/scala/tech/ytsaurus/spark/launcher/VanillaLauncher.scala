@@ -8,15 +8,7 @@ import scala.util.{Failure, Success, Try}
 trait VanillaLauncher {
   lazy val home: String = new File(sys.env.getOrElse("HOME", ".")).getAbsolutePath
 
-  lazy val sparkSystemProperties: Map[String, String] = {
-    import scala.collection.JavaConverters._
-    System.getProperties
-      .stringPropertyNames().asScala
-      .collect {
-        case name if name.startsWith("spark.") => name -> System.getProperty(name)
-      }
-      .toMap
-  }
+  val sparkSystemProperties: Map[String, String] = tech.ytsaurus.spyt.wrapper.Utils.sparkSystemProperties
 
   val sparkHome: String = new File(env("SPARK_HOME", "./spark")).getAbsolutePath
   val spytHome: String = new File(env("SPYT_HOME", "./spyt-package")).getAbsolutePath

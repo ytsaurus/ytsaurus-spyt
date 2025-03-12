@@ -1,11 +1,14 @@
 package tech.ytsaurus.spyt.streaming
 
+import org.apache.spark.sql.execution.StreamingUtils.STREAMING_SERVICE_KEY_COLUMNS_PREFIX
 import org.apache.spark.sql.functions._
 import org.apache.spark.sql.streaming.Trigger.ProcessingTime
 import org.apache.spark.sql.{DataFrame, SaveMode}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
+import tech.ytsaurus.core.tables.{ColumnValueType, TableSchema}
 import tech.ytsaurus.spyt.serializers.WriteSchemaConverter
+import tech.ytsaurus.spyt.streaming.YTsaurusStreamingTest.orderedTestSchemaForStreamingWithExactlyOnceGuarantee
 import tech.ytsaurus.spyt.test._
 import tech.ytsaurus.spyt.wrapper.YtWrapper
 
@@ -231,7 +234,32 @@ class YTsaurusStreamingTest extends AnyFlatSpec with Matchers with LocalSpark wi
     queryForOptionCheck.stop()
   }
 
-  def doStreamLaunches(launchesParams: Seq[(Int, Int, Boolean)], maxRowsPerPartition: Long): String = {
+  it should "one streaming launch" in {
+    val maxRowsPerPartition = 6
+    val launchesParams: Seq[(Int, Int, Boolean)] = Seq((0, 3, true))
+    val resultPath: String = doStreamLaunches(launchesParams, maxRowsPerPartition)
+
+    val expectedData: Seq[TestRow] = getTestData(0, 29)
+    val expectedDF: DataFrame = spark.createDataFrame(expectedData)
+
+    val resultDF = spark.read
+      .option("enable_inconsistent_read", "true")
+      .yt(resultPath)
+      .orderBy("a")
+
+    resultDF.dropDuplicates().collect() should contain theSameElementsAs expectedDF.collect()
+  }
+
+  it should "several streaming launches - at-least-once guarantee" in {
+    testSeveralStreamingLaunches()
+  }
+
+  it should "several streaming launches - exactly-once guarantee" in {
+    testSeveralStreamingLaunches(includeServiceColumns = true)
+  }
+
+  def doStreamLaunches(launchesParams: Seq[(Int, Int, Boolean)], maxRowsPerPartition: Long,
+                       includeServiceColumns: Boolean = false): String = {
     val consumerPath = s"$tmpPath/consumer-${UUID.randomUUID()}"
     val queuePath = s"$tmpPath/inputQueue-${UUID.randomUUID()}"
     val resultPath = s"$tmpPath/result-${UUID.randomUUID()}"
@@ -242,18 +270,21 @@ class YTsaurusStreamingTest extends AnyFlatSpec with Matchers with LocalSpark wi
     prepareConsumer(consumerPath, queuePath)
     waitQueueRegistration(queuePath)
 
-    val resultSchema = getTestData().toDF().schema
-    prepareOrderedTestTable(resultPath, new WriteSchemaConverter().tableSchema(resultSchema),
-      enableDynamicStoreRead = true)
+    val resultTableSchema = if (includeServiceColumns)
+      orderedTestSchemaForStreamingWithExactlyOnceGuarantee else orderedTestSchema
+
+    prepareOrderedTestTable(resultPath, resultTableSchema, enableDynamicStoreRead = true)
 
     val df: DataFrame = spark
       .readStream
       .format("yt")
       .option("consumer_path", consumerPath)
       .option("max_rows_per_partition", maxRowsPerPartition)
+      .option("include_service_columns", includeServiceColumns)
       .load(queuePath)
 
-    def runStreamUntilAchieveRecordCountLimit(startIndex: Int, iterations: Int, readUntilFullDataDelivery: Boolean = false): Unit = {
+    def runStreamUntilAchieveRecordCountLimit(startIndex: Int, iterations: Int,
+                                              readUntilFullDataDelivery: Boolean = false): Unit = {
       val queryForResultTableCheck = df
         .writeStream
         .option("checkpointLocation", checkpointLocation)
@@ -292,39 +323,39 @@ class YTsaurusStreamingTest extends AnyFlatSpec with Matchers with LocalSpark wi
     resultPath
   }
 
-  it should "one streaming launch - exactly-once guarantee" in {
-    val maxRowsPerPartition = 6
-    val launchesParams: Seq[(Int, Int, Boolean)] = Seq((0, 3, true))
-    val resultPath: String = doStreamLaunches(launchesParams, maxRowsPerPartition)
-
-    val expectedData: Seq[TestRow] = getTestData(0, 29)
-    val expectedDF: DataFrame = spark.createDataFrame(expectedData)
-
-    val resultDF = spark.read
-      .option("enable_inconsistent_read", "true")
-      .yt(resultPath)
-      .orderBy("a")
-
-    resultDF.collect() should contain theSameElementsAs expectedDF.collect()
-  }
-
-  it should "several streaming launches - at-least-once guarantee" in {
+  def testSeveralStreamingLaunches(includeServiceColumns: Boolean = false): Unit = {
     val maxRowsPerPartition = 8
     val launchesParams: Seq[(Int, Int, Boolean)] = Seq(
       (0, 3, false),
       (30, 3, false),
       (60, 3, true)
     )
-    val resultPath: String = doStreamLaunches(launchesParams, maxRowsPerPartition)
+    val resultPath: String = doStreamLaunches(launchesParams, maxRowsPerPartition, includeServiceColumns)
 
     val resultDF = spark.read
       .option("enable_inconsistent_read", "true")
       .yt(resultPath)
+      .select("a", "b", "c")
       .orderBy("a")
 
     val expectedData: Seq[TestRow] = getTestData(0, 89)
     val expectedDF: DataFrame = spark.createDataFrame(expectedData)
 
-    resultDF.dropDuplicates().collect() should contain theSameElementsAs expectedDF.collect()
+    if (includeServiceColumns) {
+      resultDF.collect() should contain theSameElementsAs expectedDF.collect()
+    } else {
+      resultDF.dropDuplicates().collect() should contain theSameElementsAs expectedDF.collect()
+    }
   }
+}
+
+object YTsaurusStreamingTest {
+  val orderedTestSchemaForStreamingWithExactlyOnceGuarantee: TableSchema = TableSchema.builder()
+    .setUniqueKeys(false)
+    .addKey(s"${STREAMING_SERVICE_KEY_COLUMNS_PREFIX}tablet_index", ColumnValueType.INT64)
+    .addKey(s"${STREAMING_SERVICE_KEY_COLUMNS_PREFIX}row_index", ColumnValueType.INT64)
+    .addValue("a", ColumnValueType.INT64)
+    .addValue("b", ColumnValueType.INT64)
+    .addValue("c", ColumnValueType.STRING)
+    .build()
 }

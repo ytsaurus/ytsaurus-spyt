@@ -27,8 +27,8 @@ class YtStreamingSource(sqlContext: SQLContext,
   private val id: String = s"YtStreamingSource-${UUID.randomUUID()}"
   private implicit val yt: CompoundClient = YtClientProvider.ytClient(ytClientConfiguration(sqlContext.sparkSession), id)
   private val cluster = YtWrapper.clusterName()
-
   private var latestOffset: Option[YtQueueOffset] = None
+  private val includeServiceColumns = parameters.get("include_service_columns").exists(_.toBoolean)
 
   override def getDefaultReadLimit: ReadLimit = parameters.get("max_rows_per_partition") match {
     case Some(maxRows) => ReadLimit.compositeLimit(Array(ReadLimit.maxRows(maxRows.toLong)))
@@ -86,7 +86,7 @@ class YtStreamingSource(sqlContext: SQLContext,
       val preparedEnd = YtQueueOffset(end)
       require(preparedEnd >= preparedStart, "Batch end is less than batch start")
       val ranges = YtQueueOffset.getRanges(preparedStart, preparedEnd)
-      new YtQueueRDD(sqlContext.sparkContext, schema, consumerPath, queuePath, ranges).setName("yt")
+      new YtQueueRDD(sqlContext.sparkContext, schema, consumerPath, queuePath, ranges, includeServiceColumns).setName("yt")
     }
     StreamingUtils.createStreamingDataFrame(sqlContext, rdd, schema)
   }
@@ -104,5 +104,4 @@ class YtStreamingSource(sqlContext: SQLContext,
     logDebug("Close YtStreamingSource")
     YtClientProvider.close(id)
   }
-
 }

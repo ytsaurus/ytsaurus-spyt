@@ -1,8 +1,9 @@
 package tech.ytsaurus.spyt.serializers
 
 import org.apache.spark.sql.catalyst.InternalRow
+import org.apache.spark.sql.execution.StreamingUtils.STREAMING_SERVICE_KEY_COLUMNS_PREFIX
 import org.apache.spark.sql.types.StructType
-import tech.ytsaurus.client.rows.{UnversionedRowset, UnversionedValue}
+import tech.ytsaurus.client.rows.{QueueRowset, UnversionedRowset, UnversionedValue}
 
 class UnversionedRowsetDeserializer(schema: StructType) {
   private val deserializer = InternalRowDeserializer.getOrCreate(schema)
@@ -37,6 +38,25 @@ class UnversionedRowsetDeserializer(schema: StructType) {
           .getOrElse(throw new IllegalStateException(s"${field.name} is not found in rowset"))
       }
       deserializeValues(values)
+    }
+  }
+
+  def deserializeQueueRowsetWithServiceColumns(rowset: QueueRowset): Iterator[InternalRow] = {
+    import scala.collection.JavaConverters._
+
+    rowset.getRows.asScala.iterator.map { row =>
+      val uvMap = row.getValues.asScala.map { value =>
+        rowset.getSchema.getColumnName(value.getId) -> value
+      }.toMap
+
+      val keys = Array(uvMap("$tablet_index"), uvMap("$row_index"))
+
+      val values: Array[UnversionedValue] = schema.fields
+        .filter(field => !field.name.startsWith(STREAMING_SERVICE_KEY_COLUMNS_PREFIX))
+        .map { field => uvMap(field.name) }
+
+      val newRow = keys ++ values
+      deserializeValues(newRow)
     }
   }
 }

@@ -4,18 +4,19 @@ import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.{FileStatus, Path}
 import org.apache.hadoop.mapreduce.Job
 import org.apache.spark.TaskContext
-import org.apache.spark.sql.{SQLContext, SparkSession}
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.UnsafeProjection
 import org.apache.spark.sql.catalyst.util.CaseInsensitiveMap
+import org.apache.spark.sql.execution.StreamingUtils
 import org.apache.spark.sql.execution.datasources._
 import org.apache.spark.sql.execution.streaming.{Sink, Source}
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.sources.{DataSourceRegister, Filter, StreamSinkProvider, StreamSourceProvider}
 import org.apache.spark.sql.streaming.OutputMode
-import org.apache.spark.sql.types.{AtomicType, StructType}
+import org.apache.spark.sql.types.StructType
 import org.apache.spark.sql.v2.YtUtils.bytesReadReporter
 import org.apache.spark.sql.v2.{YtReaderOptions, YtUtils}
+import org.apache.spark.sql.{SQLContext, SparkSession}
 import org.apache.spark.util.SerializableConfiguration
 import org.slf4j.LoggerFactory
 import tech.ytsaurus.client.CompoundClient
@@ -24,11 +25,11 @@ import tech.ytsaurus.spyt.format.YtPartitionedFileDelegate.YtPartitionedFile
 import tech.ytsaurus.spyt.format._
 import tech.ytsaurus.spyt.format.conf.SparkYtConfiguration.Read._
 import tech.ytsaurus.spyt.format.conf.{FilterPushdownConfig, SparkYtWriteConfiguration}
-import tech.ytsaurus.spyt.wrapper.client.YtClientConfigurationConverter.ytClientConfiguration
 import tech.ytsaurus.spyt.logger.YtDynTableLoggerConfig
 import tech.ytsaurus.spyt.serializers.InternalRowDeserializer
 import tech.ytsaurus.spyt.streaming.{YtStreamingSink, YtStreamingSource}
 import tech.ytsaurus.spyt.wrapper.YtWrapper
+import tech.ytsaurus.spyt.wrapper.client.YtClientConfigurationConverter.ytClientConfiguration
 import tech.ytsaurus.spyt.wrapper.client.YtClientProvider
 
 import java.util.UUID
@@ -130,11 +131,11 @@ class YtFileFormat extends FileFormat with DataSourceRegister with StreamSourceP
                             options: Map[String, String],
                             dataSchema: StructType): OutputWriterFactory = {
     YtOutputWriterFactory.create(
-        SparkYtWriteConfiguration(sparkSession.sqlContext),
-        ytClientConfiguration(sparkSession),
-        options,
-        dataSchema,
-        job.getConfiguration
+      SparkYtWriteConfiguration(sparkSession.sqlContext),
+      ytClientConfiguration(sparkSession),
+      options,
+      dataSchema,
+      job.getConfiguration
     )
   }
 
@@ -150,7 +151,9 @@ class YtFileFormat extends FileFormat with DataSourceRegister with StreamSourceP
                             parameters: Map[String, String]): (String, StructType) = {
     val caseInsensitiveParameters = CaseInsensitiveMap(parameters)
     val ypath = RichYPath.fromString(caseInsensitiveParameters(YtUtils.Options.QUEUE_PATH))
-    (shortName(), YtUtils.getSchema(sqlContext.sparkSession, ypath, None, None, caseInsensitiveParameters))
+    val schema = StreamingUtils.getStreamingSourceSchema(
+      sqlContext.sparkSession, ypath, None, None, caseInsensitiveParameters)
+    (shortName(), schema)
   }
 
   override def createSource(sqlContext: SQLContext, metadataPath: String, schema: Option[StructType],
@@ -159,7 +162,8 @@ class YtFileFormat extends FileFormat with DataSourceRegister with StreamSourceP
     val consumerPath = caseInsensitiveParameters(YtUtils.Options.CONSUMER_PATH)
     val queuePath = caseInsensitiveParameters(YtUtils.Options.QUEUE_PATH)
     val requiredSchema = schema.getOrElse {
-      YtUtils.getSchema(sqlContext.sparkSession, YPath.simple(queuePath), None, None, caseInsensitiveParameters)
+      StreamingUtils.getStreamingSourceSchema(
+        sqlContext.sparkSession, YPath.simple(queuePath), None, None, caseInsensitiveParameters)
     }
     new YtStreamingSource(sqlContext, consumerPath, queuePath, requiredSchema, caseInsensitiveParameters)
   }

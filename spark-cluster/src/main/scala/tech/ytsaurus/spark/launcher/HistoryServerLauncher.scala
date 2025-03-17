@@ -31,7 +31,7 @@ object HistoryServerLauncher extends App with VanillaLauncher with SparkLauncher
           log.info("Tcp proxy port addresses updated")
         }
 
-        checkPeriodically(historyServer.isAlive(3))
+        checkPeriodically(historyServer.isAlive(processCheckRetries))
         log.error("Shutdown SHS")
       }
     }

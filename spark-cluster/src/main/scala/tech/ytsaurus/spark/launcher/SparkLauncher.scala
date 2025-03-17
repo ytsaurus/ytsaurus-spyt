@@ -57,6 +57,7 @@ trait SparkLauncher {
   private val javaHome: String = absolutePath(env("JAVA_HOME", null))
 
   val clusterVersion: String = sys.env("SPYT_CLUSTER_VERSION")
+  val processCheckRetries: Int = sys.env.getOrElse("SPYT_CLUSTER_PROCESS_CHECK_RETRIES", "5").toInt
 
   def createLivyWorkDir(): Unit = {
     Files.createDirectories(Path.of(livyWorkDir, "conf"))

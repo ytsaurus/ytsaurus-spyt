@@ -41,8 +41,8 @@ object LivyLauncher extends App with VanillaLauncher with SparkLauncher {
         discoveryService.registerLivy(externalAddress, clusterVersion)
 
         def isAlive: Boolean = {
-          val isMasterAlive = pingAddress.forall(a => DiscoveryService.isAlive(a, 3))
-          val isLivyAlive = livyServer.isAlive(3)
+          val isMasterAlive = pingAddress.forall(a => DiscoveryService.isAlive(a, processCheckRetries))
+          val isLivyAlive = livyServer.isAlive(processCheckRetries)
 
           val res = isMasterAlive && isLivyAlive
           if (res) {

@@ -75,8 +75,8 @@ object MasterLauncher extends App
               }
 
               def isAlive: Boolean = {
-                val isMasterAlive = master.isAlive(3)
-                val isSolomonAlive = solomonAgent.forall(_.isAlive(3))
+                val isMasterAlive = master.isAlive(processCheckRetries)
+                val isSolomonAlive = solomonAgent.forall(_.isAlive(processCheckRetries))
 
                 val res = isMasterAlive && isSolomonAlive
                 if (res) {

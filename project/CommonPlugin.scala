@@ -67,6 +67,11 @@ object CommonPlugin extends AutoPlugin {
       publishMavenStyle := true,
       libraryDependencies ++= testDeps,
       Test / fork := true,
+      Test / javaOptions ++= (if (sys.env.get("SPYT_TEST_REMOTE_DEBUG").exists(_.toBoolean)) {
+        Seq("-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5006")
+      } else {
+        Nil
+      }),
       printCompileClasspath := {
         (Compile / dependencyClasspath).value.foreach(a => println(s"${a.metadata.get(configuration.key)} - ${a.data.getAbsolutePath}"))
       },

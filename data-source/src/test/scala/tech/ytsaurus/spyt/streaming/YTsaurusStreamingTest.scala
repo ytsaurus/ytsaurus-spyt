@@ -6,7 +6,10 @@ import org.apache.spark.sql.streaming.Trigger.ProcessingTime
 import org.apache.spark.sql.{DataFrame, SaveMode}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
+import tech.ytsaurus.client.request.RemoveNode
+import tech.ytsaurus.core.cypress.YPath
 import tech.ytsaurus.core.tables.{ColumnValueType, TableSchema}
+import tech.ytsaurus.spyt
 import tech.ytsaurus.spyt.serializers.WriteSchemaConverter
 import tech.ytsaurus.spyt.streaming.YTsaurusStreamingTest.orderedTestSchemaForStreamingWithExactlyOnceGuarantee
 import tech.ytsaurus.spyt.test._
@@ -237,14 +240,16 @@ class YTsaurusStreamingTest extends AnyFlatSpec with Matchers with LocalSpark wi
   it should "one streaming launch" in {
     val maxRowsPerPartition = 6
     val launchesParams: Seq[(Int, Int, Boolean)] = Seq((0, 3, true))
-    val resultPath: String = doStreamLaunches(launchesParams, maxRowsPerPartition)
+
+    val paths: StreamingObjectsPaths = prepareStreamingObjects(tmpPath = tmpPath)
+    doStreamLaunches(paths, launchesParams, maxRowsPerPartition)
 
     val expectedData: Seq[TestRow] = getTestData(0, 29)
     val expectedDF: DataFrame = spark.createDataFrame(expectedData)
 
     val resultDF = spark.read
       .option("enable_inconsistent_read", "true")
-      .yt(resultPath)
+      .yt(paths.resultPath)
       .orderBy("a")
 
     resultDF.dropDuplicates().collect() should contain theSameElementsAs expectedDF.collect()
@@ -258,22 +263,71 @@ class YTsaurusStreamingTest extends AnyFlatSpec with Matchers with LocalSpark wi
     testSeveralStreamingLaunches(includeServiceColumns = true)
   }
 
-  def doStreamLaunches(launchesParams: Seq[(Int, Int, Boolean)], maxRowsPerPartition: Long,
-                       includeServiceColumns: Boolean = false): String = {
-    val consumerPath = s"$tmpPath/consumer-${UUID.randomUUID()}"
-    val queuePath = s"$tmpPath/inputQueue-${UUID.randomUUID()}"
-    val resultPath = s"$tmpPath/result-${UUID.randomUUID()}"
-    val checkpointLocation = f"yt:/$tmpPath/stateStore-${UUID.randomUUID()}"
+  it should "fetch checkpoints location from consumer - at-least-once guarantee" in {
+    testContinueStreamingAfterRemovingCheckpoints()
+  }
 
-    YtWrapper.createDir(tmpPath)
-    prepareOrderedTestTable(queuePath, enableDynamicStoreRead = true)
-    prepareConsumer(consumerPath, queuePath)
-    waitQueueRegistration(queuePath)
+  it should "fetch checkpoints location from consumer - exactly-once guarantee" in {
+    testContinueStreamingAfterRemovingCheckpoints(includeServiceColumns = true)
+  }
 
-    val resultTableSchema = if (includeServiceColumns)
-      orderedTestSchemaForStreamingWithExactlyOnceGuarantee else orderedTestSchema
+  def testContinueStreamingAfterRemovingCheckpoints(includeServiceColumns: Boolean = false): Unit = {
+    val maxRowsPerPartition = 6
+    val paths: StreamingObjectsPaths = prepareStreamingObjects(tmpPath = tmpPath, includeServiceColumns)
+    doStreamLaunches(paths, launchesParams=Seq((0, 3, true)), maxRowsPerPartition, includeServiceColumns)
 
-    prepareOrderedTestTable(resultPath, resultTableSchema, enableDynamicStoreRead = true)
+    spyt.yt.removeNode(new RemoveNode(YPath.simple(paths.checkpointLocation.stripPrefix("yt:/")))
+      .toBuilder.setRecursive(true).build())
+
+    doStreamLaunches(paths, launchesParams=Seq((30, 3, true)), maxRowsPerPartition, includeServiceColumns)
+
+    val expectedData: Seq[TestRow] = getTestData(0, 59)
+    val expectedDF: DataFrame = spark.createDataFrame(expectedData)
+
+    val resultDF = spark.read
+      .option("enable_inconsistent_read", "true")
+      .yt(paths.resultPath)
+      .select("a", "b", "c")
+      .orderBy("a")
+
+    if (includeServiceColumns) {
+      resultDF.collect() should contain theSameElementsAs expectedDF.collect()
+    } else {
+      resultDF.dropDuplicates().collect() should contain theSameElementsAs expectedDF.collect()
+    }
+  }
+
+  def testSeveralStreamingLaunches(includeServiceColumns: Boolean = false): Unit = {
+    val paths: StreamingObjectsPaths = prepareStreamingObjects(tmpPath = tmpPath, includeServiceColumns)
+    val launchesParams: Seq[(Int, Int, Boolean)] = Seq(
+      (0, 3, false),
+      (30, 3, false),
+      (60, 3, true)
+    )
+    doStreamLaunches(paths, launchesParams, maxRowsPerPartition = 8, includeServiceColumns)
+
+    val resultDF = spark.read
+      .option("enable_inconsistent_read", "true")
+      .yt(paths.resultPath)
+      .select("a", "b", "c")
+      .orderBy("a")
+
+    val expectedData: Seq[TestRow] = getTestData(0, 89)
+    val expectedDF: DataFrame = spark.createDataFrame(expectedData)
+
+    if (includeServiceColumns) {
+      resultDF.collect() should contain theSameElementsAs expectedDF.collect()
+    } else {
+      resultDF.dropDuplicates().collect() should contain theSameElementsAs expectedDF.collect()
+    }
+  }
+
+  def doStreamLaunches(paths: StreamingObjectsPaths, launchesParams: Seq[(Int, Int, Boolean)],
+                       maxRowsPerPartition: Long, includeServiceColumns: Boolean = false): Unit = {
+    val consumerPath = paths.consumerPath
+    val queuePath = paths.queuePath
+    val resultPath = paths.resultPath
+    val checkpointLocation = paths.checkpointLocation
 
     val df: DataFrame = spark
       .readStream
@@ -307,7 +361,7 @@ class YTsaurusStreamingTest extends AnyFlatSpec with Matchers with LocalSpark wi
 
           while (currentCount < recordCountLimit) {
             Thread.sleep(2000)
-            currentCount = spark.read.option("enable_inconsistent_read", "true").yt(resultPath).count()
+            currentCount = spark.read.option("enable_inconsistent_read", "true").yt(resultPath).dropDuplicates().count()
           }
         }
       }(scala.concurrent.ExecutionContext.Implicits.global)
@@ -319,33 +373,25 @@ class YTsaurusStreamingTest extends AnyFlatSpec with Matchers with LocalSpark wi
     for (launchParams <- launchesParams) {
       runStreamUntilAchieveRecordCountLimit(launchParams._1, launchParams._2, launchParams._3)
     }
-
-    resultPath
   }
 
-  def testSeveralStreamingLaunches(includeServiceColumns: Boolean = false): Unit = {
-    val maxRowsPerPartition = 8
-    val launchesParams: Seq[(Int, Int, Boolean)] = Seq(
-      (0, 3, false),
-      (30, 3, false),
-      (60, 3, true)
-    )
-    val resultPath: String = doStreamLaunches(launchesParams, maxRowsPerPartition, includeServiceColumns)
+  def prepareStreamingObjects(tmpPath: String, includeServiceColumns: Boolean = false): StreamingObjectsPaths = {
+    val paths: StreamingObjectsPaths = new StreamingObjectsPaths(tmpPath)
+    val consumerPath = paths.consumerPath
+    val queuePath = paths.queuePath
+    val resultPath = paths.resultPath
 
-    val resultDF = spark.read
-      .option("enable_inconsistent_read", "true")
-      .yt(resultPath)
-      .select("a", "b", "c")
-      .orderBy("a")
+    YtWrapper.createDir(tmpPath)
+    prepareOrderedTestTable(queuePath, enableDynamicStoreRead = true)
+    prepareConsumer(consumerPath, queuePath)
+    waitQueueRegistration(queuePath)
 
-    val expectedData: Seq[TestRow] = getTestData(0, 89)
-    val expectedDF: DataFrame = spark.createDataFrame(expectedData)
+    val resultTableSchema = if (includeServiceColumns)
+      orderedTestSchemaForStreamingWithExactlyOnceGuarantee else orderedTestSchema
 
-    if (includeServiceColumns) {
-      resultDF.collect() should contain theSameElementsAs expectedDF.collect()
-    } else {
-      resultDF.dropDuplicates().collect() should contain theSameElementsAs expectedDF.collect()
-    }
+    prepareOrderedTestTable(resultPath, resultTableSchema, enableDynamicStoreRead = true)
+
+    paths
   }
 }
 
@@ -358,4 +404,11 @@ object YTsaurusStreamingTest {
     .addValue("b", ColumnValueType.INT64)
     .addValue("c", ColumnValueType.STRING)
     .build()
+}
+
+class StreamingObjectsPaths(tmpPath: String) {
+  val consumerPath = s"$tmpPath/consumer-${UUID.randomUUID()}"
+  val queuePath = s"$tmpPath/inputQueue-${UUID.randomUUID()}"
+  val resultPath = s"$tmpPath/result-${UUID.randomUUID()}"
+  val checkpointLocation = f"yt:/$tmpPath/stateStore-${UUID.randomUUID()}"
 }

@@ -28,7 +28,7 @@ trait DynTableTestUtils {
   val testRow: TestRow = TestRow(100, 100, "new_row")
 
   def getTestData(low: Int = 1, high: Int = 10): Seq[TestRow] = {
-    (low to high).map(i => TestRow(i, i * 2, ('a'.toInt + i).toChar.toString))
+    (low to high).map(i => TestRow(i, i * 2, ('A'.toInt + i).toChar.toString))
   }
 
   def getTestSchema(sorted: Boolean = true): TableSchema = if (sorted) testSchema else orderedTestSchema

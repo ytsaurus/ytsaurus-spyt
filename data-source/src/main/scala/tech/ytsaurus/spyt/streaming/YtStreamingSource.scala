@@ -47,10 +47,11 @@ class YtStreamingSource(sqlContext: SQLContext,
     val maxRowsOpt = limits.collectFirst { case rmr: ReadMaxRows => rmr }
     if (maxRowsOpt.isDefined) {
       val maxRows = maxRowsOpt.get.maxRows()
+      val currentOffset = YtQueueOffset.getCurrentOffset(cluster, consumerPath, queuePath)
       val partitionSeq = maxOffsetInQueue.partitions.toSeq.map { case (i, upperIndex) =>
         val realStartIndex = startYtQueueOffset match {
           case YtQueueOffset(_, _, partitions) => partitions.getOrElse(i, -1L)
-          case _ => -1L
+          case _ => currentOffset.partitions.getOrElse(i, -1L)
         }
 
         val endOffset = math.min(realStartIndex + maxRows, upperIndex)

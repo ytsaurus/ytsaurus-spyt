@@ -23,7 +23,7 @@ class YtPartitioningTest extends FlatSpec with Matchers with LocalSpark with Tmp
     .build()
 
   private val testBigTablePath = f"${tmpPath}_YtPartitioningTest2"
-  private val testDataBigTable = (1 to 5000).map(i => TestRow(i, i * 2, ('a'.toInt + i).toChar.toString))
+  private val testDataBigTable = (1 to 50000).map(i => TestRow(i, i * 2, ('a'.toInt + i).toChar.toString))
 
   // 1Kb ~ 60 rows with 2 long numbers
   private val conf = Map(

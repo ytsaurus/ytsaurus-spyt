@@ -10,7 +10,7 @@ object Dependencies {
   lazy val shapelessVersion = "2.3.7"
   lazy val scalatestVersion = "3.1.0"
   lazy val livyVersion = "0.8.0-incubating"
-  lazy val ytsaurusClientVersion = "1.2.8-SNAPSHOT"
+  lazy val ytsaurusClientVersion = "1.2.9"
   lazy val scalatraVersion = "2.7.0"
   lazy val mockitoVersion = "1.14.4"
   lazy val arrowVersion = "0.17.1"

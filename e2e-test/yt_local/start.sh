@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 
-(socat TCP-LISTEN:8000,fork TCP:localhost:80 &) && echo "Activated redirect from :8000 to :80"
+proxy_port="${PROXY_PORT:-8000}"
+(socat TCP-LISTEN:"$proxy_port",fork TCP:localhost:80 &) && echo "Activated redirect from :$proxy_port to :80"
 
 node_config="
 {

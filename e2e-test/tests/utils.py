@@ -3,8 +3,7 @@ from common.cluster_utils import DEFAULT_SPARK_CONF
 import logging
 import os
 
-
-YT_PROXY = "127.0.0.1:8000"
+YT_PROXY = "127.0.0.1:" + os.getenv("PROXY_PORT", "8000")
 DRIVER_HOST = "172.17.0.1"
 
 DRIVER_CLIENT_CONF = {

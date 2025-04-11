@@ -12,13 +12,38 @@ def wait_state_change(url, initial_state):
     return state
 
 
-def create_session(host):
-    r = requests.post(host + '/sessions', data=json.dumps({'kind': 'spark'}))
+def create_session(host, spark_conf = None):
+    """
+    :param host: host url
+    :param spark_conf: Spark configuration properties (Map of key=val)
+    :return: session url with session_id
+    """
+    session_data = {'kind': 'spark'}
+    if spark_conf is not None:
+        session_data['conf'] = spark_conf
+    r = requests.post(host + '/sessions', data=json.dumps(session_data))
+
     session_url = host + r.headers['location']
     state = wait_state_change(session_url, 'starting')
     assert state == 'idle'
     return session_url
 
+def delete_session(session_url):
+    requests.delete(session_url)
+    wait_state_change(session_url, 'shutting_down')
+
+def get_spark_conf(host, session_url):
+    code = """{{import org.json4s._;\
+            import org.json4s.jackson.Serialization;\
+            import org.json4s.jackson.Serialization.write;\
+            val conf = spark.sparkContext.getConf;\
+            val confMap = conf.getAll.toMap;\
+            implicit val formats = DefaultFormats;\
+            val json = write(confMap);\
+            print(json)}}
+            """
+    result = extract_data(run_code(host, session_url, code))
+    return json.loads(result)
 
 def wrap_sql_query(sql_query):
     return '{{' \
@@ -59,6 +84,7 @@ def test_livy_server(yt_client, tmp_dir, livy_server):
     output = run_code(host, session_url, wrap_sql_query(f"select * from yt.`ytTable:/{table}`"))
     assert extract_data(output) == 'F\nFgAAAAAAAAAKEAoCaWQQEEAQSABSBBICCBAQARgAAAACAAAAAAAAAAEAAAAAAAAAAAAAAAAAAA' \
                                    'AFAAAAAAAAADB4MTIzAAAAAQAAAAAAAAAAAAAAAAAAAAkAAAAAAAAAMHhBQkFDQUJBAAAAAAAAAA=='
+    delete_session(session_url)
 
 
 def test_read_non_latin_symbols(yt_client, tmp_dir, livy_server):
@@ -79,3 +105,29 @@ def test_read_non_latin_symbols(yt_client, tmp_dir, livy_server):
                                    'ACAAAAAAAAAAIAAAAAAAAAAAAAAAAAAAABAAAAAAAAABMAAAAAAAAA0J3QvtC80LXRgCDQvtC0' \
                                    '0LjQvQAAAAAAAgAAAAAAAAAAAAAAAAAAAAIAAAAAAAAAEQAAAAAAAADQndC+0LzQtdGAINC00L' \
                                    'LQsAAAAAAAAAA='
+    delete_session(session_url)
+
+
+def test_custom_conf(yt_client, tmp_dir, livy_server):
+    host = "http://" + livy_server.rest()
+    # create session with default configuration
+    session_url = create_session(host=host)
+    default_livy_conf = get_spark_conf(host, session_url)
+    default_executor_cores = int(default_livy_conf['spark.executor.cores'])
+    delete_session(session_url)
+
+    # create session with custom configuration
+    doubled_spark_conf = {
+        "spark.executor.cores":2*default_executor_cores,
+        "spark.executor.memory": "5g"
+    }
+    new_session_url = create_session(host=host, spark_conf=doubled_spark_conf)
+    custom_livy_conf = get_spark_conf(host, new_session_url)
+
+    custom_executor_cores = int(custom_livy_conf['spark.executor.cores'])
+    custom_executor_memory = custom_livy_conf['spark.executor.memory']
+
+    assert custom_executor_cores == default_executor_cores * 2
+    assert custom_executor_memory == "5g"
+
+    delete_session(new_session_url)

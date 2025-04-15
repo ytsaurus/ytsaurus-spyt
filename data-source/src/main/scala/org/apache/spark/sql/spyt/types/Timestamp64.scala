@@ -66,6 +66,10 @@ object Timestamp64 {
   val MIN_TIMESTAMP64_STR: String = "-144168-01-01T00:00:00.000000Z"
   val MAX_TIMESTAMP64_STR: String = "+148107-12-31T23:59:59.999999Z"
 
+  @deprecated(
+    message = "Use apply(localDatetime: LocalDateTime) instead",
+    since = "2.6.0"
+  )
   def apply(timestamp: Timestamp): Timestamp64 = new Timestamp64(timestampToLong(timestamp))
 
   def apply(localDatetime: LocalDateTime): Timestamp64 = apply(localDateTimeToSeconds(localDatetime) * 1000000)

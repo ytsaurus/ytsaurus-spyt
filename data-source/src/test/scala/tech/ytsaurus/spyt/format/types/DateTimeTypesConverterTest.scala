@@ -113,6 +113,7 @@ class DateTimeTypesConverterTest extends AnyFunSuite {
   test("timestamp64 converters"){
     assert(Timestamp64(MIN_TIMESTAMP64).toString === MIN_TIMESTAMP64_STR)
     assert(Timestamp64(MAX_TIMESTAMP64).toString === MAX_TIMESTAMP64_STR)
+    //TODO: investigate this test in different local timezones
     assert(Timestamp64(Timestamp.valueOf("2000-08-14 21:50:24.000123")).toLong === 966275424000123L)
     assert(Timestamp64(MAX_TIMESTAMP64).toTimestamp.toString === "148107-12-31 23:59:59.999999")
     assert(Timestamp64(toLocalDatetime("-144168-01-01T00:00:00Z")).toString === MIN_TIMESTAMP64_STR)

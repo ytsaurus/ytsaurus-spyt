@@ -131,3 +131,26 @@ def test_custom_conf(yt_client, tmp_dir, livy_server):
     assert custom_executor_memory == "5g"
 
     delete_session(new_session_url)
+
+
+def test_read_datetime(yt_client, tmp_dir, livy_server):
+    table = f"{tmp_dir}/datetime_table"
+    yt_client.create("table", table, attributes={"schema": [{"name": "id", "type": "int64"},
+                                                            {"name": "date32", "type": "date32"},
+                                                            {"name": "datetime64", "type": "datetime64"},
+                                                            {"name": "timestamp64", "type": "timestamp64"}
+                                                            ]})
+    yt_client.write_table(table, [{"id": 1,
+                                   "date32": 18950,
+                                   "datetime64":1450309530,
+                                   "timestamp64":1031894758}])
+
+    host = "http://" + livy_server.rest()
+    session_url = create_session(host)
+
+    query = f"select * from yt.`ytTable:/{table}`"
+    output = run_code(host, session_url, wrap_sql_query(query))
+    assert extract_data(output) == ('F\nZwAAAAAAAAAKEAoCaWQQA0ADSABSBBICCAMKFgoGZGF0ZTMyEANAkCBIAFIFEgMIkCAKGgoKZGF0ZXR'
+                                    'pbWU2NBADQJEgSABSBRIDCJEgChsKC3RpbWVzdGFtcDY0EANAkiBIAFIFEgMIkiAQARgAAAEAAAAAAAAAB'
+                                    'AAAAAAAAAAAAAAAAAAAAAEAAAAAAAAABkoAAAAAAACa93FWAAAAAOZ2gT0AAAAA')
+    delete_session(session_url)

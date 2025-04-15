@@ -1,13 +1,15 @@
 package tech.ytsaurus.spyt.serializers
 
-import NYT.NTableClient.NProto.ChunkMeta.TTableSchemaExt
-import org.apache.commons.codec.binary.Hex
 import org.apache.spark.sql.Row
+import org.apache.spark.sql.spyt.types._
 import org.apache.spark.sql.types._
 import org.scalatest.{FlatSpec, Matchers}
 import tech.ytsaurus.core.tables.{ColumnValueType, TableSchema}
 import tech.ytsaurus.spyt._
 import tech.ytsaurus.spyt.test.{LocalSpark, TestUtils, TmpDir}
+
+import java.sql.{Date, Timestamp}
+import java.time.{LocalDate, LocalDateTime, ZoneOffset, ZonedDateTime}
 
 class DataFrameSerializerTest extends FlatSpec with Matchers with LocalSpark
   with TmpDir with TestUtils {
@@ -46,6 +48,66 @@ class DataFrameSerializerTest extends FlatSpec with Matchers with LocalSpark
     )
     tableBytes should contain theSameElementsAs answer
   }
+
+  private val date: LocalDate = LocalDate.of(1971, 2, 3)
+  private val datetime: LocalDateTime = LocalDateTime.of(2025, 4, 10, 14, 30, 45)
+  private val utcTimestamp: Timestamp = Timestamp.from(ZonedDateTime.of(datetime, ZoneOffset.UTC).toInstant)
+
+  private def encode(structField: StructField, data: Any): String = {
+    val df = spark.createDataFrame(spark.sparkContext.parallelize(Seq(Row(data))), StructType(Seq(structField)))
+    val resultBase64 = GenericRowSerializer.dfToYTFormatWithBase64(df, rowCountLimit)
+    resultBase64(1)
+  }
+
+  it should "serialize date to base64" in {
+    val resultBase64 = encode(StructField("date", DateType, nullable = true),
+                              Date.valueOf(date))
+    val expected = "GgAAAAAAAAAKFAoEZGF0ZRAEQIggSABSBRIDCIggEAEYAAAAAAAAAAEAAAAAAAAAAQAAAAAAAAAAAAAAAAAAAI4BAAAAAAAA"
+    resultBase64 shouldEqual expected
+  }
+
+  it should "serialize timestamp to base64" in {
+    val resultBase64 = encode(StructField("timestamp", TimestampType, nullable = true),
+                              utcTimestamp)
+    val expected = "HwAAAAAAAAAKGQoJdGltZXN0YW1wEARAiiBIAFIFEgMIiiAQARgAAAEAAAAAAAAAAQAAAAAAAAAAAAAAAAAAAEDvYW5tMgYA"
+    resultBase64 shouldEqual expected
+  }
+
+  it should "serialize spyt date to base64" in {
+    val resultBase64 = encode(StructField("spytDate", new DatetimeType(), nullable = true),
+                              Datetime(datetime))
+    val expected = "HgAAAAAAAAAKGAoIc3B5dERhdGUQBECJIEgAUgUSAwiJIBABGAAAAAEAAAAAAAAAAQAAAAAAAAAAAAAAAAAAABXW92cAAAAA"
+    resultBase64 shouldEqual expected
+  }
+
+  it should "serialize date32 to base64" in {
+    val resultBase64 = encode(StructField("date32", new Date32Type(), nullable = false),
+                              Date32(date))
+    val expected = "GgAAAAAAAAAKFAoGZGF0ZTMyEANAkCBIAVIDCJAgEAEYAAAAAAAAAAEAAAAAAAAAAQAAAAAAAAAAAAAAAAAAAI4BAAAAAAAA"
+    resultBase64 shouldEqual expected
+  }
+
+  it should "serialize datetime64 to base64" in {
+    val resultBase64 = encode(StructField("datetime64", new Datetime64Type(), nullable = false),
+                              Datetime64(datetime))
+    val expected = "HgAAAAAAAAAKGAoKZGF0ZXRpbWU2NBADQJEgSAFSAwiRIBABGAAAAAEAAAAAAAAAAQAAAAAAAAAAAAAAAAAAABXW92cAAAAA"
+    resultBase64 shouldEqual expected
+  }
+
+  it should "serialize timestamp64 to base64" in {
+    val resultBase64 = encode(StructField("timestamp64", new Timestamp64Type(), nullable = false),
+                              Timestamp64(utcTimestamp))
+    val expected = "HwAAAAAAAAAKGQoLdGltZXN0YW1wNjQQA0CSIEgBUgMIkiAQARgAAAEAAAAAAAAAAQAAAAAAAAAAAAAAAAAAAEDvYW5tMgYA"
+    resultBase64 shouldEqual expected
+  }
+
+  it should "serialize interval to base64" in {
+    val resultBase64 = encode(StructField("interval64", new Interval64Type(), nullable = false),
+                              Interval64(1234567890L))
+    val expected = "HgAAAAAAAAAKGAoKaW50ZXJ2YWw2NBADQJMgSAFSAwiTIBABGAAAAAEAAAAAAAAAAQAAAAAAAAAAAAAAAAAAANIClkkAAAAA"
+    resultBase64 shouldEqual expected
+  }
+
 
   it should "serialize lists" in {
     writeTableFromYson(Seq(

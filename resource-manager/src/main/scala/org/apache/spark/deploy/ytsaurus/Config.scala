@@ -163,4 +163,9 @@ object Config {
     .version("2.6.0")
     .timeConf(TimeUnit.MILLISECONDS)
     .createOptional
+
+  val YTSAURUS_RPC_JOB_PROXY_ENABLED = ConfigBuilder("spark.ytsaurus.rpc.job.proxy.enabled")
+    .version("2.6.0")
+    .booleanConf
+    .createWithDefault(true)
 }

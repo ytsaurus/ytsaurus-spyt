@@ -9,6 +9,7 @@ def patch_conf(yt_client, python_path, java_home):
     set_java_home(java_home, yt_client)
     set_executor_conf(yt_client)
     set_another_shuffle_port(yt_client)
+    disable_rpc_job_proxy(yt_client)
 
 
 def get_spark_conf(yt_client):
@@ -36,3 +37,8 @@ def set_executor_conf(yt_client, executor_cores=1, executor_memory='1g'):
 
 def set_another_shuffle_port(yt_client):
     set_spark_conf({'spark.shuffle.service.port': str(27120 + (os.getpid() % 80))}, yt_client)
+
+
+def disable_rpc_job_proxy(yt_client):
+    # TODO: fix rpc job proxy authentication in yt_local, write tests for it and remove this patch
+    set_spark_conf({"spark.ytsaurus.rpc.job.proxy.enabled": "false"}, yt_client)

@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_SPARK_CONF = {
     "spark.hadoop.yt.user": "root",
-    "spark.hadoop.yt.token": "",
+    "spark.hadoop.yt.token": "token",
     "spark.yt.log.enabled": "false",
     "spark.executor.instances": "1",
     "spark.executor.cores": "1",

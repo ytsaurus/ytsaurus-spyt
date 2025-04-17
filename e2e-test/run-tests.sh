@@ -110,9 +110,10 @@ if [ "$rebuild" = "true" ]; then
     ./build.sh --spyt-version $spyt_version
 fi;
 
+export PROXY_PORT=$proxy_port
+
 if [ "$start_yt_local" = "true" ]; then
     echo "START_YT_LOCAL"
-    export PROXY_PORT=$proxy_port
     cd $root_dir/e2e-test
     # Run YTsaurus local with 3 nodes
     $yt_local_runner_path \

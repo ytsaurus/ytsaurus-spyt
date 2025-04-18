@@ -25,8 +25,7 @@ def add_default_launch_options(parser):
 
     default_enablers = SpytEnablers()
     add_parser_group(parser, '--enable-mtn', '--disable-mtn', 'enable_mtn', default_enablers.enable_mtn)
-    add_parser_group(parser, '--prefer-ipv6', '--prefer-ipv4', 'enable_preference_ipv6',
-                     default_enablers.enable_preference_ipv6)
+    add_parser_group(parser, '--prefer-ipv6', '--prefer-ipv4', 'enable_preference_ipv6', None)
 
     add_parser_group(parser, '--enable-tmpfs', '--disable-tmpfs', 'enable_tmpfs', False)
     add_parser_group(parser, '--enable-stderr-table', '--disable-stderr-table', 'enable_stderr_table', False)
@@ -43,6 +42,7 @@ def add_default_launch_options(parser):
 
     add_parser_group(parser, '--enable-squashfs', '--disable-squashfs', 'enable_squashfs',
                      default_enablers.enable_squashfs)
+    parser.add_argument('--cluster-java-home', required=False, type=str)
 
 
 def add_livy_options(parser):

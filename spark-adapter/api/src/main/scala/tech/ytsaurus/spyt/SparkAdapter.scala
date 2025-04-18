@@ -52,6 +52,7 @@ trait SparkAdapterBase {
   def createLoggingEvent(fqnOfCategoryClass: String, logger: Category,
                          timeStamp: Long, level: Level, message: String,
                          throwable: Throwable): LoggingEvent
+  def defaultModuleOptions(): String
 }
 
 trait PartitionedFileAdapter {
@@ -140,6 +141,9 @@ private class SparkAdapterImpl(base: SparkAdapterBase,
   override def createLoggingEvent(fqnOfCategoryClass: String, logger: Category, timeStamp: Long, level: Level,
                                   message: String, throwable: Throwable): LoggingEvent =
     base.createLoggingEvent(fqnOfCategoryClass, logger, timeStamp, level, message, throwable)
+
+  override def defaultModuleOptions(): String =
+    base.defaultModuleOptions()
 
   override def createPartitionedFile(partitionValues: InternalRow, filePath: String,
                                      start: Long, length: Long): PartitionedFile =

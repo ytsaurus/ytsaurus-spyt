@@ -35,4 +35,12 @@ public class SparkClassCommandBuilderForSpyt extends SparkClassCommandBuilder {
         }
         return cmd;
     }
+
+    @Override
+    List<String> buildJavaCommand(String extraClassPath) throws IOException {
+        List<String> cmd = super.buildJavaCommand(extraClassPath);
+        cmd.add("-XX:+IgnoreUnrecognizedVMOptions");
+        cmd.add("--add-opens=java.base/java.lang=ALL-UNNAMED");
+        return cmd;
+    }
 }

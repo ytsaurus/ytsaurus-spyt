@@ -2,7 +2,6 @@ package tech.ytsaurus.spyt.patch;
 
 import javassist.*;
 import javassist.bytecode.ClassFile;
-import org.apache.hadoop.shaded.com.google.common.collect.Streams;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import tech.ytsaurus.spyt.SparkVersionUtils;

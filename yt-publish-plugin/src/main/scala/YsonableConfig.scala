@@ -50,34 +50,6 @@ object YsonableConfig {
   }
 }
 
-case class SparkGlobalConfig(spark_conf: Map[String, String],
-                             latest_spyt_version: String = "1.76.1",  // COMPAT(alex-shishkin)
-                             latest_spark_cluster_version: String = "1.75.4",
-                             python_cluster_paths: Map[String, String] = Map(
-                               "3.11" -> "/opt/python3.11/bin/python3.11",
-                               "3.12" -> "/opt/python3.12/bin/python3.12",
-                               "3.9" -> "/opt/python3.9/bin/python3.9",
-                               "3.8" -> "/opt/python3.8/bin/python3.8",
-                               "3.7" -> "/opt/python3.7/bin/python3.7",
-                               "3.5" -> "python3.5",
-                               "3.4" -> "/opt/python3.4/bin/python3.4",
-                               "2.7" -> "python2.7",
-                             ),
-                             environment: Map[String, String] = Map(
-                               "JAVA_HOME" -> "/opt/jdk11",
-                               "IS_SPARK_CLUSTER" -> "true",
-                               "YT_ALLOW_HTTP_REQUESTS_TO_YT_FROM_JOB" -> "1",
-                               "ARROW_ENABLE_NULL_CHECK_FOR_GET" -> "false",
-                               "ARROW_ENABLE_UNSAFE_MEMORY_ACCESS" -> "true",
-                               "SOLOMON_PUSH_PORT" -> "27099"
-                             ),
-                             operation_spec: Map[String, YTreeNode] = Map(
-                               "job_cpu_monitor" -> YsonableConfig.toYTree(Map("enable_cpu_reclaim" -> "false"))
-                             ),
-                             worker_num_limit: Int = 1000,
-                             cuda_toolkit_version: String = "11.0",
-                             ytserver_proxy_path: String = defaultYtServerProxyPath) extends YsonableConfig
-
 case class SparkLaunchConfig(spark_yt_base_path: String,
                              file_paths: Seq[String],
                              spark_conf: Map[String, String],

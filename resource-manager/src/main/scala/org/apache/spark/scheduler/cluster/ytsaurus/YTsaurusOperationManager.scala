@@ -163,6 +163,7 @@ private[spark] class YTsaurusOperationManager(val ytClient: YTsaurusClient,
       sparkJavaOpts ++
       ytsaurusJavaOptions ++ Seq(
       driverOpts,
+      SparkAdapter.instance.defaultModuleOptions(),
       "org.apache.spark.deploy.ytsaurus.DriverWrapper",
       appArgs.mainClass
     ) ++ additionalArgs ++ appArgs.driverArgs).mkString(" ")
@@ -342,8 +343,8 @@ private[spark] object YTsaurusOperationManager extends Logging {
       val spytVersion = conf.get(SPYT_VERSION.key)
       logInfo(s"Used SPYT version: $spytVersion")
       val environment = globalConfig.getMap("environment")
-      val javaHome = environment.getStringO("JAVA_HOME")
-        .orElseThrow(() => new SparkException(s"JAVA_HOME is not set in ${GLOBAL_CONFIG_PATH.key} parameter value"))
+      val javaHome = conf.get(YTSAURUS_JAVA_HOME)
+      environment.put("JAVA_HOME", YTree.stringNode(javaHome))
 
       val releaseConfigPath = s"${conf.get(RELEASE_CONFIG_PATH)}/$spytVersion/${conf.get(LAUNCH_CONF_FILE)}"
 

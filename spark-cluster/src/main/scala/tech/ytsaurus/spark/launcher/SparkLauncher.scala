@@ -12,13 +12,10 @@ import tech.ytsaurus.spyt.wrapper.YtWrapper
 import tech.ytsaurus.spyt.wrapper.client.YtClientConfiguration
 import tech.ytsaurus.spyt.wrapper.discovery.{Address, CompoundDiscoveryService, CypressDiscoveryService, DiscoveryServerService, DiscoveryService}
 import tech.ytsaurus.client.CompoundClient
-import tech.ytsaurus.client.request.GetOperation
-import tech.ytsaurus.core.GUID
-import tech.ytsaurus.spyt.{HostAndPort, SparkVersionUtils}
+import tech.ytsaurus.spyt.{HostAndPort, SparkAdapter, SparkVersionUtils}
 
 import java.io.File
 import java.nio.file.{Files, Path}
-import java.util
 import scala.annotation.tailrec
 import scala.collection.mutable.ArrayBuffer
 import scala.concurrent.duration._
@@ -193,7 +190,7 @@ trait SparkLauncher {
   }
 
   private def runLivyProcess(log: Logger): Process = {
-    val livyJavaOpts = s"cat $spytHome/conf/java-opts".!!
+    val livyJavaOpts = s"cat $spytHome/conf/java-opts".!!.trim + " " + SparkAdapter.instance.defaultModuleOptions()
     val livyRunner = f"$livyHome/bin/livy-server start"
     log.info(s"Run command: $livyRunner")
     val extraEnv = ArrayBuffer(

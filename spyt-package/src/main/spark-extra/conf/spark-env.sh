@@ -20,9 +20,13 @@ if [ -n "$SPYT_CLASSPATH" ] && [ ! -f "$SPARK_CONF_DIR/java-opts" ]; then
 fi
 
 if [ -z "$SPARK_LAUNCHER_OPTS" ] && [ -n "$SPARK_SUBMIT_OPTS" ]; then
-  export SPARK_LAUNCHER_OPTS=$SPARK_SUBMIT_OPTS
+  SPARK_LAUNCHER_OPTS=$SPARK_SUBMIT_OPTS
 fi
 
 if [ -z "$SPARK_LAUNCHER_OPTS" ]; then
-  export SPARK_LAUNCHER_OPTS=$javaagent_parameter
+  SPARK_LAUNCHER_OPTS=$javaagent_parameter
 fi
+
+SPARK_LAUNCHER_OPTS="$SPARK_LAUNCHER_OPTS -XX:+IgnoreUnrecognizedVMOptions --add-opens=java.base/java.lang=ALL-UNNAMED"
+
+export SPARK_LAUNCHER_OPTS

@@ -4,6 +4,7 @@ import org.antlr.v4.runtime.ParserRuleContext
 import org.apache.log4j.spi.LoggingEvent
 import org.apache.log4j.{Category, Level}
 import org.apache.spark.executor.{ExecutorBackendFactory, ExecutorBackendFactory330}
+import org.apache.spark.launcher.JavaModuleOptions
 import org.apache.spark.sql.catalyst.expressions.Expression
 import org.apache.spark.sql.connector.read.{InputPartition, ScanBuilder}
 import org.apache.spark.sql.connector.read.partitioning.{Partitioning, UnknownPartitioning}
@@ -54,4 +55,6 @@ class SparkAdapterBase330 extends SparkAdapterBase {
                                   message: String, throwable: Throwable): LoggingEvent = {
     Utils330.createLoggingEvent(fqnOfCategoryClass, logger, timeStamp, level, message, throwable)
   }
+
+  override def defaultModuleOptions(): String = JavaModuleOptions.defaultModuleOptions()
 }

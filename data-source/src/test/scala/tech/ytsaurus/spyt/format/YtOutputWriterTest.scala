@@ -19,6 +19,7 @@ import tech.ytsaurus.core.tables.{ColumnValueType, TableSchema}
 import tech.ytsaurus.spyt.format.conf.SparkYtWriteConfiguration
 import tech.ytsaurus.spyt.fs.path.YPathEnriched
 
+import java.time.temporal.ChronoUnit
 import java.time.{Instant, LocalDate}
 import java.util
 import java.util.concurrent.CompletableFuture
@@ -86,7 +87,7 @@ class YtOutputWriterTest extends FlatSpec with TmpDir with LocalSpark with Match
   it should "correctly serialize time to YSON" in {
     import spark.implicits._
     val sampleData = (1 to 1000).map(n => SampleRow2(Nested(
-      java.sql.Timestamp.from(Instant.now().minusSeconds(n)),
+      java.sql.Timestamp.from(Instant.now().minusSeconds(n).truncatedTo(ChronoUnit.MICROS)),
       java.sql.Date.valueOf(LocalDate.now().minusDays(n)),
       org.apache.spark.sql.spyt.types.Date32.apply(LocalDate.now().minusDays(n)),
       org.apache.spark.sql.spyt.types.Datetime.apply(java.time.LocalDateTime.now().minusDays(n).withNano(0)),
@@ -99,11 +100,14 @@ class YtOutputWriterTest extends FlatSpec with TmpDir with LocalSpark with Match
 
     outputPathAttributes("dynamic").boolValue() shouldBe false
 
-    assertResult(sampleData.groupBy(row => Seq(row.nested.productIterator.toSeq)).mapValues(_.length)) {
-      spark.read.option(YtUtils.Options.PARSING_TYPE_V3, value = true).yt(tmpPath).collect().groupBy(row =>
-        Seq(row.getStruct(0).toSeq)
-      ).mapValues(_.length)
-    }
+    val result = spark.read
+      .option(YtUtils.Options.PARSING_TYPE_V3, value = true)
+      .yt(tmpPath)
+      .select($"nested.*")
+      .as[Nested]
+      .collect()
+
+    result should contain theSameElementsAs sampleData.map(_.nested)
   }
 
   def runTestWithSpecificPath(path: String): Unit = {

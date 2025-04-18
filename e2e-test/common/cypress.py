@@ -28,7 +28,7 @@ def set_python_path(python_path, yt_client):
 
 def set_java_home(java_home, yt_client):
     logger.info(f"Set java home: {java_home}")
-    yt_client.set("//home/spark/conf/global/environment/JAVA_HOME", java_home)
+    yt_client.set("//home/spark/conf/global/default_cluster_java_home", java_home)
 
 
 def set_executor_conf(yt_client, executor_cores=1, executor_memory='1g'):

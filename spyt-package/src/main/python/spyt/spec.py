@@ -77,6 +77,7 @@ class CommonComponentConfig(NamedTuple):
     alias_prefix: str = ""
     spark_discovery: SparkDiscovery = None
     group_id: str = None
+    cluster_java_home: str = None
 
 
 class MasterConfig(NamedTuple):
@@ -169,7 +170,7 @@ def _launcher_command(component: str, common_params: CommonSpecParams, additiona
                                         common_params.config.enablers.enable_squashfs,
                                         additional_parameters)
 
-    java_bin = os.path.join(common_params.java_home, 'bin', 'java')
+    java_bin = os.path.join(common_params.java_home, 'bin', 'java') if common_params.java_home else 'java'
     if command := common_params.task_spec.get('command'):
         java_bin = f'{command} {java_bin}'
     classpath = (f'{common_params.spyt_home}/conf/:'
@@ -444,6 +445,11 @@ def build_spark_operation_spec(config: dict, client: YtClient,
         operation_spec["description"]["BYOP"] = ytserver_proxy_attributes(ytserver_proxy_path, client=client)
 
     environment = copy.deepcopy(config["environment"])
+    java_home = common_config.cluster_java_home or config.get('default_cluster_java_home')
+    if "JAVA_HOME" in environment:
+        del environment["JAVA_HOME"]  # COMPAT(atokarew) JAVA_HOME is preserved in global config for older releases
+    if java_home:
+        environment["JAVA_HOME"] = java_home
     environment["YT_PROXY"] = call_get_proxy_address_url(required=True, client=client)
     environment["YT_OPERATION_ALIAS"] = operation_spec["title"]
     _put_if_not_none(environment, "SPARK_DISCOVERY_GROUP_ID", common_config.group_id)
@@ -505,7 +511,7 @@ def build_spark_operation_spec(config: dict, client: YtClient,
     if entrypoint := config.get('entrypoint'):
         common_task_spec['command'] = entrypoint if isinstance(entrypoint, str) else shlex.join(entrypoint)
     common_params = CommonSpecParams(
-        container_home, spark_home, spyt_home, spark_distributive, environment["JAVA_HOME"],
+        container_home, spark_home, spyt_home, spark_distributive, java_home,
         extra_java_opts, environment, spark_conf_common, common_task_spec, common_config
     )
     builder = VanillaSpecBuilder()

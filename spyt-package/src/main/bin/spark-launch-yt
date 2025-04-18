@@ -148,10 +148,10 @@ def main(raw_args=None):
                             enable_profiling=args.enable_profiling,
                             enable_mtn=args.enable_mtn,
                             enable_solomon_agent=args.enable_solomon_agent,
-                            enable_preference_ipv6=args.enable_preference_ipv6,
                             enable_tcp_proxy=args.enable_tcp_proxy,
                             enable_squashfs=args.enable_squashfs
                         ),
+                        enable_preference_ipv6=args.enable_preference_ipv6,
                         client=yt_client,
                         preemption_mode=args.preemption_mode,
                         cluster_log_level=args.cluster_log_level,
@@ -177,7 +177,9 @@ def main(raw_args=None):
                         tcp_proxy_range_size=args.tcp_proxy_range_size,
                         enable_stderr_table=args.enable_stderr_table,
                         group_id=args.group_id,
-                        worker_gpu_limit=args.worker_gpu_limit)
+                        worker_gpu_limit=args.worker_gpu_limit,
+                        cluster_java_home=args.cluster_java_home
+                        )
 
 
 if __name__ == '__main__':

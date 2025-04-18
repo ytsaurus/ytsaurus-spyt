@@ -317,7 +317,8 @@ class YtSparkSQLTest extends FlatSpec with Matchers with LocalSpark with TmpDir
     val attrs = YtWrapper.attributes(YPath.simple(tmpPath))
     attrs("custom1") shouldBe YTree.stringNode("value1")
     attrs("custom2") shouldBe YTree.integerNode(4)
-    attrs("schema").getAttribute("unique_keys").get() shouldBe YTree.booleanNode(false)
+    val schema = YtWrapper.attribute(tmpPath, "schema")
+    schema.getAttribute("unique_keys").get() shouldBe YTree.booleanNode(false)
     attrs("sorted_by") shouldBe YTree.listBuilder().value(YTree.stringNode("id")).endList().build()
   }
 

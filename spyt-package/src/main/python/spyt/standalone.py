@@ -102,6 +102,14 @@ def _jmx_opts(port):
            "-Dcom.sun.management.jmxremote.ssl=false".format(port)
 
 
+def _process_ipv6_preference(dynamic_config, enable_preference_ipv6, enablers):
+    if (enable_preference_ipv6 is None and
+            'spark.hadoop.yt.preferenceIpv6.enabled' in dynamic_config['spark_conf']):
+        enable_preference_ipv6 = parse_bool(dynamic_config['spark_conf']['spark.hadoop.yt.preferenceIpv6.enabled'])
+    if enable_preference_ipv6 is not None:
+        enablers.enable_preference_ipv6 = enable_preference_ipv6
+
+
 def submit(discovery_path, spark_home, deploy_mode, spark_conf, job_class, jar_path, job_args, client=None):
     spark_args = ["--deploy-mode", deploy_mode]
 
@@ -291,13 +299,15 @@ def run_operation_wrapper(op_builder, address_path, client):
 
 
 def start_livy_server(operation_alias=None, discovery_path=None, pool=None, enable_tmpfs=False, network_project=None,
-                      tvm_id=None, tvm_secret=None, params=None, spark_cluster_version=None, enablers=None, client=None,
+                      tvm_id=None, tvm_secret=None, params=None, spark_cluster_version=None, enablers=None,
+                      enable_preference_ipv6=None, client=None,
                       preemption_mode="normal", cluster_log_level="INFO",
                       livy_driver_cores=SparkDefaultArguments.LIVY_DRIVER_CORES,
                       livy_driver_memory=SparkDefaultArguments.LIVY_DRIVER_MEMORY,
                       livy_max_sessions=SparkDefaultArguments.LIVY_MAX_SESSIONS, spark_master_address=None,
                       rpc_job_proxy=False, rpc_job_proxy_thread_pool_size=4, tcp_proxy_range_start=30000,
-                      tcp_proxy_range_size=100, enable_stderr_table=False, master_group_id=None, group_id=None):
+                      tcp_proxy_range_size=100, enable_stderr_table=False, master_group_id=None, group_id=None,
+                      cluster_java_home=None):
     if discovery_path is None and group_id is None:
         raise RuntimeError("Either discovery path or discovery group id must be provided")
 
@@ -318,6 +328,7 @@ def start_livy_server(operation_alias=None, discovery_path=None, pool=None, enab
 
     global_conf = read_global_conf(client=client)
     dynamic_config = get_base_cluster_config(global_conf, spark_cluster_version, params, discovery_path, client)
+    _process_ipv6_preference(dynamic_config, enable_preference_ipv6, enablers)
     enablers.apply_config(dynamic_config)
 
     spark_discovery = None
@@ -329,7 +340,7 @@ def start_livy_server(operation_alias=None, discovery_path=None, pool=None, enab
     common_config = CommonComponentConfig(
         operation_alias, pool, enable_tmpfs, network_project, tvm_id, tvm_secret, enablers, preemption_mode,
         cluster_log_level, rpc_job_proxy, rpc_job_proxy_thread_pool_size, tcp_proxy_range_start,
-        tcp_proxy_range_size, enable_stderr_table, "livy", spark_discovery, group_id
+        tcp_proxy_range_size, enable_stderr_table, "livy", spark_discovery, group_id, cluster_java_home
     )
     livy_config = LivyConfig(
         livy_driver_cores, livy_driver_memory, livy_max_sessions, spark_master_address,
@@ -346,10 +357,11 @@ def start_history_server(operation_alias=None, discovery_path=None, pool=None, e
                          history_server_cpu_limit=SparkDefaultArguments.SPARK_HISTORY_SERVER_CPU_LIMIT,
                          history_server_memory_overhead=SparkDefaultArguments.SPARK_HISTORY_SERVER_MEMORY_OVERHEAD,
                          network_project=None, tvm_id=None, tvm_secret=None, advanced_event_log=True,
-                         params=None, shs_location=None, spark_cluster_version=None, enablers=None, client=None,
+                         params=None, shs_location=None, spark_cluster_version=None, enablers=None,
+                         enable_preference_ipv6=None, client=None,
                          preemption_mode="normal", cluster_log_level="INFO", rpc_job_proxy=False,
                          rpc_job_proxy_thread_pool_size=4, tcp_proxy_range_start=30000,
-                         tcp_proxy_range_size=100, enable_stderr_table=False):
+                         tcp_proxy_range_size=100, enable_stderr_table=False, cluster_java_home=None):
     enablers = enablers or SpytEnablers()
 
     spark_discovery = SparkDiscovery(discovery_path=discovery_path)
@@ -364,7 +376,7 @@ def start_history_server(operation_alias=None, discovery_path=None, pool=None, e
 
     dynamic_config = get_base_cluster_config(global_conf, spark_cluster_version, params,
                                              spark_discovery.base_discovery_path, client)
-
+    _process_ipv6_preference(dynamic_config, enable_preference_ipv6, enablers)
     enablers.apply_config(dynamic_config)
 
     spark_discovery.create(client)
@@ -372,7 +384,7 @@ def start_history_server(operation_alias=None, discovery_path=None, pool=None, e
     common_config = CommonComponentConfig(
         operation_alias, pool, enable_tmpfs, network_project, tvm_id, tvm_secret, enablers, preemption_mode,
         cluster_log_level, rpc_job_proxy, rpc_job_proxy_thread_pool_size, tcp_proxy_range_start,
-        tcp_proxy_range_size, enable_stderr_table, "shs", spark_discovery, None
+        tcp_proxy_range_size, enable_stderr_table, "shs", spark_discovery, None, cluster_java_home
     )
     hs_config = HistoryServerConfig(
         history_server_memory_limit, history_server_cpu_limit, history_server_memory_overhead, shs_location,
@@ -408,7 +420,8 @@ def start_spark_cluster(worker_cores, worker_memory, worker_num, worker_cores_ov
                         advanced_event_log=False, worker_log_transfer=False, worker_log_json_mode=False,
                         worker_log_update_interval=SparkDefaultArguments.SPARK_WORKER_LOG_UPDATE_INTERVAL,
                         worker_log_table_ttl=SparkDefaultArguments.SPARK_WORKER_LOG_TABLE_TTL,
-                        params=None, shs_location=None, spark_cluster_version=None, enablers=None, client=None,
+                        params=None, shs_location=None, spark_cluster_version=None, enablers=None,
+                        enable_preference_ipv6=None, client=None,
                         preemption_mode="normal", cluster_log_level="INFO", enable_multi_operation_mode=False,
                         dedicated_operation_mode=False, driver_cores=None, driver_memory=None, driver_num=None,
                         driver_cores_overhead=None, driver_timeout=None, autoscaler_period=None,
@@ -419,7 +432,7 @@ def start_spark_cluster(worker_cores, worker_memory, worker_num, worker_cores_ov
                         livy_max_sessions=SparkDefaultArguments.LIVY_MAX_SESSIONS, rpc_job_proxy=False,
                         rpc_job_proxy_thread_pool_size=4, tcp_proxy_range_start=30000,
                         tcp_proxy_range_size=100, enable_stderr_table=False, group_id=None,
-                        worker_gpu_limit=0):
+                        worker_gpu_limit=0, cluster_java_home=None):
     """Start Spark cluster
     :param operation_alias: alias for the underlying YT operation
     :param pool: pool for the underlying YT operation
@@ -459,6 +472,7 @@ def start_spark_cluster(worker_cores, worker_memory, worker_num, worker_cores_ov
     :param params: YT operation params: file_paths, layer_paths, operation_spec, environment, spark_conf
     :param shs_location: hard set path to log directory
     :param enablers: ...
+    :param enable_preference_ipv6: Whether to prefer ipv6 addresses or ipv4, default is release config setting
     :param client: YtClient
     :param preemption_mode: 'normal' or 'graceful' for graceful preemption
     :param cluster_log_level: level for cluster logs
@@ -485,6 +499,7 @@ def start_spark_cluster(worker_cores, worker_memory, worker_num, worker_cores_ov
     :param enable_stderr_table: enables writing YT operation logs to stderr table
     :param group_id: discovery group id
     :param worker_gpu_limit: number of gpu for each worker
+    :param cluster_java_home: custom java home for cluster vanilla operation
     :return:
     """
     worker_res = WorkerResources(worker_cores, worker_memory, worker_num, worker_cores_overhead, worker_timeout,
@@ -538,6 +553,9 @@ def start_spark_cluster(worker_cores, worker_memory, worker_num, worker_cores_ov
 
     dynamic_config = get_base_cluster_config(global_conf, spark_cluster_version, params,
                                              spark_discovery.base_discovery_path, client)
+
+    _process_ipv6_preference(dynamic_config, enable_preference_ipv6, enablers)
+
     if ytserver_proxy_path:
         dynamic_config["ytserver_proxy_path"] = ytserver_proxy_path
     dynamic_config['spark_conf']['spark.dedicated_operation_mode'] = dedicated_operation_mode
@@ -568,7 +586,7 @@ def start_spark_cluster(worker_cores, worker_memory, worker_num, worker_cores_ov
     common_config = CommonComponentConfig(
         operation_alias, pool, enable_tmpfs, network_project, tvm_id, tvm_secret, enablers, preemption_mode,
         cluster_log_level, rpc_job_proxy, rpc_job_proxy_thread_pool_size, tcp_proxy_range_start,
-        tcp_proxy_range_size, enable_stderr_table, "spark", spark_discovery, group_id
+        tcp_proxy_range_size, enable_stderr_table, "spark", spark_discovery, group_id, cluster_java_home
     )
     master_config = MasterConfig(master_memory_limit, master_port)
     worker_config = WorkerConfig(

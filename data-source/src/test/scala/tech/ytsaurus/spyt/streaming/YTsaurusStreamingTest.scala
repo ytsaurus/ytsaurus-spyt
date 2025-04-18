@@ -16,6 +16,7 @@ import tech.ytsaurus.spyt.test._
 import tech.ytsaurus.spyt.wrapper.YtWrapper
 
 import java.util.UUID
+import java.util.concurrent.{CountDownLatch, TimeUnit}
 import scala.concurrent.duration.DurationInt
 import scala.concurrent.{Await, Future, Promise}
 import scala.language.postfixOps
@@ -27,7 +28,7 @@ class YTsaurusStreamingTest extends AnyFlatSpec with Matchers with LocalSpark wi
   import tech.ytsaurus.spyt._
 
   it should "work with native key-value storage and FileContext YTsaurus API" in {
-    val batchCount = 3L
+    val batchCount = 3
     val batchSeconds = 5
 
     YtWrapper.createDir(tmpPath)
@@ -39,7 +40,7 @@ class YTsaurusStreamingTest extends AnyFlatSpec with Matchers with LocalSpark wi
       .load()
       .select($"timestamp", floor(rand() * 10).as("num"))
 
-    val stopSignal = Promise[Unit]()
+    val stopSignal = new CountDownLatch(batchCount + 1)
 
     val groupedNumbers = numbers
       .withWatermark("timestamp", "5 seconds")
@@ -50,21 +51,17 @@ class YTsaurusStreamingTest extends AnyFlatSpec with Matchers with LocalSpark wi
       .writeStream
       .option("checkpointLocation", f"yt:/$tmpPath/stateStore")
       .trigger(ProcessingTime(batchSeconds * 1000))
-      .foreachBatch { (frame: DataFrame, batchNum: Long) =>
-        if (batchNum >= batchCount) {
-          if (!stopSignal.isCompleted) stopSignal.success()
-          ()
-        } else {
-          frame.write.mode(SaveMode.Append).yt(s"$tmpPath/result")
-        }
+      .foreachBatch { (frame: DataFrame, _: Long) =>
+        frame.write.mode(SaveMode.Append).yt(s"$tmpPath/result")
+        stopSignal.countDown()
       }
 
     val query = job.start()
-    Await.result(stopSignal.future, 420 seconds)
+    stopSignal.await(420, TimeUnit.SECONDS)
     query.stop()
 
     val resultDF = spark.read.yt(s"$tmpPath/result")
-    val receivedNums = resultDF.select(sum("count").cast("long")).first().getLong(0)
+    val receivedNums = resultDF.select(sum("count").cast("long")).first().getLong(0).toInt
     receivedNums should be >= ((batchCount - 1) * batchSeconds)
   }
 

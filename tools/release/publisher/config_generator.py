@@ -29,7 +29,7 @@ LAUNCH_CONFIG = {
 }
 GLOBAL_CONFIG = {
     'environment': {
-        "JAVA_HOME": "/opt/jdk11",
+        "JAVA_HOME": "/opt/jdk11",  # COMPAT(atokarew): legacy option, JAVA_HOME is set dynamically since SPYT 2.6.0
         "IS_SPARK_CLUSTER": "true",
         "YT_ALLOW_HTTP_REQUESTS_TO_YT_FROM_JOB": "1",
         "ARROW_ENABLE_NULL_CHECK_FOR_GET": "false",
@@ -164,6 +164,7 @@ def prepare_global_config(os_release: bool) -> Dict[str, Any]:
             "2.7": "python2.7"
         }
         global_config['ytserver_proxy_path'] = YTSERVER_PROXY
+        global_config['default_cluster_java_home'] = '/opt/jdk11'
     else:
         python_cluster_paths = {
             "3.7": "/usr/bin/python3.7",

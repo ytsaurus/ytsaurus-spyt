@@ -46,4 +46,6 @@ class SparkAdapterBase322 extends SparkAdapterBase {
                                   message: String, throwable: Throwable): LoggingEvent = {
     new LoggingEvent(fqnOfCategoryClass, logger, timeStamp, level, message, throwable)
   }
+
+  override def defaultModuleOptions(): String = ""
 }

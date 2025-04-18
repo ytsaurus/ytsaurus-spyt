@@ -40,6 +40,8 @@ def launch_gateway(memory="512m",
         if 'spark-yt-spark-patch' in jar][0]
     command += [
         f"-javaagent:{spark_patch}",
+        "-XX:+IgnoreUnrecognizedVMOptions",
+        "--add-opens=java.base/java.lang=ALL-UNNAMED",
         "-cp", ":".join(additional_jars + _submit_classpath(spark_home)),
         "tech.ytsaurus.spyt.submit.PythonGatewayServer"
     ]

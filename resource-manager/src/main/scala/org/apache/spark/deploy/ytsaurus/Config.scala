@@ -168,4 +168,10 @@ object Config {
     .version("2.6.0")
     .booleanConf
     .createWithDefault(true)
+
+  val YTSAURUS_JAVA_HOME = ConfigBuilder("spark.ytsaurus.java.home")
+    .doc("Path to java home on YTsaurus cluster")
+    .version("2.6.0")
+    .stringConf
+    .createWithDefault(s"/opt/jdk${Runtime.version().feature()}")
 }

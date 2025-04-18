@@ -72,6 +72,7 @@ object CommonPlugin extends AutoPlugin {
       } else {
         Nil
       }),
+      Test / javaOptions ++= org.apache.spark.launcher.JavaModuleOptions.defaultModuleOptions().split(' ').toSeq,
       printCompileClasspath := {
         (Compile / dependencyClasspath).value.foreach(a => println(s"${a.metadata.get(configuration.key)} - ${a.data.getAbsolutePath}"))
       },

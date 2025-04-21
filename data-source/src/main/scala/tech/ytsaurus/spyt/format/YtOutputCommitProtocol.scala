@@ -162,8 +162,11 @@ class YtOutputCommitProtocol(jobId: String,
   override def commitTask(taskContext: TaskAttemptContext): FileCommitProtocol.TaskCommitMessage = {
     val conf = taskContext.getConfiguration
     implicit val ytClient: CompoundClient = yt(conf)
-    if (!isDynamicTable(conf)) commitTransaction(conf, Transaction)
-    new FileCommitProtocol.TaskCommitMessage(TaskMessage(writtenTables.get()))
+    val optTaskTransactionId = conf.getYtConf(Transaction)
+    if (!isDynamicTable(conf) && optTaskTransactionId.isDefined) {
+      muteTransaction(optTaskTransactionId.get)
+    }
+    new FileCommitProtocol.TaskCommitMessage(TaskMessage(writtenTables.get(), optTaskTransactionId))
   }
 
   override def deleteWithJob(fs: FileSystem, path: Path, recursive: Boolean): Boolean = {
@@ -207,13 +210,26 @@ class YtOutputCommitProtocol(jobId: String,
   override def newTaskTempFileAbsPath(taskContext: TaskAttemptContext, absoluteDir: String, ext: String): String = {
     rootPath.toStringPath
   }
+
+  override def onTaskCommit(taskCommit: FileCommitProtocol.TaskCommitMessage): Unit = {
+    val taskMessage = taskCommit.obj.asInstanceOf[TaskMessage]
+    if (taskMessage.transactionId.isEmpty) {
+      return
+    }
+    val transactionGuid = taskMessage.transactionId.get
+    val yt = YtClientProvider.cachedClient("committer").yt
+    log.debug(s"Commit write transaction: $transactionGuid")
+    log.debug(s"Send commit transaction request: $transactionGuid")
+    YtWrapper.commitTransaction(transactionGuid)(yt)
+    log.debug(s"Success commit transaction: $transactionGuid")
+  }
 }
 
 object YtOutputCommitProtocol {
   import tech.ytsaurus.spyt.format.conf.SparkYtInternalConfiguration._
 
   // These messages will be sent from successful tasks to a driver
-  case class TaskMessage(tables: Seq[YPathEnriched]) extends Serializable
+  private case class TaskMessage(tables: Seq[YPathEnriched], transactionId: Option[String])
 
   private val log = LoggerFactory.getLogger(getClass)
 
@@ -241,7 +257,8 @@ object YtOutputCommitProtocol {
   def createTransaction(conf: Configuration, confEntry: ConfigEntry[String], parent: Option[String])
                        (implicit yt: CompoundClient): String = {
     val transactionTimeout = conf.ytConf(SparkYtConfiguration.Transaction.Timeout)
-    val transaction = YtWrapper.createTransaction(parent, transactionTimeout)
+    val pingInterval = conf.ytConf(SparkYtConfiguration.Transaction.PingInterval)
+    val transaction = YtWrapper.createTransaction(parent, transactionTimeout, pingPeriod = pingInterval)
     try {
       pingFutures += transaction.getId.toString -> transaction
       log.debug(s"Create write transaction: ${transaction.getId}")
@@ -263,6 +280,12 @@ object YtOutputCommitProtocol {
     log.debug(s"Abort write transaction: $transaction")
     pingFutures.remove(transaction).foreach { transaction =>
       transaction.abort().join()
+    }
+  }
+
+  private def muteTransaction(transactionGuid: String): Unit = {
+    pingFutures.remove(transactionGuid).foreach { transaction =>
+      transaction.stopPing()
     }
   }
 

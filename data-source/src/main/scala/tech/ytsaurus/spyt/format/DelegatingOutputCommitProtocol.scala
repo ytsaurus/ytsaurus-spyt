@@ -44,6 +44,9 @@ class DelegatingOutputCommitProtocol(jobId: String,
 
   override def deleteWithJob(fs: FileSystem, path: Path, recursive: Boolean): Boolean =
     delegate.deleteWithJob(fs, path, recursive)
+
+  override def onTaskCommit(taskCommit: FileCommitProtocol.TaskCommitMessage): Unit =
+    delegate.onTaskCommit(taskCommit)
 }
 
 object DelegatingOutputCommitProtocol {

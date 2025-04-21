@@ -21,9 +21,16 @@ trait LocalSpark extends LocalYtClient {
 
   def numExecutors: Int = 4
 
+  def numFailures: Int = 1
+
   def sparkConf: SparkConf = defaultSparkConf
 
+  def reinstantiateSparkSession: Boolean = false
+
   lazy val spark: SparkSession = {
+    if (reinstantiateSparkSession) {
+      LocalSpark.stop()
+    }
     if (LocalSpark.spark != null) {
       LocalSpark.spark
     } else {
@@ -33,7 +40,7 @@ trait LocalSpark extends LocalYtClient {
   }
 
   protected def sparkSessionBuilder: SparkSession.Builder = SparkSession.builder()
-    .master(s"local[$numExecutors]")
+    .master(s"local[$numExecutors, $numFailures]")
     .config(sparkConf)
 
   override protected def ytRpcClient: YtRpcClient = {

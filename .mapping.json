@@ -210,6 +210,7 @@
   "data-source/src/test/scala/tech/ytsaurus/spyt/format/YtFilesTest.scala":"yt/spark/spark-over-yt/data-source/src/test/scala/tech/ytsaurus/spyt/format/YtFilesTest.scala",
   "data-source/src/test/scala/tech/ytsaurus/spyt/format/YtInferSchemaTest.scala":"yt/spark/spark-over-yt/data-source/src/test/scala/tech/ytsaurus/spyt/format/YtInferSchemaTest.scala",
   "data-source/src/test/scala/tech/ytsaurus/spyt/format/YtInputSplitTest.scala":"yt/spark/spark-over-yt/data-source/src/test/scala/tech/ytsaurus/spyt/format/YtInputSplitTest.scala",
+  "data-source/src/test/scala/tech/ytsaurus/spyt/format/YtOutputCommitProtocolTest.scala":"yt/spark/spark-over-yt/data-source/src/test/scala/tech/ytsaurus/spyt/format/YtOutputCommitProtocolTest.scala",
   "data-source/src/test/scala/tech/ytsaurus/spyt/format/YtOutputWriterTest.scala":"yt/spark/spark-over-yt/data-source/src/test/scala/tech/ytsaurus/spyt/format/YtOutputWriterTest.scala",
   "data-source/src/test/scala/tech/ytsaurus/spyt/format/YtPartitioningTest.scala":"yt/spark/spark-over-yt/data-source/src/test/scala/tech/ytsaurus/spyt/format/YtPartitioningTest.scala",
   "data-source/src/test/scala/tech/ytsaurus/spyt/format/YtReadLockTest.scala":"yt/spark/spark-over-yt/data-source/src/test/scala/tech/ytsaurus/spyt/format/YtReadLockTest.scala",

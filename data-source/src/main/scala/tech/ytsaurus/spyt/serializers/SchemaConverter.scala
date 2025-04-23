@@ -2,8 +2,10 @@ package tech.ytsaurus.spyt.serializers
 
 import org.apache.spark.sql.types._
 import org.apache.spark.sql.v2.YtTable
+import org.apache.spark.unsafe.types.UTF8String
 import tech.ytsaurus.core.common.Decimal.textToBinary
 import tech.ytsaurus.spyt.common.utils.TypeUtils.{isTuple, isVariant}
+import tech.ytsaurus.spyt.common.utils.UuidUtils
 import tech.ytsaurus.spyt.format.conf.YtTableSparkSettings.isNullTypeAllowed
 import tech.ytsaurus.spyt.serialization.IndexedDataType
 import tech.ytsaurus.spyt.serialization.IndexedDataType.StructFieldMeta
@@ -19,6 +21,7 @@ object SchemaConverter {
     val TAG = "tag"
     val OPTIONAL = "optional"
     val ARROW_SUPPORTED = "arrow_supported"
+    val YT_LOGICAL_TYPE = "yt_logical_type"
 
     def getOriginalName(field: StructField): String = {
       if (field.metadata.contains(ORIGINAL_NAME)) field.metadata.getString(ORIGINAL_NAME) else field.name
@@ -233,5 +236,12 @@ object SchemaConverter {
     }
     val binary = textToBinary(decimalValue.toBigDecimal.bigDecimal.toPlainString, precision, scale)
     binary
+  }
+
+  def stringToBinary(ytType: Option[TiType], stringValue: UTF8String): Array[Byte] = {
+    ytType match {
+      case Some(tiType) if tiType.isUuid => UuidUtils.UTF8UuidToBytes(stringValue)
+      case _ => stringValue.getBytes
+    }
   }
 }

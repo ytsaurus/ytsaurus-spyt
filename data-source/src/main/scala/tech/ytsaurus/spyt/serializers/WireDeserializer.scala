@@ -6,7 +6,9 @@ import org.apache.spark.unsafe.types.UTF8String
 import tech.ytsaurus.client.rows.{WireRowDeserializer, WireValueDeserializer}
 import tech.ytsaurus.core.common.Decimal.binaryToText
 import tech.ytsaurus.core.tables.ColumnValueType
+import tech.ytsaurus.spyt.common.utils.UuidUtils
 import tech.ytsaurus.spyt.serialization.YsonDecoder
+import tech.ytsaurus.spyt.serializers.SchemaConverter.MetadataFields
 import tech.ytsaurus.spyt.types.YTsaurusTypes
 
 import java.nio.charset.StandardCharsets
@@ -134,7 +136,7 @@ abstract class WireDeserializer[T](schema: StructType) extends WireRowDeserializ
             case DoubleType => addValue(getString(bytes).toDouble)
             case BooleanType => addValue(getString(bytes).toBoolean)
             case BinaryType => addValue(bytes)
-            case StringType => addValue(UTF8String.fromBytes(bytes))
+            case StringType => addValue(getBytesFromStringType(bytes))
             case d: DecimalType =>
               addValue(Decimal(BigDecimal(binaryToText(bytes, d.precision, d.scale)), d.precision, d.scale))
             case otherType => if (!YTsaurusTypes.instance.wireDeserializeBytes(otherType, bytes, isString = true, addValue)) {
@@ -152,6 +154,16 @@ abstract class WireDeserializer[T](schema: StructType) extends WireRowDeserializ
           }
         case _ => throwValueTypeViolation("string")
       }
+    }
+  }
+
+  private def getBytesFromStringType(bytes: Array[Byte]): UTF8String = {
+    val metadata = schema.fields(_index).metadata
+    val ytType = MetadataFields.YT_LOGICAL_TYPE
+    if (metadata.contains(ytType) && metadata.getString(ytType) == YtLogicalType.Uuid.name) {
+      UuidUtils.bytesToUTF8Uuid(bytes)
+    } else {
+      UTF8String.fromBytes(bytes)
     }
   }
 

@@ -131,6 +131,8 @@ object YtLogicalType {
   case object Timestamp64 extends AtomicYtLogicalType("timestamp64", 0x1012, ColumnValueType.INT64, TiType.timestamp64(), new Timestamp64Type(), arrowSupported = false)
   case object Interval64 extends AtomicYtLogicalType("interval64", 0x1013, ColumnValueType.INT64, TiType.interval64(), new Interval64Type(), arrowSupported = false)
 
+  case object Uuid extends AtomicYtLogicalType("uuid", 0x100f, ColumnValueType.STRING, TiType.uuid(), StringType, arrowSupported = false)
+  case object Json extends AtomicYtLogicalType("json", 0x100e, ColumnValueType.STRING, TiType.json(), StringType, arrowSupported = false)
 
   case class Decimal(precision: Int, scale: Int) extends CompositeYtLogicalType {
     override def sparkType: SparkType = SingleSparkType(DecimalType(precision, scale))
@@ -257,7 +259,7 @@ object YtLogicalType {
 
   private lazy val atomicTypes = Seq(Null, Int64, Uint64, Float, Double, Boolean, String, Binary, Any,
     Int8, Uint8, Int16, Uint16, Int32, Uint32, Utf8, Date, Datetime, Timestamp, Interval, Date32, Datetime64,
-    Timestamp64, Interval64, Void)
+    Timestamp64, Interval64, Json, Uuid, Void)
 
   private lazy val compositeTypes = Seq(Optional, Dict, Array, Struct, Tuple,
     Tagged, Variant, Decimal)
@@ -294,6 +296,8 @@ object YtLogicalType {
     ytType match {
       case o: Optional => addInnerMetadata(metadataBuilder, o.inner)
       case t: Tagged => metadataBuilder.putString(MetadataFields.TAG, t.tag)
+      case YtLogicalType.Uuid | YtLogicalType.Json =>
+        metadataBuilder.putString(MetadataFields.YT_LOGICAL_TYPE, ytType.getNameV3(true))
       case _ =>
     }
   }

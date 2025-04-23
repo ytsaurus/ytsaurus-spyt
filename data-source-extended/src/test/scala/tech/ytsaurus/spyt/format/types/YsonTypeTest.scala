@@ -6,15 +6,12 @@ import org.apache.spark.sql.functions._
 import org.apache.spark.sql.internal.SQLConf.{CODEGEN_FACTORY_MODE, WHOLESTAGE_CODEGEN_ENABLED}
 import org.apache.spark.sql.types._
 import org.apache.spark.sql.spyt.types.YsonType
-import org.apache.spark.sql.{AnalysisException, Encoders, Row}
+import org.apache.spark.sql.{Encoders, Row}
 import org.scalatest.{FlatSpec, Matchers}
 import tech.ytsaurus.spyt._
 import tech.ytsaurus.spyt.format.Test
 import tech.ytsaurus.spyt.test.{LocalSpark, TestUtils, TmpDir}
-import tech.ytsaurus.spyt.wrapper.YtJavaConverters._
-import tech.ytsaurus.spyt.wrapper.YtWrapper
 import tech.ytsaurus.spyt.wrapper.table.OptimizeMode
-import tech.ytsaurus.ysontree.YTreeNode
 
 class YsonTypeTest extends FlatSpec with Matchers with LocalSpark with TmpDir with TestUtils {
 
@@ -24,33 +21,6 @@ class YsonTypeTest extends FlatSpec with Matchers with LocalSpark with TmpDir wi
     spark.read.yt(path)
       .withColumn("value", 'value.cast(BinaryType))
       .as[Array[Byte]].collect()
-  }
-
-  def schema(path: String, fieldName: String): java.util.Map[String, YTreeNode] = {
-    import scala.collection.JavaConverters._
-
-    val schema = YtWrapper.attribute(path, "schema")
-    schema.asList()
-      .asScala
-      .find((t: YTreeNode) => t.asMap().getOrThrow("name").stringValue() == fieldName)
-      .get.asMap()
-  }
-
-  def typeV3(path: String, fieldName: String): String = {
-    schema(path, fieldName)
-      .getOrThrow("type_v3").asMap()
-      .getOrThrow("item").stringValue()
-  }
-
-  def typeV2(path: String, fieldName: String): String = {
-    schema(path, fieldName)
-      .getOrThrow("type_v2").asMap()
-      .getOrThrow("element").stringValue()
-  }
-
-  def typeV1(path: String, fieldName: String): String = {
-    schema(path, fieldName)
-      .getOrThrow("type").stringValue()
   }
 
   "YtFormat" should "read and write yson" in {

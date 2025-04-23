@@ -7,7 +7,7 @@ import tech.ytsaurus.core.tables.{ColumnSortOrder, TableSchema}
 import tech.ytsaurus.spyt.common.utils.TypeUtils.{isTuple, isVariant, isVariantOverTuple}
 import tech.ytsaurus.spyt.format.conf.YtTableSparkSettings.{StringToUtf8, WriteSchemaHint, WriteTypeV3}
 import tech.ytsaurus.spyt.wrapper.config.{OptionsConf, SparkYtHadoopConfiguration}
-import tech.ytsaurus.spyt.serializers.SchemaConverter.{SortOption, Unordered, applyYtLimitToSparkDecimal, wrapSparkAttributes}
+import tech.ytsaurus.spyt.serializers.SchemaConverter.{MetadataFields, SortOption, Unordered, applyYtLimitToSparkDecimal, wrapSparkAttributes}
 import tech.ytsaurus.spyt.serializers.YtLogicalTypeSerializer.{serializeType, serializeTypeV3}
 import tech.ytsaurus.spyt.types.YTsaurusTypes
 import tech.ytsaurus.ysontree.{YTree, YTreeNode}
@@ -37,7 +37,12 @@ class WriteSchemaConverter(
   }
 
   def ytLogicalTypeV3(structField: StructField): YtLogicalType =
-    ytLogicalTypeV3(structField.dataType, hint.getOrElse(structField.name, null))
+    ytLogicalTypeV3(structField.dataType, hint.getOrElse(structField.name, ytLogicalTypeV3FromMetadata(structField)))
+
+  private def ytLogicalTypeV3FromMetadata(structField: StructField): YtLogicalType = {
+    if (structField.metadata.contains(MetadataFields.YT_LOGICAL_TYPE))
+      YtLogicalType.fromName(structField.metadata.getString(MetadataFields.YT_LOGICAL_TYPE)) else null
+  }
 
   def ytLogicalTypeV3(sparkType: DataType, hint: YtLogicalType = null): YtLogicalType = sparkType match {
     case NullType => YtLogicalType.Null
@@ -47,10 +52,13 @@ class WriteSchemaConverter(
     case LongType => YtLogicalType.Int64
     case StringType =>
       if (hint != null) {
-        if (hint != YtLogicalType.Utf8 && hint != YtLogicalType.String) {
-          throw new IllegalArgumentException(s"casting from $sparkType to $hint is not supported")
+        hint match {
+          case YtLogicalType.Utf8 => YtLogicalType.Utf8
+          case YtLogicalType.String => YtLogicalType.String
+          case YtLogicalType.Json => YtLogicalType.Json
+          case YtLogicalType.Uuid => YtLogicalType.Uuid
+          case _ => throw new IllegalArgumentException(s"casting from $sparkType to $hint is not supported")
         }
-        hint
       } else
         if (stringToUtf8) YtLogicalType.Utf8 else YtLogicalType.String
     case FloatType => YtLogicalType.Float

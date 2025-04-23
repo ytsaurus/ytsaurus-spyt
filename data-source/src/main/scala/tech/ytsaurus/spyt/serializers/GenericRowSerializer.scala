@@ -7,6 +7,7 @@ import org.apache.spark.sql.types._
 import org.apache.spark.sql.{DataFrame, Row}
 import tech.ytsaurus.client.rows.{UnversionedRow, UnversionedValue, WireProtocolWriter}
 import tech.ytsaurus.core.tables.ColumnValueType
+import tech.ytsaurus.spyt.common.utils.UuidUtils
 import tech.ytsaurus.spyt.serialization.YsonEncoder
 import tech.ytsaurus.spyt.types.YTsaurusTypes
 
@@ -32,8 +33,13 @@ class GenericRowSerializer(schema: StructType) {
       val skipNulls = sparkField.metadata.contains("skipNulls") && sparkField.metadata.getBoolean("skipNulls")
       sparkField.dataType match {
         case BinaryType => boxValue(i, row.getAs[Array[Byte]](i))
-
-        case StringType => boxValue(i, row.getString(i).getBytes(StandardCharsets.UTF_8))
+        case StringType =>
+          val ytLogicalType = toYtLogicalType(sparkField)
+          val value = ytLogicalType match {
+            case YtLogicalType.Uuid => UuidUtils.uuidToBytes(row.getString(i))
+            case _ => row.getString(i).getBytes(StandardCharsets.UTF_8)
+          }
+          boxValue(i, value)
         case t@(ArrayType(_, _) | StructType(_) | MapType(_, _, _)) =>
           boxValue(i, YsonEncoder.encode(row.get(i), t, skipNulls, typeV3Format = true, Some(toYtLogicalType(sparkField).tiType)))
         case ByteType => boxValue(i, row.getByte(i).toLong)

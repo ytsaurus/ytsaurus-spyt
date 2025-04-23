@@ -3,11 +3,12 @@ package tech.ytsaurus.spyt.test
 import tech.ytsaurus.spyt.wrapper.YtWrapper
 import tech.ytsaurus.spyt.wrapper.table.OptimizeMode
 import tech.ytsaurus.client.CompoundClient
-import tech.ytsaurus.client.request.{ReadSerializationContext, SerializationContext, WriteSerializationContext, WriteTable}
+import tech.ytsaurus.client.request.{SerializationContext, WriteSerializationContext, WriteTable}
 import tech.ytsaurus.client.rows.{UnversionedRow, UnversionedRowSerializer, WireRowDeserializer, WireValueDeserializer}
 import tech.ytsaurus.core.cypress.{CypressNodeType, YPath}
 import tech.ytsaurus.core.rows.YTreeRowSerializer
 import tech.ytsaurus.core.tables.{ColumnValueType, TableSchema}
+import tech.ytsaurus.spyt.wrapper.YtJavaConverters.RichJavaMap
 import tech.ytsaurus.typeinfo.TiType
 import tech.ytsaurus.yson.YsonConsumer
 import tech.ytsaurus.ysontree.{YTreeBuilder, YTreeNode, YTreeNodeUtils, YTreeTextSerializer}
@@ -23,6 +24,26 @@ trait TestUtils {
     .setUniqueKeys(false)
     .addValue("value", ColumnValueType.INT64)
     .build()
+
+  private def ytSchema(path: String, fieldName: String)(implicit yt: CompoundClient): java.util.Map[String, YTreeNode] = {
+    import scala.collection.JavaConverters._
+
+    val schema = YtWrapper.attribute(path, "schema")
+    schema.asList()
+      .asScala
+      .find((t: YTreeNode) => t.asMap().getOrThrow("name").stringValue() == fieldName)
+      .get.asMap()
+  }
+
+  def typeV3(path: String, fieldName: String)(implicit yt: CompoundClient): String = {
+    ytSchema(path, fieldName)
+      .getOrThrow("type_v3").stringValue()
+  }
+
+  def typeV1(path: String, fieldName: String)(implicit yt: CompoundClient): String = {
+    ytSchema(path, fieldName)
+      .getOrThrow("type").stringValue()
+  }
 
   def createEmptyTable(path: String, schema: TableSchema)
                       (implicit yt: CompoundClient): Unit = {

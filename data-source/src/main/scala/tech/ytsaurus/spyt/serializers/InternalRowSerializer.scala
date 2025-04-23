@@ -10,10 +10,9 @@ import org.slf4j.LoggerFactory
 import tech.ytsaurus.client.TableWriter
 import tech.ytsaurus.client.rows.{WireProtocolWriteable, WireRowSerializer}
 import tech.ytsaurus.core.tables.{ColumnValueType, TableSchema}
-import tech.ytsaurus.spyt.format.conf.YtTableSparkSettings.{WriteSchemaHint, WriteTypeV3}
 import tech.ytsaurus.spyt.serialization.YsonEncoder
 import tech.ytsaurus.spyt.serializers.InternalRowSerializer._
-import tech.ytsaurus.spyt.serializers.SchemaConverter.{Unordered, decimalToBinary}
+import tech.ytsaurus.spyt.serializers.SchemaConverter.{Unordered, decimalToBinary, stringToBinary}
 import tech.ytsaurus.spyt.types.YTsaurusTypes
 import tech.ytsaurus.spyt.wrapper.LogLazy
 import tech.ytsaurus.typeinfo.TiType
@@ -73,7 +72,8 @@ class InternalRowSerializer(schema: StructType, writeSchemaConverter: WriteSchem
           case BinaryType =>
             writeBytes(writeable, idMapping, aggregate, i, row.getBinary(i), getColumnType)
           case StringType =>
-            writeBytes(writeable, idMapping, aggregate, i, row.getUTF8String(i).getBytes, getColumnType)
+            val binary = stringToBinary(ytFieldHint, row.getUTF8String(i))
+            writeBytes(writeable, idMapping, aggregate, i, binary, getColumnType)
           case d: DecimalType =>
             val value = row.getDecimal(i, d.precision, d.scale)
             if (writeSchemaConverter.typeV3Format) {

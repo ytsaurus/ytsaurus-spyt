@@ -86,6 +86,7 @@ def test_write_schema_hint(yt_client: YtClient, tmp_dir, local_session: SparkSes
         "int8", "uint8",
         "int16", "uint16", "int32", "uint32", "utf8", "date", "datetime",
         "timestamp", "interval", "date32", "datetime64", "timestamp64", "interval64",
+        "json", "uuid"
     ]
 
     spark_rows = [
@@ -98,6 +99,7 @@ def test_write_schema_hint(yt_client: YtClient, tmp_dir, local_session: SparkSes
             timestamp=datetime(1970, 4, 11, 0, 0, 0, tzinfo=timezone.utc), interval=365,
             date32=Date32(MIN_DATE32), datetime64=Datetime64(MIN_DATETIME64),
             timestamp64=Timestamp64(MIN_TIMESTAMP64), interval64=Interval64(MIN_INTERVAL64),
+            json="""{"id": 1, "name": "Ann"}""", uuid="4b336d46-6576-4c7a-5436-4f6847644642"
         ),
         Row(
             int64=987654321098765, uint64=987654321098765, float=1.618, double=1.41421,
@@ -108,6 +110,7 @@ def test_write_schema_hint(yt_client: YtClient, tmp_dir, local_session: SparkSes
             timestamp=datetime(2019, 2, 9, 13, 41, 11, tzinfo=timezone.utc), interval=183,
             date32=Date32(MAX_DATE32), datetime64=Datetime64(MAX_DATETIME64),
             timestamp64=Timestamp64(MAX_TIMESTAMP64), interval64=Interval64(MAX_INTERVAL64),
+            json="""{"id": 2, "name": "Bob"}""", uuid="4b336d01-6576-4c7a-5436-4f6847644642"
         )
     ]
 
@@ -134,6 +137,8 @@ def test_write_schema_hint(yt_client: YtClient, tmp_dir, local_session: SparkSes
             "datetime64": MIN_DATETIME64,
             "timestamp64": MIN_TIMESTAMP64,
             "interval64": MIN_INTERVAL64,
+            "json": """{"id": 1, "name": "Ann"}""",
+            "uuid":'Fm3KvezLT6OhGdFB',
         },
         {
             "int64": 987654321098765,
@@ -157,6 +162,8 @@ def test_write_schema_hint(yt_client: YtClient, tmp_dir, local_session: SparkSes
             "datetime64": MAX_DATETIME64,
             "timestamp64": MAX_TIMESTAMP64,
             "interval64": MAX_INTERVAL64,
+            "json": """{"id": 2, "name": "Bob"}""",
+            "uuid":'\x01m3KvezLT6OhGdFB',
         }
     ]
 
@@ -187,7 +194,9 @@ def test_write_schema_hint(yt_client: YtClient, tmp_dir, local_session: SparkSes
                                               {'name': 'date32', 'type_v3': 'date32'},
                                               {'name': 'datetime64', 'type_v3': 'datetime64'},
                                               {'name': 'timestamp64', 'type_v3': 'timestamp64'},
-                                              {'name': 'interval64', 'type_v3': 'interval64'}]
+                                              {'name': 'interval64', 'type_v3': 'interval64'},
+                                              {'name': 'json', 'type_v3': 'json'},
+                                              {'name': 'uuid', 'type_v3': 'uuid'}]
 
     result: RowsIterator = yt_client.read_table(table_path)
     assert_items_equal(result, yt_rows)

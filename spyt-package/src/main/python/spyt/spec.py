@@ -287,6 +287,7 @@ def build_master_spec(builder: VanillaSpecBuilder, common_params: CommonSpecPara
     master_task_spec["environment"] = master_environment
     builder.begin_task("master") \
         .job_count(1) \
+        .port_count(2) \
         .command(master_command) \
         .memory_limit(parse_memory(config.master_memory_limit)) \
         .cpu_limit(2) \
@@ -389,6 +390,7 @@ def build_worker_spec(builder: VanillaSpecBuilder, job_type: str, ytserver_proxy
     spec = driver_task_spec if "drivers" == job_type else worker_task_spec
     builder.begin_task(job_type) \
         .job_count(config.res.num) \
+        .port_count(2) \
         .command(worker_command) \
         .memory_limit(worker_ram_memory + parse_memory(config.res.memory_overhead)) \
         .cpu_limit(config.res.cores + worker_cores_overhead) \

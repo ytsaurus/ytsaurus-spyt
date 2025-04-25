@@ -10,37 +10,37 @@ import java.util.concurrent.TimeUnit
 object Config {
   val GLOBAL_CONFIG_PATH = ConfigBuilder("spark.ytsaurus.config.global.path")
     .doc("Path to global Spark configuration for the whole YTsaurus cluster")
-    .version("3.2.2")
+    .version("1.76.0")
     .stringConf
     .createWithDefault("//home/spark/conf/global")
 
   val RELEASE_CONFIG_PATH = ConfigBuilder("spark.ytsaurus.config.releases.path")
     .doc("Root path for SPYT releases configuration")
-    .version("3.2.2")
+    .version("1.76.0")
     .stringConf
     .createWithDefault(s"//home/spark/conf/${releaseTypeDirectory(BuildInfo.version)}")
 
   val SPARK_DISTRIBUTIVES_PATH = ConfigBuilder("spark.ytsaurus.distributives.path")
     .doc("Root path for Spark distributives")
-    .version("3.2.2")
+    .version("2.0.0")
     .stringConf
     .createWithDefault("//home/spark/distrib")
 
   val LAUNCH_CONF_FILE = ConfigBuilder("spark.ytsaurus.config.launch.file")
     .doc("SPYT release configuration file name")
-    .version("3.2.2")
+    .version("1.76.0")
     .stringConf
     .createWithDefault("spark-launch-conf")
 
   val SPYT_VERSION = ConfigBuilder("spark.ytsaurus.spyt.version")
     .doc("SPYT version to use on cluster")
-    .version("3.2.2")
+    .version("1.76.0")
     .stringConf
     .createOptional
 
   val YTSAURUS_MAX_DRIVER_FAILURES = ConfigBuilder("spark.ytsaurus.driver.maxFailures")
     .doc("Maximum driver task failures before operation failure")
-    .version("3.2.2")
+    .version("1.76.0")
     .intConf
     .createWithDefault(5)
 
@@ -48,31 +48,31 @@ object Config {
   // MAX_EXECUTOR_FAILURES
   val YTSAURUS_MAX_EXECUTOR_FAILURES = ConfigBuilder("spark.ytsaurus.executor.maxFailures")
     .doc("Maximum executor task failures before operation failure")
-    .version("3.2.2")
+    .version("1.76.0")
     .intConf
     .createWithDefault(10)
 
   val EXECUTOR_OPERATION_SHUTDOWN_DELAY = ConfigBuilder("spark.ytsaurus.executor.operation.shutdown.delay")
     .doc("Time for executors to shutdown themselves before terminating the executor operation, milliseconds")
-    .version("3.2.2")
+    .version("1.76.0")
     .longConf
     .createWithDefault(10000)
 
   val YTSAURUS_POOL = ConfigBuilder("spark.ytsaurus.pool")
     .doc("YTsaurus scheduler pool to execute this job")
-    .version("3.2.2")
+    .version("1.78.0")
     .stringConf
     .createOptional
 
   val YTSAURUS_IS_PYTHON = ConfigBuilder("spark.ytsaurus.isPython")
     .internal()
-    .version("3.2.2")
+    .version("1.78.0")
     .booleanConf
     .createWithDefault(false)
 
   val YTSAURUS_IS_PYTHON_BINARY = ConfigBuilder("spark.ytsaurus.isPythonBinary")
     .internal()
-    .version("3.2.2")
+    .version("2.4.0")
     .booleanConf
     .createWithDefault(false)
 
@@ -80,30 +80,33 @@ object Config {
     .doc("An entry point for python binary for cluster mode if it's not main method. It is taken from " +
       "Y_PYTHON_ENTRY_POINT environment variable if not explicitly specified as spark-submit --conf parameter. " +
       "For client mode Y_PYTHON_ENTRY_POINT environment variable should be used.")
-    .version("3.2.2")
+    .version("2.4.0")
     .stringConf
     .createOptional
 
   val YTSAURUS_PYTHON_EXECUTABLE = ConfigBuilder("spark.ytsaurus.python.executable")
     .internal()
-    .version("3.2.2")
+    .version("1.78.0")
     .stringConf
     .createOptional
 
   val TCP_PROXY_ENABLED = ConfigBuilder("spark.ytsaurus.tcp.proxy.enabled")
+    .version("2.1.0")
     .booleanConf
     .createWithDefault(false)
 
   val TCP_PROXY_RANGE_START = ConfigBuilder("spark.ytsaurus.tcp.proxy.range.start")
+    .version("2.1.0")
     .intConf
     .createWithDefault(30000)
 
   val TCP_PROXY_RANGE_SIZE = ConfigBuilder("spark.ytsaurus.tcp.proxy.range.size")
+    .version("2.1.0")
     .intConf
     .createWithDefault(1000)
 
   val YTSAURUS_CUDA_VERSION = ConfigBuilder("spark.ytsaurus.cuda.version")
-    .version("3.2.2")
+    .version("2.1.0")
     .stringConf
     .createOptional
 
@@ -112,29 +115,29 @@ object Config {
   val SPARK_PRIMARY_RESOURCE = "spark.ytsaurus.primary.resource"
 
   val YTSAURUS_REDIRECT_STDOUT_TO_STDERR = ConfigBuilder("spark.ytsaurus.redirect.stdout.to.stderr")
-    .version("3.2.2")
+    .version("2.1.0")
     .booleanConf
     .createWithDefault(false)
 
   val YTSAURUS_PORTO_LAYER_PATHS = ConfigBuilder("spark.ytsaurus.porto.layer.paths")
-    .version("3.2.2")
+    .version("2.1.0")
     .stringConf
     .createOptional
 
   val YTSAURUS_EXTRA_PORTO_LAYER_PATHS = ConfigBuilder("spark.ytsaurus.porto.extra.layer.paths")
-    .version("3.2.2")
+    .version("2.1.0")
     .stringConf
     .createOptional
 
   val YTSAURUS_DRIVER_OPERATION_DUMP_PATH = ConfigBuilder("spark.ytsaurus.driver.operation.dump.path")
     .doc("File where driver operation id will be written after successful start")
-    .version("3.2.2")
+    .version("2.2.0")
     .stringConf
     .createOptional
 
   val YTSAURUS_REMOTE_TEMP_FILES_DIRECTORY = ConfigBuilder("spark.ytsaurus.remote.temp.files.directory")
     .doc("Path to temporary directory on Cypress for uploading local files and file cache")
-    .version("3.2.2")
+    .version("2.4.0")
     .stringConf
     .createWithDefault("//tmp/yt_wrapper/file_storage")
 
@@ -144,7 +147,7 @@ object Config {
 
   val YTSAURUS_DRIVER_WATCH = ConfigBuilder("spark.ytsaurus.driver.watch")
     .doc("Enable logging for driver operation")
-    .version("3.2.2") // TODO replace all Spark versions with SPYT versions
+    .version("2.4.2")
     .booleanConf
     .createWithDefault(true)
 

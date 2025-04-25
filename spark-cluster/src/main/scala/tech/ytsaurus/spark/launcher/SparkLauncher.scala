@@ -137,6 +137,11 @@ trait SparkLauncher {
     val reverseProxyUrlProp = reverseProxyUrl.map(url => f"-Dspark.ui.reverseProxyUrl=$url")
     val positionalArgs = ArrayBuffer[String]()
     for (port <- sys.env.get("YT_PORT_0")) {
+      // https://github.com/apache/spark/blob/676cac0/core/src/main/scala/org/apache/spark/deploy/master/MasterArguments.scala#L65
+      positionalArgs += "--port"
+      positionalArgs += port
+    }
+    for (port <- sys.env.get("YT_PORT_1")) {
       // https://github.com/apache/spark/blob/676cac0/core/src/main/scala/org/apache/spark/deploy/master/MasterArguments.scala#L69
       positionalArgs += "--webui-port"
       positionalArgs += port
@@ -160,6 +165,11 @@ trait SparkLauncher {
     val config = SparkDaemonConfig.fromProperties("worker", "512M")
     val positionalArgs = ArrayBuffer[String]()
     for (port <- sys.env.get("YT_PORT_0")) {
+      // https://github.com/apache/spark/blob/676cac0/core/src/main/scala/org/apache/spark/deploy/worker/WorkerArguments.scala#L78
+      positionalArgs += "--port"
+      positionalArgs += port
+    }
+    for (port <- sys.env.get("YT_PORT_1")) {
       // https://github.com/apache/spark/blob/676cac0/core/src/main/scala/org/apache/spark/deploy/worker/WorkerArguments.scala#L94
       positionalArgs += "--webui-port"
       positionalArgs += port

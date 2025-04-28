@@ -149,7 +149,7 @@ trait SparkLauncher {
     val thread = runSparkThread(
       masterClass,
       config.memory,
-      positionalArgs,
+      positionalArgs = positionalArgs,
       namedArgs = Map("host" -> ytHostnameOrIpAddress),
       systemProperties = commonJavaOpts ++ reverseProxyUrlProp.toSeq
     )

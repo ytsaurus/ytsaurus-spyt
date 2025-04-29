@@ -1,5 +1,6 @@
 package tech.ytsaurus.spyt.streaming
 
+import org.apache.spark.SparkConf
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.connector.read.streaming
@@ -13,7 +14,6 @@ import tech.ytsaurus.spyt.wrapper.YtWrapper
 import tech.ytsaurus.spyt.wrapper.client.YtClientConfigurationConverter.ytClientConfiguration
 import tech.ytsaurus.spyt.wrapper.client.YtClientProvider
 
-import java.util.UUID
 import scala.collection.SortedMap
 import scala.util.{Failure, Success}
 
@@ -24,8 +24,7 @@ class YtStreamingSource(sqlContext: SQLContext,
                         val schema: StructType,
                         parameters: Map[String, String]) extends Source with Logging with SupportsAdmissionControl {
 
-  private val id: String = s"YtStreamingSource-${UUID.randomUUID()}"
-  private implicit val yt: CompoundClient = YtClientProvider.ytClient(ytClientConfiguration(sqlContext.sparkSession), id)
+  private implicit val yt: CompoundClient = YtClientProvider.ytClient(ytClientConfiguration(sqlContext.sparkSession))
   private val cluster = YtWrapper.clusterName()
   private var latestOffset: Option[YtQueueOffset] = None
   private val includeServiceColumns = parameters.get("include_service_columns").exists(_.toBoolean)
@@ -103,6 +102,5 @@ class YtStreamingSource(sqlContext: SQLContext,
 
   override def stop(): Unit = {
     logDebug("Close YtStreamingSource")
-    YtClientProvider.close(id)
   }
 }

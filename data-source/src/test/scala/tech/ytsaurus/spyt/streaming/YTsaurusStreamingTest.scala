@@ -273,8 +273,7 @@ class YTsaurusStreamingTest extends AnyFlatSpec with Matchers with LocalSpark wi
     val paths: StreamingObjectsPaths = prepareStreamingObjects(tmpPath = tmpPath, includeServiceColumns)
     doStreamLaunches(paths, launchesParams=Seq((0, 3, true)), maxRowsPerPartition, includeServiceColumns)
 
-    spyt.yt.removeNode(new RemoveNode(YPath.simple(paths.checkpointLocation.stripPrefix("yt:/")))
-      .toBuilder.setRecursive(true).build())
+    YtWrapper.removeDirIfExists(paths.checkpointLocation.stripPrefix("yt:/"), recursive = true)
 
     doStreamLaunches(paths, launchesParams=Seq((30, 3, true)), maxRowsPerPartition, includeServiceColumns)
 

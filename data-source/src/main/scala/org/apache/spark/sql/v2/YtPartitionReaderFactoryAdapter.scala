@@ -8,7 +8,7 @@ import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.UnsafeProjection
 import org.apache.spark.sql.connector.read.{InputPartition, PartitionReader}
 import org.apache.spark.sql.execution.datasources.PartitionedFile
-import org.apache.spark.sql.execution.datasources.v2.{FilePartitionReaderFactory, PartitionReaderWithPartitionValues}
+import org.apache.spark.sql.execution.datasources.v2.PartitionReaderWithPartitionValues
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.types._
 import org.apache.spark.sql.v2.YtUtils.bytesReadReporter
@@ -29,7 +29,6 @@ import tech.ytsaurus.spyt.serializers.InternalRowDeserializer
 import tech.ytsaurus.spyt.wrapper.YtWrapper
 import tech.ytsaurus.spyt.wrapper.client.YtClientProvider
 
-import java.util.UUID
 
 case class YtPartitionReaderFactoryAdapter(sqlConf: SQLConf,
                                            broadcastedConf: Broadcast[SerializableConfiguration],
@@ -41,8 +40,6 @@ case class YtPartitionReaderFactoryAdapter(sqlConf: SQLConf,
                                            filterPushdownConf: FilterPushdownConfig,
                                            ytLoggerConfig: Option[YtDynTableLoggerConfig])
   extends PartitionReaderFactoryAdapter with Logging {
-
-  private val idPrefix: String = s"YtPartitionReaderFactory-${UUID.randomUUID()}"
 
   private val resultSchema = StructType(readDataSchema.fields)
   private val ytClientConf = ytClientConfiguration(sqlConf)
@@ -59,7 +56,7 @@ case class YtPartitionReaderFactoryAdapter(sqlConf: SQLConf,
 
   override def buildReader(file: PartitionedFile): PartitionReader[InternalRow] = {
     buildLockedSplitReader(file) { case (split, path) =>
-      implicit val yt: CompoundClient = YtClientProvider.ytClientWithProxy(ytClientConf, path.ypath.cluster, idPrefix)
+      implicit val yt: CompoundClient = YtClientProvider.ytClientWithProxy(ytClientConf, path.ypath.cluster)
       val reader = if (readBatch) {
         createVectorizedReader(split, returnBatch = false, path)
       } else {
@@ -83,7 +80,7 @@ case class YtPartitionReaderFactoryAdapter(sqlConf: SQLConf,
 
   override def buildColumnarReader(file: PartitionedFile): PartitionReader[ColumnarBatch] = {
     buildLockedSplitReader(file) { case (split, path) =>
-      implicit val yt: CompoundClient = YtClientProvider.ytClientWithProxy(ytClientConf, path.ypath.cluster, idPrefix)
+      implicit val yt: CompoundClient = YtClientProvider.ytClientWithProxy(ytClientConf, path.ypath.cluster)
       val vectorizedReader = createVectorizedReader(split, returnBatch = true, path)
       new PartitionReader[ColumnarBatch] {
         override def next(): Boolean = vectorizedReader.nextKeyValue()

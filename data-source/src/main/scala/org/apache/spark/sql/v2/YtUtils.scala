@@ -7,17 +7,17 @@ import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.types.{MetadataBuilder, StructField, StructType}
 import org.apache.spark.util.SerializableConfiguration
 import org.slf4j.LoggerFactory
-import tech.ytsaurus.client.CompoundClient
 import tech.ytsaurus.core.cypress.YPath
-import tech.ytsaurus.spyt.wrapper.client.YtClientConfigurationConverter.ytClientConfiguration
 import tech.ytsaurus.spyt.fs.path.YPathEnriched
 import tech.ytsaurus.spyt.fs.{YtFileSystemBase, YtHadoopPath}
 import tech.ytsaurus.spyt.serializers.SchemaConverter.MetadataFields
 import tech.ytsaurus.spyt.serializers.{SchemaConverter, SchemaConverterConfig}
 import tech.ytsaurus.spyt.wrapper.YtWrapper
+import tech.ytsaurus.spyt.wrapper.client.YtClientConfigurationConverter.ytClientConfiguration
 import tech.ytsaurus.spyt.wrapper.client.YtClientProvider
 
 import java.lang.reflect.InvocationTargetException
+
 
 object YtUtils {
   object Options {
@@ -185,8 +185,12 @@ object YtUtils {
     val fsScheme = FileSystem.getDefaultUri(conf.value.value).getScheme
     fsScheme match {
       case scheme if scheme == "yt" || scheme == "ytTable" =>
-        bytesRead =>
-          FileSystem.get(conf.value.value).asInstanceOf[YtFileSystemBase].internalStatistics.incrementBytesRead(bytesRead)
+        bytesRead => {
+          val ytFS: YtFileSystemBase = FileSystem.get(conf.value.value).asInstanceOf[YtFileSystemBase]
+          ytFS.internalStatistics.incrementBytesRead(bytesRead)
+          ytFS.close()
+        }
+
       case scheme =>
         log.warn(s"Unsupported uri: $scheme")
         _ => () //noop

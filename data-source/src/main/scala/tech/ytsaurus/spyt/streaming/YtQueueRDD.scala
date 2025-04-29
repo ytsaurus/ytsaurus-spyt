@@ -11,8 +11,6 @@ import tech.ytsaurus.spyt.wrapper.YtWrapper
 import tech.ytsaurus.spyt.wrapper.client.YtClientConfigurationConverter.ytClientConfiguration
 import tech.ytsaurus.spyt.wrapper.client.YtClientProvider
 
-import java.util.UUID
-
 
 class YtQueueRDD(sc: SparkContext,
                  schema: StructType,
@@ -20,18 +18,15 @@ class YtQueueRDD(sc: SparkContext,
                  queuePath: String,
                  ranges: Seq[YtQueueRange],
                  val includeServiceColumns: Boolean = false) extends RDD[InternalRow](sc, Nil) {
-  private val classId: String = s"YtQueueRDD-${UUID.randomUUID()}"
   private val configuration = ytClientConfiguration(sc.hadoopConfiguration)
 
   override def compute(split: Partition, context: TaskContext): Iterator[InternalRow] = {
-    val yt = YtClientProvider.ytClient(configuration, classId)
-
     val partition = split.asInstanceOf[YtQueueRange]
     val size = partition.upperIndex - partition.lowerIndex
     if (size > 0) {
+      val yt = YtClientProvider.ytClient(configuration)
       val rowsets: Seq[QueueRowset] =
         YtWrapper.pullConsumerStrict(consumerPath, queuePath, partition.tabletIndex, partition.lowerIndex, size)(yt)
-
       val deserializer = new UnversionedRowsetDeserializer(schema)
       val proj = UnsafeProjection.create(schema)
 
@@ -47,6 +42,7 @@ class YtQueueRDD(sc: SparkContext,
     } else {
       Seq.empty.iterator
     }
+
   }
 
   override protected def getPartitions: Array[Partition] = ranges.sortBy(_.tabletIndex).toArray

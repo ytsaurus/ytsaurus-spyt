@@ -5,6 +5,7 @@ import org.apache.spark.metrics.yt.YtMetricsRegister.ytMetricsSource._
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.execution.datasources.OutputWriter
 import org.apache.spark.sql.types.StructType
+import org.slf4j.LoggerFactory
 import tech.ytsaurus.client.CompoundClient
 import tech.ytsaurus.client.request.ModifyRowsRequest
 import tech.ytsaurus.core.tables.TableSchema
@@ -13,7 +14,6 @@ import tech.ytsaurus.spyt.fs.path.YPathEnriched
 import tech.ytsaurus.spyt.serializers.SchemaConverter.Unordered
 import tech.ytsaurus.spyt.serializers.{DynTableRowConverter, WriteSchemaConverter}
 import tech.ytsaurus.spyt.wrapper.YtWrapper
-import org.slf4j.LoggerFactory
 
 import scala.collection.JavaConverters._
 
@@ -26,12 +26,10 @@ class YtDynamicTableWriter(richPath: YPathEnriched,
   import YtDynamicTableWriter._
 
   override val path: String = richPath.toStringPath
-
   private val writeSchemaConverter = WriteSchemaConverter(options)
   private val typeV3: Boolean = writeSchemaConverter.typeV3Format
   private val tableSchema: TableSchema = writeSchemaConverter.tableSchema(schema, Unordered)
   private val rowConverter: DynTableRowConverter = new DynTableRowConverter(schema, tableSchema, typeV3)
-
   private var count = 0
   private var modifyRowsRequestBuilder: ModifyRowsRequest.Builder = _
 
@@ -40,7 +38,6 @@ class YtDynamicTableWriter(richPath: YPathEnriched,
   def write(row: Seq[Any]): Unit = {
     val preparedRow = rowConverter.convertRow(row)
     modifyRowsRequestBuilder.addInsert(preparedRow.asJava)
-
     count += 1
     if (count == wConfig.dynBatchSize) {
       commitBatch()
@@ -64,11 +61,7 @@ class YtDynamicTableWriter(richPath: YPathEnriched,
   private def commitBatch(): Unit = {
     log.debug(s"Batch size: ${wConfig.dynBatchSize}, actual batch size: $count")
     YtMetricsRegister.time(writeBatchTime, writeBatchTimeSum) {
-      val request: ModifyRowsRequest = modifyRowsRequestBuilder.build()
-      val transaction = YtWrapper.createTransaction(parent = None, timeout = wConfig.timeout, sticky = true)
-
-      transaction.modifyRows(request).join()
-      transaction.commit().join()
+      YtWrapper.insertRows(modifyRowsRequestBuilder.build(), None)
     }
     initBatch()
   }

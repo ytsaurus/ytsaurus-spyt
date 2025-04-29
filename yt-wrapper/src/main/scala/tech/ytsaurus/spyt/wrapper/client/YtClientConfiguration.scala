@@ -1,18 +1,17 @@
 package tech.ytsaurus.spyt.wrapper.client
 
 import org.slf4j.LoggerFactory
-
-import java.time.{Duration => JDuration}
+import tech.ytsaurus.client.rpc.YTsaurusClientAuth
 import tech.ytsaurus.spyt.wrapper.Utils
 import tech.ytsaurus.spyt.wrapper.YtJavaConverters.toScalaDuration
-import tech.ytsaurus.client.rpc.YTsaurusClientAuth
 
 import java.net.URL
+import java.time.{Duration => JDuration}
 import scala.concurrent.duration._
 import scala.language.postfixOps
 import scala.util.{Failure, Success, Try}
 
-@SerialVersionUID(6764302982752098915L)
+@SerialVersionUID(-8206532076881043994L)
 case class YtClientConfiguration(proxy: String,
                                  user: String,
                                  token: String,
@@ -24,12 +23,16 @@ case class YtClientConfiguration(proxy: String,
                                  proxyNetworkName: Option[String],
                                  useCommonProxies: Boolean = false) extends Serializable {
 
-  private def proxyUrl: Try[URL] = Try(new URL(proxy)).orElse {
-    val normalizedProxy = if (proxy.contains(".") || proxy.contains(":")) {
-      proxy
-    } else {
-      s"$proxy.yt.yandex.net"
-    }
+  private lazy val initialUrlAttempt: Try[URL] = Try(new URL(proxy))
+
+  def normalizedProxy: String = initialUrlAttempt match {
+    case Success(_) => proxy
+    case Failure(_) =>
+      if (proxy.contains(".") || proxy.contains(":")) proxy
+      else s"$proxy.yt.yandex.net"
+  }
+
+  private def proxyUrl: Try[URL] = initialUrlAttempt.orElse {
     Try(new URL(s"http://$normalizedProxy"))
   }
 
@@ -66,30 +69,29 @@ object YtClientConfiguration {
 
   def apply(getByName: String => Option[String]): YtClientConfiguration = {
     val byopEnabled = getByName("byop.enabled").orElse(sys.env.get("SPARK_YT_BYOP_ENABLED")).exists(_.toBoolean)
-
-    val token = getByName("token").orElse(sys.env.get("YT_SECURE_VAULT_YT_TOKEN")).getOrElse(DefaultRpcCredentials.token)
-    YtClientConfiguration(
-      getByName("proxy").orElse(sys.env.get("YT_PROXY")).getOrElse(
-        throw new IllegalArgumentException("Proxy must be specified")
-      ),
-      getByName("user").orElse(sys.env.get("YT_SECURE_VAULT_YT_USER")).getOrElse(DefaultRpcCredentials.tokenUser(token)),
-      token,
-      getByName("timeout").map(Utils.parseDuration).getOrElse(60 seconds),
-      getByName("proxyRole"),
-      ByopConfiguration(
-        enabled = byopEnabled,
-        ByopRemoteConfiguration(
-          enabled = getByName("byop.remote.enabled").map(_.toBoolean).getOrElse(byopEnabled),
-          emptyWorkersListStrategy = parseEmptyWorkersListStrategy(getByName)
-        )
-      ),
-      getByName("masterWrapper.url"),
-      getByName("extendedFileTimeout").forall(_.toBoolean),
-      sys.env.get("YT_JOB_ID") match {
-        case Some(_) => None
-        case None => getByName("proxyNetworkName")
-      }
+    val token = getByName("token").orElse(sys.env.get("YT_SECURE_VAULT_YT_TOKEN"))
+      .getOrElse(DefaultRpcCredentials.token)
+    val proxy = getByName("proxy").orElse(sys.env.get("YT_PROXY")).getOrElse(
+      throw new IllegalArgumentException("Proxy must be specified")
     )
+    val user = getByName("user").orElse(sys.env.get("YT_SECURE_VAULT_YT_USER"))
+      .getOrElse(DefaultRpcCredentials.tokenUser(token))
+    val timeout = getByName("timeout").map(Utils.parseDuration).getOrElse(60 seconds)
+    val byopConf = ByopConfiguration(
+      enabled = byopEnabled,
+      ByopRemoteConfiguration(
+        enabled = getByName("byop.remote.enabled").map(_.toBoolean).getOrElse(byopEnabled),
+        emptyWorkersListStrategy = parseEmptyWorkersListStrategy(getByName)
+      )
+    )
+    val extendedFileTimeout = getByName("extendedFileTimeout").forall(_.toBoolean)
+    val proxyNetworkName = sys.env.get("YT_JOB_ID") match {
+      case Some(_) => None
+      case None => getByName("proxyNetworkName")
+    }
+
+    YtClientConfiguration(proxy, user, token, timeout, getByName("proxyRole"), byopConf, getByName("masterWrapper.url"),
+      extendedFileTimeout, proxyNetworkName)
   }
 
   def optionalApply(getByName: String => Option[String]): Option[YtClientConfiguration] = {

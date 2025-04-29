@@ -38,11 +38,7 @@ class YtFileOutputStream(writer: FileWriter, yt: Option[YtRpcClient]) extends Ou
         writer.readyEvent().join()
         writer.close().join()
       } finally {
-        try {
-          yt.foreach(_.close())
-        } finally {
-          closed = true
-        }
+        closed = true
       }
     }
   }

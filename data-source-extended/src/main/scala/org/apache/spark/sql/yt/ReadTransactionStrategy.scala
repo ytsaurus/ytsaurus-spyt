@@ -14,7 +14,7 @@ import tech.ytsaurus.spyt.format.GlobalTransactionUtils
 import tech.ytsaurus.spyt.fs.path.YPathEnriched
 import tech.ytsaurus.spyt.wrapper.Utils.tryWithResources
 import tech.ytsaurus.spyt.wrapper.YtWrapper
-import tech.ytsaurus.spyt.wrapper.client.YtClientConfigurationConverter
+import tech.ytsaurus.spyt.wrapper.client.{YtClientConfigurationConverter, YtClientProvider}
 
 import scala.collection.mutable
 import scala.concurrent.duration.DurationInt
@@ -38,15 +38,13 @@ class ReadTransactionStrategy(sparkSession: SparkSession) extends Rule[LogicalPl
         {
           sparkSession.sparkContext.addSparkListener(this)
         }
-        private val ytRpcClient = YtWrapper.createRpcClient(proxy, configuration.replaceProxy(Some(proxy)))
+        private val ytRpcClient = YtClientProvider.ytRpcClient(configuration.replaceProxy(Some(proxy)))
         private implicit val ytClient: CompoundClient = ytRpcClient.yt
         private val transaction: ApiServiceTransaction = YtWrapper.createTransaction(None, 2.minutes)
 
         override def onOtherEvent(event: SparkListenerEvent): Unit = event match {
           case sqlExecutionEnd: SparkListenerSQLExecutionEnd if sqlExecutionEnd.executionId == executionId =>
-            tryWithResources(ytRpcClient) { _ =>
-              tryWithResources(transaction) { _ => sparkSession.sparkContext.removeSparkListener(this) }
-            }
+            tryWithResources(transaction) { _ => sparkSession.sparkContext.removeSparkListener(this) }
           case _ =>
         }
 

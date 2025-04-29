@@ -11,7 +11,6 @@ import tech.ytsaurus.spyt.wrapper.model.WorkerLogSchema.getMetaPath
 import tech.ytsaurus.client.CompoundClient
 import tech.ytsaurus.spyt.wrapper.client.YtClientProvider
 
-import java.util.UUID
 import javax.servlet.http.HttpServletRequest
 import scala.xml.{Node, Unparsed}
 
@@ -19,9 +18,8 @@ class YtLogPage(conf: SparkConf) extends WebUIPage("workerLogPage") with Logging
   private val supportedLogTypes = Set("stderr", "stdout")
   private val defaultRows = 200
 
-  private val id: String = UUID.randomUUID().toString
   protected var _ytConf: YtClientConfiguration = YtClientConfigurationConverter.ytClientConfiguration(conf)
-  protected lazy val yt: CompoundClient = YtClientProvider.ytClient(_ytConf, id)
+  protected lazy val yt: CompoundClient = YtClientProvider.ytClient(_ytConf)
 
   def renderLog(request: HttpServletRequest): String = {
     val (app, exec, logType, _, _, _, logText, startRow, endRow, logLength) = getLogQuery(request)

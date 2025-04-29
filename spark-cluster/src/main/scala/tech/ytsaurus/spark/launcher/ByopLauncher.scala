@@ -4,7 +4,7 @@ import com.twitter.scalding.Args
 import ByopLauncher.ByopConfig
 import Service.BasicService
 import tech.ytsaurus.spyt.wrapper.YtWrapper
-import tech.ytsaurus.spyt.wrapper.client.{ByopConfiguration, YtClientConfiguration}
+import tech.ytsaurus.spyt.wrapper.client.{ByopConfiguration, YtClientConfiguration, YtClientProvider}
 import tech.ytsaurus.spark.launcher.Service.BasicService
 import tech.ytsaurus.ysontree.{YTreeBuilder, YTreeMapNode, YTreeNode, YTreeTextSerializer}
 
@@ -44,9 +44,8 @@ trait ByopLauncher extends SidecarLauncher {
         is.close()
         val ysonConfig = ysonConfigTry.get
 
-        val ytRpc = YtWrapper.createRpcClient("byop", config.ytConf.copy(byop = ByopConfiguration.DISABLED))
+        val ytRpc = YtClientProvider.ytRpcClient(config.ytConf.copy(byop = ByopConfiguration.DISABLED))
         val remoteClusterConnection = Try(YtWrapper.attribute("//sys", "cluster_connection")(ytRpc.yt))
-        ytRpc.close()
 
         ByopLauncher.update(ysonConfig, remoteClusterConnection.get, "cluster_connection")
         if (!c.tvmEnabled) ysonConfig.remove("tvm_service")

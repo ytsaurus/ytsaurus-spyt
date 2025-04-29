@@ -1,16 +1,16 @@
 package tech.ytsaurus.spyt.wrapper.dyntable
 
 import org.slf4j.LoggerFactory
+import tech.ytsaurus.client.request.{GetTablePivotKeys, ModifyRowsRequest, ReshardTable, SelectRowsRequest}
+import tech.ytsaurus.client.rows.UnversionedRowset
+import tech.ytsaurus.client.rpc.AlwaysSwitchRpcFailoverPolicy
+import tech.ytsaurus.client.{ApiServiceTransaction, CompoundClient, RetryPolicy}
+import tech.ytsaurus.core.cypress.YPath
+import tech.ytsaurus.core.tables.TableSchema
 import tech.ytsaurus.spyt.wrapper.YtJavaConverters._
 import tech.ytsaurus.spyt.wrapper.YtWrapper.createTable
 import tech.ytsaurus.spyt.wrapper.cypress.{YtAttributes, YtCypressUtils}
 import tech.ytsaurus.spyt.wrapper.table.YtTableSettings
-import tech.ytsaurus.client.request.{GetTablePivotKeys, ModifyRowsRequest, ReshardTable, SelectRowsRequest}
-import tech.ytsaurus.client.rows.UnversionedRowset
-import tech.ytsaurus.client.{ApiServiceTransaction, CompoundClient, RetryPolicy}
-import tech.ytsaurus.client.rpc.AlwaysSwitchRpcFailoverPolicy
-import tech.ytsaurus.core.cypress.YPath
-import tech.ytsaurus.core.tables.TableSchema
 import tech.ytsaurus.ysontree.{YTreeBinarySerializer, YTreeBuilder, YTreeMapNode, YTreeNode}
 
 import java.io.ByteArrayOutputStream
@@ -242,6 +242,11 @@ trait YtDynTableUtils {
         .addInserts(rows.map(_.asJava).asJava)
         .build(),
       parentTransaction)
+  }
+
+  def insertRows(modifyRowsRequest: ModifyRowsRequest, parentTransaction: Option[ApiServiceTransaction])
+                (implicit yt: CompoundClient): Unit = {
+    processModifyRowsRequest(modifyRowsRequest, parentTransaction)
   }
 
   def updateRow(path: String, schema: TableSchema, map: java.util.Map[String, Any],

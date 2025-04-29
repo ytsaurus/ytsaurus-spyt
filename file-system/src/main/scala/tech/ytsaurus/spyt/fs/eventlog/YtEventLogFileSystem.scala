@@ -19,18 +19,16 @@ import java.io.FileNotFoundException
 import java.net.URI
 import java.time.Clock
 import java.util
-import java.util.UUID
 import scala.util.{Failure, Success, Try}
 
 class YtEventLogFileSystem extends FileSystem with LogLazy {
-  val id: String = UUID.randomUUID().toString
 
   private val log = LoggerFactory.getLogger(getClass)
 
   private var _uri: URI = _
   private var _workingDirectory: Path = new Path("/")
   protected var _ytConf: YtClientConfiguration = _
-  protected lazy val yt: CompoundClient = YtClientProvider.ytClient(_ytConf, id)
+  protected lazy val yt: CompoundClient = YtClientProvider.ytClient(_ytConf)
 
   private var clock = Clock.systemUTC()
 

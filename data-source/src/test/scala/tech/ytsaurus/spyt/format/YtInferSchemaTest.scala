@@ -244,14 +244,14 @@ class YtInferSchemaTest extends FlatSpec with Matchers with LocalSpark
     val rpcClient = YtClientProvider.ytRpcClientWithProxy(ytClientConfiguration(spark), None)
     val mockYt: CompoundClient = Mockito.spy(rpcClient.yt)
     try {
-      YtClientProvider.getClients(rpcClient.id) = rpcClient.copy(yt = mockYt)
+      YtClientProvider.getClients(rpcClient.normalizedProxy) = rpcClient.copy(yt = mockYt)
       YtUtils.inferSchema(spark, Map.empty, filesStatus)
       // getNode invoked in YtWrapper.attribute(path, "schema"), that might be invoked for every chunk in inferSchema
       // schema should be asked exactly 1 time for every file
       verify(mockYt, times(tables.length)).getNode(any[GetNode])
       Mockito.reset(mockYt)
     } finally {
-      YtClientProvider.getClients(rpcClient.id) = rpcClient
+      YtClientProvider.getClients(rpcClient.normalizedProxy) = rpcClient
     }
   }
 

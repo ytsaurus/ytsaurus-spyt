@@ -9,8 +9,6 @@ import tech.ytsaurus.spyt.format.conf.SparkYtWriteConfiguration
 import tech.ytsaurus.spyt.fs.path.YPathEnriched
 import tech.ytsaurus.spyt.wrapper.client.{YtClientConfigurationConverter, YtClientProvider}
 
-import java.util.UUID
-
 class YtStreamingSink(sqlContext: SQLContext,
                       queuePath: String,
                       parameters: Map[String, String]) extends Sink with Logging {
@@ -34,14 +32,11 @@ class YtStreamingSink(sqlContext: SQLContext,
       val bcPath = sparkContext.broadcast(path)
       val bcParameters = sparkContext.broadcast(parameters)
       val bcSchema = sparkContext.broadcast(data.schema)
-
       data.queryExecution.toRdd.foreachPartition { partitionIterator =>
         if (partitionIterator.hasNext){
-          val partitionYtClient = YtClientProvider.ytClient(bcYtClientConfiguration.value,
-            s"YtStreamingPartition-${UUID.randomUUID()}")
+          val partitionYtClient = YtClientProvider.ytClient(bcYtClientConfiguration.value)
           val dynamicTableWriter = new YtDynamicTableWriter(bcPath.value, bcSchema.value, bcWriterConfig.value,
             bcParameters.value)(partitionYtClient)
-
           try {
             partitionIterator.foreach { row => dynamicTableWriter.write(row) }
           } finally {
@@ -49,7 +44,6 @@ class YtStreamingSink(sqlContext: SQLContext,
           }
         }
       }
-
       latestBatchId = batchId
     }
   }

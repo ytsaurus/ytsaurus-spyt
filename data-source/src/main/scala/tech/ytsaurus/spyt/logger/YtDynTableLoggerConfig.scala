@@ -4,7 +4,7 @@ import org.apache.log4j.Level
 import org.apache.spark.sql.SparkSession
 import tech.ytsaurus.spyt.wrapper.client.YtClientConfigurationConverter.ytClientConfiguration
 import tech.ytsaurus.spyt.wrapper.YtWrapper
-import tech.ytsaurus.spyt.wrapper.client.YtClientConfiguration
+import tech.ytsaurus.spyt.wrapper.client.{YtClientConfiguration, YtClientProvider}
 import tech.ytsaurus.client.CompoundClient
 
 case class YtDynTableLoggerConfig(ytConfig: YtClientConfiguration,
@@ -17,7 +17,7 @@ case class YtDynTableLoggerConfig(ytConfig: YtClientConfiguration,
                                   mergeExecutors: Map[String, Boolean],
                                   maxPartitionId: Map[String, Int],
                                   taskContext: Option[TaskInfo] = None) {
-  @transient lazy val yt: CompoundClient = YtWrapper.createRpcClient("yt logger", ytConfig).yt
+  @transient lazy val yt: CompoundClient = YtClientProvider.ytClient(ytConfig)
 
   def forceTraceOnExecutor(name: String): Option[Level] = {
     val shouldForceTrace = mergeExecutors(name) && taskContext.exists(_.partitionId > maxPartitionId(name))

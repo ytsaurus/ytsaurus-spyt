@@ -44,7 +44,7 @@ trait LocalSpark extends LocalYtClient {
     .config(sparkConf)
 
   override protected def ytRpcClient: YtRpcClient = {
-    YtClientProvider.ytRpcClient(ytClientConfiguration(spark), "test")
+    YtClientProvider.ytRpcClient(ytClientConfiguration(spark))
   }
 
   def physicalPlan(df: DataFrame): SparkPlan = {

@@ -15,7 +15,6 @@ import tech.ytsaurus.spyt.wrapper.{LogLazy, YtWrapper}
 
 import java.io.FileNotFoundException
 import java.net.URI
-import java.util.UUID
 import java.util.concurrent.CompletionException
 import scala.annotation.tailrec
 import scala.collection.convert.ImplicitConversions.`collection AsScalaIterable`
@@ -23,8 +22,6 @@ import scala.concurrent.duration._
 import scala.language.postfixOps
 
 abstract class YtFileSystemBase extends FileSystem with LogLazy {
-  private val idPrefix: String = s"YtFileSystemBase-${UUID.randomUUID()}"
-
   private val log = LoggerFactory.getLogger(getClass)
 
   private var _uri: URI = _
@@ -33,7 +30,7 @@ abstract class YtFileSystemBase extends FileSystem with LogLazy {
   private var defaultYtConf: YtClientConfiguration = _
 
   protected[fs] def ytClient(f: YPathEnriched): CompoundClient = {
-    YtClientProvider.ytClientWithProxy(defaultYtConf, f.cluster, idPrefix)
+    YtClientProvider.ytClientWithProxy(defaultYtConf, f.cluster)
   }
 
   private[fs] def validateSameCluster(src: YPathEnriched, dst: YPathEnriched): Unit = {
@@ -79,12 +76,11 @@ abstract class YtFileSystemBase extends FileSystem with LogLazy {
 
     if (defaultYtConf.extendedFileTimeout) {
       val ytConf = defaultYtConf.copy(timeout = 7 days)
-      val ytRpcClient: YtRpcClient = YtClientProvider.ytRpcClient(ytConf, s"create-file-${UUID.randomUUID().toString}")
+      val ytRpcClient: YtRpcClient = YtClientProvider.ytRpcClient(ytConf)
       try {
         createFile(Some(ytRpcClient), ytRpcClient.yt)
       } catch {
         case e: Throwable =>
-          ytRpcClient.close()
           throw e
       }
     } else {
@@ -146,8 +142,6 @@ abstract class YtFileSystemBase extends FileSystem with LogLazy {
   override def getWorkingDirectory: Path = _workingDirectory
 
   override def close(): Unit = {
-    log.info("Close YtFileSystem")
-    YtClientProvider.closeByPrefix(idPrefix)
     super.close()
   }
 

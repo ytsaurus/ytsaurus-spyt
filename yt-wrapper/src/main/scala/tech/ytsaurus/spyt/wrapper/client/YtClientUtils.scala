@@ -30,23 +30,23 @@ trait YtClientUtils {
     }
   }
 
-  def createRpcClient(id: String, config: YtClientConfiguration): YtRpcClient = {
-    log.info(s"Create RPC YT Client, id $id, configuration ${config.copy(token = "*****")}")
+  def createRpcClient(config: YtClientConfiguration, nThreads: Int): YtRpcClient = {
+    log.info(s"Create RPC YT Client, configuration ${config.copy(token = "*****")}")
 
     jobProxyEndpoint(config) match {
       case Some(jobProxy) =>
         log.info(s"Create job proxy client with config $jobProxy")
-        createYtClientWrapper(id, config.timeout, new EpollEventLoopGroup(1, daemonThreadFactory)) {
+        createYtClientWrapper(config.normalizedProxy, config.timeout, new EpollEventLoopGroup(nThreads, daemonThreadFactory)) {
           case (connector, options) => createJobProxyClient(config, connector, options, jobProxy)
         }
       case None =>
-        createYtClientWrapper(id, config.timeout, new NioEventLoopGroup(1, daemonThreadFactory)) {
+        createYtClientWrapper(config.normalizedProxy, config.timeout, new NioEventLoopGroup(nThreads, daemonThreadFactory)) {
           case (connector, options) => createYtClient(config, connector, options)
         }
     }
   }
 
-  private def createYtClientWrapper(id: String, timeout: Duration, group: MultithreadEventLoopGroup)
+  private def createYtClientWrapper(proxy: String, timeout: Duration, group: MultithreadEventLoopGroup)
                                    (client: (DefaultBusConnector, RpcOptions) => CompoundClient): YtRpcClient = {
     val connector = new DefaultBusConnector(group, true)
       .setReadTimeout(toJavaDuration(timeout))
@@ -57,8 +57,8 @@ trait YtClientUtils {
       rpcOptions.setTimeouts(timeout)
 
       val yt = client(connector, rpcOptions)
-      log.info(s"YtClient $id created")
-      YtRpcClient(id, yt, connector)
+      log.info(s"YtClient for proxy $proxy created")
+      YtRpcClient(proxy, yt, connector)
     } catch {
       case e: Throwable =>
         connector.close()

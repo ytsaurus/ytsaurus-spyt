@@ -15,8 +15,9 @@ import tech.ytsaurus.client.{ApiServiceTransaction, CompoundClient}
 import tech.ytsaurus.spyt.exceptions._
 import tech.ytsaurus.spyt.format.YtOutputCommitProtocol._
 import tech.ytsaurus.spyt.format.conf.SparkYtConfiguration.Write.DynBatchSize
+import tech.ytsaurus.spyt.fs.path.YPathEnriched.CLUSTER_KEY
 import tech.ytsaurus.spyt.wrapper.config.ConfigEntry
-import tech.ytsaurus.spyt.wrapper.client.YtClientProvider
+import tech.ytsaurus.spyt.wrapper.client.{YtClientConfiguration, YtClientProvider}
 
 class YtOutputCommitProtocol(jobId: String,
                              outputPath: String,
@@ -39,10 +40,11 @@ class YtOutputCommitProtocol(jobId: String,
   override def setupJob(jobContext: JobContext): Unit = {
     val conf = jobContext.getConfiguration
     implicit val ytClient: CompoundClient = yt(conf)
-    val externalTransaction = jobContext.getConfiguration.getYtConf(WriteTransaction)
+    cachedClient = ytClient
+
+    val externalTransaction = conf.getYtConf(WriteTransaction)
 
     log.debug(s"Setting up job for path $rootPath")
-
     if (isDynamicTable(conf)) {
       validateDynamicTable(rootPath, conf)
     } else {
@@ -105,6 +107,7 @@ class YtOutputCommitProtocol(jobId: String,
   override def setupTask(taskContext: TaskAttemptContext): Unit = {
     val conf = taskContext.getConfiguration
     implicit val ytClient: CompoundClient = yt(conf)
+    cachedClient = ytClient
     initWrittenTables()  // Executors will have null value after deserialization
     if (!isDynamicTable(conf)) {
       val parent = YtOutputCommitProtocol.getGlobalWriteTransaction(conf)
@@ -217,10 +220,9 @@ class YtOutputCommitProtocol(jobId: String,
       return
     }
     val transactionGuid = taskMessage.transactionId.get
-    val yt = YtClientProvider.cachedClient("committer").yt
     log.debug(s"Commit write transaction: $transactionGuid")
     log.debug(s"Send commit transaction request: $transactionGuid")
-    YtWrapper.commitTransaction(transactionGuid)(yt)
+    YtWrapper.commitTransaction(transactionGuid)(cachedClient)
     log.debug(s"Success commit transaction: $transactionGuid")
   }
 }
@@ -237,7 +239,9 @@ object YtOutputCommitProtocol {
 
   private val pingFutures = scala.collection.concurrent.TrieMap.empty[String, ApiServiceTransaction]
 
-  private def yt(conf: Configuration): CompoundClient = YtClientProvider.ytClient(ytClientConfiguration(conf), "committer")
+  private var cachedClient: CompoundClient = _
+
+  private def yt(conf: Configuration): CompoundClient = YtClientProvider.ytClient(ytClientConfiguration(conf))
 
   def withTransaction(transaction: String)(f: String => Unit): Unit = {
     try {

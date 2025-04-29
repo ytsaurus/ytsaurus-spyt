@@ -2,16 +2,16 @@ package tech.ytsaurus.spark.launcher
 
 import io.circe.generic.auto._
 import io.circe.parser._
-import org.slf4j.{Logger, LoggerFactory}
-import Service.{BasicService, MasterService}
 import org.apache.spark.deploy.history.YtHistoryServer
 import org.apache.spark.deploy.master.YtMaster
 import org.apache.spark.deploy.worker.YtWorker
+import org.slf4j.{Logger, LoggerFactory}
+import tech.ytsaurus.client.CompoundClient
+import tech.ytsaurus.spark.launcher.Service.{BasicService, MasterService}
 import tech.ytsaurus.spyt.wrapper.Utils.{parseDuration, ytHostnameOrIpAddress}
 import tech.ytsaurus.spyt.wrapper.YtWrapper
-import tech.ytsaurus.spyt.wrapper.client.YtClientConfiguration
-import tech.ytsaurus.spyt.wrapper.discovery.{Address, CompoundDiscoveryService, CypressDiscoveryService, DiscoveryServerService, DiscoveryService}
-import tech.ytsaurus.client.CompoundClient
+import tech.ytsaurus.spyt.wrapper.client.{YtClientConfiguration, YtClientProvider}
+import tech.ytsaurus.spyt.wrapper.discovery._
 import tech.ytsaurus.spyt.{HostAndPort, SparkAdapter, SparkVersionUtils}
 
 import java.io.File
@@ -341,12 +341,7 @@ trait SparkLauncher {
 
   def withYtClient(ytConfig: YtClientConfiguration)
                   (f: CompoundClient => Unit): Unit = {
-    val client = YtWrapper.createRpcClient("discovery", ytConfig)
-    try {
-      f(client.yt)
-    } finally {
-      client.close()
-    }
+    f(YtClientProvider.ytClient(ytConfig))
   }
 
   def withOptionalYtClient(ytConfig: Option[YtClientConfiguration])

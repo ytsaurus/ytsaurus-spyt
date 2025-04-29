@@ -32,13 +32,9 @@ import tech.ytsaurus.spyt.wrapper.YtWrapper
 import tech.ytsaurus.spyt.wrapper.client.YtClientConfigurationConverter.ytClientConfiguration
 import tech.ytsaurus.spyt.wrapper.client.YtClientProvider
 
-import java.util.UUID
 
 class YtFileFormat extends FileFormat with DataSourceRegister with StreamSourceProvider with StreamSinkProvider
   with Serializable {
-
-  private val idPrefix: String = s"YtFileFormat-${UUID.randomUUID()}"
-
   override def inferSchema(sparkSession: SparkSession,
                            options: Map[String, String],
                            files: Seq[FileStatus]): Option[StructType] = {
@@ -84,7 +80,7 @@ class YtFileFormat extends FileFormat with DataSourceRegister with StreamSourceP
       case ypf: YtPartitionedFile =>
         val log = LoggerFactory.getLogger(getClass)
         implicit val yt: CompoundClient =
-          YtClientProvider.ytClientWithProxy(ytClientConf, ypf.delegate.cluster, idPrefix)
+          YtClientProvider.ytClientWithProxy(ytClientConf, ypf.delegate.cluster)
         val split = YtInputSplit(ypf, requiredSchema, filterPushdownConfig = filterPushdownConfig,
           ytLoggerConfig = ytLoggerConfig)
         log.info(s"Reading ${split.ytPathWithFilters}")

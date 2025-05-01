@@ -153,7 +153,7 @@ def spark_conf_to_opts(config: dict):
 
 def setup_spyt_env(container_home: str, spark_distributive: str, enable_squashfs: bool,
                    additional_parameters: List[str]):
-    cmd = ["./setup-spyt-env.sh"]
+    cmd = ["source", "./setup-spyt-env.sh"]
     if enable_squashfs:
         cmd += ["--use-squashfs"]
     else:

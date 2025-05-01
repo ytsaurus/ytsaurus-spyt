@@ -197,6 +197,7 @@ private[spark] class YTsaurusOperationManager(val ytClient: YTsaurusClient,
         .key("job_count").value(1)
         .key("cpu_limit").value(conf.get(DRIVER_CORES))
         .key("memory_limit").value(memoryLimit)
+        .key("port_count").value(2)
       setCommonSpecParams(specBuilder, conf, DRIVER_TASK).endMap()
     }
 

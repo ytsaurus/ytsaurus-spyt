@@ -635,7 +635,7 @@ def start_spark_cluster(worker_cores, worker_memory, worker_num, worker_cores_ov
             driver_args = args.copy()
             driver_args['job_types'] = ['driver']
             driver_config = worker_config._replace(res=driver_res,
-                                                   driver_op_discovery_script='spark/bin/driver-op-discovery.sh')
+                                                   driver_op_discovery_script='bin/driver-op-discovery.sh')
             driver_args['worker_config'] = driver_config
             driver_builder = build_spark_operation_spec(**driver_args)
             op_driver = run_operation(driver_builder, sync=False, client=client)

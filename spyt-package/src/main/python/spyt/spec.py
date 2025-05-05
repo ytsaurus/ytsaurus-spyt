@@ -2,6 +2,7 @@ import copy
 import logging
 import os
 import shlex
+from dataclasses import dataclass
 from typing import List, NamedTuple
 
 from spyt.dependency_utils import require_yt_client
@@ -59,7 +60,8 @@ class SparkDefaultArguments(object):
         }
 
 
-class CommonComponentConfig(NamedTuple):
+@dataclass
+class CommonComponentConfig():
     operation_alias: str = None
     pool: str = None
     enable_tmpfs: bool = True
@@ -78,6 +80,16 @@ class CommonComponentConfig(NamedTuple):
     spark_discovery: SparkDiscovery = None
     group_id: str = None
     cluster_java_home: str = None
+    container_home: str = None
+    spark_home: str = None
+    spyt_home: str = None
+
+    def __post_init__(self):
+        enable_squashfs = self.enablers and self.enablers.enable_squashfs
+        if not self.container_home:
+            self.container_home = "./tmpfs" if self.enable_tmpfs else "."
+        self.spark_home = "/usr/lib/spark" if enable_squashfs else f"$HOME/{self.container_home}/spark"
+        self.spyt_home = "/usr/lib/spyt" if enable_squashfs else f"$HOME/{self.container_home}/spyt-package"
 
 
 class MasterConfig(NamedTuple):
@@ -130,9 +142,6 @@ class LivyConfig(NamedTuple):
 
 
 class CommonSpecParams(NamedTuple):
-    container_home: str
-    spark_home: str
-    spyt_home: str
     spark_distributive: str
     java_home: str
     extra_java_opts: List[str]
@@ -165,7 +174,7 @@ def _launcher_command(component: str, common_params: CommonSpecParams, additiona
                       xmx: str = "512m", extra_java_opts: List[str] = None, launcher_opts: str = ""):
     additional_parameters = additional_parameters or []
     extra_java_opts = extra_java_opts or []
-    setup_spyt_env_cmd = setup_spyt_env(common_params.container_home,
+    setup_spyt_env_cmd = setup_spyt_env(common_params.config.container_home,
                                         common_params.spark_distributive,
                                         common_params.config.enablers.enable_squashfs,
                                         additional_parameters)
@@ -173,9 +182,9 @@ def _launcher_command(component: str, common_params: CommonSpecParams, additiona
     java_bin = os.path.join(common_params.java_home, 'bin', 'java') if common_params.java_home else 'java'
     if command := common_params.task_spec.get('command'):
         java_bin = f'{command} {java_bin}'
-    classpath = (f'{common_params.spyt_home}/conf/:'
-                 f'{common_params.spyt_home}/jars/*:'
-                 f'{common_params.spark_home}/jars/*')
+    classpath = (f'{common_params.config.spyt_home}/conf/:'
+                 f'{common_params.config.spyt_home}/jars/*:'
+                 f'{common_params.config.spark_home}/jars/*')
     extra_java_opts_str = " ".join(extra_java_opts)
     run_launcher = "{} -Xmx{} -cp {} {}".format(java_bin, xmx, classpath, extra_java_opts_str)
 
@@ -203,7 +212,7 @@ def build_livy_spec(builder: VanillaSpecBuilder, common_params: CommonSpecParams
     livy_command = _launcher_command("Livy", common_params, additional_parameters=["--enable-livy"],
                                      extra_java_opts=extra_java_opts, launcher_opts=" ".join(livy_launcher_opts))
 
-    livy_work_dir = "$HOME/{}/livy".format(common_params.container_home)
+    livy_work_dir = "$HOME/{}/livy".format(common_params.config.container_home)
     livy_environment = {
         "LIVY_HOME": "/usr/lib/livy" if enable_squashfs else livy_work_dir,
         "LIVY_WORK_DIR": livy_work_dir
@@ -288,7 +297,7 @@ def build_master_spec(builder: VanillaSpecBuilder, common_params: CommonSpecPara
 def build_worker_spec(builder: VanillaSpecBuilder, job_type: str, ytserver_proxy_path: str, tvm_enabled: bool,
                       common_params: CommonSpecParams, config: WorkerConfig):
     def _script_absolute_path(script):
-        return "{}/{}".format(common_params.container_home, script)
+        return os.path.join(common_params.config.spyt_home, script)
 
     spark_conf_worker = common_params.spark_conf.copy()
 
@@ -296,24 +305,22 @@ def build_worker_spec(builder: VanillaSpecBuilder, job_type: str, ytserver_proxy
         worker_log_location = "yt:/{}".format(common_params.config.spark_discovery.worker_log())
         spark_conf_worker["spark.workerLog.tablePath"] = worker_log_location
     if config.driver_op_discovery_script:
-        script_absolute_path = _script_absolute_path(config.driver_op_discovery_script)
+        driver_op_discovery_script_path = _script_absolute_path(config.driver_op_discovery_script)
         spark_conf_worker["spark.worker.resource.driverop.amount"] = str(config.res.cores)
-        spark_conf_worker["spark.worker.resource.driverop.discoveryScript"] = script_absolute_path
-        spark_conf_worker["spark.driver.resource.driverop.discoveryScript"] = script_absolute_path
+        spark_conf_worker["spark.worker.resource.driverop.discoveryScript"] = driver_op_discovery_script_path
+        spark_conf_worker["spark.driver.resource.driverop.discoveryScript"] = driver_op_discovery_script_path
     if config.extra_metrics_enabled:
         spark_conf_worker["spark.ui.prometheus.enabled"] = "true"
 
     if config.autoscaler_enabled:
+        job_id_script_path = _script_absolute_path("bin/job-id-discovery.sh")
+        spark_conf_worker["spark.worker.resource.jobid.discoveryScript"] = job_id_script_path
+        spark_conf_worker["spark.driver.resource.jobid.discoveryScript"] = job_id_script_path
         spark_conf_worker["spark.worker.resource.jobid.amount"] = "1"
-        spark_conf_worker["spark.worker.resource.jobid.discoveryScript"] = _script_absolute_path(
-            "spark/bin/job-id-discovery.sh")
-        spark_conf_worker["spark.driver.resource.jobid.discoveryScript"] = _script_absolute_path(
-            "spark/bin/job-id-discovery.sh")
 
     if config.worker_gpu_limit > 0:
         spark_conf_worker["spark.worker.resource.gpu.amount"] = str(config.worker_gpu_limit)
-        spark_conf_worker["spark.worker.resource.gpu.discoveryScript"] = _script_absolute_path(
-            "spyt-package/bin/getGpusResources.sh")
+        spark_conf_worker["spark.worker.resource.gpu.discoveryScript"] = _script_absolute_path("bin/getGpusResources.sh")
 
     worker_launcher_opts = \
         "--cores {0} --memory {1} --wait-master-timeout {2} --wlog-service-enabled {3} --wlog-enable-json {4} " \
@@ -397,10 +404,6 @@ def build_spark_operation_spec(config: dict, client: YtClient,
     if job_types == [] or job_types is None:
         job_types = ['master', 'history', 'worker']
 
-    enable_squashfs = common_config.enablers.enable_squashfs
-    container_home = "./tmpfs" if common_config.enable_tmpfs else "."
-    spark_home = "/usr/lib/spark" if enable_squashfs else "$HOME/{}/spark".format(container_home)
-    spyt_home = "/usr/lib/spyt" if enable_squashfs else "$HOME/{}/spyt-package".format(container_home)
     spark_distributive, spark_distributive_path = get_spark_distributive(client, common_config.enablers.enable_squashfs)
 
     extra_java_opts = ["-Dlog4j.loglevel={}".format(common_config.cluster_log_level)]
@@ -452,8 +455,8 @@ def build_spark_operation_spec(config: dict, client: YtClient,
     if common_config.spark_discovery is not None:
         environment["SPARK_BASE_DISCOVERY_PATH"] = str(common_config.spark_discovery.base_discovery_path)
         environment["SPARK_DISCOVERY_PATH"] = str(common_config.spark_discovery.discovery())  # COMPAT(alex-shishkin)
-    environment["SPARK_HOME"] = spark_home
-    environment["SPYT_HOME"] = spyt_home
+    environment["SPARK_HOME"] = common_config.spark_home
+    environment["SPYT_HOME"] = common_config.spyt_home
     environment["SPARK_CLUSTER_VERSION"] = config["cluster_version"]  # TODO Rename to SPYT_CLUSTER_VERSION
     environment["SPYT_CLUSTER_VERSION"] = config["cluster_version"]
     environment["SPARK_YT_SOLOMON_ENABLED"] = str(common_config.enablers.enable_solomon_agent)
@@ -507,8 +510,8 @@ def build_spark_operation_spec(config: dict, client: YtClient,
     if entrypoint := config.get('entrypoint'):
         common_task_spec['command'] = entrypoint if isinstance(entrypoint, str) else shlex.join(entrypoint)
     common_params = CommonSpecParams(
-        container_home, spark_home, spyt_home, spark_distributive, java_home,
-        extra_java_opts, environment, spark_conf_common, common_task_spec, common_config
+        spark_distributive, java_home, extra_java_opts, environment,
+        spark_conf_common, common_task_spec, common_config
     )
     builder = VanillaSpecBuilder()
     if "master" in job_types:

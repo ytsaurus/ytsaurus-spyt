@@ -255,8 +255,7 @@ def build_hs_spec(builder: VanillaSpecBuilder, common_params: CommonSpecParams, 
                                         launcher_opts=history_launcher_opts)
 
     shs_file_paths = copy.copy(common_params.task_spec["file_paths"])
-    if common_params.config.enablers.enable_profiling:
-        shs_file_paths.append("//home/sashbel/profiler.zip")
+
     builder.begin_task("history") \
         .job_count(1) \
         .command(history_command) \
@@ -352,9 +351,6 @@ def build_worker_spec(builder: VanillaSpecBuilder, job_type: str, ytserver_proxy
     worker_file_paths = copy.copy(common_params.task_spec["file_paths"])
     if ytserver_proxy_path and common_params.config.enablers.enable_byop:
         worker_file_paths.append(ytserver_proxy_path)
-
-    if common_params.config.enablers.enable_profiling:
-        worker_file_paths.append("//home/sashbel/profiler.zip")
 
     worker_task_spec = copy.deepcopy(common_params.task_spec)
     worker_task_spec["environment"] = worker_environment

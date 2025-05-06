@@ -124,7 +124,8 @@ if [ "$start_yt_local" = "true" ]; then
       --rpc-proxy-port $((proxy_port + 2)) \
       --yt-version spyt-testing \
       --yt-skip-pull true \
-      --publish-ports --port-range-start 27001 --extra-yt-docker-opts "--env PROXY_PORT=$proxy_port"
+      --publish-ports --port-range-start 27001 \
+      --extra-yt-docker-opts "--env PROXY_PORT=$proxy_port"
     trap "echo 'Stopping YT local' && $yt_local_runner_path --stop" EXIT
     sleep 5 # waiting for nodes to start
 fi;

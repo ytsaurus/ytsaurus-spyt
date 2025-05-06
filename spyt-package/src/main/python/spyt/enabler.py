@@ -13,12 +13,11 @@ class SpytEnablers(object):
     MTN_KEY = "spark.hadoop.yt.mtn.enabled"
     SOLOMON_AGENT_KEY = "spark.hadoop.yt.solomonAgent.enabled"
     IPV6_KEY = "spark.hadoop.yt.preferenceIpv6.enabled"
-    FQDN_KEY = "spark.hadoop.yt.fqdn.enabled"
     TCP_PROXY_KEY = "spark.hadoop.yt.tcpProxy.enabled"
     SQUASHFS_KEY = "spark.ytsaurus.squashfs.enabled"
 
     def __init__(self, enable_byop=False, enable_profiling=False, enable_arrow=True,
-                 enable_mtn=False, enable_solomon_agent=True, enable_preference_ipv6=True, enable_fqdn=False,
+                 enable_mtn=False, enable_solomon_agent=True, enable_preference_ipv6=True,
                  enable_tcp_proxy=False, enable_squashfs=False):
         self.enable_byop = enable_byop
         self.enable_profiling = enable_profiling
@@ -26,7 +25,6 @@ class SpytEnablers(object):
         self.enable_mtn = enable_mtn
         self.enable_solomon_agent = enable_solomon_agent
         self.enable_preference_ipv6 = enable_preference_ipv6
-        self.enable_fqdn = enable_fqdn
         self.enable_tcp_proxy = enable_tcp_proxy
         self.enable_squashfs = enable_squashfs
         self.config_enablers = {}
@@ -49,7 +47,6 @@ class SpytEnablers(object):
         self.enable_mtn = self._get_enabler(self.enable_mtn, "enable_mtn", self.MTN_KEY)
         self.enable_solomon_agent = self._get_enabler(self.enable_solomon_agent, "enable_solomon_agent",
                                                       self.SOLOMON_AGENT_KEY)
-        self.enable_fqdn = self._get_enabler(self.enable_fqdn, "enable_fqdn", self.FQDN_KEY)
         self.enable_tcp_proxy = self._get_enabler(self.enable_tcp_proxy, "enable_tcp_proxy", self.TCP_PROXY_KEY)
         self.enable_squashfs = self._get_enabler(self.enable_squashfs, "enable_squashfs", self.SQUASHFS_KEY)
 
@@ -61,5 +58,4 @@ class SpytEnablers(object):
             self.BYOP_KEY: str(self.enable_byop),
             self.ARROW_KEY: str(self.enable_arrow),
             self.IPV6_KEY: str(self.enable_preference_ipv6),
-            self.FQDN_KEY: str(self.enable_fqdn),
         }

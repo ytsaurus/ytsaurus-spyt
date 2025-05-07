@@ -10,6 +10,7 @@ import tech.ytsaurus.spyt.wrapper.discovery.{Address, SparkConfYsonable}
 import tech.ytsaurus.spark.launcher.rest.MasterWrapperLauncher
 import tech.ytsaurus.spark.metrics.AdditionalMetrics
 
+import java.net.URI
 import scala.concurrent.duration._
 import scala.language.postfixOps
 
@@ -35,16 +36,18 @@ object MasterLauncher extends App
       val reverseProxyUrl = tcpRouter.map(x => "http://" + x.getExternalAddress("WEBUI").toString)
       withService(startMaster(reverseProxyUrl)) { master =>
         withService(startMasterWrapper(args, master)) { masterWrapper =>
-          withOptionalService(startSolomonAgent(args, "master", master.masterAddress.webUiHostAndPort.port)) {
+          withOptionalService(startSolomonAgent(args, "master", master.masterAddress.webUiUri, master.masterAddress.webUiHostAndPort.port)) {
             solomonAgent =>
 
               master.waitAndThrowIfNotAlive(5 minutes)
               masterWrapper.waitAndThrowIfNotAlive(5 minutes)
 
               val masterAddress = tcpRouter.map { router =>
+                val webUi = router.getExternalAddress("WEBUI")
                 Address(
                   router.getExternalAddress("HOST"),
-                  router.getExternalAddress("WEBUI"),
+                  webUi,
+                  URI.create(s"http://$webUi"),
                   router.getExternalAddress("REST")
                 )
               }.getOrElse(master.masterAddress)

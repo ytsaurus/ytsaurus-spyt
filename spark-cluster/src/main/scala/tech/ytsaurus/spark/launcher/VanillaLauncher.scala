@@ -63,6 +63,7 @@ trait VanillaLauncher {
 
   def log4jConfigJavaOption(logJson: Boolean): String = {
     val log4jProperties = if (logJson) "log4j.clusterLogJson.properties" else "log4j.clusterLog.properties"
-    s"-Dlog4j.configuration=file://$spytHome/conf/$log4jProperties"
+    val log4j2Properties = if (logJson) "log4j2.clusterLogJson.properties" else "log4j2.clusterLog.properties"
+    s"-Dlog4j.configuration=file://$spytHome/conf/$log4jProperties -Dlog4j2.configurationFile=file://$spytHome/conf/$log4j2Properties"
   }
 }

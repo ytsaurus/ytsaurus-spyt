@@ -24,7 +24,7 @@ object ClusterStateService extends LogLazy {
   def apply(discoveryService: DiscoveryService, yt: CompoundClient): ClusterStateService =
     new ClusterStateService {
       val sparkStateService: SparkStateService =
-        SparkStateService.sparkStateService(discoveryService.discoverAddress().get.webUiHostAndPort,
+        SparkStateService.sparkStateService(discoveryService.discoverAddress().get.webUiUri,
           discoveryService.discoverAddress().get.restHostAndPort)
 
       override def query: Option[State] = {

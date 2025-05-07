@@ -60,7 +60,7 @@ object YtHistoryServer extends Logging {
     val server = new YtHistoryServer(conf, provider, securityManager, port)
     server.bind()
     provider.start()
-    AddressUtils.writeAddressToFile("history", server.publicHostName, server.boundPort, None, None)
+    AddressUtils.writeAddressToFile("history", server.publicHostName, server.boundPort, None, None, None)
 
     ShutdownHookManager.addShutdownHook { () => server.stop() }
 

@@ -671,6 +671,7 @@ def find_spark_cluster(discovery_path=None, client=None):
     return SparkCluster(
         master_endpoint=SparkDiscovery.getOption(discovery.master_spark(), client=client),
         master_web_ui_url=SparkDiscovery.getOption(discovery.master_webui(), client=client),
+        master_web_ui_schemed_url=SparkDiscovery.getOption(discovery.master_webui_url(), client=client),
         master_rest_endpoint=SparkDiscovery.getOption(discovery.master_rest(), client=client),
         operation_id=SparkDiscovery.getOption(discovery.operation(), client=client),
         shs_url=SparkDiscovery.getOption(discovery.shs(), client=client),

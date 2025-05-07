@@ -45,14 +45,17 @@ class YtMaster(rpcEnv: RpcEnv,
   override def onStart(): Unit = {
     super.onStart()
     val webUi = getBaseClassFieldValue(WebUiField)
-    val envVar = conf.getenv("SPARK_PUBLIC_DNS")
-    val masterPublicAddress = if (envVar != null) envVar else address.host
-    val restServerBoundPort = getBaseClassFieldValue(RestServerBoundPortField)
-    val masterWebUiUrl = s"${webUi.scheme}${Utils.addBracketsIfIpV6Host(masterPublicAddress)}" +
-      s":${webUi.boundPort}"
-    setBaseClassFieldValue(MasterWebUiUrlField, masterWebUiUrl)
-    AddressUtils.writeAddressToFile("master", masterPublicAddress,
-      address.port, Some(webUi.boundPort), restServerBoundPort)
+    val masterPublicAddress = java.util.Objects.requireNonNullElseGet(conf.getenv("SPARK_PUBLIC_DNS"), () => address.host)
+    if (!conf.contains("spark.ui.reverseProxyUrl")) {
+      setBaseClassFieldValue(
+        MasterWebUiUrlField, s"${webUi.scheme}${Utils.addBracketsIfIpV6Host(masterPublicAddress)}:${webUi.boundPort}"
+      )
+    }
+    AddressUtils.writeAddressToFile(
+      "master", masterPublicAddress, address.port,
+      Some(webUi.boundPort), Some(getBaseClassFieldValue(MasterWebUiUrlField)),
+      getBaseClassFieldValue(RestServerBoundPortField),
+    )
   }
 
   override def receive: PartialFunction[Any, Unit] = super.receive orElse {

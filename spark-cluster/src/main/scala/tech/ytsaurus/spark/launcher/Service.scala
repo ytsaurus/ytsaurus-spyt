@@ -43,7 +43,7 @@ sealed trait Service {
   }
 }
 
-sealed trait ServiceWithAddress extends Service {
+trait ServiceWithAddress extends Service {
   private val log = LoggerFactory.getLogger(getClass)
 
   def address: HostAndPort

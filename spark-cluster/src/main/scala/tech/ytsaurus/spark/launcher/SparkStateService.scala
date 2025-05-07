@@ -12,6 +12,7 @@ import sttp.model.Uri
 import tech.ytsaurus.spark.launcher.rest.AppStatusesRestClient
 import tech.ytsaurus.spyt.HostAndPort
 
+import java.net.URI
 import java.util.concurrent.{ExecutorService, Executors}
 import scala.concurrent.ExecutionContext
 import scala.concurrent.duration.{Duration, DurationLong}
@@ -54,7 +55,7 @@ object SparkStateService {
 
   private val log = LoggerFactory.getLogger(getClass)
 
-  def sparkStateService(webUi: HostAndPort, rest: HostAndPort): SparkStateService =
+  def sparkStateService(webUi: URI, rest: HostAndPort): SparkStateService =
     new SparkStateService {
       private val restClient: AppStatusesRestClient = AppStatusesRestClient.create(rest)
       implicit val backend: SttpBackend[Identity, Nothing, NothingT] = HttpURLConnectionBackend()
@@ -106,7 +107,7 @@ object SparkStateService {
       }
 
       override def masterStats: Try[MasterStats] = {
-        val uri = uri"http://${webUi.asString}/metrics/master/prometheus"
+        val uri = uri"$webUi/metrics/master/prometheus"
         log.debug(s"querying $uri")
         basicRequest
           .get(uri)
@@ -119,7 +120,7 @@ object SparkStateService {
       }
 
       override def appStats: Try[Seq[AppStats]] = {
-        val uri = uri"http://${webUi.asString}/metrics/applications/prometheus"
+        val uri = uri"$webUi/metrics/applications/prometheus"
         log.debug(s"querying $uri")
         basicRequest
           .get(uri)

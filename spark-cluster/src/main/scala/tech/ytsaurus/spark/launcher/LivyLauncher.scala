@@ -27,7 +27,7 @@ object LivyLauncher extends App with VanillaLauncher with SparkLauncher {
       log.info("Used discovery service: " + discoveryService.toString)
       val (masterAddress, pingAddress) = fixedMasterAddress.map(a => (a, None)).getOrElse {
         val address = waitForMaster(waitMasterTimeout, discoveryService)
-        (s"spark://${address.hostAndPort.toString}", Some(address.webUiHostAndPort))
+        (s"spark://${address.hostAndPort.toString}", Some(address.hostAndPort))
       }
       log.info(s"Starting livy server for master $masterAddress")
       val tcpRouter = ytO.flatMap(yt => TcpProxyService().register("LIVY")(yt))

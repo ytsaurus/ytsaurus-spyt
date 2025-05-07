@@ -3,6 +3,7 @@
 Usage notes: spyt module must be imported before any of pyspark.* modules in order
 for extensions to take an effect.
 """
+import logging
 
 from .dependency_utils import require_pyspark
 
@@ -34,6 +35,20 @@ __all__ = [
 ]
 
 
+def configure_logging():
+    logger = logging.getLogger(__name__)
+    logger.setLevel(logging.INFO)
+    logger.propagate = False
+
+    handler = logging.StreamHandler()
+    handler.setLevel(logging.INFO)
+
+    formatter = logging.Formatter("%(asctime)s - %(levelname)s - %(name)s - %(message)s")
+    handler.setFormatter(formatter)
+
+    logger.addHandler(handler)
+
+
 def initialize():
     pyspark.sql.types._atomic_types.append(UInt64Type)
     # exact copy of the corresponding line in pyspark/sql/types.py
@@ -62,4 +77,5 @@ def initialize():
         pyspark.cloudpickle.cloudpickle_fast.CloudPickler.dispatch_table[CodeType] = _code_reduce
 
 
+configure_logging()
 initialize()

@@ -23,8 +23,6 @@ SNAPSHOTS_SUBDIR = "snapshots"
 
 SELF_VERSION = __scala_version__
 
-
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(name)s - %(message)s')
 logger = logging.getLogger(__name__)
 
 

@@ -17,7 +17,6 @@ from yt.wrapper.operation_commands import get_operation_url  # noqa: E402
 from yt.yson.convert import yson_to_json  # noqa: E402
 from .arcadia import checked_extract_spark, checked_extract_spyt  # noqa: E402
 
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(name)s - %(message)s')
 logger = logging.getLogger(__name__)
 
 

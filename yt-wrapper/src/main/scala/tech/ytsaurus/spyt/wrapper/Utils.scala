@@ -46,7 +46,7 @@ object Utils {
   def ytHostnameOrIpAddress: String =
     if (ytNetworkProjectEnabled)
       ytHostIp
-    else if (sparkSystemProperties.get("spark.yt.use_fqdn").exists(_.toBoolean))
+    else if (sparkSystemProperties.get("spark.yt.useFqdn").exists(_.toBoolean))
       InetAddress.getLocalHost.getCanonicalHostName
     else
       InetAddress.getLocalHost.getHostName

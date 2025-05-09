@@ -82,6 +82,8 @@ object YtTableSparkSettings {
 
   case object TableWriterConfig extends ConfigEntry[YTreeNode]("table_writer")
 
+  case object WriteTableConfig extends ConfigEntry[YTreeNode](s"write_table_config", Some(null))
+
   case object UniqueKeys extends ConfigEntry[Boolean]("unique_keys", Some(false))
 
   case object InconsistentDynamicWrite extends ConfigEntry[Boolean]("inconsistent_dynamic_write", Some(false))

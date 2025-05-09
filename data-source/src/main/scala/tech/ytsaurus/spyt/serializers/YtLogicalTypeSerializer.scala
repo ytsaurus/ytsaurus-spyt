@@ -1,6 +1,6 @@
 package tech.ytsaurus.spyt.serializers
 
-import org.apache.spark.sql.types.Metadata
+import org.apache.spark.sql.types.{DecimalType, Metadata}
 import tech.ytsaurus.ysontree.{YTree, YTreeBuilder, YTreeMapNode, YTreeNode, YTreeStringNode}
 
 import scala.collection.JavaConverters.asScalaBufferConverter
@@ -105,10 +105,8 @@ object YtLogicalTypeSerializer {
         case YtLogicalType.Optional =>
           YtLogicalType.Optional(deserializeTypeV3(m.getOrThrow("item")))
         case YtLogicalType.Decimal =>
-          YtLogicalType.Decimal(
-            m.getOrThrow("precision").intValue(),
-            m.getOrThrow("scale").intValue()
-          )
+          val decimalType = DecimalType(m.getOrThrow("precision").intValue(), m.getOrThrow("scale").intValue())
+          YtLogicalType.Decimal(decimalType.precision, decimalType.scale, decimalType)
         case YtLogicalType.Dict =>
           YtLogicalType.Dict(
             deserializeTypeV3(m.getOrThrow("key")),

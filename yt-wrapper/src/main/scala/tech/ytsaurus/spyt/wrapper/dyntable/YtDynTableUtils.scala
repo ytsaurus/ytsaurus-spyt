@@ -178,11 +178,7 @@ trait YtDynTableUtils {
 
     waitState(path, TabletState.Mounted, 60 seconds)
     val f: ApiServiceTransaction => UnversionedRowset = _.selectRows(request).get(10, MINUTES)
-    val selected = if (transaction.isEmpty) {
-      runWithRetry(f)
-    } else {
-      f(transaction.get)
-    }
+    val selected = runWithDefinedTxOrRetry(f, transaction)
     selected.getYTreeRows.asScala.toList
   }
 
@@ -190,35 +186,15 @@ trait YtDynTableUtils {
                  transaction: Option[ApiServiceTransaction] = None,
                  columns: Seq[String] = Nil)(implicit yt: CompoundClient): Seq[YTreeMapNode] = {
     selectRowsRequest(
-      s"""${ if (columns.nonEmpty) columns.mkString(", ") else "*" } from [${formatPath(path)}] ${condition.map("where " + _).mkString}""",
+      s"""${if (columns.nonEmpty) columns.mkString(", ") else "*"} from [${formatPath(path)}] ${condition.map("where " + _).mkString}""",
       path, transaction)
   }
 
   def countRows(path: String, condition: Option[String] = None,
-                 transaction: Option[ApiServiceTransaction] = None)(implicit yt: CompoundClient): Long = {
+                transaction: Option[ApiServiceTransaction] = None)(implicit yt: CompoundClient): Long = {
     selectRowsRequest(
       s"""SUM(1) as count from [${formatPath(path)}] ${condition.map("where " + _).mkString} group by 1""",
       path, transaction).headOption.map(_.getLong("count")).getOrElse(0L)
-  }
-
-  private def processModifyRowsRequest(request: ModifyRowsRequest,
-                                       transaction: Option[ApiServiceTransaction] = None)
-                                      (implicit yt: CompoundClient): Unit = {
-    val f: ApiServiceTransaction => Unit = _.modifyRows(request).get(1, MINUTES)
-    if (transaction.isEmpty) {
-      runWithRetry(f)
-    } else {
-      f(transaction.get)
-    }
-  }
-
-  def runWithRetry[T](f: ApiServiceTransaction => T)(implicit yt: CompoundClient): T = {
-    val rowsFuture = yt.retryWithTabletTransaction(
-      transaction => CompletableFuture.supplyAsync(() => f(transaction)),
-      executor,
-      RetryPolicy.attemptLimited(3, RetryPolicy.fromRpcFailoverPolicy(new AlwaysSwitchRpcFailoverPolicy))
-    ).join()
-    rowsFuture
   }
 
   def insertRows(path: String, schema: TableSchema, rows: java.util.List[java.util.List[Any]],
@@ -274,7 +250,7 @@ trait YtDynTableUtils {
   }
 
   def deleteRows(path: String, schema: TableSchema, rows: Seq[java.util.Map[String, Any]],
-                parentTransaction: Option[ApiServiceTransaction] = None)(implicit yt: CompoundClient): Unit = {
+                 parentTransaction: Option[ApiServiceTransaction] = None)(implicit yt: CompoundClient): Unit = {
     val request = rows.foldLeft(
       ModifyRowsRequest.builder()
         .setPath(formatPath(path))
@@ -318,6 +294,26 @@ trait YtDynTableUtils {
     }
     yt.reshardTable(rawRequest.build()).join()
   }
+
+  private def processModifyRowsRequest(request: ModifyRowsRequest,
+                                       transaction: Option[ApiServiceTransaction] = None)
+                                      (implicit yt: CompoundClient): Unit = {
+    val f: ApiServiceTransaction => Unit = _.modifyRows(request).get(1, MINUTES)
+    runWithDefinedTxOrRetry(f, transaction)
+  }
+
+  def runWithDefinedTxOrRetry[T](f: ApiServiceTransaction => T, tx: Option[ApiServiceTransaction] = None,
+                                 attemptLimit: Int = 3)(implicit yt: CompoundClient): T = tx match {
+    case Some(tx) => f(tx)
+    case None => runWithRetry(f, attemptLimit)
+  }
+
+  def runWithRetry[T](f: ApiServiceTransaction => T, attemptLimit: Int = 3)(implicit yt: CompoundClient): T =
+    yt.retryWithTabletTransaction(
+      transaction => CompletableFuture.supplyAsync(() => f(transaction)),
+      executor,
+      RetryPolicy.attemptLimited(attemptLimit, RetryPolicy.fromRpcFailoverPolicy(new AlwaysSwitchRpcFailoverPolicy))
+    ).join()
 
   sealed abstract class TabletState(val name: String)
 

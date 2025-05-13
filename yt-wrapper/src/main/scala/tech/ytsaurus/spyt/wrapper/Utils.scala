@@ -1,7 +1,10 @@
 package tech.ytsaurus.spyt.wrapper
 
 import java.net.InetAddress
+import java.util.concurrent.{CompletableFuture, TimeUnit}
+import scala.annotation.tailrec
 import scala.concurrent.duration._
+import scala.util.{Failure, Success, Try}
 
 object Utils {
   def parseDuration(s: String): Duration = {
@@ -52,4 +55,29 @@ object Utils {
       InetAddress.getLocalHost.getHostName
 
   def tryWithResources[R <: AutoCloseable, A](resource: R)(body: R => A): A = TryWithResourcesJava.apply(resource, body)
+
+  def runWithRetry[T](
+                       operation: => CompletableFuture[T],
+                       maxRetries: Int = 3,
+                       initialDelay: FiniteDuration = 5.second,
+                       maxDelay: FiniteDuration = 60.seconds,
+                       timeout: FiniteDuration = 30.seconds
+                     ): T = {
+    require(maxRetries >= 0, "maxRetries must be non-negative")
+
+    @tailrec
+    def attempt(retry: Int, currentDelay: FiniteDuration): T = {
+      val result = Try(operation.get(timeout.toMillis, TimeUnit.MILLISECONDS))
+      result match {
+        case Success(value) => value
+        case Failure(_) if retry > 0 =>
+          Thread.sleep(currentDelay.toMillis)
+          val nextDelay = (currentDelay * 2).min(maxDelay)
+          attempt(retry - 1, nextDelay)
+        case Failure(ex) =>
+          throw new RuntimeException(s"Operation failed after ${maxRetries + 1} attempts", ex)
+      }
+    }
+    attempt(maxRetries, initialDelay)
+  }
 }

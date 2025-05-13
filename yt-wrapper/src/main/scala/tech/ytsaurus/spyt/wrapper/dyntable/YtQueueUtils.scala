@@ -5,6 +5,7 @@ import tech.ytsaurus.client.request.{AdvanceConsumer, PullConsumer, RegisterQueu
 import tech.ytsaurus.client.rows.QueueRowset
 import tech.ytsaurus.core.{DataSize, GUID}
 import tech.ytsaurus.core.cypress.YPath
+import tech.ytsaurus.spyt.wrapper.Utils.runWithRetry
 import tech.ytsaurus.spyt.wrapper.cypress.YtCypressUtils
 import tech.ytsaurus.spyt.wrapper.transaction.YtTransactionUtils
 
@@ -25,7 +26,7 @@ trait YtQueueUtils {
       .setOffset(offset)
       .setRowBatchReadOptions(options)
       .build()
-    yt.pullConsumer(request).join()
+    runWithRetry(yt.pullConsumer(request), maxRetries = 5)
   }
 
   def pullConsumerStrict(consumerPath: String, queuePath: String, partitionIndex: Int, offset: Long, rowCount: Long)

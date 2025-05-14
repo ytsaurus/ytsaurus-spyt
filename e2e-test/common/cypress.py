@@ -4,8 +4,9 @@ import os
 logger = logging.getLogger(__name__)
 
 
-def patch_conf(yt_client, python_path, java_home):
-    set_python_path(python_path, yt_client)
+def patch_conf(yt_client, python_path, java_home, direct_submit=False):
+    if not direct_submit:
+        set_python_path(python_path, yt_client)
     set_java_home(java_home, yt_client)
     set_executor_conf(yt_client)
     set_another_shuffle_port(yt_client)

@@ -1,6 +1,5 @@
 package tech.ytsaurus.spyt.streaming
 
-import org.apache.spark.SparkConf
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.connector.read.streaming
@@ -35,8 +34,6 @@ class YtStreamingSource(sqlContext: SQLContext,
   }
 
   override def latestOffset(startOffset: streaming.Offset, limit: ReadLimit): streaming.Offset = {
-    val startYtQueueOffset: YtQueueOffset = if (startOffset != null) YtQueueOffset(startOffset) else null
-
     val limits: Seq[ReadLimit] = limit match {
       case rows: CompositeReadLimit => rows.getReadLimits
       case rows => Seq(rows)
@@ -46,11 +43,13 @@ class YtStreamingSource(sqlContext: SQLContext,
     val maxRowsOpt = limits.collectFirst { case rmr: ReadMaxRows => rmr }
     if (maxRowsOpt.isDefined) {
       val maxRows = maxRowsOpt.get.maxRows()
-      val currentOffset = YtQueueOffset.getCurrentOffset(cluster, consumerPath, queuePath)
+      val startYtQueueOffset: YtQueueOffset = if (startOffset != null) YtQueueOffset(startOffset) else null
       val partitionSeq = maxOffsetInQueue.partitions.toSeq.map { case (i, upperIndex) =>
         val realStartIndex = startYtQueueOffset match {
           case YtQueueOffset(_, _, partitions) => partitions.getOrElse(i, -1L)
-          case _ => currentOffset.partitions.getOrElse(i, -1L)
+          case _ =>
+            val currentOffset = YtQueueOffset.getCurrentOffset(cluster, consumerPath, queuePath)
+            currentOffset.partitions.getOrElse(i, -1L)
         }
 
         val endOffset = math.min(realStartIndex + maxRows, upperIndex)

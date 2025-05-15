@@ -30,6 +30,7 @@ object AddressUtils extends Logging {
                          host: String,
                          port: Int,
                          webUiPort: Option[Int],
+                         webUiUrl: Option[String],
                          restPort: Option[Int]): Unit = {
     logInfo(s"Writing address to file: $port, $webUiPort, $restPort")
 
@@ -39,6 +40,7 @@ object AddressUtils extends Logging {
       "host" -> host,
       "port" -> port,
       "webUiPort" -> webUiPort,
+      "webUiUrl" -> webUiUrl,
       "restPort" -> restPort
     ))
 

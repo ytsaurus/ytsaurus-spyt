@@ -44,7 +44,7 @@ object WorkerLauncher extends App with VanillaLauncher with SparkLauncher with B
 
           log.info(s"Starting worker for master $masterAddress")
           withService(startWorker(masterAddress, cores, memory, extraEnv, enableSquashfs)) { worker =>
-            withOptionalService(startSolomonAgent(args, "worker", worker.address.port)) { solomonAgent =>
+            withOptionalService(startSolomonAgent(args, "worker", worker.webUiUrl, worker.address.port)) { solomonAgent =>
               def isAlive: Boolean = {
                 val isMasterAlive = DiscoveryService.isAlive(masterAddress.webUiHostAndPort, processCheckRetries)
                 val isWorkerAlive = worker.isAlive(processCheckRetries)

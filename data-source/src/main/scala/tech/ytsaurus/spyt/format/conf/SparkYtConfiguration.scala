@@ -13,6 +13,8 @@ object SparkYtConfiguration {
 
     case object BatchSize extends ConfigEntry[Int](s"$prefix.batchSize", Some(500000))
 
+    case object Arrow extends ConfigEntry[Boolean](s"$prefix.arrow", Some(false))
+
     case object MiniBatchSize extends ConfigEntry[Int](s"$prefix.miniBatchSize", Some(1000))
 
     case object DynBatchSize extends ConfigEntry[Int](s"$prefix.dynBatchSize", Some(50000))

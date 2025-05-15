@@ -6,11 +6,14 @@ import tech.ytsaurus.spyt.wrapper.config._
 
 import scala.concurrent.duration.Duration
 
-case class SparkYtWriteConfiguration(miniBatchSize: Int,
-                                     batchSize: Int,
-                                     dynBatchSize: Int,
-                                     timeout: Duration,
-                                     typeV3Format: Boolean)
+case class SparkYtWriteConfiguration(
+                                      miniBatchSize: Int,
+                                      batchSize: Int,
+                                      dynBatchSize: Int,
+                                      timeout: Duration,
+                                      typeV3Format: Boolean,
+                                      arrow: Boolean = false,
+                                    )
 
 object SparkYtWriteConfiguration {
 
@@ -21,7 +24,8 @@ object SparkYtWriteConfiguration {
     sqlc.ytConf(Write.BatchSize),
     sqlc.ytConf(Write.DynBatchSize),
     sqlc.ytConf(Write.Timeout),
-    sqlc.ytConf(Write.TypeV3)
+    sqlc.ytConf(Write.TypeV3),
+    sqlc.ytConf(Write.Arrow),
   )
 
   def apply(sqlc: SQLConf): SparkYtWriteConfiguration = SparkYtWriteConfiguration(
@@ -29,6 +33,7 @@ object SparkYtWriteConfiguration {
     sqlc.ytConf(Write.BatchSize),
     sqlc.ytConf(Write.DynBatchSize),
     sqlc.ytConf(Write.Timeout),
-    sqlc.ytConf(Write.TypeV3)
+    sqlc.ytConf(Write.TypeV3),
+    sqlc.ytConf(Write.Arrow),
   )
 }

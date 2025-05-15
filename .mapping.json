@@ -640,6 +640,8 @@
   "spyt-package/src/main/spark-extra/conf/log4j.livy.properties":"yt/spark/spark-over-yt/spyt-package/src/main/spark-extra/conf/log4j.livy.properties",
   "spyt-package/src/main/spark-extra/conf/log4j.properties":"yt/spark/spark-over-yt/spyt-package/src/main/spark-extra/conf/log4j.properties",
   "spyt-package/src/main/spark-extra/conf/log4j.worker.properties":"yt/spark/spark-over-yt/spyt-package/src/main/spark-extra/conf/log4j.worker.properties",
+  "spyt-package/src/main/spark-extra/conf/log4j2.clusterLog.properties":"yt/spark/spark-over-yt/spyt-package/src/main/spark-extra/conf/log4j2.clusterLog.properties",
+  "spyt-package/src/main/spark-extra/conf/log4j2.clusterLogJson.properties":"yt/spark/spark-over-yt/spyt-package/src/main/spark-extra/conf/log4j2.clusterLogJson.properties",
   "spyt-package/src/main/spark-extra/conf/log4j2.properties":"yt/spark/spark-over-yt/spyt-package/src/main/spark-extra/conf/log4j2.properties",
   "spyt-package/src/main/spark-extra/conf/metrics.properties":"yt/spark/spark-over-yt/spyt-package/src/main/spark-extra/conf/metrics.properties",
   "spyt-package/src/main/spark-extra/conf/spark-defaults.conf":"yt/spark/spark-over-yt/spyt-package/src/main/spark-extra/conf/spark-defaults.conf",

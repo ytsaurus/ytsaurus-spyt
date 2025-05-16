@@ -9,10 +9,12 @@ import tech.ytsaurus.core.cypress.YPath
 
 object StreamingUtils {
   val STREAMING_SERVICE_KEY_COLUMNS_PREFIX = "__spyt_streaming_src_"
+  val TABLET_INDEX_WITH_PREFIX = s"${STREAMING_SERVICE_KEY_COLUMNS_PREFIX}tablet_index"
+  val ROW_INDEX_WITH_PREFIX = s"${STREAMING_SERVICE_KEY_COLUMNS_PREFIX}row_index"
 
   private val additionalKeysSchemaForStreaming = StructType(Seq(
-    StructField(s"${STREAMING_SERVICE_KEY_COLUMNS_PREFIX}tablet_index", LongType, nullable = true),
-    StructField(s"${STREAMING_SERVICE_KEY_COLUMNS_PREFIX}row_index", LongType, nullable = true)
+    StructField(TABLET_INDEX_WITH_PREFIX, LongType, nullable = true),
+    StructField(ROW_INDEX_WITH_PREFIX, LongType, nullable = true)
   ))
 
   def createStreamingDataFrame(sqlContext: SQLContext, rdd: RDD[InternalRow], schema: StructType): DataFrame = {

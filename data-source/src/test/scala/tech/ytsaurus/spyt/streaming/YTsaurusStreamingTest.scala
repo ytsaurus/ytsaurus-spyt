@@ -1,17 +1,16 @@
 package tech.ytsaurus.spyt.streaming
 
-import org.apache.spark.sql.execution.StreamingUtils.STREAMING_SERVICE_KEY_COLUMNS_PREFIX
+import org.apache.spark.sql.execution.StreamingUtils.{ROW_INDEX_WITH_PREFIX, TABLET_INDEX_WITH_PREFIX}
 import org.apache.spark.sql.functions._
+import org.apache.spark.sql.streaming.Trigger
 import org.apache.spark.sql.streaming.Trigger.ProcessingTime
 import org.apache.spark.sql.{DataFrame, SaveMode}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
-import tech.ytsaurus.client.request.RemoveNode
-import tech.ytsaurus.core.cypress.YPath
 import tech.ytsaurus.core.tables.{ColumnValueType, TableSchema}
-import tech.ytsaurus.spyt
+import tech.ytsaurus.spyt.format.conf.YtTableSparkSettings.InconsistentReadEnabled
 import tech.ytsaurus.spyt.serializers.WriteSchemaConverter
-import tech.ytsaurus.spyt.streaming.YTsaurusStreamingTest.orderedTestSchemaForStreamingWithExactlyOnceGuarantee
+import tech.ytsaurus.spyt.streaming.YTsaurusStreamingTest.{PROCESSING_TIME_TRIGGER, schemaWithServiceColumns, schemaWithServiceColumnsAndQueuePath}
 import tech.ytsaurus.spyt.test._
 import tech.ytsaurus.spyt.wrapper.YtWrapper
 
@@ -83,7 +82,7 @@ class YTsaurusStreamingTest extends AnyFlatSpec with Matchers with LocalSpark wi
     val job = numbers
       .writeStream
       .option("checkpointLocation", f"yt:/$tmpPath/stateStore")
-      .trigger(ProcessingTime(2000))
+      .trigger(PROCESSING_TIME_TRIGGER)
       .format("yt")
       .option("path", path)
 
@@ -91,7 +90,7 @@ class YTsaurusStreamingTest extends AnyFlatSpec with Matchers with LocalSpark wi
       var currentCount = 0L
       while (currentCount < recordCountLimit) {
         Thread.sleep(1000)
-        currentCount = spark.read.option("enable_inconsistent_read", "true").yt(path).count()
+        currentCount = spark.read.option(InconsistentReadEnabled.name, "true").yt(path).count()
       }
     }(scala.concurrent.ExecutionContext.Implicits.global)
 
@@ -122,7 +121,7 @@ class YTsaurusStreamingTest extends AnyFlatSpec with Matchers with LocalSpark wi
     val job = numbers
       .writeStream
       .option("checkpointLocation", f"yt:/$tmpPath/stateStore")
-      .trigger(ProcessingTime(2000))
+      .trigger(PROCESSING_TIME_TRIGGER)
       .foreachBatch { (frame: DataFrame, batchNum: Long) =>
         recordCount += frame.count()
         if (recordCount >= recordCountLimit && !stopSignal.isCompleted) stopSignal.success()
@@ -132,7 +131,7 @@ class YTsaurusStreamingTest extends AnyFlatSpec with Matchers with LocalSpark wi
     val recordFuture = Future[Unit] {
       while (!stopSignal.isCompleted) {
         appendChunksToTestTable(queuePath, Seq(getTestData()), sorted = false, remount = false)
-        Thread.sleep(4000)
+        Thread.sleep(2000)
       }
     }(scala.concurrent.ExecutionContext.Implicits.global)
 
@@ -163,7 +162,7 @@ class YTsaurusStreamingTest extends AnyFlatSpec with Matchers with LocalSpark wi
     val job = numbers
       .writeStream
       .option("checkpointLocation", f"yt:/$tmpPath/stateStore")
-      .trigger(ProcessingTime(2000))
+      .trigger(PROCESSING_TIME_TRIGGER)
       .format("yt")
       .option("path", resultPath)
 
@@ -171,8 +170,8 @@ class YTsaurusStreamingTest extends AnyFlatSpec with Matchers with LocalSpark wi
       var currentCount = 0L
       while (currentCount < recordCountLimit) {
         appendChunksToTestTable(queuePath, Seq(getTestData()), sorted = false, remount = false)
-        Thread.sleep(2000)
-        currentCount = spark.read.option("enable_inconsistent_read", "true").yt(resultPath).count()
+        Thread.sleep(1000)
+        currentCount = spark.read.option(InconsistentReadEnabled.name, "true").yt(resultPath).count()
       }
     }(scala.concurrent.ExecutionContext.Implicits.global)
 
@@ -210,7 +209,7 @@ class YTsaurusStreamingTest extends AnyFlatSpec with Matchers with LocalSpark wi
     val jobForOptionCheck = df
       .writeStream
       .option("checkpointLocation", f"yt:/$tmpPath/stateStore_0")
-      .trigger(ProcessingTime(2000))
+      .trigger(PROCESSING_TIME_TRIGGER)
       .foreachBatch { (frame: DataFrame, batchNum: Long) =>
         frame.foreachPartition { partition: Iterator[org.apache.spark.sql.Row] =>
           assert(partition.size <= maxRowsPerPartition)
@@ -224,7 +223,7 @@ class YTsaurusStreamingTest extends AnyFlatSpec with Matchers with LocalSpark wi
     val recordFuture = Future[Unit] {
       while (!stopSignal.isCompleted) {
         appendChunksToTestTable(queuePath, Seq(getTestData()), sorted = false, remount = false)
-        Thread.sleep(4000)
+        Thread.sleep(2000)
       }
     }(scala.concurrent.ExecutionContext.Implicits.global)
 
@@ -245,11 +244,12 @@ class YTsaurusStreamingTest extends AnyFlatSpec with Matchers with LocalSpark wi
     val expectedDF: DataFrame = spark.createDataFrame(expectedData)
 
     val resultDF = spark.read
-      .option("enable_inconsistent_read", "true")
+      .option(InconsistentReadEnabled.name, "true")
       .yt(paths.resultPath)
       .orderBy("a")
 
     resultDF.dropDuplicates().collect() should contain theSameElementsAs expectedDF.collect()
+
   }
 
   it should "several streaming launches - at-least-once guarantee" in {
@@ -268,20 +268,222 @@ class YTsaurusStreamingTest extends AnyFlatSpec with Matchers with LocalSpark wi
     testContinueStreamingAfterRemovingCheckpoints(includeServiceColumns = true)
   }
 
+  it should "streaming with several sources-queues: check consumer and result synchronization" in {
+    val queues = (0 until 3).map(i => s"$tmpPath/inputQueue$i-${UUID.randomUUID()}")
+    val consumerPath = s"$tmpPath/consumer-${UUID.randomUUID()}"
+    val resultPath = s"$tmpPath/result-${UUID.randomUUID()}"
+    val checkpointLocation = f"yt:/$tmpPath/stateStore-${UUID.randomUUID()}"
+
+    YtWrapper.createDir(tmpPath)
+    for (queue <- queues) {
+      prepareOrderedTestTable(queue, enableDynamicStoreRead = true)
+      prepareConsumer(consumerPath, queue)
+      waitQueueRegistration(queue)
+    }
+    val resultTableSchema: TableSchema = schemaWithServiceColumnsAndQueuePath
+    prepareOrderedTestTable(resultPath, resultTableSchema, enableDynamicStoreRead = true)
+
+    val queries = queues.map { queue =>
+      spark
+        .readStream
+        .format("yt")
+        .option("consumer_path", consumerPath)
+        .option("max_rows_per_partition", 6)
+        .option("include_service_columns", value = true)
+        .load(queue)
+        .withColumn("queue", lit(queue))
+        .writeStream
+        .option("checkpointLocation", checkpointLocation + "/" + queue)
+        .format("yt")
+        .option("path", resultPath)
+        .start()
+    }
+
+    val queueWritingDuration = 10.seconds
+    val endTime = System.currentTimeMillis() + queueWritingDuration.toMillis
+    var lowerIndex = 0
+    while (System.currentTimeMillis() < endTime) {
+      queues.foreach { queue =>
+        val data = getTestData(lowerIndex, lowerIndex + 9)
+        appendChunksToTestTable(queue, Seq(data), sorted = false, remount = false)
+      }
+      lowerIndex += 10
+      Thread.sleep(1000)
+    }
+    queries.foreach(_.stop())
+
+    val resultDF = spark.read
+      .option(InconsistentReadEnabled.name, "true")
+      .yt(resultPath)
+      .orderBy("a")
+    val cluster = YtWrapper.clusterName()
+
+    for (queue <- queues) {
+      val currentOffsetPartitions = YtQueueOffset.getCurrentOffset(cluster, consumerPath, queue).partitions
+      var totalRowsFromQueue = 0
+      for (partitionIndex <- currentOffsetPartitions.keys) {
+        val partitionDataDf = resultDF
+          .filter(col("queue") === queue)
+          .filter(col("__spyt_streaming_src_tablet_index") === partitionIndex)
+
+        val totalRowsConsumed = currentOffsetPartitions(partitionIndex) + 1
+        val totalRowsFromPartition = partitionDataDf.count.toInt
+        totalRowsFromQueue += totalRowsFromPartition
+
+        assert(totalRowsFromPartition >= totalRowsConsumed)
+
+        val seq = (0 until totalRowsFromPartition).toArray
+        partitionDataDf.select(col(ROW_INDEX_WITH_PREFIX)).collect().map(_.getLong(0).toInt) should contain theSameElementsAs seq
+      }
+    }
+  }
+
+  it should "streaming with several sources-queues: check full data delivery" in {
+    val queues = (0 until 3).map(i => s"$tmpPath/inputQueue$i-${UUID.randomUUID()}")
+    val iterarionsCount = Seq(1, 3, 5)
+    val consumerPath = s"$tmpPath/consumer-${UUID.randomUUID()}"
+    val resultPath = s"$tmpPath/result-${UUID.randomUUID()}"
+    val checkpointLocation = f"yt:/$tmpPath/stateStore-${UUID.randomUUID()}"
+
+    YtWrapper.createDir(tmpPath)
+    for (queue <- queues) {
+      prepareOrderedTestTable(queue, enableDynamicStoreRead = true)
+      prepareConsumer(consumerPath, queue)
+      waitQueueRegistration(queue)
+    }
+    val resultTableSchema: TableSchema = schemaWithServiceColumnsAndQueuePath
+    prepareOrderedTestTable(resultPath, resultTableSchema, enableDynamicStoreRead = true)
+
+    val queriesAndFutures = queues.zipWithIndex.map { case (queue, index) =>
+      val query = spark
+        .readStream
+        .format("yt")
+        .option("consumer_path", consumerPath)
+        .option("max_rows_per_partition", 6)
+        .option("include_service_columns", value = true)
+        .load(queue)
+        .withColumn("queue", lit(queue))
+        .writeStream
+        .option("checkpointLocation", checkpointLocation + "/" + queue)
+        .format("yt")
+        .option("path", resultPath)
+        .start()
+
+      val recordFuture = Future[Unit] {
+        var lowerIndex = 0
+        for (_ <- 0 until iterarionsCount(index)) {
+          val data = getTestData(lowerIndex, lowerIndex + 9)
+          appendChunksToTestTable(queue, Seq(data), sorted = false, remount = false)
+          lowerIndex += 10
+        }
+
+        val recordCountLimit = iterarionsCount(index) * 10
+        var currentCount = 0L
+        while (currentCount < recordCountLimit) {
+          Thread.sleep(2000)
+          currentCount = spark.read.option(InconsistentReadEnabled.name, "true").yt(resultPath).filter(col("queue") === queue).count()
+        }
+
+      }(scala.concurrent.ExecutionContext.Implicits.global)
+
+      (query, recordFuture)
+    }
+
+    val allFutures = queriesAndFutures.map(_._2)
+    import scala.concurrent.ExecutionContext.Implicits.global
+    Await.result(Future.sequence(allFutures), 120.seconds)
+    queriesAndFutures.foreach { case (query, _) => query.stop() }
+
+    val resultDF = spark.read
+      .option(InconsistentReadEnabled.name, "true")
+      .yt(resultPath)
+      .orderBy("a")
+
+    queues.zipWithIndex.map { case (queue, index) =>
+      val countElems = iterarionsCount(index) * 10
+      val expectedDF: DataFrame = spark.createDataFrame(getTestData(0, countElems - 1))
+      val filteredDf = resultDF.filter(col("queue") === queue).select("a", "b", "c")
+      filteredDf.collect() should contain theSameElementsAs expectedDF.collect()
+    }
+  }
+
+  it should "streaming with several sinks and consumers" in {
+    val queuePath = s"$tmpPath/inputQueue-${UUID.randomUUID()}"
+    val checkpointLocation = f"yt:/$tmpPath/stateStore-${UUID.randomUUID()}"
+    val resultTableSchema: TableSchema = schemaWithServiceColumnsAndQueuePath
+    YtWrapper.createDir(tmpPath)
+    prepareOrderedTestTable(queuePath, enableDynamicStoreRead = true)
+
+    val consumersAndResultPathsPairs: Seq[(String, String)] = (1 to 3).map { i =>
+      val consumerPath = s"$tmpPath/consumer$i-${UUID.randomUUID()}"
+      prepareConsumer(consumerPath, queuePath)
+      val resultPath = s"$tmpPath/result$i-${UUID.randomUUID()}"
+      prepareOrderedTestTable(resultPath, resultTableSchema, enableDynamicStoreRead = true)
+      (consumerPath, resultPath)
+    }
+    waitQueueRegistration(queuePath)
+
+    val queries = consumersAndResultPathsPairs.map { pair =>
+      spark
+        .readStream
+        .format("yt")
+        .option("consumer_path", pair._1)
+        .option("max_rows_per_partition", 6)
+        .option("include_service_columns", value = true)
+        .load(queuePath)
+        .withColumn("queue", lit(queuePath))
+        .writeStream
+        .option("checkpointLocation", checkpointLocation + "/" + pair._1)
+        .format("yt")
+        .option("path", pair._2)
+        .start()
+    }
+
+    val iterations = 3
+    var lowerIndex = 0
+    for (_ <- 0 until iterations) {
+      val data = getTestData(lowerIndex, lowerIndex + 9)
+      appendChunksToTestTable(queuePath, Seq(data), sorted = false, remount = false)
+      lowerIndex += 10
+    }
+
+    val recordCountLimit = iterations * 10
+    val waitingTimeout = 120.seconds
+    val endTime = System.currentTimeMillis() + waitingTimeout.toMillis
+    while (System.currentTimeMillis() < endTime &&
+      !consumersAndResultPathsPairs.map(pair => pair._2).forall(resultPath =>
+        spark.read.option(InconsistentReadEnabled.name, "true").yt(resultPath).count() >= recordCountLimit
+      )) {
+      Thread.sleep(2000)
+    }
+    queries.foreach(_.stop)
+
+    for (resultPath <- consumersAndResultPathsPairs.map(pair => pair._2)) {
+      val resultDF = spark.read
+        .option(InconsistentReadEnabled.name, "true")
+        .yt(resultPath)
+        .orderBy("a")
+        .select("a", "b", "c")
+
+      val expectedDF: DataFrame = spark.createDataFrame(getTestData(0, 29))
+      resultDF.collect() should contain theSameElementsAs expectedDF.collect()
+    }
+  }
+
   def testContinueStreamingAfterRemovingCheckpoints(includeServiceColumns: Boolean = false): Unit = {
     val maxRowsPerPartition = 6
     val paths: StreamingObjectsPaths = prepareStreamingObjects(tmpPath = tmpPath, includeServiceColumns)
-    doStreamLaunches(paths, launchesParams=Seq((0, 3, true)), maxRowsPerPartition, includeServiceColumns)
+    doStreamLaunches(paths, launchesParams = Seq((0, 3, true)), maxRowsPerPartition, includeServiceColumns)
 
     YtWrapper.removeDirIfExists(paths.checkpointLocation.stripPrefix("yt:/"), recursive = true)
 
-    doStreamLaunches(paths, launchesParams=Seq((30, 3, true)), maxRowsPerPartition, includeServiceColumns)
+    doStreamLaunches(paths, launchesParams = Seq((30, 3, true)), maxRowsPerPartition, includeServiceColumns)
 
     val expectedData: Seq[TestRow] = getTestData(0, 59)
     val expectedDF: DataFrame = spark.createDataFrame(expectedData)
 
     val resultDF = spark.read
-      .option("enable_inconsistent_read", "true")
+      .option(InconsistentReadEnabled.name, "true")
       .yt(paths.resultPath)
       .select("a", "b", "c")
       .orderBy("a")
@@ -303,7 +505,7 @@ class YTsaurusStreamingTest extends AnyFlatSpec with Matchers with LocalSpark wi
     doStreamLaunches(paths, launchesParams, maxRowsPerPartition = 8, includeServiceColumns)
 
     val resultDF = spark.read
-      .option("enable_inconsistent_read", "true")
+      .option(InconsistentReadEnabled.name, "true")
       .yt(paths.resultPath)
       .select("a", "b", "c")
       .orderBy("a")
@@ -316,6 +518,25 @@ class YTsaurusStreamingTest extends AnyFlatSpec with Matchers with LocalSpark wi
     } else {
       resultDF.dropDuplicates().collect() should contain theSameElementsAs expectedDF.collect()
     }
+  }
+
+  def prepareStreamingObjects(tmpPath: String, includeServiceColumns: Boolean = false): StreamingObjectsPaths = {
+    val paths: StreamingObjectsPaths = new StreamingObjectsPaths(tmpPath)
+    val consumerPath = paths.consumerPath
+    val queuePath = paths.queuePath
+    val resultPath = paths.resultPath
+
+    YtWrapper.createDir(tmpPath)
+    prepareOrderedTestTable(queuePath, enableDynamicStoreRead = true)
+    prepareConsumer(consumerPath, queuePath)
+    waitQueueRegistration(queuePath)
+
+    val resultTableSchema = if (includeServiceColumns)
+      schemaWithServiceColumns else orderedTestSchema
+
+    prepareOrderedTestTable(resultPath, resultTableSchema, enableDynamicStoreRead = true)
+
+    paths
   }
 
   def doStreamLaunches(paths: StreamingObjectsPaths, launchesParams: Seq[(Int, Int, Boolean)],
@@ -338,7 +559,7 @@ class YTsaurusStreamingTest extends AnyFlatSpec with Matchers with LocalSpark wi
       val queryForResultTableCheck = df
         .writeStream
         .option("checkpointLocation", checkpointLocation)
-        .trigger(ProcessingTime(2000))
+        .trigger(PROCESSING_TIME_TRIGGER)
         .format("yt")
         .option("path", resultPath)
         .start()
@@ -357,7 +578,7 @@ class YTsaurusStreamingTest extends AnyFlatSpec with Matchers with LocalSpark wi
 
           while (currentCount < recordCountLimit) {
             Thread.sleep(2000)
-            currentCount = spark.read.option("enable_inconsistent_read", "true").yt(resultPath).dropDuplicates().count()
+            currentCount = spark.read.option(InconsistentReadEnabled.name, "true").yt(resultPath).dropDuplicates().count()
           }
         }
       }(scala.concurrent.ExecutionContext.Implicits.global)
@@ -370,36 +591,40 @@ class YTsaurusStreamingTest extends AnyFlatSpec with Matchers with LocalSpark wi
       runStreamUntilAchieveRecordCountLimit(launchParams._1, launchParams._2, launchParams._3)
     }
   }
-
-  def prepareStreamingObjects(tmpPath: String, includeServiceColumns: Boolean = false): StreamingObjectsPaths = {
-    val paths: StreamingObjectsPaths = new StreamingObjectsPaths(tmpPath)
-    val consumerPath = paths.consumerPath
-    val queuePath = paths.queuePath
-    val resultPath = paths.resultPath
-
-    YtWrapper.createDir(tmpPath)
-    prepareOrderedTestTable(queuePath, enableDynamicStoreRead = true)
-    prepareConsumer(consumerPath, queuePath)
-    waitQueueRegistration(queuePath)
-
-    val resultTableSchema = if (includeServiceColumns)
-      orderedTestSchemaForStreamingWithExactlyOnceGuarantee else orderedTestSchema
-
-    prepareOrderedTestTable(resultPath, resultTableSchema, enableDynamicStoreRead = true)
-
-    paths
-  }
 }
 
 object YTsaurusStreamingTest {
-  val orderedTestSchemaForStreamingWithExactlyOnceGuarantee: TableSchema = TableSchema.builder()
-    .setUniqueKeys(false)
-    .addKey(s"${STREAMING_SERVICE_KEY_COLUMNS_PREFIX}tablet_index", ColumnValueType.INT64)
-    .addKey(s"${STREAMING_SERVICE_KEY_COLUMNS_PREFIX}row_index", ColumnValueType.INT64)
-    .addValue("a", ColumnValueType.INT64)
-    .addValue("b", ColumnValueType.INT64)
-    .addValue("c", ColumnValueType.STRING)
-    .build()
+
+  val PROCESSING_TIME_TRIGGER: Trigger = ProcessingTime(1000)
+
+  val schemaWithServiceColumns: TableSchema = {
+    var builder: TableSchema.Builder = TableSchema.builder().setUniqueKeys(false)
+    builder = addServiceColumnsAsKeys(builder)
+    builder = addValueColumns(builder)
+    builder.build()
+  }
+
+  val schemaWithServiceColumnsAndQueuePath: TableSchema = {
+    var builder: TableSchema.Builder = TableSchema.builder().setUniqueKeys(false)
+    builder = builder.addKey(s"queue", ColumnValueType.STRING)
+    builder = addServiceColumnsAsKeys(builder)
+    builder = addValueColumns(builder)
+    builder.build()
+  }
+
+  def addValueColumns(builder: TableSchema.Builder): TableSchema.Builder = {
+    builder
+      .addValue("a", ColumnValueType.INT64)
+      .addValue("b", ColumnValueType.INT64)
+      .addValue("c", ColumnValueType.STRING)
+  }
+
+  def addServiceColumnsAsKeys(builder: TableSchema.Builder): TableSchema.Builder = {
+    builder
+      .addKey(TABLET_INDEX_WITH_PREFIX, ColumnValueType.INT64)
+      .addKey(ROW_INDEX_WITH_PREFIX, ColumnValueType.INT64)
+  }
+
 }
 
 class StreamingObjectsPaths(tmpPath: String) {

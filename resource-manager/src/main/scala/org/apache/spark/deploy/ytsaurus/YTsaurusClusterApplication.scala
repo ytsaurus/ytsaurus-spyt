@@ -1,16 +1,18 @@
 
 package org.apache.spark.deploy.ytsaurus
 
-import scala.collection.mutable
 import org.apache.spark.SparkConf
 import org.apache.spark.deploy.SparkApplication
-import org.apache.spark.deploy.ytsaurus.Config.YTSAURUS_DRIVER_OPERATION_DUMP_PATH
-import org.apache.spark.deploy.ytsaurus.Config.YTSAURUS_DRIVER_WATCH
+import org.apache.spark.deploy.ytsaurus.Config.{SUBMISSION_ID, YTSAURUS_DRIVER_OPERATION_DUMP_PATH, YTSAURUS_DRIVER_WATCH}
 import org.apache.spark.internal.Logging
 import org.apache.spark.scheduler.cluster.ytsaurus.YTsaurusOperationManager
-import org.apache.spark.scheduler.cluster.ytsaurus.YTsaurusOperationManager.{getOperation, getOperationState,
-  getWebUIAddress, isCompletedState}
+import org.apache.spark.scheduler.cluster.ytsaurus.YTsaurusOperationManager.{getOperation, getOperationState, getWebUIAddress, isCompletedState}
 
+import java.util.concurrent.ConcurrentHashMap
+import scala.collection.concurrent.TrieMap
+import scala.collection.mutable
+import scala.concurrent.Promise
+import scala.jdk.CollectionConverters._
 import scala.reflect.io.File
 
 
@@ -35,10 +37,12 @@ private[spark] class YTsaurusClusterApplication extends SparkApplication with Lo
     logInfo(s"Application arguments: $appArgs")
 
     val operationManager = YTsaurusOperationManager.create(ytProxy, conf, networkName, proxyRole)
+    val submissionIdOpt = conf.getOption(SUBMISSION_ID)
 
     try {
       val driverOperation = operationManager.startDriver(conf, appArgs)
-      conf.get(YTSAURUS_DRIVER_OPERATION_DUMP_PATH).foreach { File(_).writeAll(driverOperation.id.toString) }
+      val operationId = driverOperation.id.toString
+      conf.get(YTSAURUS_DRIVER_OPERATION_DUMP_PATH).foreach { File(_).writeAll(operationId) }
       if (conf.get(YTSAURUS_DRIVER_WATCH)) {
         var currentState = "undefined"
         var webUIAddress: Option[String] = None
@@ -46,7 +50,7 @@ private[spark] class YTsaurusClusterApplication extends SparkApplication with Lo
           Thread.sleep(pingInterval)
           val opSpec = getOperation(driverOperation, operationManager.ytClient)
           currentState = getOperationState(opSpec)
-          logInfo(s"Operation: ${driverOperation.id}, State: $currentState")
+          logInfo(s"Operation: $operationId, State: $currentState")
 
           val currentWebUiAddress = getWebUIAddress(opSpec)
           if (currentWebUiAddress.isDefined && currentWebUiAddress != webUIAddress) {
@@ -58,8 +62,13 @@ private[spark] class YTsaurusClusterApplication extends SparkApplication with Lo
           throw new IllegalStateException(s"Unsuccessful operation state: $currentState")  // For non-zero exit code
         }
       } else {
-        logInfo(s"Driver operation: ${driverOperation.id}")
+        YTsaurusClusterApplication.completeOperationId(submissionIdOpt, operationId)
+        logInfo(s"Driver operation: $operationId")
       }
+    } catch {
+      case e: Exception =>
+        YTsaurusClusterApplication.failOperationId(submissionIdOpt, e)
+        throw e
     } finally {
       operationManager.close()
     }
@@ -68,6 +77,21 @@ private[spark] class YTsaurusClusterApplication extends SparkApplication with Lo
 
 object YTsaurusClusterApplication {
   private val pingInterval = 3000L
+  private val operationPromises = TrieMap.empty[String, Promise[String]]
+
+  def getOrCreatePromise(submissionId: String): Promise[String] =
+    operationPromises.getOrElseUpdate(submissionId, Promise[String]())
+
+  def failOperationId(submissionId: String, ex: Throwable): Unit =
+    operationPromises.remove(submissionId).foreach(_.tryFailure(ex))
+
+  private def completeOperationId(submissionIdOpt: Option[String], operationId: String): Unit =
+    submissionIdOpt.foreach { submissionId =>
+      operationPromises.remove(submissionId).foreach(_.trySuccess(operationId))
+    }
+
+  private def failOperationId(submissionIdOpt: Option[String], ex: Throwable): Unit =
+    submissionIdOpt.foreach(failOperationId(_, ex))
 }
 
 private[spark] case class ApplicationArguments(

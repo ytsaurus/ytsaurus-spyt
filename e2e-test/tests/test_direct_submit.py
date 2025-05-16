@@ -6,7 +6,7 @@ from pyspark.sql.types import IntegerType, StringType, StructType, StructField, 
 from pyspark.sql.functions import col, udf
 import requests
 from utils import SPARK_CONF, YT_PROXY, upload_file
-import yt.yson as yson
+from utils import wait_for_operation
 
 
 def test_client_mode(yt_client, tmp_dir, direct_session):
@@ -60,19 +60,66 @@ def test_history_server(history_server):
     assert applications[0]['id'] == app_id
 
 
-def test_cluster_mode(yt_client, tmp_dir, direct_submitter):
+def prepare_in_table(tmp_dir, yt_client):
     table_in = f"{tmp_dir}/t_in"
-    table_out = f"{tmp_dir}/t_out"
     yt_client.create("table", table_in,
                      attributes={"schema": [{"name": "name", "type": "string"}, {"name": "price", "type": "uint32"}]})
     rows = [{'name': 'potato', 'price': 2}, {'name': 'milk', 'price': 5}, {'name': 'meat', 'price': 10}]
     yt_client.write_table(table_in, rows)
+    return rows, table_in
 
+
+def test_cluster_mode(yt_client, tmp_dir, direct_submitter):
+    rows, table_in = prepare_in_table(tmp_dir, yt_client)
+
+    table_out = f"{tmp_dir}/t_out"
     upload_file(yt_client, 'jobs/spark_id.py', f'{tmp_dir}/spark_id.py')
-    code = direct_submitter.submit(f'yt:/{tmp_dir}/spark_id.py', job_args=[table_in, table_out])
-    assert code == 0
+    operation_id = direct_submitter.submit(f'yt:/{tmp_dir}/spark_id.py', job_args=[table_in, table_out])
 
+    assert operation_id is not None
+    wait_for_operation(yt_client, operation_id)
     assert_items_equal(yt_client.read_table(table_out), rows)
+
+
+def test_cluster_mode_multi_operations(yt_client, tmp_dir, direct_submitter):
+    rows, table_in = prepare_in_table(tmp_dir, yt_client)
+    upload_file(yt_client, 'jobs/spark_id.py', f'{tmp_dir}/spark_id.py')
+
+    operation_ids = []
+    table_outs = []
+    for i in range(3):
+        table_out = f"{tmp_dir}/t_out_{i}"
+        table_outs.append(table_out)
+        op_id = direct_submitter.submit(
+            f'yt:/{tmp_dir}/spark_id.py',
+            job_args=[table_in, table_out]
+        )
+        assert op_id is not None
+        operation_ids.append(op_id)
+
+    assert len(set(operation_ids)) == 3, f"Operation IDs are not unique: {operation_ids}"
+
+    for op_id in operation_ids:
+        wait_for_operation(yt_client, op_id)
+
+    for table_out in table_outs:
+        assert_items_equal(yt_client.read_table(table_out), rows)
+
+
+def test_cluster_mode_broken_spark_conf(yt_client, tmp_dir, direct_submitter):
+    rows, table_in = prepare_in_table(tmp_dir, yt_client)
+
+    table_out = f"{tmp_dir}/t_out"
+    upload_file(yt_client, 'jobs/spark_id.py', f'{tmp_dir}/spark_id.py')
+    invalid_spark_conf = {"spark.executor.memory": "0M"}
+    try:
+        direct_submitter.submit(f'yt:/{tmp_dir}/spark_id.py',
+                                           job_args=[table_in, table_out],
+                                           conf=invalid_spark_conf)
+        assert False, "Exception was not raised"
+    except Exception as e:
+        assert "Failed to submit Spark job" in str(e)
+
 
 
 def test_cluster_mode_with_dependencies(yt_client, tmp_dir, direct_submitter):
@@ -85,9 +132,12 @@ def test_cluster_mode_with_dependencies(yt_client, tmp_dir, direct_submitter):
     for script in ['spark_job_with_dependencies.py', 'dependencies.py']:
         upload_file(yt_client, f'jobs/{script}', f'{tmp_dir}/{script}')
 
-    direct_submitter.submit(f'yt:/{tmp_dir}/spark_job_with_dependencies.py',
-                            spark_base_args=['--py-files', f'yt:/{tmp_dir}/dependencies.py'],
-                            job_args=[table_in, table_out])
+    operation_id = direct_submitter.submit(f'yt:/{tmp_dir}/spark_job_with_dependencies.py',
+                                           spark_base_args=['--py-files', f'yt:/{tmp_dir}/dependencies.py'],
+                                           job_args=[table_in, table_out])
+
+    assert operation_id is not None
+    wait_for_operation(yt_client, operation_id)
 
     result_rows = [
         {"key": "Reminder count for 0"},
@@ -103,9 +153,12 @@ def test_archives(yt_client, tmp_dir, direct_submitter):
     for script in ['spark_job_archives.py', 'deps.tar', 'deps2.zip']:
         upload_file(yt_client, f'jobs/{script}', f'{tmp_dir}/{script}')
 
-    direct_submitter.submit(f'yt:/{tmp_dir}/spark_job_archives.py',
-                            spark_base_args=['--archives', f'yt:/{tmp_dir}/deps.tar#arcdep,yt:/{tmp_dir}/deps2.zip'],
-                            job_args=[table_out])
+    operation_id = direct_submitter.submit(f'yt:/{tmp_dir}/spark_job_archives.py',
+                                           spark_base_args=['--archives',
+                                                            f'yt:/{tmp_dir}/deps.tar#arcdep,yt:/{tmp_dir}/deps2.zip'],
+                                           job_args=[table_out])
+    assert operation_id is not None
+    wait_for_operation(yt_client, operation_id)
 
     result_rows = [{"_1": "Sp4rK", "_2": "YTsaaaurus"}]
     assert_items_equal(yt_client.read_table(table_out), result_rows)

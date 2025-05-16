@@ -2,6 +2,7 @@ from common.cluster_utils import DEFAULT_SPARK_CONF
 
 import logging
 import os
+import time
 
 YT_PROXY = "127.0.0.1:" + os.getenv("PROXY_PORT", "8000")
 DRIVER_HOST = "172.17.0.1"
@@ -30,3 +31,13 @@ def upload_file(yt_client, source_path, remote_path):
     full_source_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), source_path)
     with open(full_source_path, 'rb') as file:
         yt_client.write_file(remote_path, file)
+
+
+def wait_for_operation(yt_client, operation_id):
+    if operation_id is not None:
+        while True:
+            current_state = yt_client.get_operation_state(operation_id)
+            logging.info(f"Operation: {operation_id}, State: {current_state}")
+            if current_state.is_finished():
+                break
+            time.sleep(1)

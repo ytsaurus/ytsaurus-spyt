@@ -12,8 +12,7 @@ from subprocess import Popen, PIPE
 from py4j.protocol import Py4JJavaError
 from enum import Enum
 from datetime import timedelta
-from .utils import scala_buffer_to_list, get_spark_home, get_spyt_home, _add_conf
-import subprocess
+from .utils import scala_buffer_to_list, get_spark_home, get_spyt_home
 
 
 logger = logging.getLogger(__name__)
@@ -293,27 +292,27 @@ class SparkLauncher(object):
         self._jlauncher = jlauncher
         self._jutils = gateway.jvm.tech.ytsaurus.spyt.submit.InProcessLauncherPythonUtils
 
-    def set_app_resource(self, resource):
+    def set_app_resource(self, resource: str):
         self._jlauncher.setAppResource(resource)
         return self
 
-    def set_main_class(self, main_class):
+    def set_main_class(self, main_class: str):
         self._jlauncher.setMainClass(main_class)
         return self
 
-    def set_conf(self, key, value):
+    def set_conf(self, key: str, value: str):
         self._jlauncher.setConf(key, value)
         return self
 
-    def set_properties_file(self, path):
+    def set_properties_file(self, path: str):
         self._jlauncher.setPropertiesFile(path)
         return self
 
-    def set_app_name(self, app_name):
+    def set_app_name(self, app_name: str):
         self._jlauncher.setAppName(app_name)
         return self
 
-    def add_spark_arg(self, arg, value=None):
+    def add_spark_arg(self, arg: str, value: str = None):
         if value:
             self._jlauncher.addSparkArg(arg, value)
         else:
@@ -325,20 +324,42 @@ class SparkLauncher(object):
             self._jutils.addAppArg(self._jlauncher, arg)
         return self
 
-    def add_jar(self, jar):
+    def add_jar(self, jar: str):
         self._jlauncher.addJar(jar)
         return self
 
-    def add_file(self, file):
+    def add_file(self, file: str):
         self._jlauncher.addFile(file)
         return self
 
-    def add_py_file(self, file):
+    def add_py_file(self, file: str):
         self._jlauncher.addPyFile(file)
         return self
 
-    def set_verbose(self, verbose):
+    def set_verbose(self, verbose: bool):
         self._jlauncher.setVerbose(verbose)
+        return self
+
+    def add_spark_args(self, *spark_args):
+        for i in range(0, len(spark_args), 2):
+            self.add_spark_arg(spark_args[i], spark_args[i+1])
+        return self
+
+    def set_spark_conf(self, conf: dict):
+        for key, value in conf.items():
+            self.set_conf(key, str(value))
+        return self
+
+    def set_master(self, master: str):
+        self._jlauncher.setMaster(master)
+        return self
+
+    def set_deploy_mode(self, deploy_mode: str):
+        self._jlauncher.setDeployMode(deploy_mode)
+        return self
+
+    def launcher(self):
+        return self._jlauncher
 
 
 def create_base_spark_env(spark_home):
@@ -350,25 +371,29 @@ def create_base_spark_env(spark_home):
 
 
 def direct_submit(yt_proxy, num_executors, main_file, deploy_mode="cluster", pool=None,
-                  spark_base_args=[], job_args=[], spark_conf={}, extra_env={}):
-    spark_home = get_spark_home()
-    spark_submit_path = "{}/bin/spark-submit".format(spark_home)
-    spark_args = [spark_submit_path]
-    spark_args.extend(["--master", "ytsaurus://" + yt_proxy])
-    spark_args.extend(["--deploy-mode", deploy_mode])
+                  spark_base_args=[], job_args=[], spark_conf={}, timeout_sec=30):
+    spark_args = []
     spark_args.extend(["--num-executors", str(num_executors)])
     if pool:
         spark_args.extend(["--queue", pool])
-    _add_conf(spark_conf, spark_args)
     spark_args.extend(spark_base_args)
-    spark_args.append(main_file)
-    spark_args.extend(job_args)
 
-    spark_env = create_base_spark_env(spark_home)
-    spark_env.update(extra_env)
+    with (java_gateway() as gateway):
+        j_launcher = gateway.jvm.org.apache.spark.launcher.InProcessLauncher()
+        spark_launcher = (SparkLauncher(j_launcher, gateway)
+                          .set_master("ytsaurus://" + yt_proxy)
+                          .set_deploy_mode(deploy_mode)
+                          .set_app_resource(main_file)
+                          .set_spark_conf(spark_conf)
+                          .add_app_args(*job_args)
+                          .add_spark_args(*spark_args))
 
-    # replace stdin to avoid https://bugs.openjdk.java.net/browse/JDK-8211842
-    return subprocess.call(spark_args, env=spark_env, stdin=subprocess.PIPE)
+        j_directsubmitter = gateway.jvm.tech.ytsaurus.spyt.submit.DirectSubmitter()
+        try_operation_id = j_directsubmitter.submit(spark_launcher.launcher(), timeout_sec)
+        if try_operation_id.isSuccess():
+            return try_operation_id.get()
+        failure = try_operation_id.failed().get()
+        raise Exception(f"Failed to submit Spark job: {failure.toString()}, {failure.getMessage()}")
 
 
 def direct_submit_binary(yt_proxy, num_executors, spyt_version, driver_entry_point=None, executable=sys.executable,

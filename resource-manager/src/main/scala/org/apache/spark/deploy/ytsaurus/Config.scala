@@ -111,6 +111,7 @@ object Config {
     .createOptional
 
   val DRIVER_OPERATION_ID = "spark.ytsaurus.driver.operation.id"
+  val SUBMISSION_ID = "spark.ytsaurus.submission.id"
   val EXECUTOR_OPERATION_ID = "spark.ytsaurus.executor.operation.id"
   val SPARK_PRIMARY_RESOURCE = "spark.ytsaurus.primary.resource"
 

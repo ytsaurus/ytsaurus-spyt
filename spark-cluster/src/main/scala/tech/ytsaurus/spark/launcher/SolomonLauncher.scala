@@ -7,6 +7,7 @@ import tech.ytsaurus.spyt.wrapper.client.YtClientConfiguration
 import tech.ytsaurus.spark.launcher.Service.BasicService
 
 import java.io.File
+import java.net.URI
 import scala.concurrent.duration.Duration
 
 trait SolomonLauncher extends SidecarLauncher {
@@ -21,6 +22,7 @@ trait SolomonLauncher extends SidecarLauncher {
         val cfg = templateContent
           .replaceAll("\\$SPARK_COMPONENT", c.sparkComponent)
           .replaceAll("\\$SOLOMON_CONFIG_FILE", c.solomonConfigFile)
+          .replaceAll("\\$SPARK_UI_URL", c.sparkUiUrl.toString)
           .replaceAll("\\$SPARK_UI_PORT", c.sparkUiPort.toString)
           .replaceAll("\\$SOLOMON_PORT", c.port.toString)
           .replaceAll("\\$SOLOMON_PUSH_PORT", c.pushPort.toString)
@@ -32,8 +34,9 @@ trait SolomonLauncher extends SidecarLauncher {
 
   def startSolomonAgent(args: Array[String],
                         sparkComponent: String,
+                        sparkUiUrl: URI,
                         sparkUiPort: Int): Option[BasicService] = {
-    SolomonConfig(sparkSystemProperties, args, sparkComponent, sparkUiPort).map { config =>
+    SolomonConfig(sparkSystemProperties, args, sparkComponent, sparkUiUrl, sparkUiPort).map { config =>
       startService(config, prepareConfigFile, processWorkingDir = Some(new File(path(config.configDirectory))))
     }
   }
@@ -51,6 +54,7 @@ case class SolomonConfig(binaryPath: String,
                          ytConf: YtClientConfiguration,
                          timeout: Duration,
                          sparkComponent: String,
+                         sparkUiUrl: URI,
                          sparkUiPort: Int) extends SidecarConfig {
   override def host: String = "::"
 
@@ -64,11 +68,12 @@ object SolomonConfig extends SidecarConfigUtils {
   def apply(sparkConf: Map[String, String],
             args: Array[String],
             sparkComponent: String,
+            sparkUiUrl: URI,
             sparkUiPort: Int): Option[SolomonConfig] = {
-    SolomonConfig(sparkConf, Args(args), sparkComponent, sparkUiPort)
+    SolomonConfig(sparkConf, Args(args), sparkComponent, sparkUiUrl, sparkUiPort)
   }
 
-  def apply(sparkConf: Map[String, String], args: Args, sparkComponent: String, sparkUiPort: Int): Option[SolomonConfig] = {
+  def apply(sparkConf: Map[String, String], args: Args, sparkComponent: String, sparkUiUrl: URI, sparkUiPort: Int): Option[SolomonConfig] = {
     implicit val a: Args = args
     if (optionArg("enabled").forall(_.toBoolean)) {
       val agentConfig = "solomon-agent.template.conf"
@@ -88,6 +93,7 @@ object SolomonConfig extends SidecarConfigUtils {
         ytConf = ytConf,
         timeout = timeout,
         sparkComponent = sparkComponent,
+        sparkUiUrl = sparkUiUrl,
         sparkUiPort = sparkUiPort
       ))
     } else None

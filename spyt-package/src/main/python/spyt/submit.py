@@ -371,7 +371,7 @@ def create_base_spark_env(spark_home):
 
 
 def direct_submit(yt_proxy, num_executors, main_file, deploy_mode="cluster", pool=None,
-                  spark_base_args=[], job_args=[], spark_conf={}, prefer_ipv6=False, timeout_sec=30):
+                  spark_base_args=[], job_args=[], spark_conf={}, java_home=None, prefer_ipv6=False, timeout_sec=30):
     """
     Submits a Spark job directly to YTsaurus using the provided parameters.
 
@@ -384,6 +384,7 @@ def direct_submit(yt_proxy, num_executors, main_file, deploy_mode="cluster", poo
     :param spark_base_args: additional Spark arguments
     :param job_args: job arguments
     :param spark_conf: additional Spark configuration as Python dict
+    :param java_home: path to the Java home directory (default: None)
     :param prefer_ipv6:prefer IPv6 addresses (internal Yandex users must enable ipv6 option by default)
     :param timeout_sec: timeout for submitting the job in seconds (default: 30 sec)
     :return: operation ID of the submitted Spark job.
@@ -394,7 +395,7 @@ def direct_submit(yt_proxy, num_executors, main_file, deploy_mode="cluster", poo
         spark_args.extend(["--queue", pool])
     spark_args.extend(spark_base_args)
 
-    with (java_gateway(prefer_ipv6=prefer_ipv6) as gateway):
+    with (java_gateway(java_home=java_home, prefer_ipv6=prefer_ipv6) as gateway):
         j_launcher = gateway.jvm.org.apache.spark.launcher.InProcessLauncher()
         spark_launcher = (SparkLauncher(j_launcher, gateway)
                           .set_master("ytsaurus://" + yt_proxy)

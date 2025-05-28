@@ -8,7 +8,11 @@ import tech.ytsaurus.spyt.wrapper.YtWrapper
 
 import scala.collection.concurrent.TrieMap
 
-object YtClientProvider {
+trait YtClientProvider {
+  def ytClient(conf: YtClientConfiguration): CompoundClient
+}
+
+object YtClientProvider extends YtClientProvider {
   private val CLIENT_THREADS_PER_SPARK_CORE: Int = 2
   private val log = LoggerFactory.getLogger(getClass)
   private val clients = TrieMap.empty[String, YtRpcClient] // normalizedProxy - YtRpcClient

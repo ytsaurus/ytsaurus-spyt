@@ -93,6 +93,9 @@ lazy val `resource-manager` = (project in file("resource-manager"))
     libraryDependencies ++= sparkTestDep
   )
 
+lazy val `shuffle-service`= (project in file("shuffle-service"))
+  .dependsOn(`yt-wrapper` % "compile->compile;test->test;provided->provided;compileprovided->compileprovided;testprovided->testprovided")
+
 lazy val `cluster` = (project in file("spark-cluster"))
   .dependsOn(`data-source-extended` % "compile->compile;test->test;provided->provided;compileprovided->compileprovided;testprovided->testprovided")
   .enablePlugins(JavaAgent)
@@ -109,7 +112,16 @@ lazy val `spark-submit` = (project in file("spark-submit"))
   )
   .enablePlugins(JavaAgent)
   .settings(
-    libraryDependencies ++= scaldingArgs,
+    resolvedJavaAgents := javaAgents.value
+  )
+
+lazy val `spyt-test` = (project in file("spyt-test"))
+  .dependsOn(
+    `spark-submit` % "compile->compile;test->test;provided->provided;compileprovided->compileprovided;testprovided->testprovided",
+    `shuffle-service` % "compile->compile;test->test"
+  )
+  .enablePlugins(JavaAgent)
+  .settings(
     resolvedJavaAgents := javaAgents.value
   )
 
@@ -117,6 +129,7 @@ lazy val `spyt-package` = (project in file("spyt-package"))
   .enablePlugins(JavaAppPackaging, PythonPlugin)
   .dependsOn(
     `spark-submit` % "compile->compile;test->test",
+    `shuffle-service` % "compile->compile;test->test",
     `spark-patch`,
     `spark-adapter-impl-322`,
     `spark-adapter-impl-330`,
@@ -247,6 +260,8 @@ lazy val root = (project in file("."))
     `resource-manager`,
     `spark-submit`,
     `spark-patch`,
+    `shuffle-service`,
+    `spyt-test`,
     `spyt-package`
   )
   .settings(
@@ -290,7 +305,8 @@ lazy val root = (project in file("."))
         `data-source-extended` / publishSigned,
         `resource-manager` / publishSigned,
         `cluster` / publishSigned,
-        `spark-submit` / publishSigned
+        `spark-submit` / publishSigned,
+        `shuffle-service` / publishSigned
       ).value
     }
   )

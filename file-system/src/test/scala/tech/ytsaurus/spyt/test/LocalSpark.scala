@@ -7,7 +7,7 @@ import org.apache.spark.sql.internal.SQLConf.FILE_COMMIT_PROTOCOL_CLASS
 import org.apache.spark.sql.{DataFrame, SparkSession}
 import org.apache.spark.yt.test.Utils
 import org.apache.spark.yt.test.Utils.{SparkConfigEntry, defaultConfValue}
-import org.scalatest.TestSuite
+import org.scalatest.{BeforeAndAfterEach, TestSuite}
 import tech.ytsaurus.spyt.wrapper.client.YtClientConfigurationConverter._
 import tech.ytsaurus.spyt.wrapper.config.ConfigEntry
 import tech.ytsaurus.spyt.test.LocalSpark.defaultSparkConf
@@ -15,7 +15,7 @@ import tech.ytsaurus.spyt.wrapper.client.{YtClientProvider, YtRpcClient}
 
 import scala.annotation.tailrec
 
-trait LocalSpark extends LocalYtClient {
+trait LocalSpark extends LocalYtClient with BeforeAndAfterEach {
   self: TestSuite =>
   System.setProperty("io.netty.tryReflectionSetAccessible", "true")
 
@@ -23,25 +23,51 @@ trait LocalSpark extends LocalYtClient {
 
   def numFailures: Int = 1
 
+  def sparkMaster: String = s"local[$numExecutors, $numFailures]"
+
   def sparkConf: SparkConf = defaultSparkConf
 
   def reinstantiateSparkSession: Boolean = false
 
-  lazy val spark: SparkSession = {
+  override def beforeEach(): Unit = {
+    super.beforeEach()
     if (reinstantiateSparkSession) {
       LocalSpark.stop()
     }
+  }
+
+  override def afterEach(): Unit = {
+    if (reinstantiateSparkSession) {
+      LocalSpark.stop()
+    }
+    super.afterEach()
+  }
+
+  private def sparkSession(extraConf: Map[String, String] = Map()): SparkSession = {
     if (LocalSpark.spark != null) {
       LocalSpark.spark
     } else {
-      LocalSpark.spark = sparkSessionBuilder.getOrCreate()
+      LocalSpark.spark = sparkSessionBuilder(extraConf).getOrCreate()
       LocalSpark.spark
     }
   }
 
-  protected def sparkSessionBuilder: SparkSession.Builder = SparkSession.builder()
-    .master(s"local[$numExecutors, $numFailures]")
-    .config(sparkConf)
+  lazy val spark: SparkSession = sparkSession()
+
+  def withSparkSession(conf: Map[String, String] = Map.empty)(testBody: SparkSession => Any): Any = {
+    val _spark = sparkSession(conf)
+    testBody(_spark)
+  }
+
+  protected def sparkSessionBuilder(extraConf: Map[String, String] = Map()): SparkSession.Builder = {
+    val builder = SparkSession.builder()
+      .master(sparkMaster)
+      .config(sparkConf)
+    extraConf.foreach { case (key, value) =>
+      builder.config(key, value)
+    }
+    builder
+  }
 
   override protected def ytRpcClient: YtRpcClient = {
     YtClientProvider.ytRpcClient(ytClientConfiguration(spark))

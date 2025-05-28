@@ -11,7 +11,7 @@ object Dependencies {
   lazy val shapelessVersion = "2.3.7"
   lazy val scalatestVersion = "3.1.0"
   lazy val livyVersion = "0.8.0-incubating"
-  lazy val ytsaurusClientVersion = "1.2.9"
+  lazy val ytsaurusClientVersion = "1.2.9-SNAPSHOT"
   lazy val scalatraVersion = "2.7.0"
   lazy val mockitoVersion = "1.14.4"
   lazy val arrowVersion = "0.17.1"
@@ -93,5 +93,9 @@ object Dependencies {
   lazy val intellijIdeaCompatLibraries = spark(compileSparkVersion) ++ spark(testSparkVersion) ++ Seq(
     "io.netty" % "netty-all" % "4.1.96.Final" % Provided,
     "io.netty" % "netty-transport-native-epoll" % "4.1.96.Final" % Provided,
+    "io.netty" % "netty-transport-native-epoll" % "4.1.96.Final" % Provided classifier "linux-x86_64",
+    "io.netty" % "netty-transport-native-epoll" % "4.1.96.Final" % Provided classifier "linux-aarch_64",
+    "io.netty" % "netty-transport-native-kqueue" % "4.1.96.Final" % Provided classifier "osx-aarch_64",
+    "io.netty" % "netty-transport-native-kqueue" % "4.1.96.Final" % Provided classifier "osx-x86_64",
   )
 }

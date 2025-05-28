@@ -34,6 +34,12 @@ object CommonPlugin extends AutoPlugin {
       ossrhCredentialsFile
     ).filter(_.exists()).map(Credentials(_))
 
+    val consoleTesting = if (sys.env.get("SPYT_TEST_CONSOLE").exists(_.toBoolean)) {
+      Seq(Test / connectInput := true)
+    } else {
+      Nil
+    }
+
     Seq(
       externalResolvers := Resolver.combineDefaultResolvers(resolvers.value.toVector, mavenCentral = false),
       ivyConfigurations ++= Seq(SparkCompile, SparkRuntimeTest),
@@ -73,6 +79,9 @@ object CommonPlugin extends AutoPlugin {
         Nil
       }),
       Test / javaOptions ++= org.apache.spark.launcher.JavaModuleOptions.defaultModuleOptions().split(' ').toSeq,
+      Test / envVars ++= Map(
+        "SPYT_TESTING" -> "1"
+      ),
       printCompileClasspath := {
         (Compile / dependencyClasspath).value.foreach(a => println(s"${a.metadata.get(configuration.key)} - ${a.data.getAbsolutePath}"))
       },
@@ -81,6 +90,6 @@ object CommonPlugin extends AutoPlugin {
       },
       Global / pgpPassphrase := gpgPassphrase.map(_.toCharArray),
       ivyConfigurations := overrideConfigs(CompileProvided, TestProvided, NewCompileInternal, NewTestInternal)(ivyConfigurations.value)
-    ) ++ credentialsSettings.map(c => credentials += c)
+    ) ++ consoleTesting ++ credentialsSettings.map(c => credentials += c)
   }
 }

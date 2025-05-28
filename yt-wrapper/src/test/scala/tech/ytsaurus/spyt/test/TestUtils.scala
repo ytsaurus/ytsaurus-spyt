@@ -15,6 +15,7 @@ import tech.ytsaurus.ysontree.{YTreeBuilder, YTreeNode, YTreeNodeUtils, YTreeTex
 
 import java.io.{ByteArrayInputStream, InputStream}
 import java.nio.charset.StandardCharsets
+import java.util.concurrent.{CompletableFuture, CompletionStage}
 import scala.annotation.tailrec
 import scala.concurrent.duration._
 import scala.language.postfixOps
@@ -129,21 +130,28 @@ trait TestUtils {
       }
     }
     val req = WriteTable.builder[String]()
-      .setPath(path)
+      .setPath(YPath.simple(path))
       .setSerializationContext(new SerializationContext(serializer))
       .setNeedRetries(false)
-    val writer = yt.writeTable(req).join()
+      .setTableSchema(physicalSchema)
+    val writer = yt.writeTableV2(req.build()).join()
+    val rowsJList: java.util.List[String] = rows.asJava
 
-    @tailrec
-    def write(): Unit = {
-      if (!writer.write(rows.asJava, physicalSchema)) {
-        writer.readyEvent().join()
-        write()
+    val chunkRowsLimit = 5000000;
+
+    def write(fromIndex: Int): CompletableFuture[Void] = {
+      val toIndex = Math.min(fromIndex + chunkRowsLimit, rowsJList.size())
+      val wFuture = writer.write(rowsJList.subList(fromIndex, toIndex))
+      wFuture.thenCompose { _ =>
+        if (toIndex < rowsJList.size()) {
+          write(toIndex)
+        } else {
+          CompletableFuture.completedFuture[Void](null)
+        }
       }
     }
 
-    write()
-    writer.close().join()
+    write(0).thenCompose(_ => writer.finish().asInstanceOf[CompletionStage[Any]]).join()
   }
 
   def writeTableFromURow(rows: Seq[UnversionedRow], path: String,
@@ -233,4 +241,14 @@ trait TestUtils {
     ), path, ytSchema)
   }
 
+  /**
+   * A utility method than can be used in any test to pause test execution and investigate intermediate state.
+   * SPYT_TEST_CONSOLE env variable must be set to true in order to enable this functionality.
+   */
+  def pressAnyKey(): Unit = {
+    if (sys.env.get("SPYT_TEST_CONSOLE").exists(_.toBoolean)) {
+      println("Press any key to continue.....")
+      scala.io.StdIn.readLine()
+    }
+  }
 }

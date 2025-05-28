@@ -18,64 +18,57 @@ class YtOutputCommitProtocolTest extends FlatSpec with Matchers with LocalSpark 
 
   override def reinstantiateSparkSession: Boolean = true
 
-  override def afterAll(): Unit = {
-    LocalSpark.stop()
-    super.afterAll()
-  }
-
   behavior of "YtOutputCommitProtocol"
 
-  it should "not duplicate output data in case of failures after commiting a task" in {
-    withConfs(Map(
+  it should "not duplicate output data in case of failures after commiting a task" in withSparkSession(Map(
       "spark.sql.autoBroadcastJoinThreshold" -> "-1",
       "spark.sql.shuffle.partitions" -> "12",
       "spark.sql.adaptive.coalescePartitions.enabled" -> "false",
       "spark.sql.sources.commitProtocolClass" -> "tech.ytsaurus.spyt.format.BogusYtOutputCommitProtocol"
-    )) {
-      val mainTableSchema = TableSchema.builder()
-        .addValue("id", ColumnValueType.INT64)
-        .addValue("join_id", ColumnValueType.INT64)
-        .addValue("value", ColumnValueType.STRING)
-        .build()
+  )) { _spark =>
+    val mainTableSchema = TableSchema.builder()
+      .addValue("id", ColumnValueType.INT64)
+      .addValue("join_id", ColumnValueType.INT64)
+      .addValue("value", ColumnValueType.STRING)
+      .build()
 
-      val joinTableSchema = TableSchema.builder()
-        .addValue("id", ColumnValueType.INT64)
-        .addValue("value", ColumnValueType.STRING)
-        .build()
+    val joinTableSchema = TableSchema.builder()
+      .addValue("id", ColumnValueType.INT64)
+      .addValue("value", ColumnValueType.STRING)
+      .build()
 
-      YtWrapper.createDir(tmpPath)
+    YtWrapper.createDir(tmpPath)
 
-      val mainTablePath = s"$tmpPath/main_table"
-      val mainTableRows = 10000
-      val joinTablePath = s"$tmpPath/join_table"
-      val joinTableRows = 1000
-      val outTablePath = s"$tmpPath/out"
+    val mainTablePath = s"$tmpPath/main_table"
+    val mainTableRows = 10000
+    val joinTablePath = s"$tmpPath/join_table"
+    val joinTableRows = 1000
+    val outTablePath = s"$tmpPath/out"
 
-      writeTableFromYson(
-        (1 to mainTableRows).map(id => s"""{id = ${id}u; join_id = ${id*2}u; value = "value $id"}"""),
-        mainTablePath,
-        mainTableSchema
-      )
+    writeTableFromYson(
+      (1 to mainTableRows).map(id => s"""{id = ${id}u; join_id = ${id*2}u; value = "value $id"}"""),
+      mainTablePath,
+      mainTableSchema
+    )
 
-      writeTableFromYson(
-        (1 to joinTableRows).map(id => s"""{id = ${id*20}u; value = "value $id"}"""),
-        joinTablePath,
-        joinTableSchema
-      )
+    writeTableFromYson(
+      (1 to joinTableRows).map(id => s"""{id = ${id*20}u; value = "value $id"}"""),
+      joinTablePath,
+      joinTableSchema
+    )
 
-      val mainTableDf = spark.read.yt(mainTablePath).repartition(13)
-      val joinTableDf = spark.read.yt(joinTablePath).repartition(7)
+    val mainTableDf = _spark.read.yt(mainTablePath).repartition(13)
+    val joinTableDf = _spark.read.yt(joinTablePath).repartition(7)
 
-      val result = mainTableDf.join(joinTableDf, mainTableDf("join_id") === joinTableDf("id"), "left")
+    val result = mainTableDf.join(joinTableDf, mainTableDf("join_id") === joinTableDf("id"), "left")
 
-      result.select(mainTableDf("id"), joinTableDf("value")).write.yt(outTablePath)
+    result.select(mainTableDf("id"), joinTableDf("value")).write.yt(outTablePath)
 
-      val rowCount = YtWrapper.attribute(outTablePath, "row_count").intValue()
-      val chunkCount = YtWrapper.attribute(outTablePath, "chunk_count").intValue()
+    val rowCount = YtWrapper.attribute(outTablePath, "row_count").intValue()
+    val chunkCount = YtWrapper.attribute(outTablePath, "chunk_count").intValue()
 
-      rowCount shouldBe mainTableRows
-      chunkCount shouldEqual spark.conf.get("spark.sql.shuffle.partitions").toInt
-    }
+    rowCount shouldBe mainTableRows
+    chunkCount shouldEqual _spark.conf.get("spark.sql.shuffle.partitions").toInt
   }
 }
 

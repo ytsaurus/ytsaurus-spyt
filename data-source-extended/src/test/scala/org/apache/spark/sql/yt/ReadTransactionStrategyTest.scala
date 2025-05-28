@@ -7,14 +7,11 @@ import tech.ytsaurus.spyt.test.{DynTableTestUtils, LocalSpark, TestUtils, TmpDir
 import tech.ytsaurus.spyt.wrapper.Utils.tryWithResources
 
 class ReadTransactionStrategyTest extends FlatSpec with Matchers with LocalSpark with TestUtils with TmpDir with DynTableTestUtils {
-  override def beforeAll(): Unit = {
-    super.beforeAll()
-    LocalSpark.stop()
-  }
+  override def reinstantiateSparkSession: Boolean = true
 
   it should "be able to read removed table" in {
     writeTableFromYson(Seq("""{}"""), tmpPath, TableSchema.builder().build())
-    tryWithResources(sparkSessionBuilder.withExtensions { extensions =>
+    tryWithResources(sparkSessionBuilder().withExtensions { extensions =>
       extensions.injectPreCBORule(new ReadTransactionStrategy(_))
       extensions.injectPreCBORule { _ =>
         plan => {

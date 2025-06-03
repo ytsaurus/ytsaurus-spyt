@@ -17,7 +17,7 @@ run_tox_tests="true"
 yt_local_runner_path="$root_dir/../../docker/local/run_local_cluster.sh"
 proxy_port=8000
 spark_cache_path=""
-spark_versions="3.2.2 3.2.4 3.3.4 3.4.4 3.5.4 3.5.5"
+spark_versions="3.2.2 3.2.4 3.3.4 3.4.4 3.5.5 3.5.6"
 versions_combinations=""
 
 print_usage() {
@@ -104,7 +104,7 @@ if [ "$rebuild" = "true" ]; then
     # Build SPYT artifacts
     sbt -DcustomSpytVersion=$spyt_version spytBuildRelease
     # Download pre-built Livy distributive
-    wget -nc -P $root_dir/build_output https://storage.yandexcloud.net/ytsaurus-spyt/livy.tgz
+    wget -nv -nc -P $root_dir/build_output https://storage.yandexcloud.net/ytsaurus-spyt/livy.tgz
     # Build SPYT docker image
     cd $root_dir/tools/release/spyt_image
     ./build.sh --spyt-version $spyt_version

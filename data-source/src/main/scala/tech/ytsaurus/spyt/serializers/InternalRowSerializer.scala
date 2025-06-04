@@ -84,7 +84,7 @@ class InternalRowSerializer(schema: StructType, writeSchemaConverter: WriteSchem
               targetColumnType match {
                 case ColumnValueType.INT64 | ColumnValueType.UINT64 | ColumnValueType.DOUBLE | ColumnValueType.STRING =>
                   writeHeader(writeable, idMapping, aggregate, i, 0, _ => targetColumnType)
-                  targetColumnType match {
+                  (targetColumnType: @unchecked) match {
                     case ColumnValueType.INT64 | ColumnValueType.UINT64 =>
                       writeable.onInteger(value.toLong)
                     case ColumnValueType.DOUBLE =>

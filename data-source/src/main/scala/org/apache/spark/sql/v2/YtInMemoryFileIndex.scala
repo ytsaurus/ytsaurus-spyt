@@ -20,7 +20,7 @@ import scala.annotation.tailrec
 import scala.collection.mutable
 
 /**
- * Copy-paste from [[org.apache.spark.sql.execution.datasources.InMemoryFileIndex]]
+ * Copy-paste from org.apache.spark.sql.execution.datasources.InMemoryFileIndex
  * with changes to lookup nodes with `@` attributes (transactions, timestamps etc)
  */
 class YtInMemoryFileIndex(

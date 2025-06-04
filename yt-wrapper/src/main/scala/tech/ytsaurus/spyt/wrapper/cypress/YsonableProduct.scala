@@ -14,8 +14,8 @@ object YsonableProduct {
 
     private def toYsonAny(value: Any, builder: YTreeBuilder): YTreeBuilder = {
       value match {
-        case m: Map[String, String] => m.foldLeft(builder.beginMap()){case (b, (k, v)) => b.key(k).value(v)}.endMap()
-        case s: Seq[String] => s.foldLeft(builder.beginList()){case (b, v) => b.value(v)}.endList()
+        case m: Map[String @unchecked, String @unchecked] => m.foldLeft(builder.beginMap()){case (b, (k, v)) => b.key(k).value(v)}.endMap()
+        case s: Seq[String @unchecked] => s.foldLeft(builder.beginList()){case (b, v) => b.value(v)}.endList()
         case _ => builder.value(value)
       }
     }

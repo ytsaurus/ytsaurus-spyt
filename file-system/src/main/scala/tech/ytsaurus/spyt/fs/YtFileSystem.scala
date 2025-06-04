@@ -49,6 +49,7 @@ class YtFileSystem extends YtFileSystemBase {
       )
       case PathType.Directory => new FileStatus(0, true, 1, 0, 0, f)
       case PathType.None => null
+      case unknown => throw new NoSuchElementException(s"Unknown PathType: '$unknown'")
     }
   }
 

@@ -135,7 +135,7 @@ object SchemaConverter {
         IndexedDataType.TupleType(tupleElementTypes, s)
       case s@StructType(fields) if isVariant(s) =>
         val transformedStruct = StructType(fields.map(f => f.copy(name = f.name.substring(2))))
-        indexedDataType(transformedStruct) match {
+        (indexedDataType(transformedStruct): @unchecked) match {
           case t: IndexedDataType.TupleType => IndexedDataType.VariantOverTupleType(t)
           case s: IndexedDataType.StructType => IndexedDataType.VariantOverStructType(s)
         }

@@ -114,7 +114,7 @@ case class YtPartitionReaderFactoryAdapter(sqlConf: SQLConf,
   private def buildLockedSplitReader[T](file: PartitionedFile)
                                        (splitReader: (YtInputSplit, YtHadoopPath) => PartitionReader[T]): PartitionReader[T] = {
     file match {
-      case ypf: YtPartitionedFile =>
+      case ypf: YtPartitionedFile @unchecked =>
         val split = createSplit(ypf)
         splitReader(split, ypf.delegate.hadoopPath)
       case _ =>

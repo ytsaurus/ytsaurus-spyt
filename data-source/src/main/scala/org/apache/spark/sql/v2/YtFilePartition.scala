@@ -153,13 +153,13 @@ object YtFilePartition {
   val partitionedFilesOrdering: Ordering[PartitionedFile] = {
     (x: PartitionedFile, y: PartitionedFile) => {
       (x, y) match {
-        case (xYt: YtPartitionedFileExt, yYt: YtPartitionedFileExt)
+        case (xYt: YtPartitionedFileExt @unchecked, yYt: YtPartitionedFileExt @unchecked)
           if xYt.path == yYt.path && !xYt.delegate.isDynamic && !yYt.delegate.isDynamic =>
           xYt.delegate.beginRow.compare(yYt.delegate.beginRow)
-        case (xYt: YtPartitionedFileExt, yYt: YtPartitionedFileExt) =>
+        case (xYt: YtPartitionedFileExt @unchecked, yYt: YtPartitionedFileExt @unchecked) =>
           xYt.path.compare(yYt.path)
-        case (_: YtPartitionedFileExt, _) => -1
-        case (_, _: YtPartitionedFileExt) => 1
+        case (_: YtPartitionedFileExt @unchecked, _) => -1
+        case (_, _: YtPartitionedFileExt @unchecked) => 1
         case (_, _) => y.length.compare(x.length)
       }
     }
@@ -173,7 +173,7 @@ object YtFilePartition {
       s"Required keys: ${requiredKeysO.map(_.mkString(",")).getOrElse("-")}")
     if (keys.nonEmpty && keyPartitioningConfig.enabled && requiredKeysO.forall(keys.startsWith(_))) {
       val isSupportedFiles = splitFiles.forall {
-        case _: YtPartitionedFileExt => true
+        case _: YtPartitionedFileExt @unchecked => true
         case _ => false
       }
       if (isSupportedFiles) {
@@ -218,7 +218,7 @@ object YtFilePartition {
     }
   }
 
-  def getFilePartitions(partitionedFiles: Seq[PartitionedFile]) = {
+  def getFilePartitions(partitionedFiles: Seq[PartitionedFile]): Seq[FilePartition] = {
     partitionedFiles.zipWithIndex.map { case (x, i) => FilePartition(i, Array(x)) }
   }
 

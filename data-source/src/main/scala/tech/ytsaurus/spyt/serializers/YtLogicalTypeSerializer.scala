@@ -131,6 +131,7 @@ object YtLogicalTypeSerializer {
           } else {
             throw new NoSuchElementException("Incorrect variant format")
           }
+        case unknown => throw new NoSuchElementException(s"Unknown YTLogicalType: '$unknown'")
       }
     case s: YTreeStringNode =>
       YtLogicalType.fromName(s.stringValue())

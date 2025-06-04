@@ -54,8 +54,8 @@ object SpecificationUtils {
 
   private[ytsaurus] def convertToYTree(data: Any): Any = {
     data match {
-      case mutableMap: mutable.Map[String, Any] => convertToYTree(mutableMap.toMap)
-      case map: Map[String, Any] =>
+      case mutableMap: mutable.Map[String, Any] @unchecked => convertToYTree(mutableMap.toMap)
+      case map: Map[String, Any] @unchecked=>
         val builder = YTree.mapBuilder()
         map.foreach {
           case (key, value) =>
@@ -100,8 +100,8 @@ object SpecificationUtils {
       case (key, _) => key != null && key.nonEmpty
     }
     val configAsMapTree = createNestedStructure(filteredConf.toMap).values.headOption match {
-      case Some(map: mutable.HashMap[String, Any]) => map.toMap
-      case Some(map: Map[String, Any]) => map
+      case Some(map: mutable.HashMap[String, Any] @unchecked) => map.toMap
+      case Some(map: Map[String, Any] @unchecked) => map
       case None => Map.empty[String, Any]
       case _ => throw new IllegalArgumentException("Unexpected map type stored in annotations")
     }
@@ -127,7 +127,7 @@ object SpecificationUtils {
     val result = mutable.Map[String, Any]() ++= map1
 
     map2.foreach { case (key, map2Value) =>
-      val map1Value = if (result.contains(key) && result(key).isInstanceOf[mutable.HashMap[String, Any]])
+      val map1Value = if (result.contains(key) && result(key).isInstanceOf[mutable.HashMap[String @unchecked, Any @unchecked]])
         result(key).asInstanceOf[mutable.HashMap[String, Any]].toMap
       else result.get(key)
 

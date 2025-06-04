@@ -77,7 +77,7 @@ class YtFileFormat extends FileFormat with DataSourceRegister with StreamSourceP
     val ytLoggerConfig = YtDynTableLoggerConfig.fromSpark(sparkSession)
 
     {
-      case ypf: YtPartitionedFile =>
+      case ypf: YtPartitionedFile @unchecked =>
         val log = LoggerFactory.getLogger(getClass)
         implicit val yt: CompoundClient =
           YtClientProvider.ytClientWithProxy(ytClientConf, ypf.delegate.cluster)

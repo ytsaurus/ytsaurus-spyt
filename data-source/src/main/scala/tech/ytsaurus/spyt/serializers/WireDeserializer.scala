@@ -69,7 +69,7 @@ abstract class WireDeserializer[T](schema: StructType) extends WireRowDeserializ
             case _: Datetime64Type => addValue(value)
             case _: Timestamp64Type => addValue(value)
             case _: Interval64Type => addValue(value)
-            case _: DecimalType => _currentType match {
+            case _: DecimalType => (_currentType: @unchecked) match {
               case ColumnValueType.INT64 => addValue(Decimal(value))
               case ColumnValueType.UINT64 => addValue(YTsaurusTypes.longToUnsignedDecimal(value))
             }

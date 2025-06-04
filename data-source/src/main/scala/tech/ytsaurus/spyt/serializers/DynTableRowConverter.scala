@@ -80,7 +80,8 @@ class DynTableRowConverter(schema: StructType, tableSchema: TableSchema, typeV3:
       value match {
         case row: Row => convertField(row.get(index), field.dataType, typeV3, hint)
         case row: InternalRow => convertField(row.get(index, field.dataType), field.dataType, typeV3, hint)
-        case row: UnsafeRow => convertField(row.get(index, field.dataType), field.dataType, typeV3, hint)
+        // TBD: delete below UnsafeRow extends InternalRow
+        // case row: UnsafeRow => convertField(row.get(index, field.dataType), field.dataType, typeV3, hint)
       }
     }
 

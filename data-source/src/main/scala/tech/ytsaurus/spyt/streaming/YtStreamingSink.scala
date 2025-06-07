@@ -25,7 +25,7 @@ class YtStreamingSink(sqlContext: SQLContext,
       val ytClientConfiguration = YtClientConfigurationConverter.ytClientConfiguration(sparkContext.getConf)
       val bcYtClientConfiguration = sparkContext.broadcast(ytClientConfiguration)
 
-      val wConfig = SparkYtWriteConfiguration(sqlContext).copy(dynBatchSize = Int.MaxValue)
+      val wConfig = SparkYtWriteConfiguration(sqlContext)
       val bcWriterConfig = sparkContext.broadcast(wConfig)
 
       val path = YPathEnriched.fromPath(new Path(queuePath))

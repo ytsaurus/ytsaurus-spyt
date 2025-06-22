@@ -163,6 +163,21 @@ object Config {
     .booleanConf
     .createWithDefault(false)
 
+  val YTSAURUS_METRICS_ENABLED = ConfigBuilder("spark.ytsaurus.metrics.enabled")
+    .version("2.7.0")
+    .booleanConf
+    .createWithDefault(false)
+
+  val YT_METRICS_PULL_PORT = ConfigBuilder("spark.ytsaurus.metrics.pull.port")
+    .version("2.7.0")
+    .intConf
+    .createWithDefault(27100)
+
+  val YT_METRICS_AGENT_PULL_PORT = ConfigBuilder("spark.ytsaurus.metrics.agent.pull.port")
+    .version("2.7.0")
+    .intConf
+    .createWithDefault(27101)
+
   val YTSAURUS_CLIENT_TIMEOUT = ConfigBuilder("spark.ytsaurus.client.rpc.timeout")
     .version("2.6.0")
     .timeConf(TimeUnit.MILLISECONDS)

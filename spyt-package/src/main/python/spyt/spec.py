@@ -15,6 +15,7 @@ from yt.wrapper.http_helpers import get_token, get_user_name  # noqa: E402
 from yt.wrapper.spec_builders import VanillaSpecBuilder  # noqa: E402
 
 from .conf import ytserver_proxy_attributes, get_spark_distributive  # noqa: E402
+from .conf import read_metrics_conf, read_spark_defaults_conf  # noqa: E402
 from .utils import SparkDiscovery, call_get_proxy_address_url, parse_memory  # noqa: E402
 from .enabler import SpytEnablers  # noqa: E402
 from .version import __version__  # noqa: E402
@@ -47,9 +48,7 @@ class SparkDefaultArguments(object):
         return {
             "operation_spec": {
                 "annotations": {
-                    "is_spark": True,
-                    "solomon_resolver_tag": "spark",
-                    "solomon_resolver_ports": [27100],
+                    "is_spark": True
                 },
                 "max_failed_job_count": 10000,
                 "max_stderr_count": 150,
@@ -460,7 +459,7 @@ def build_spark_operation_spec(config: dict, client: YtClient,
     environment["SPYT_HOME"] = common_config.spyt_home
     environment["SPARK_CLUSTER_VERSION"] = config["cluster_version"]  # TODO Rename to SPYT_CLUSTER_VERSION
     environment["SPYT_CLUSTER_VERSION"] = config["cluster_version"]
-    environment["SPARK_YT_SOLOMON_ENABLED"] = str(common_config.enablers.enable_solomon_agent)
+    environment["SPARK_YT_METRICS_ENABLED"] = str(common_config.enablers.enable_yt_metrics)
     environment["SPARK_YT_IPV6_PREFERENCE_ENABLED"] = \
         str(common_config.enablers.enable_preference_ipv6)  # COMPAT(alex-shishkin)
     environment["SPARK_YT_TCP_PROXY_ENABLED"] = str(common_config.enablers.enable_tcp_proxy)
@@ -468,8 +467,19 @@ def build_spark_operation_spec(config: dict, client: YtClient,
     environment["SPARK_YT_RPC_JOB_PROXY_ENABLED"] = str(common_config.rpc_job_proxy)
     if common_config.enablers.enable_byop:
         environment["SPARK_YT_BYOP_PORT"] = "27002"
-    if common_config.enablers.enable_solomon_agent:
-        environment["SOLOMON_PUSH_PORT"] = "27099"
+    if common_config.enablers.enable_yt_metrics:
+        metrics_conf = read_metrics_conf()
+        spark_defaults_conf = read_spark_defaults_conf()
+
+        spark_push_port = metrics_conf["*.sink.solomon.solomon_port"]
+        metrics_pull_port = spark_defaults_conf["spark.ytsaurus.metrics.pull.port"]
+        agent_pull_port = spark_defaults_conf["spark.ytsaurus.metrics.agent.pull.port"]
+        environment["YT_METRICS_SPARK_PUSH_PORT"] = spark_push_port
+        environment["YT_AGENT_METRICS_PULL_PORT"] = agent_pull_port
+        environment["YT_METRICS_PULL_PORT"] = metrics_pull_port
+        operation_spec["annotations"]["solomon_resolver_tag"] = "spark"
+        operation_spec["annotations"]["solomon_resolver_ports"] = [metrics_pull_port, agent_pull_port]
+
     if common_config.enablers.enable_tcp_proxy:
         environment["SPARK_YT_TCP_PROXY_RANGE_START"] = str(common_config.tcp_proxy_range_start)
         environment["SPARK_YT_TCP_PROXY_RANGE_SIZE"] = str(common_config.tcp_proxy_range_size)

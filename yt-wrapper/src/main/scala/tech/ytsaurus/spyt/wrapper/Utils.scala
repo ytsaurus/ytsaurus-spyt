@@ -1,6 +1,8 @@
 package tech.ytsaurus.spyt.wrapper
 
+import java.io.{FileInputStream, InputStream}
 import java.net.InetAddress
+import java.util.Properties
 import java.util.concurrent.{CompletableFuture, TimeUnit}
 import scala.annotation.tailrec
 import scala.concurrent.duration._
@@ -53,6 +55,18 @@ object Utils {
       InetAddress.getLocalHost.getCanonicalHostName
     else
       InetAddress.getLocalHost.getHostName
+
+  def tryUpdatePropertiesFromFile(path: String, properties: Properties): Unit = {
+    var is: InputStream = null
+    try {
+      is = new FileInputStream(path)
+      properties.load(is)
+    } finally {
+      if (is != null) {
+        is.close()
+      }
+    }
+  }
 
   def tryWithResources[R <: AutoCloseable, A](resource: R)(body: R => A): A = TryWithResourcesJava.apply(resource, body)
 

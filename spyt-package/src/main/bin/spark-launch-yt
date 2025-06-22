@@ -49,8 +49,8 @@ def main(raw_args=None):
 
     default_enablers = SpytEnablers()
     add_parser_group(parser, '--enable-byop', '--disable-byop', 'enable_byop', default_enablers.enable_byop)
-    add_parser_group(parser, '--enable-solomon-agent', '--disable-solomon-agent', 'enable_solomon_agent',
-                     default_enablers.enable_solomon_agent)
+    add_parser_group(parser, '--enable-yt-metrics', '--disable-yt-metrics', 'enable_yt_metrics',
+                     default_enablers.enable_yt_metrics)
 
     parser.set_defaults(enable_tmpfs=True)
 
@@ -144,7 +144,7 @@ def main(raw_args=None):
                         enablers=SpytEnablers(
                             enable_byop=args.enable_byop,
                             enable_mtn=args.enable_mtn,
-                            enable_solomon_agent=args.enable_solomon_agent,
+                            enable_yt_metrics=args.enable_yt_metrics,
                             enable_tcp_proxy=args.enable_tcp_proxy,
                             enable_squashfs=args.enable_squashfs
                         ),

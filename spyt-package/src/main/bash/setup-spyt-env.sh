@@ -66,3 +66,9 @@ for file in $(ls); do
     fi
   fi
 done
+
+if [[ -n "$YT_METRICS_SPARK_PUSH_PORT" ]]; then
+  export SPYT_BINS="$spyt_home/bin"
+  CONFIG_PATH="$HOME/unified-agent.yaml"
+  unified_agent --config $CONFIG_PATH 1>&2 &
+fi

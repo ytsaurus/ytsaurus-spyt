@@ -3,12 +3,13 @@ package tech.ytsaurus.spark.launcher
 import com.codahale.metrics.MetricRegistry
 import com.twitter.scalding.Args
 import org.slf4j.LoggerFactory
+import tech.ytsaurus.spark.launcher.AdditionalMetricsSender.startAdditionalMetricsSenderIfDefined
+import tech.ytsaurus.spark.launcher.rest.MasterWrapperLauncher
+import tech.ytsaurus.spark.metrics.AdditionalMetrics
 import tech.ytsaurus.spyt.wrapper.TcpProxyService
 import tech.ytsaurus.spyt.wrapper.TcpProxyService.updateTcpAddress
 import tech.ytsaurus.spyt.wrapper.client.YtClientConfiguration
 import tech.ytsaurus.spyt.wrapper.discovery.{Address, SparkConfYsonable}
-import tech.ytsaurus.spark.launcher.rest.MasterWrapperLauncher
-import tech.ytsaurus.spark.metrics.AdditionalMetrics
 
 import scala.concurrent.duration._
 import scala.language.postfixOps
@@ -16,16 +17,18 @@ import scala.language.postfixOps
 object MasterLauncher extends App
   with VanillaLauncher
   with SparkLauncher
-  with MasterWrapperLauncher
-  with SolomonLauncher {
+  with MasterWrapperLauncher {
 
   private val log = LoggerFactory.getLogger(getClass)
+  private val instance = "master"
+
   val masterArgs = MasterLauncherArgs(args)
+
   import masterArgs._
 
   val autoscalerConf: Option[AutoScaler.Conf] = AutoScaler.Conf(sparkSystemProperties)
   val additionalMetrics: MetricRegistry = new MetricRegistry
-  AdditionalMetrics.register(additionalMetrics, "master")
+  AdditionalMetrics.register(additionalMetrics, instance)
 
   withYtClient(ytConfig) { yt =>
     val masterGroupId = groupId.map(getFullGroupId)
@@ -35,65 +38,59 @@ object MasterLauncher extends App
       val reverseProxyUrl = tcpRouter.map(x => "http://" + x.getExternalAddress("WEBUI").toString)
       withService(startMaster(reverseProxyUrl)) { master =>
         withService(startMasterWrapper(args, master)) { masterWrapper =>
-          withOptionalService(startSolomonAgent(args, "master", master.masterAddress.webUiHostAndPort.port)) {
-            solomonAgent =>
+          master.waitAndThrowIfNotAlive(5 minutes)
+          masterWrapper.waitAndThrowIfNotAlive(5 minutes)
 
-              master.waitAndThrowIfNotAlive(5 minutes)
-              masterWrapper.waitAndThrowIfNotAlive(5 minutes)
+          val masterAddress = tcpRouter.map { router =>
+            Address(
+              router.getExternalAddress("HOST"),
+              router.getExternalAddress("WEBUI"),
+              router.getExternalAddress("REST")
+            )
+          }.getOrElse(master.masterAddress)
+          val masterWrapperAddress =
+            tcpRouter.map(_.getExternalAddress("WRAPPER")).getOrElse(masterWrapper.address)
+          log.info("Register master")
+          discoveryService.registerMaster(
+            operationId,
+            masterAddress,
+            clusterVersion,
+            masterWrapperAddress,
+            SparkConfYsonable(sparkSystemProperties)
+          )
+          log.info("Master registered")
+          tcpRouter.foreach { router =>
+            updateTcpAddress(master.masterAddress.hostAndPort.toString, router.getPort("HOST"))(yt)
+            updateTcpAddress(master.masterAddress.webUiHostAndPort.toString, router.getPort("WEBUI"))(yt)
+            updateTcpAddress(master.masterAddress.restHostAndPort.toString, router.getPort("REST"))(yt)
+            updateTcpAddress(masterWrapper.address.toString, router.getPort("WRAPPER"))(yt)
+            log.info("Tcp proxy port addresses updated")
+          }
 
-              val masterAddress = tcpRouter.map { router =>
-                Address(
-                  router.getExternalAddress("HOST"),
-                  router.getExternalAddress("WEBUI"),
-                  router.getExternalAddress("REST")
-                )
-              }.getOrElse(master.masterAddress)
-              val masterWrapperAddress =
-                tcpRouter.map(_.getExternalAddress("WRAPPER")).getOrElse(masterWrapper.address)
-              log.info("Register master")
-              discoveryService.registerMaster(
+          autoscalerConf foreach { conf =>
+            AutoScaler.start(AutoScaler.build(conf, discoveryService, yt), conf, additionalMetrics)
+          }
+
+          startAdditionalMetricsSenderIfDefined(sparkSystemProperties, spytHome, instance, additionalMetrics)
+
+          def isAlive: Boolean = {
+            val isMasterAlive = master.isAlive(processCheckRetries)
+
+            val res = isMasterAlive
+            if (res) {
+              discoveryService.updateMaster(
                 operationId,
                 masterAddress,
                 clusterVersion,
                 masterWrapperAddress,
                 SparkConfYsonable(sparkSystemProperties)
               )
-              log.info("Master registered")
-              tcpRouter.foreach { router =>
-                updateTcpAddress(master.masterAddress.hostAndPort.toString, router.getPort("HOST"))(yt)
-                updateTcpAddress(master.masterAddress.webUiHostAndPort.toString, router.getPort("WEBUI"))(yt)
-                updateTcpAddress(master.masterAddress.restHostAndPort.toString, router.getPort("REST"))(yt)
-                updateTcpAddress(masterWrapper.address.toString, router.getPort("WRAPPER"))(yt)
-                log.info("Tcp proxy port addresses updated")
-              }
-
-              autoscalerConf foreach { conf =>
-                AutoScaler.start(AutoScaler.build(conf, discoveryService, yt), conf, additionalMetrics)
-              }
-              if (solomonAgent.nonEmpty) {
-                AdditionalMetricsSender(sparkSystemProperties, "master", additionalMetrics).start()
-              }
-
-              def isAlive: Boolean = {
-                val isMasterAlive = master.isAlive(processCheckRetries)
-                val isSolomonAlive = solomonAgent.forall(_.isAlive(processCheckRetries))
-
-                val res = isMasterAlive && isSolomonAlive
-                if (res) {
-                  discoveryService.updateMaster(
-                    operationId,
-                    masterAddress,
-                    clusterVersion,
-                    masterWrapperAddress,
-                    SparkConfYsonable(sparkSystemProperties)
-                  )
-                }
-                res
-              }
-
-              checkPeriodically(isAlive)
-              log.error("Master is not alive")
+            }
+            res
           }
+
+          checkPeriodically(isAlive)
+          log.error("Master is not alive")
         }
       }
     }

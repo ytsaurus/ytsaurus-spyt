@@ -122,6 +122,33 @@ def read_remote_conf(global_conf, cluster_version, client=None):
     return update_inplace(global_conf, version_conf)  # TODO(alex-shishkin): Might cause undefined behaviour
 
 
+def read_metrics_conf():
+    return read_conf("metrics.properties", delimiter="=")
+
+
+def read_spark_defaults_conf():
+    return read_conf("spark-defaults.conf")
+
+
+def read_conf(filename, delimiter=None):
+    props = {}
+    try:
+        conf_dir = os.environ.get("SPARK_CONF_DIR")
+        filepath = os.path.join(conf_dir, filename)
+        with open(filepath, 'r') as f:
+            for line in f:
+                line = line.strip()
+                if line and not line.startswith('#'):
+                    key_value = line.split(delimiter, 1)
+                    if len(key_value) != 2:
+                        continue
+                    key, value = key_value
+                    props[key.strip()] = value.strip()
+    except Exception as e:
+        print(f"Failed to load conf from {filename}: {e}")
+    return props
+
+
 def read_cluster_conf(path=None, client=None):
     if path is None:
         return {}

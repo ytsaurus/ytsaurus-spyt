@@ -3,7 +3,9 @@ package tech.ytsaurus.spark.launcher
 import com.codahale.metrics.MetricRegistry
 import org.slf4j.{Logger, LoggerFactory}
 import tech.ytsaurus.spark.launcher.AdditionalMetricsSender.MetricsConfig.MetricsConfig
+import tech.ytsaurus.spark.metrics.SolomonSinkSettings.YT_MONITORING_PUSH_PORT_ENV_NAME
 import tech.ytsaurus.spark.metrics.{ReporterConfig, SolomonReporter, SolomonConfig => SC}
+import tech.ytsaurus.spyt.wrapper.Utils
 
 import scala.util.Try
 
@@ -15,9 +17,16 @@ trait AdditionalMetricsSender {
 object AdditionalMetricsSender {
   val log: Logger = LoggerFactory.getLogger(AdditionalMetricsSender.getClass)
 
-  def apply(systemProps: Map[String, String], instance: String, registry: MetricRegistry): AdditionalMetricsSender = {
+  def startAdditionalMetricsSenderIfDefined(systemProps: Map[String, String], spytHome: String,
+                                       instance: String, registry: MetricRegistry): Unit = {
+    if (Option(System.getenv(YT_MONITORING_PUSH_PORT_ENV_NAME)).isDefined) {
+      AdditionalMetricsSender(systemProps, spytHome, instance, registry).start()
+    }
+  }
+
+  def apply(systemProps: Map[String, String], spytHome: String, instance: String, registry: MetricRegistry): AdditionalMetricsSender = {
     val conf = new MetricsConfig(systemProps)
-    conf.initialize()
+    conf.initialize(spytHome)
     val instProps = conf.getInstance(instance)
     val propsOpt = conf.subProperties(instProps, "^sink\\.(.+)\\.(.+)".r).get("solomon")
 
@@ -63,12 +72,12 @@ object AdditionalMetricsSender {
 
       /**
        * Load properties from various places, based on precedence
-       * If the same property is set again latter on in the method, it overwrites the previous value
+       * If the same property is set again later on in the method, it overwrites the previous value
        */
-      def initialize(): Unit = {
+      def initialize(spytHome: String): Unit = {
         // Add default properties in case there's no properties file
         setDefaultProperties(properties)
-        val spytHome = sys.env("SPYT_HOME")
+
         // constant from config package replaced with plain string
         loadPropertiesFromFile(systemProps.getOrElse("spark.metrics.conf", s"$spytHome/conf/metrics.properties"))
 
@@ -144,17 +153,11 @@ object AdditionalMetricsSender {
        * in class path.
        */
       private[this] def loadPropertiesFromFile(path: String): Unit = {
-        var is: InputStream = null
         try {
-          is = new FileInputStream(path)
-          properties.load(is)
+          Utils.tryUpdatePropertiesFromFile(path, properties)
         } catch {
           case e: Exception =>
             log.error(s"Error loading configuration file $path", e)
-        } finally {
-          if (is != null) {
-            is.close()
-          }
         }
       }
 

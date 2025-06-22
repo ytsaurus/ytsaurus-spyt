@@ -1,0 +1,65 @@
+status:
+  port: !expr "{$env('YT_AGENT_METRICS_PULL_PORT')}"
+  host: '::'
+
+storages:
+- name: main-storage
+  plugin: fs
+  config:
+    directory: /tmp/unified_agent_storage
+    max_partition_size: 1gb
+
+channels:
+- name: main-metrics-channel
+  channel:
+    pipe:
+    - storage_ref:
+        name: main-storage
+    output:
+      plugin: metrics_pull
+      id: metrics-pull-output
+      config:
+        port: !expr "{$env('YT_METRICS_PULL_PORT')}"
+        host: '::'
+        max_memory_usage: 300mb
+
+routes:
+- input:
+    plugin: metrics
+    id: httpPush
+    config:
+      port: !expr "{$env('YT_METRICS_SPARK_PUSH_PORT')}"
+      host: '::'
+      path: /
+      metric_name_label: sensor
+      format:
+        solomon_json: { }
+  channel:
+    pipe:
+      - filter:
+          plugin: add_metric_labels
+          config:
+            labels:
+              cookie: !expr "{$env('YT_JOB_COOKIE')}"
+              operation_alias: !expr "{$env('YT_OPERATION_ALIAS')}"
+              component: !expr "{$env('YT_TASK_NAME')}"
+              host: spark
+      - filter:
+          plugin: convert_metrics
+          config:
+            format:
+              solomon_json: { }
+      - filter:
+          plugin: subprocess
+          config:
+            command: !expr "{$env('SPYT_BINS')}/unified-agent-spark-sensor-normalizer.py"
+      - filter:
+          plugin: parse_metrics
+          config:
+            metric_name_label: sensor
+            project: yt
+            service: spark
+            format:
+              solomon_json: { }
+    channel_ref:
+      name: main-metrics-channel

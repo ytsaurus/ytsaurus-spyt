@@ -18,12 +18,13 @@ import tech.ytsaurus.client.request.{CompleteOperation, GetOperation, UpdateOper
 import tech.ytsaurus.client.rpc.{RpcOptions, YTsaurusClientAuth}
 import tech.ytsaurus.core.GUID
 import tech.ytsaurus.spyt.{BuildInfo, SparkAdapter, SparkVersionUtils}
-import tech.ytsaurus.spyt.wrapper.YtWrapper
+import tech.ytsaurus.spyt.wrapper.{Utils => YtUtils, YtWrapper}
 import tech.ytsaurus.ysontree._
 
 import java.net.URI
 import java.nio.file.Paths
 import java.time.Duration
+import java.util.Properties
 import scala.collection.JavaConverters._
 import scala.collection.mutable.ArrayBuffer
 import scala.concurrent.duration.DurationInt
@@ -298,6 +299,7 @@ private[spark] class YTsaurusOperationManager(val ytClient: YTsaurusClient,
     OperationParameters(spec, conf.get(YTSAURUS_MAX_EXECUTOR_FAILURES) * numExecutors, attemptId)
   }
 
+
   private def setCommonSpecParams(specBuilder: YTreeBuilder, conf: SparkConf, taskName: String): YTreeBuilder = {
     if (conf.contains(s"spark.ytsaurus.$taskName.task.parameters")) {
       val customParametersString = conf.get(s"spark.ytsaurus.$taskName.task.parameters")
@@ -408,6 +410,10 @@ private[spark] object YTsaurusOperationManager extends Logging {
       val spytHome = if (isSquashFs) "/usr/lib/spyt" else s"$home/spyt-package"
       val sparkClassPath = s"$home/*:$spytHome/conf/:$spytHome/jars/*:$sparkHome/jars/*"
       environment.put("SPARK_HOME", YTree.stringNode(sparkHome))
+
+      if (conf.get(Config.YTSAURUS_METRICS_ENABLED)) {
+        enrichMetricsEnvironment(spytHome, conf, environment)
+      }
 
       if (conf.get(YTSAURUS_IS_PYTHON_BINARY)) {
         val pyBinaryWrapper = YTree.stringNode(YTsaurusUtils.pythonBinaryWrapperPath(spytHome))
@@ -590,6 +596,44 @@ private[spark] object YTsaurusOperationManager extends Logging {
     (files ++ primaryResource).distinct
   }
 
+  private[ytsaurus] def enrichMetricsEnvironment(spytHome: String, conf: SparkConf, environment: YTreeMapNode): Unit = {
+    logDebug(s"Initializing YT metrics environment")
+    val sparkConfDir = Option(System.getenv("SPARK_CONF_DIR")).getOrElse(s"$spytHome/conf")
+    val metricsConfPath = conf.get("spark.metrics.conf", s"$sparkConfDir/metrics.properties")
+    logDebug(s"Loading metrics.properties from $metricsConfPath")
+    val metricProps = loadPropertiesFromFile(metricsConfPath)
+
+    val solomonPortKey = "*.sink.solomon.solomon_port"
+    val metricsSparkPushPort = metricProps.getProperty(solomonPortKey)
+    logDebug(s"Solomon port from properties: $metricsSparkPushPort")
+    if (metricsSparkPushPort == null || metricsSparkPushPort.isEmpty) {
+      throw new SparkException(s"Solomon port is not set in metrics.properties ($metricsConfPath)")
+    }
+
+    val metricsPullPort = conf.get(Config.YT_METRICS_PULL_PORT).toString
+    val metricsAgentPullPort = conf.get(Config.YT_METRICS_AGENT_PULL_PORT).toString
+    val appName = conf.get("spark.app.name")
+
+    conf.set(s"$SPYT_ANNOTATIONS.is_spark", "True")
+    conf.set(s"$SPYT_ANNOTATIONS.solomon_resolver_tag", "spark")
+    conf.set(s"$SPYT_ANNOTATIONS.solomon_resolver_ports", s"$metricsPullPort,$metricsAgentPullPort")
+
+    val envVars = Map(
+      "YT_METRICS_SPARK_PUSH_PORT" -> metricsSparkPushPort,
+      "YT_METRICS_PULL_PORT" -> metricsPullPort,
+      "YT_AGENT_METRICS_PULL_PORT" -> metricsAgentPullPort,
+      "YT_OPERATION_ALIAS" -> appName,
+      "SPARK_YT_METRICS_ENABLED" -> "true"
+    )
+
+    envVars.foreach(kv => environment.put(kv._1, YTree.stringNode(kv._2)))
+
+    logDebug(
+      s"""YT metrics environment initialized with:
+         |${envVars.map(kv => s"  ${kv._1}: ${kv._2}").mkString("\n")}""".stripMargin
+    )
+  }
+
   private[ytsaurus] def enrichSparkConf(conf: SparkConf, ytSparkConfig: YTreeMapNode): Unit = {
     if (ytSparkConfig.containsKey("spark_conf")) {
       ytSparkConfig.getMap("spark_conf").asScala.foreach { entry =>
@@ -672,6 +716,17 @@ private[spark] object YTsaurusOperationManager extends Logging {
       builder.setAuth(YTsaurusClientAuth.builder().setUser(user).setToken(token).build())
     }
     builder.build()
+  }
+
+  private[this] def loadPropertiesFromFile(path: String): Properties = {
+    val properties = new Properties()
+    try {
+      YtUtils.tryUpdatePropertiesFromFile(path, properties)
+    } catch {
+      case e: Exception =>
+        log.error(s"Error loading configuration file $path", e)
+    }
+    properties
   }
 }
 

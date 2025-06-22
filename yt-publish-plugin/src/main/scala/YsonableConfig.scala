@@ -68,14 +68,14 @@ case class SparkLaunchConfig(spark_yt_base_path: String,
 
 case class SpytEnablers(enable_byop: Boolean = true,
                         enable_mtn: Boolean = true,
-                        enable_solomon_agent: Boolean = true,
+                        enable_yt_metrics: Boolean = true,
                         enable_tcp_proxy: Boolean = true,
                         enable_squashfs: Boolean = true) extends YsonableConfig {
   override def toYson(builder: YTreeBuilder): YTreeBuilder = {
     builder.beginMap()
       .key("spark.hadoop.yt.byop.enabled").value(enable_byop)
       .key("spark.hadoop.yt.mtn.enabled").value(enable_mtn)
-      .key("spark.hadoop.yt.solomonAgent.enabled").value(enable_solomon_agent)
+      .key("spark.ytsaurus.metrics.enabled").value(enable_yt_metrics)
       .key("spark.hadoop.yt.tcpProxy.enabled").value(enable_tcp_proxy)
       .key("spark.ytsaurus.squashfs.enabled").value(enable_squashfs)
       .endMap()
@@ -84,7 +84,7 @@ case class SpytEnablers(enable_byop: Boolean = true,
 
 object SparkLaunchConfig {
   val defaultLayers = Seq(
-    s"$sparkYtDeltaLayerPath/layer_with_solomon_agent.tar.gz",
+    s"$sparkYtDeltaLayerPath/layer_with_unify_agent.tar.gz",
     s"$ytPortoDeltaLayersPath/jdk/layer_with_jdk_lastest.tar.gz",
     s"$sparkYtDeltaLayerPath/python/layer_with_python312_focal_v002.tar.gz",
     s"$sparkYtDeltaLayerPath/python/layer_with_python311_focal_v002.tar.gz",
@@ -95,7 +95,7 @@ object SparkLaunchConfig {
   )
 
   val squashFsLayers = Seq(
-    s"$sparkYtSquashfsLayerPath/layer_with_solomon_agent.squashfs",
+    s"$sparkYtSquashfsLayerPath/layer_with_unify_agent.squashfs",
     s"$sparkYtSquashfsLayerPath/jdk/layer_with_jdk_latest.squashfs",
     s"$sparkYtSquashfsLayerPath/python/layer_with_python312_focal_v002.squashfs",
     s"$sparkYtSquashfsLayerPath/python/layer_with_python311_focal_v002.squashfs",

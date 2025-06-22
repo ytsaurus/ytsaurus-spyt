@@ -98,7 +98,7 @@ def prepare_sidecar_configs(conf_local_dir: str, os_release: bool):
 
 
 def prepare_launch_config(conf_local_dir: str, client: Client, versions: Versions,
-                          os_release: bool) -> Dict[str, Any]:
+                          os_release: bool, yandex_internal_tests: bool) -> Dict[str, Any]:
     launch_config = copy.deepcopy(LAUNCH_CONFIG)
     launch_config['spark_conf']['spark.yt.version'] = versions.spyt_version.scala
     launch_config['spark_conf']['spark.shuffle.service.port.interval.start'] = "27050"
@@ -110,14 +110,14 @@ def prepare_launch_config(conf_local_dir: str, client: Client, versions: Version
     launch_config['file_paths'] = get_file_paths(conf_local_dir, client.root_path, versions)
     launch_config['enablers'] = {
         "spark.hadoop.yt.byop.enabled": not os_release,
-        "spark.hadoop.yt.solomonAgent.enabled": not os_release,
+        "spark.ytsaurus.metrics.enabled": not os_release if yandex_internal_tests is None else yandex_internal_tests,
         "spark.hadoop.yt.mtn.enabled": not os_release,
         "spark.hadoop.yt.tcpProxy.enabled": os_release,
         "spark.ytsaurus.squashfs.enabled": not os_release
     }
     if not os_release:
         launch_config['layer_paths'] = [
-            client.resolve_from_root("delta/layer_with_solomon_agent.tar.gz"),
+            client.resolve_from_root("delta/layer_with_unify_agent.tar.gz"),
             "//porto_layers/delta/jdk/layer_with_jdk_lastest.tar.gz",
             client.resolve_from_root("delta/python/layer_with_python312_focal_v002.tar.gz"),
             client.resolve_from_root("delta/python/layer_with_python311_focal_v002.tar.gz"),
@@ -127,7 +127,7 @@ def prepare_launch_config(conf_local_dir: str, client: Client, versions: Version
             "//porto_layers/base/focal/porto_layer_search_ubuntu_focal_app_lastest.tar.gz"
         ]
         launch_config['squashfs_layer_paths'] = [
-            client.resolve_from_root("squashfs/layer_with_solomon_agent.squashfs"),
+            client.resolve_from_root("squashfs/layer_with_unify_agent.squashfs"),
             client.resolve_from_root("squashfs/jdk/layer_with_jdk_latest.squashfs"),
             client.resolve_from_root("squashfs/python/layer_with_python312_focal_v002.squashfs"),
             client.resolve_from_root("squashfs/python/layer_with_python311_focal_v002.squashfs"),
@@ -174,7 +174,8 @@ def prepare_global_config(os_release: bool) -> Dict[str, Any]:
     return global_config
 
 
-def make_configs(sources_path: str, client_builder: ClientBuilder, versions: Versions, os_release: bool):
+def make_configs(sources_path: str, client_builder: ClientBuilder, versions: Versions, os_release: bool,
+                 yandex_internal_tests: bool = False):
     client = Client(client_builder)
 
     conf_local_dir = join(sources_path, 'conf')
@@ -182,7 +183,7 @@ def make_configs(sources_path: str, client_builder: ClientBuilder, versions: Ver
     logger.debug("Sidecar configs preparation")
     prepare_sidecar_configs(conf_local_dir, os_release)
     logger.debug("Launch config file creation")
-    launch_config = prepare_launch_config(conf_local_dir, client, versions, os_release)
+    launch_config = prepare_launch_config(conf_local_dir, client, versions, os_release, yandex_internal_tests)
     logger.info(f"Launch config: {launch_config}")
     write_config(launch_config, join(conf_local_dir, 'spark-launch-conf'))
 
@@ -193,12 +194,12 @@ def make_configs(sources_path: str, client_builder: ClientBuilder, versions: Ver
         write_config(global_config, join(conf_local_dir, 'global'))
 
 
-def main(sources_path: str, client_builder: ClientBuilder, os_release: bool):
+def main(sources_path: str, client_builder: ClientBuilder, os_release: bool, yandex_internal_tests: bool):
     release_level = get_release_level(sources_path)
     if release_level < ReleaseLevel.SPYT:
         raise RuntimeError("Found no cluster files")
     versions = load_versions(sources_path)
-    make_configs(sources_path, client_builder, versions, os_release)
+    make_configs(sources_path, client_builder, versions, os_release, yandex_internal_tests)
     logger.info("Generation finished successfully")
 
 
@@ -207,11 +208,18 @@ if __name__ == '__main__':
     parser.add_argument("sources", type=str, help="Path to SPYT sources")
     parser.add_argument("--root", default="//home/spark", type=str, help="Root spyt path on YTsaurus cluster")
     parser.add_argument("--inner-release", action='store_false', dest='os_release', help="Includes extra settings")
+    parser.add_argument('--yandex-internal-tests', dest='yandex_internal_tests', action='store_true',
+                        help='Explicitly enable YT metrics for tests')
+    parser.set_defaults(yandex_internal_tests=None)  # fallback to default value based on os_release
+
     parser.set_defaults(os_release=True)
     args, _ = parser.parse_known_args()
+
+    logger.info(f"Arguments: {args}")
 
     client_builder = ClientBuilder(
         root_path=args.root,
     )
 
-    main(sources_path=args.sources, client_builder=client_builder, os_release=args.os_release)
+    main(sources_path=args.sources, client_builder=client_builder, os_release=args.os_release,
+         yandex_internal_tests=args.yandex_internal_tests)

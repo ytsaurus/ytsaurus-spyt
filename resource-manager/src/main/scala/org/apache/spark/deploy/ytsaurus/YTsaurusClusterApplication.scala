@@ -8,11 +8,9 @@ import org.apache.spark.internal.Logging
 import org.apache.spark.scheduler.cluster.ytsaurus.YTsaurusOperationManager
 import org.apache.spark.scheduler.cluster.ytsaurus.YTsaurusOperationManager.{getOperation, getOperationState, getWebUIAddress, isCompletedState}
 
-import java.util.concurrent.ConcurrentHashMap
 import scala.collection.concurrent.TrieMap
 import scala.collection.mutable
 import scala.concurrent.Promise
-import scala.jdk.CollectionConverters._
 import scala.reflect.io.File
 
 

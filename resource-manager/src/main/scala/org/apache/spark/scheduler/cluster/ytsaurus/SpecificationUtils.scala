@@ -14,28 +14,33 @@ object SpecificationUtils {
   private def createNestedStructure(allSettings: Map[String, String]): Map[String, Any] = {
 
     def processValue(value: String): Any = {
-      if (value.contains(",")) value.split(",").map(_.trim).toList
-      else value
+      if (value.contains(",")) {
+        return value.split(",")
+          .map(s => convertSimpleValue(s.trim))
+          .toList
+      }
+      convertSimpleValue(value)
+    }
+
+    def convertSimpleValue(s: String): Any = {
+      Try(s.toBoolean).getOrElse(
+        Try(s.toLong).getOrElse(
+          Try(s.toDouble).getOrElse(s)
+        )
+      )
+    }
+
+    def convertValue(value: Any): Any = value match {
+      case b: Boolean => b
+      case l: Long => l
+      case d: Double => d
+      case _ => processValue(value.toString)
     }
 
     def nestedMap(path: List[String], value: Any, currentMap: mutable.Map[String, Any]): mutable.Map[String, Any] = {
       path match {
         case head :: Nil =>
-          value match {
-            case Boolean => currentMap += (head -> value.asInstanceOf[Boolean])
-            case Long => currentMap += (head -> value.asInstanceOf[Long])
-            case Double => currentMap += (head -> value.asInstanceOf[Double])
-            case s: String =>
-              Try(s.toBoolean).map(b => currentMap += (head -> b)).getOrElse(
-                Try(s.toLong).map(l => currentMap += (head -> l)).getOrElse(
-                  Try(s.toDouble).map(d => currentMap += (head -> d)).getOrElse(
-                    currentMap += (head -> processValue(s))
-                  )
-                )
-              )
-            case _ =>
-              currentMap += (head -> processValue(value.toString))
-          }
+          currentMap += (head -> convertValue(value))
         case head :: tail =>
           val nextMap = currentMap.getOrElse(head, mutable.Map[String, Any]()).asInstanceOf[mutable.Map[String, Any]]
           currentMap += (head -> nestedMap(tail, value, nextMap))

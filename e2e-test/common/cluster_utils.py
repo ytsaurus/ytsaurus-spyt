@@ -50,7 +50,7 @@ def get_data_path(dump_dir, relative_path, create_dir=False):
 def dump_runtime_files(dump_dir, yt_root_path, subdir, lbl, ignore_function):
     logger.info(f"Trying dump runtime data from {yt_root_path}/<slot-runtime-data>/{subdir}")
     if not yt_root_path:
-        logger.warn("No yt cluster root path found")
+        logger.warning("No yt cluster root path found")
         return
 
     nodes_path = os.path.join(yt_root_path, "runtime_data", "node")

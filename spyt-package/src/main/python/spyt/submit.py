@@ -125,10 +125,6 @@ def java_gateway(kill_jvm_on_shutdown=True, *args, **kwargs):
 
 
 class RetryConfig(object):
-    def __new__(cls, *args, **kwargs):
-        instance = super(RetryConfig, cls).__new__(cls)
-        return instance
-
     def __init__(self, enable_retry=True, retry_limit=10, retry_interval=timedelta(minutes=1)):
         self.enable_retry = enable_retry
         self.retry_limit = retry_limit
@@ -371,7 +367,8 @@ def create_base_spark_env(spark_home):
 
 
 def direct_submit(yt_proxy, num_executors, main_file, deploy_mode="cluster", pool=None,
-                  spark_base_args=[], job_args=[], spark_conf={}, java_home=None, prefer_ipv6=False, timeout_sec=30):
+                  spark_base_args=[], job_args=[], spark_conf={}, java_home=None, prefer_ipv6=False,
+                  timeout_sec=30, max_attempts=1, base_delay=10, max_delay=300):
     """
     Submits a Spark job directly to YTsaurus using the provided parameters.
 
@@ -387,8 +384,18 @@ def direct_submit(yt_proxy, num_executors, main_file, deploy_mode="cluster", poo
     :param java_home: path to the Java home directory (default: None)
     :param prefer_ipv6:prefer IPv6 addresses (internal Yandex users must enable ipv6 option by default)
     :param timeout_sec: timeout for submitting the job in seconds (default: 30 sec)
+    :param max_attempts: maximum number of attempts to submit the job (default: 1)
+    :param base_delay: base delay between attempts in seconds, doubles for every new attempt (default: 10 sec)
+    :param max_delay: maximum delay between attempts in seconds (default: 300 sec)
     :return: operation ID of the submitted Spark job.
     """
+    if max_attempts < 1:
+        raise ValueError("max_attempts must be greater than 0")
+    if base_delay < 0:
+        raise ValueError("base_delay must be non-negative")
+    if max_delay < base_delay:
+        raise ValueError("max_delay must be greater than or equal to base_delay")
+
     spark_args = []
     spark_args.extend(["--num-executors", str(num_executors)])
     if pool:
@@ -406,11 +413,18 @@ def direct_submit(yt_proxy, num_executors, main_file, deploy_mode="cluster", poo
                           .add_spark_args(*spark_args))
 
         j_directsubmitter = gateway.jvm.tech.ytsaurus.spyt.submit.DirectSubmitter()
-        try_operation_id = j_directsubmitter.submit(spark_launcher.launcher(), timeout_sec)
-        if try_operation_id.isSuccess():
-            return try_operation_id.get()
-        failure = try_operation_id.failed().get()
-        raise Exception(f"Failed to submit Spark job: {failure.toString()}, {failure.getMessage()}")
+        delay = base_delay
+        for attempt in range(max_attempts):
+            try_operation_id = j_directsubmitter.submit(spark_launcher.launcher(), timeout_sec)
+            if try_operation_id.isSuccess():
+                return try_operation_id.get()
+            failure = try_operation_id.failed().get()
+            last_error = f"Failed to submit Spark job: {failure.toString()}, {failure.getMessage()}"
+            if attempt < max_attempts - 1:
+                logging.warning(f"Attempt {attempt + 1}. {last_error}. Retrying in {delay} sec ...")
+                time.sleep(delay)
+                delay = min(delay * 2, max_delay)
+        raise Exception(f"All {max_attempts} attempts failed. Last error: {last_error}")
 
 
 def direct_submit_binary(yt_proxy, num_executors, spyt_version, driver_entry_point=None, executable=sys.executable,

@@ -165,6 +165,7 @@ def prepare_global_config(os_release: bool) -> Dict[str, Any]:
         }
         global_config['ytserver_proxy_path'] = YTSERVER_PROXY
         global_config['default_cluster_java_home'] = '/opt/jdk11'
+        global_config['environment']['SPARK_PREFER_IPV6'] = 'true'
     else:
         python_cluster_paths = {
             "3.7": "/usr/bin/python3.7",

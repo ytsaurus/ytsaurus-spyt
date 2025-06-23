@@ -1,19 +1,6 @@
 #!/bin/bash
 
 set -ex
-
-# apt-update.sh
-ln -sf /dev/null /etc/systemd/system/apt-daily-upgrade.service
-ln -sf /dev/null /etc/systemd/system/apt-daily.service
-if [ -e "/bin/systemctl" ]; then
-    # wait until systemd is completely loaded
-    while true; do
-        sleep 2
-        STATUS="$(/bin/systemctl status | awk '$1 == "State:" {print $2}')"
-        [ "${STATUS}" = "running" ] && break
-        [ "${STATUS}" = "degraded" ] && break
-    done
-fi
 apt-get update
 
 PYTHON_VERSION="python3.12"

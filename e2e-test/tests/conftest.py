@@ -68,8 +68,9 @@ def local_session():
 
 
 @pytest.fixture(scope="function")
-def direct_session():
-    with direct_spark_session(YT_PROXY, extra_conf=SPARK_CONF) as session:
+def direct_session(request):
+    extra_conf = getattr(request, 'param', {})
+    with direct_spark_session(YT_PROXY, extra_conf=extra_conf|SPARK_CONF) as session:
         logging.debug("Created direct spark session")
         yield session
     logging.debug("Stopped direct spark session")

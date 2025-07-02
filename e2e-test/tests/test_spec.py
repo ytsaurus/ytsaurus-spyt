@@ -1,5 +1,6 @@
 from spyt.enabler import SpytEnablers
-from spyt.spec import CommonComponentConfig, CommonSpecParams, WorkerConfig, WorkerResources, build_worker_spec
+from spyt.spec import CommonComponentConfig, CommonSpecParams, WorkerConfig, WorkerResources, SparkDefaultArguments
+from spyt.spec import build_worker_spec, build_spark_operation_spec
 from spyt.utils import SparkDiscovery, format_memory, parse_memory
 from yt.wrapper.common import update
 from yt.wrapper.spec_builders import VanillaSpecBuilder
@@ -39,11 +40,11 @@ def test_format_memory():
     assert format_memory(256 * 1024 * 1024 * 1024) == "256G"
 
 
-def build_spec(enable_tmpfs=False):
+def _build_configs(enable_tmpfs=False):
     enablers = SpytEnablers(enable_byop=False, enable_profiling=False)
     discovery = SparkDiscovery("//home/cluster")
     common_config = CommonComponentConfig(container_home="./spark",
-        enable_tmpfs=enable_tmpfs, enablers=enablers, rpc_job_proxy_thread_pool_size=6, spark_discovery=discovery)
+                                          enable_tmpfs=enable_tmpfs, enablers=enablers, rpc_job_proxy_thread_pool_size=6, spark_discovery=discovery)
     common_params = CommonSpecParams(
         spark_distributive="spark-3.2.2-bin-hadoop3.2.tgz", java_home="/opt/jdk",
         extra_java_opts=["-Dtest=true"], environment={"TEST_ENV": "True"}, spark_conf={"spark.yt.option": "2024"},
@@ -54,14 +55,38 @@ def build_spec(enable_tmpfs=False):
         autoscaler_enabled=False, worker_log_transfer=False, worker_log_json_mode=False,
         worker_log_update_interval="5m", worker_log_table_ttl="5d", worker_disk_name="default", worker_gpu_limit=1,
         cuda_toolkit_version="11.0")
+    return common_params, worker_config, common_config
 
+
+def _build_worker_spec(enable_tmpfs=False):
+    common_params, worker_config, _ = _build_configs(enable_tmpfs)
     builder = VanillaSpecBuilder()
     build_worker_spec(builder, "workers", None, False, common_params, worker_config)
     return builder.build()
 
 
+def _build_worker_operation_spec(yt_client):
+    init_config = {
+        "spark_conf":{},
+        "operation_spec":{},
+        "file_paths":[],
+        "cluster_version":"2.999",
+        "environment":{},
+        "squashfs_layer_paths":[],
+        "layer_paths":[]
+    }
+    dynamic_config = SparkDefaultArguments.get_params()
+    init_config = update(init_config, dynamic_config)
+
+    _, worker_config, common_config = _build_configs(enable_tmpfs=False)
+
+    builder = build_spark_operation_spec(config=init_config, client=yt_client, job_types=['worker'],
+                                      common_config=common_config, worker_config=worker_config)
+    return builder.build()
+
+
 def test_worker_spec_builder():
-    spec = build_spec()
+    spec = _build_worker_spec()
     expected_command = \
         './setup-spyt-env.sh --spark-home ./spark --spark-distributive spark-3.2.2-bin-hadoop3.2.tgz && ' \
         '/opt/jdk/bin/java -Xmx2g ' \
@@ -96,7 +121,7 @@ def test_worker_spec_builder():
 
 
 def test_worker_spec_builder_enable_tmpfs():
-    spec = build_spec(enable_tmpfs=True)
+    spec = _build_worker_spec(enable_tmpfs=True)
     expected_command = \
         './setup-spyt-env.sh --spark-home ./spark --spark-distributive spark-3.2.2-bin-hadoop3.2.tgz && ' \
         '/opt/jdk/bin/java -Xmx2g ' \
@@ -129,3 +154,20 @@ def test_worker_spec_builder_enable_tmpfs():
     }
 
     assert update(spec, expected_spec) == spec, f"{update(spec, expected_spec)} != {spec}"
+
+
+def test_yt_metrics_annotations(yt_client):
+    spec = _build_worker_operation_spec(yt_client)
+    actual_section = spec['annotations']
+    expected_section = {
+        "is_spark": True,
+        "solomon_resolver_ports": [
+            27100,
+            27101
+        ],
+        "solomon_resolver_tag": "spark"
+    }
+
+    assert update(actual_section, expected_section) == actual_section, \
+        f"{update(actual_section, expected_section)} != {actual_section}"
+

@@ -18,7 +18,7 @@ case object SolomonSinkSettings {
   case object SolomonMetricNameTransform extends ConfigEntry[String]("rename_metrics", Some(""))
 
   case object ReporterEnabled extends ConfigEntry[Boolean]("reporter_enabled",
-    Some(Option(System.getenv("SPARK_YT_METRICS_ENABLED")).forall(_.toBoolean)))
+    Some(Option(System.getenv("SPARK_YT_METRICS_ENABLED")).map(_.toBoolean).getOrElse(false)))
   case object ReporterPollPeriod extends ConfigEntry[Duration]("poll_period",
     Some(500.milliseconds))
   case object ReporterName extends ConfigEntry[String]("reporter_name", Some("spyt"))

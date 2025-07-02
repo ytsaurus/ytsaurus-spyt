@@ -478,7 +478,7 @@ def build_spark_operation_spec(config: dict, client: YtClient,
         environment["YT_AGENT_METRICS_PULL_PORT"] = agent_pull_port
         environment["YT_METRICS_PULL_PORT"] = metrics_pull_port
         operation_spec["annotations"]["solomon_resolver_tag"] = "spark"
-        operation_spec["annotations"]["solomon_resolver_ports"] = [metrics_pull_port, agent_pull_port]
+        operation_spec["annotations"]["solomon_resolver_ports"] = [int(metrics_pull_port), int(agent_pull_port)]
 
     if common_config.enablers.enable_tcp_proxy:
         environment["SPARK_YT_TCP_PROXY_RANGE_START"] = str(common_config.tcp_proxy_range_start)

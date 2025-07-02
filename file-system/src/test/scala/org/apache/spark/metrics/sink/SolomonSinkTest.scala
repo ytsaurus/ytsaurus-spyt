@@ -29,8 +29,9 @@ class SolomonSinkTest extends FunSuite {
       server.start()
       val port = server.port
       props.setProperty("solomon_port", port.toString)
+      props.setProperty("reporter_enabled", true.toString)
       extraProps.foreach(p => props.setProperty(p._1, p._2))
-      val sink = new SolomonSink(props, registry, null)
+      val sink = SolomonSink(props, registry, null)
       server.assert(req => assert(json(req)))
       sink.report()
       server.awaitResult().httpStatusCode should be(200)

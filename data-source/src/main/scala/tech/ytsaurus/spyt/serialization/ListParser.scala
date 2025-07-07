@@ -4,7 +4,6 @@ import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.GenericInternalRow
 import org.apache.spark.sql.catalyst.util.{ArrayBasedMapData, ArrayData}
 import org.apache.spark.sql.types.{StructField, StructType}
-import IndexedDataType.StructFieldMeta
 import tech.ytsaurus.yson.YsonTags
 
 trait ListParser {
@@ -14,9 +13,12 @@ trait ListParser {
 
   def parseYsonListAsSparkList(allowEof: Boolean, elementType: IndexedDataType): ArrayData = {
     val res = Array.newBuilder[Any]
-    readList(endToken, allowEof) { (_, token) =>
-      val element = parseNode(token, allowEof, elementType)
-      res += element
+    readList(endToken, allowEof) { (index, token) =>
+      try {
+        res += parseNode(token, allowEof, elementType)
+      } catch {
+        case e: Exception => throw new RuntimeException("" + index, e)
+      }
     }
     ArrayData.toArrayData(res.result())
   }
@@ -30,16 +32,15 @@ trait ListParser {
 
   def parseYsonListAsSparkStruct(allowEof: Boolean, schema: IndexedDataType.StructType): InternalRow = {
     val res = new Array[Any](schema.map.size)
-    readList(endToken, allowEof) {
-      case (index, token) =>
-        val fieldName = schema.sparkDataType.fields(index).name
-        val field = schema.map.get(fieldName)
-        field match {
-          case Some(StructFieldMeta(index, fieldType, _)) =>
-            res(index) = parseNode(token, allowEof, fieldType)
-          case None =>
-            throw new NoSuchElementException(s"$fieldName is not found in schema map")
-        }
+    readList(endToken, allowEof) { (index, token) =>
+      val fieldName = schema.sparkDataType.fields(index).name
+      try {
+        res(index) = parseNode(token, allowEof, schema.map.getOrElse(
+          fieldName, throw new NoSuchElementException(s"$fieldName is not found in schema map")
+        ).dataType)
+      } catch {
+        case e: Exception => throw new RuntimeException(fieldName, e)
+      }
     }
     new GenericInternalRow(res)
   }
@@ -47,11 +48,14 @@ trait ListParser {
   def parseYsonListAsArray(allowEof: Boolean, schema: IndexedDataType.TupleType): Array[Any] = {
     val res = new Array[Any](schema.length)
     readList(endToken, allowEof) { (index, token) =>
-      if (index < schema.length) {
-        val fieldType = schema(index)
-        res(index) = parseNode(token, allowEof, fieldType)
-      } else {
-        parseNode(token, allowEof, IndexedDataType.NoneType)
+      try {
+        if (index < schema.length) {
+          res(index) = parseNode(token, allowEof, schema(index))
+        } else {
+          parseNode(token, allowEof, IndexedDataType.NoneType)
+        }
+      } catch {
+        case e: Exception => throw new RuntimeException("" + index, e)
       }
     }
     res

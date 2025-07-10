@@ -329,7 +329,7 @@ private[spark] object YTsaurusOperationManager extends Logging {
     logDebug("Entering YTsaurusOperationManager.create")
     val (user, token) = YTsaurusUtils.userAndToken(conf)
     logDebug("User and token were retrieved, now creating YTsaurus client")
-    val ytClient: YTsaurusClient = buildClient(ytProxy, user, token, networkName, proxyRole, conf)
+    val ytClient: YTsaurusClient = buildClient(ytProxy, token, networkName, proxyRole, conf)
     logDebug("YTsaurus client has been successfully created")
 
     try {
@@ -694,7 +694,6 @@ private[spark] object YTsaurusOperationManager extends Logging {
   }
 
   private def buildClient(ytProxy: String,
-                          user: String,
                           token: String,
                           networkName: Option[String],
                           proxyRole: Option[String],
@@ -712,8 +711,8 @@ private[spark] object YTsaurusOperationManager extends Logging {
     }
     networkName.foreach(nn => builder.setProxyNetworkName(nn))
     proxyRole.foreach(pr => builder.setProxyRole(pr))
-    if (user != null && token != null) {
-      builder.setAuth(YTsaurusClientAuth.builder().setUser(user).setToken(token).build())
+    if (token != null) {
+      builder.setAuth(YTsaurusClientAuth.builder().setToken(token).build())
     }
     builder.build()
   }

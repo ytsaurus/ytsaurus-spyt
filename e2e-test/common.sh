@@ -131,7 +131,8 @@ main() {
           --yt-version spyt-testing \
           --yt-skip-pull true \
           --enable-shuffle-service \
-          --extra-yt-docker-opts "-p 27001-27150:27001-27150 --env PROXY_PORT=$proxy_port"
+          --publish-ports --port-range-start 27001 \
+          --extra-yt-docker-opts "--env PROXY_PORT=$proxy_port"
         trap "echo 'Stopping YT local' && $yt_local_runner_path --stop" EXIT
         sleep 5 # waiting for nodes to start
     fi

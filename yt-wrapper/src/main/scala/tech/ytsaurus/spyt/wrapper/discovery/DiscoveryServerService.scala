@@ -6,6 +6,7 @@ import tech.ytsaurus.client.discovery.MemberInfo
 import tech.ytsaurus.spyt.HostAndPort
 import tech.ytsaurus.ysontree.{YTree, YTreeNode}
 
+import java.net.URI
 import scala.util.Try
 
 class DiscoveryServerService(client: DiscoveryClient, groupId: String,
@@ -13,6 +14,8 @@ class DiscoveryServerService(client: DiscoveryClient, groupId: String,
   private val log = LoggerFactory.getLogger(getClass)
 
   private def webUiAttr: String = "webui"
+
+  private def webUiUrlAttr: String = "webui_url"
 
   private def restAttr: String = "rest"
 
@@ -49,6 +52,7 @@ class DiscoveryServerService(client: DiscoveryClient, groupId: String,
     val attributes: Map[String, YTreeNode] = Map(
       urlAttr -> YTree.stringNode(address.hostAndPort.toString),
       webUiAttr -> YTree.stringNode(address.webUiHostAndPort.toString),
+      webUiUrlAttr -> YTree.stringNode(address.webUiUri.toString),
       restAttr -> YTree.stringNode(address.restHostAndPort.toString),
       operationAttr -> YTree.stringNode(operationId),
       versionAttr -> YTree.stringNode(clusterVersion),
@@ -89,12 +93,13 @@ class DiscoveryServerService(client: DiscoveryClient, groupId: String,
 
   override def discoverAddress(): Try[Address] = {
     Try {
-      val attrs = Seq(urlAttr, webUiAttr, restAttr)
+      val attrs = Seq(urlAttr, webUiAttr, webUiUrlAttr, restAttr)
       val members = DiscoveryClientWrapper.listMembers(masterGroupId, attrs = attrs)(client)
       val masterMember = members.find(_.getId == "master").get
       Address(
         getMemberAddress(masterMember, urlAttr),
         getMemberAddress(masterMember, webUiAttr),
+        URI.create(masterMember.getAttributes.get(webUiUrlAttr).stringValue()),
         getMemberAddress(masterMember, restAttr),
       )
     }

@@ -8,6 +8,7 @@ import tech.ytsaurus.spark.launcher.ClusterStateService.State
 import tech.ytsaurus.spark.launcher.SparkStateService.{AppStats, MasterStats, WorkerInfo, WorkerStats}
 import tech.ytsaurus.spyt.HostAndPort
 
+import java.net.URI
 import scala.concurrent.duration.DurationInt
 import scala.util.Success
 
@@ -71,7 +72,7 @@ class AutoScalerTest extends AnyFlatSpec with Matchers  {
         |metrics_worker_custom_tmpfs_Total_Free_Bytes_Value{type="gauges"} 9099825141
         |metrics_worker_custom_tmpfs_Total_Used_Bytes_Value{type="gauges"} 5183762443
         |""".stripMargin
-    val srv = SparkStateService.sparkStateService(HostAndPort.fromString("localhost:8080"),
+    val srv = SparkStateService.sparkStateService(URI.create("http://localhost:8080"),
         HostAndPort.fromString("localhost:8081"))
     val res = srv.parseWorkerMetrics(metrics, WorkerInfo("id", "localhost", 8082, 6, 1024, "test", alive = true, Map()))
     res shouldEqual Success(WorkerStats(6, 4, 1, 0, 4096))
@@ -86,7 +87,7 @@ class AutoScalerTest extends AnyFlatSpec with Matchers  {
         |metrics_master_waitingApps_Value{type="gauges"} 1
         |metrics_master_workers_Value{type="gauges"} 4
         |""".stripMargin
-    val srv = SparkStateService.sparkStateService(HostAndPort.fromString("localhost:8080"),
+    val srv = SparkStateService.sparkStateService(URI.create("http://localhost:8080"),
       HostAndPort.fromString("localhost:8081"))
     val res = srv.parseMasterMetrics(metrics)
     res shouldEqual Success(MasterStats(3, 4, 2, 1))
@@ -106,7 +107,7 @@ class AutoScalerTest extends AnyFlatSpec with Matchers  {
         |metrics_jvm_direct_capacity_Value{type="gauges"} 84599582
         |metrics_jvm_direct_count_Value{type="gauges"} 85
         |""".stripMargin
-    val srv = SparkStateService.sparkStateService(HostAndPort.fromString("localhost:8080"),
+    val srv = SparkStateService.sparkStateService(URI.create("http://localhost:8080"),
       HostAndPort.fromString("localhost:8081"))
     val res = srv.parseAppMetrics(metrics).map(_.toSet)
     res shouldEqual Success(Set(

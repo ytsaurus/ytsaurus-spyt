@@ -15,6 +15,7 @@ import tech.ytsaurus.spyt.wrapper.discovery._
 import tech.ytsaurus.spyt.{HostAndPort, SparkAdapter, SparkVersionUtils}
 
 import java.io.File
+import java.net.URI
 import java.nio.file.{Files, Path}
 import scala.annotation.tailrec
 import scala.collection.mutable.ArrayBuffer
@@ -145,11 +146,13 @@ trait SparkLauncher {
     MasterService("Master", address, thread)
   }
 
+  case class BasicServiceWithUi(name: String, address: HostAndPort, webUiUrl: URI, thread: Thread) extends ServiceWithAddress
+
   def startWorker(master: Address,
                   cores: Int,
                   memory: String,
                   extraEnv: Map[String, String],
-                  enableSquashfs: Boolean): BasicService = {
+                  enableSquashfs: Boolean): BasicServiceWithUi = {
     val config = SparkDaemonConfig.fromProperties("worker", "512M")
     val thread = runSparkThread(
       workerClass,
@@ -165,7 +168,7 @@ trait SparkLauncher {
     )
     val address = readAddressOrDie("worker", config.startTimeout, thread)
 
-    BasicService("Worker", address.hostAndPort, thread)
+    BasicServiceWithUi("Worker", address.hostAndPort, address.webUiUri, thread)
   }
 
   def startHistoryServer(path: String, memory: String, discoveryService: DiscoveryService): BasicService = {

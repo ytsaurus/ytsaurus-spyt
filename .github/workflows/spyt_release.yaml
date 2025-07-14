@@ -129,14 +129,14 @@ jobs:
         run: |
           mkdir -p ~/.sbt
           echo "realm=Sonatype Nexus Repository Manager" > ~/.sbt/.ossrh_credentials
-          echo "host=s01.oss.sonatype.org" >> ~/.sbt/.ossrh_credentials
+          echo "host=central.sonatype.com" >> ~/.sbt/.ossrh_credentials
           echo "user=${{ secrets.OSSRH_USERNAME }}" >> ~/.sbt/.ossrh_credentials
           echo "password=${{ secrets.OSSRH_PASSWORD }}" >> ~/.sbt/.ossrh_credentials
-      
+
       - name: Publish to Maven Central
         run: |
           sbt -Dgpg.passphrase=${{ secrets.GPG_PASSWORD }} publishToMavenCentral
-  
+
   build_and_publish_docker_image:
     name: Build and publish SPYT docker image
     needs:

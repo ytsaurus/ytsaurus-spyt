@@ -9,6 +9,7 @@ import tech.ytsaurus.client.request.GetOperation
 import tech.ytsaurus.core.GUID
 import tech.ytsaurus.ysontree.YTreeNode
 
+import java.net.URI
 import java.util.Optional
 import scala.concurrent.duration._
 import scala.language.{implicitConversions, postfixOps}
@@ -22,6 +23,8 @@ class CypressDiscoveryService(baseDiscoveryPath: String)(implicit yt: CompoundCl
   private def addressPath: String = s"$discoveryPath/spark_address"
 
   private def webUiPath: String = s"$discoveryPath/webui"
+
+  private def webUiUrlPath: String = s"$discoveryPath/webui_url"
 
   private def restPath: String = s"$discoveryPath/rest"
 
@@ -74,6 +77,7 @@ class CypressDiscoveryService(baseDiscoveryPath: String)(implicit yt: CompoundCl
       YtWrapper.createDir(s"$addressPath/${YtWrapper.escape(address.hostAndPort.toString)}", tr)
       Map(
         webUiPath -> YtWrapper.escape(address.webUiHostAndPort.toString),
+        webUiUrlPath -> YtWrapper.escape(address.webUiUri.toString),
         restPath -> YtWrapper.escape(address.restHostAndPort.toString),
         operationPath -> operationId,
         clusterVersionPath -> clusterVersion,
@@ -134,8 +138,9 @@ class CypressDiscoveryService(baseDiscoveryPath: String)(implicit yt: CompoundCl
       _ <- getPath(confPath).recover { case InvalidCatalogException(msg) => EmptyDirectoryException(msg) }
       hostAndPort <- cypressHostAndPort(addressPath)
       webUiHostAndPort <- cypressHostAndPort(webUiPath)
+      webUiUrl <- getPath(webUiPath).map(URI.create)
       restHostAndPort <- cypressHostAndPort(restPath)
-    } yield Address(hostAndPort, webUiHostAndPort, restHostAndPort)
+    } yield Address(hostAndPort, webUiHostAndPort, webUiUrl, restHostAndPort)
 
   def clusterVersion: Try[String] = getPath(clusterVersionPath)
 

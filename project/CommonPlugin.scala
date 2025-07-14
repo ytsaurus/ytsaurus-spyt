@@ -45,8 +45,8 @@ object CommonPlugin extends AutoPlugin {
       ivyConfigurations ++= Seq(SparkCompile, SparkRuntimeTest),
       resolvers += Resolver.mavenLocal,
       resolvers += Resolver.mavenCentral,
-      resolvers += ("YTsaurusSparkReleases" at "https://repo1.maven.org/maven2"),
-      resolvers += ("YTsaurusSparkSnapshots" at "https://s01.oss.sonatype.org/content/repositories/snapshots/"),
+      resolvers += ("YTsaurusSparkReleases" at "https://central.sonatype.com/api/v1/publish"),
+      resolvers += ("YTsaurusSparkSnapshots" at "https://central.sonatype.com/repository/maven-snapshots/"),
       ThisBuild / version := (ThisBuild / spytVersion).value,
       organization := "tech.ytsaurus",
       name := s"spark-yt-${name.value}",
@@ -66,9 +66,9 @@ object CommonPlugin extends AutoPlugin {
       javacOptions ++= Seq("-source", "11", "-target", "11"),
       publishTo := {
         if (isSnapshot.value)
-          Some("snapshots" at "https://s01.oss.sonatype.org/content/repositories/snapshots/")
+          Some("snapshots" at "https://central.sonatype.com/repository/maven-snapshots/")
         else
-          Some("releases" at "https://s01.oss.sonatype.org/service/local/staging/deploy/maven2/")
+          Some("releases" at "https://central.sonatype.com/api/v1/publish")
       },
       publishMavenStyle := true,
       libraryDependencies ++= testDeps,

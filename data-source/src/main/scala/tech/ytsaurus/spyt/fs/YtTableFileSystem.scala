@@ -24,10 +24,11 @@ class YtTableFileSystem extends YtFileSystemBase {
 
   private def listStatus(path: YPathEnriched, expandDirectory: Boolean)
                         (implicit yt: CompoundClient = ytClient(path)): Array[FileStatus] = {
-    if (!YtWrapper.exists(path.toYPath, path.transaction)) {
+    val yPath = path.toYPath
+    if (!YtWrapper.exists(yPath, path.transaction)) {
       throw new FileNotFoundException(path.toStringPath)
     }
-    val attributes = YtWrapper.attributes(path.toYPath, path.transaction)
+    val attributes = YtWrapper.attributes(yPath, path.transaction)
     PathType.fromAttributes(attributes) match {
       case PathType.File => Array(getFileStatus(path.lock()))
       case PathType.Table => Array(lockTable(path, attributes))
@@ -76,10 +77,11 @@ class YtTableFileSystem extends YtFileSystemBase {
 
   private def getFileStatus(f: Path, path: YPathEnriched)(implicit yt: CompoundClient = ytClient(path)): FileStatus = {
     log.debugLazy(s"Get file status $f")
-    if (!YtWrapper.exists(path.toYPath, path.transaction)) {
+    val yPath = path.toYPath
+    if (!YtWrapper.exists(yPath, path.transaction)) {
       throw new FileNotFoundException(s"File $f is not found")
     }
-    val attributes = YtWrapper.attributes(path.toYPath, path.transaction)(yt)
+    val attributes = YtWrapper.attributes(yPath, path.transaction)(yt)
     val modificationTime = YtWrapper.modificationTimeTs(attributes)
     YtWrapper.pathType(attributes) match {
       case PathType.File =>

@@ -6,13 +6,15 @@ import org.apache.spark.internal.Logging
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.analysis.NoSuchTableException
 import org.apache.spark.sql.types.StructType
+import tech.ytsaurus.client.CompoundClient
 import tech.ytsaurus.spyt.wrapper.client.YtClientConfigurationConverter.ytClientConfiguration
 import tech.ytsaurus.spyt.fs.path.YPathEnriched
 import tech.ytsaurus.spyt.serializers.SchemaConverter.{Sorted, Unordered}
 import tech.ytsaurus.spyt.serializers.{SchemaConverter, SchemaConverterConfig, WriteSchemaConverter}
 import tech.ytsaurus.spyt.wrapper.YtWrapper
 import tech.ytsaurus.spyt.wrapper.client.YtClientProvider
-import tech.ytsaurus.spyt.wrapper.table.BaseYtTableSettings
+import tech.ytsaurus.spyt.wrapper.cypress.YtAttributes
+import tech.ytsaurus.spyt.wrapper.table.{BaseYtTableSettings, TableType}
 import tech.ytsaurus.ysontree.{YTreeNode, YTreeTextSerializer}
 
 import java.net.URI
@@ -116,15 +118,24 @@ class YTsaurusExternalCatalog(conf: SparkConf, hadoopConf: Configuration)
     if (YtWrapper.exists(path.toStringYPath)(yt)) {
       val ident = TableIdentifier(table, Some(YTSAURUS_DB))
       val config = SchemaConverterConfig(conf)
-      val schemaTree = YtWrapper.attribute(path.toStringYPath, "schema")(yt)
+      val versionedPath: YPathEnriched = ensureVersionedPath(path, yt)
+      val schemaTree = YtWrapper.attribute(versionedPath.toStringYPath, "schema")(yt)
       val schema = SchemaConverter.sparkSchema(schemaTree, parsingTypeV3 = config.parsingTypeV3)
       val storage = CatalogStorageFormat(
-        locationUri = Some(path.toPath.toUri),
+        locationUri = Some(versionedPath.toPath.toUri),
         inputFormat = None, outputFormat = None, serde = None, compressed = false, properties = Map.empty
       )
       Some(CatalogTable(ident, CatalogTableType.MANAGED, storage, schema, provider = Some("yt")))
     } else {
       None
+    }
+  }
+
+  private def ensureVersionedPath(path: YPathEnriched, yt: CompoundClient) = {
+    val tableType = YtWrapper.tableType(YtWrapper.attribute(path.toStringYPath, YtAttributes.dynamic)(yt))
+    tableType match {
+      case TableType.Dynamic if path.timestamp.isEmpty => path.withLatestVersion
+      case _ => path
     }
   }
 

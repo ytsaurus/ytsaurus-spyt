@@ -233,6 +233,13 @@ class YtSparkSQLTest extends FlatSpec with Matchers with LocalSpark with TmpDir
     res.select("a", "b", "c").selectAs[TestRow].collect() should contain theSameElementsAs testData
   }
 
+  it should "select from dynamic table without timestamp attribute" in {
+    prepareTestTable(tmpPath, testData, Seq(Seq(), Seq(3), Seq(6, 12)))
+    val res = spark.sql(s"SELECT * FROM yt.`ytTable:/$tmpPath`")
+    res.columns should contain theSameElementsAs Seq("a", "b", "c")
+    res.select("a", "b", "c").selectAs[TestRow].collect() should contain theSameElementsAs testData
+  }
+
   it should "select from a table using custom UDF" in {
     writeTableFromYson(Seq(
       """{a = 1; b = "a"; c = 0.3}""",

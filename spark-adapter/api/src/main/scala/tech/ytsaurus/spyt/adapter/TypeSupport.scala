@@ -1,8 +1,7 @@
 package tech.ytsaurus.spyt.adapter
 
 import org.apache.spark.sql.catalyst.expressions.Expression
-import org.apache.spark.sql.catalyst.expressions.codegen.{Block, ExprValue}
-import org.apache.spark.sql.catalyst.parser.SqlBaseParser
+import org.apache.spark.sql.catalyst.expressions.codegen.{Block, CodegenContext, ExprValue}
 import org.apache.spark.sql.types.DataType
 import tech.ytsaurus.spyt.adapter.TypeSupport.CastFunction
 
@@ -13,6 +12,7 @@ trait TypeSupport {
   def uInt64Serializer(inputObject: Expression): Expression
   def uInt64Deserializer(path: Expression): Expression
   def uInt64Cast(from: DataType): Any => Any
+  def uint64CastCode(from: DataType): CastFunction
   val uInt64CastToString: Any => Any
   val uInt64CastToStringCode: CastFunction
 

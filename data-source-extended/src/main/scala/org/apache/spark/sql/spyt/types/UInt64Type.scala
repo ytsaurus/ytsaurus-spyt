@@ -2,13 +2,14 @@ package org.apache.spark.sql.spyt.types
 
 import org.apache.spark.sql.catalyst.expressions.Expression
 import org.apache.spark.sql.catalyst.expressions.codegen.Block.BlockHelper
-import org.apache.spark.sql.catalyst.expressions.codegen.{Block, ExprValue}
+import org.apache.spark.sql.catalyst.expressions.codegen.{Block, CodegenContext, ExprValue}
 import org.apache.spark.sql.catalyst.expressions.objects.{Invoke, StaticInvoke}
 import org.apache.spark.sql.expressions.UserDefinedFunction
 import org.apache.spark.sql.functions.udf
 import org.apache.spark.sql.types._
 import org.apache.spark.unsafe.types.UTF8String
 import tech.ytsaurus.spyt.SparkAdapter
+import tech.ytsaurus.spyt.adapter.TypeSupport.CastFunction
 import tech.ytsaurus.spyt.types.UInt64Long
 
 import scala.math.Numeric.LongIsIntegral
@@ -76,6 +77,20 @@ object UInt64Support {
     case StringType => s => UInt64Long.fromString(s.asInstanceOf[UTF8String].toString)
     case BooleanType => b => if (b.asInstanceOf[Boolean]) 1L else 0L
     case x: NumericType => SparkAdapter.instance.castToLong(x)
+  }
+
+  def castCode(from: DataType): CastFunction = from match {
+    case StringType =>
+      (c, evPrim, evNull) =>
+        code"""
+          try {
+              $evPrim = tech.ytsaurus.spyt.types.UInt64Long$$.MODULE$$.fromString($c.toString());
+          } catch (NumberFormatException nfe) {
+              $evNull = true;
+          }
+        """
+    case BooleanType => (c, evPrim, _) => code"$evPrim = $c ? 1L : 0L;"
+    case x: NumericType => (c, evPrim, _) => code"$evPrim = (long) $c;"
   }
 }
 

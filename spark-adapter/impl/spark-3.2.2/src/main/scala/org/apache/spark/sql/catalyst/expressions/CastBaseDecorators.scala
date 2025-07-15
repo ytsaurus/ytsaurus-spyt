@@ -63,6 +63,7 @@ class CastBaseDecorators {
   @DecoratedMethod
   private[this] def nullSafeCastFunction(from: DataType, to: DataType, ctx: CodegenContext): CastFunction = to match {
     case ts.ysonDataType if !(from == NullType || to == from) => ts.binaryCastToYsonCode
+    case ts.uInt64DataType if !(from == NullType || to == from) => ts.uint64CastCode(from)
     case _ => __nullSafeCastFunction(from, to, ctx)
   }
 

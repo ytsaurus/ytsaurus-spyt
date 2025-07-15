@@ -1,13 +1,10 @@
 package tech.ytsaurus.spyt.adapter
 
 import org.apache.spark.sql.catalyst.expressions.Expression
-import org.apache.spark.sql.catalyst.parser.SqlBaseParser
+import org.apache.spark.sql.catalyst.expressions.codegen.CodegenContext
 import org.apache.spark.sql.spyt.types._
 import org.apache.spark.sql.types.DataType
-import tech.ytsaurus.spyt.SparkAdapter
 import tech.ytsaurus.spyt.adapter.TypeSupport.CastFunction
-
-import java.util.Locale
 
 class YTsaurusTypeSupport extends TypeSupport {
 
@@ -16,6 +13,7 @@ class YTsaurusTypeSupport extends TypeSupport {
   override def uInt64Deserializer(path: Expression): Expression = UInt64Support.createDeserializer(path)
 
   override def uInt64Cast(from: DataType): Any => Any = UInt64Support.cast(from)
+  override def uint64CastCode(from: DataType): CastFunction = UInt64Support.castCode(from)
   override val uInt64CastToString: Any => Any = UInt64CastToString
   override val uInt64CastToStringCode: CastFunction = UInt64CastToStringCode
 

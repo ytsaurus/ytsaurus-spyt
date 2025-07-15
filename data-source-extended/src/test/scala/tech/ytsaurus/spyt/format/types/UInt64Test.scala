@@ -250,6 +250,18 @@ class UInt64Test extends FlatSpec with Matchers with LocalSpark with TmpDir with
     )
   }
 
+  it should "join dataframes by uint64 column when casted from other type" in {
+    val df1 = Seq("1" -> "a1", "2" -> "b1").toDF("a", "b")
+    val df2 = Seq(UInt64Long(1L) -> "a2", UInt64Long(2L) -> "b2", UInt64Long(3L) -> "c2").toDF("a", "c")
+
+    val result = df2.join(df1, Seq("a"), "outer")
+    result.collect() should contain theSameElementsAs Seq(
+      Row("1", "a2", "a1"),
+      Row("2", "b2", "b1"),
+      Row("3", "c2", null)
+    )
+  }
+
   it should "execute SortAggregate on dataframe with uint64 column" in {
     val data = Seq(
       (UInt64Long(1L), "a", 1),

@@ -18,7 +18,8 @@ import scala.util.Try
 // Partitions are specified in Spark format, i.e. values is last read row index.
 case class YtQueueOffset(cluster: String, path: String, partitions: SortedMap[Int, Long]) extends Offset {
   require(partitions.size == 1 + YtQueueOffset.getSafeMax(partitions.keys).getOrElse(-1),
-    "Partitions must be numbered without skips")
+    f"Partitions must be numbered consecutively without any gaps. partitions.size = ${partitions.size}, " +
+      f"max = ${1 + YtQueueOffset.getSafeMax(partitions.keys).getOrElse(-1)}")
 
   def >=(other: YtQueueOffset): Boolean = {
     partitions.forall { case (index, value) => value >= other.partitions.getOrElse(index, -1L) }
@@ -73,8 +74,9 @@ object YtQueueOffset {
     val rows = YtWrapper.selectRows(consumerPath,
       Some(s"""$QUEUE_CLUSTER = "$cluster" and $QUEUE_PATH = "$queuePath"""")).map(ConsumerUtils.fromYTree)
     val sparsePartitions = rows.map(row => (row.partitionIndex, row.offset)).toMap
-    require(rows.length == sparsePartitions.size,
-      "Corrupted partition list. Probably the consumer table has different queues with the same name")
+    require(rows.length == sparsePartitions.size, f"Corrupted partition list. " +
+      f"rows.length = ${rows.length}, sparsePartitions.size = ${sparsePartitions.size}. " +
+        f"Probably the consumer table has multiple queues with the same name")
     val partitionCount = 1 + getSafeMax(sparsePartitions.keys).getOrElse(-1)
     val partitionSeq = (0 until partitionCount).map(index => (index, sparsePartitions.getOrElse(index, 0L) - 1))
     YtQueueOffset(cluster, queuePath, SortedMap(partitionSeq: _*))

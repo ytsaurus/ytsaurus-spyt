@@ -58,9 +58,11 @@ class YtStreamingSource(sqlContext: SQLContext,
     } else {
       val currentOffset = YtQueueOffset.getCurrentOffset(cluster, consumerPath, queuePath)
       val preparedStart = start.map(YtQueueOffset.apply).getOrElse(currentOffset)
-      require(preparedStart >= currentOffset, "Committed offset was queried")
+      require(preparedStart >= currentOffset, f"Committed offset was queried. " +
+        f"preparedStart = $preparedStart, currentOffset = $currentOffset")
       val preparedEnd = YtQueueOffset(end)
-      require(preparedEnd >= preparedStart, "Batch end is less than batch start")
+      require(preparedEnd >= preparedStart, f"Batch end is less than batch start. " +
+        f"preparedEnd = $preparedEnd, preparedStart = $preparedStart")
       val ranges = YtQueueOffset.getRanges(preparedStart, preparedEnd)
       new YtQueueRDD(sqlContext.sparkContext, schema, consumerPath, queuePath, ranges, includeServiceColumns).setName("yt")
     }

@@ -460,6 +460,17 @@ class YtInputSplitTest extends FlatSpec with Matchers with LocalSpark with DynTa
     }
   }
 
+  it should "not lose non-empty partitions when key columns are unsigned" in {
+    prepareTestTable(
+      tmpPath, (0L until 16L).map(x => (x << 60, x % 10, 0.toString)).map { case (a, b, c) => TestRow(a, b, c) },
+      Seq(Seq(), Seq(Long.MaxValue / 2), Seq(Long.MinValue), Seq(Long.MinValue / 2)),
+      schema = testSchemaUnsigned,
+    )
+    withConf(s"spark.yt.${SparkYtConfiguration.Read.YtPartitioningEnabled.name}", "true") {
+      spark.read.yt(tmpPath).cache().count() shouldBe 16
+    }
+  }
+
   private def getNumOutputRows(res: DataFrame, filter: Column): Long = {
     val query = res.filter(filter)
     query.collect()

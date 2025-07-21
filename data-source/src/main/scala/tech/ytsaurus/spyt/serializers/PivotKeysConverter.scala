@@ -1,9 +1,8 @@
 package tech.ytsaurus.spyt.serializers
 
 import tech.ytsaurus.core.cypress.RangeLimit
-import tech.ytsaurus.spyt.common.utils.TuplePoint
+import tech.ytsaurus.spyt.common.utils.{ExpressionTransformer, MInfinity, PInfinity, Point, RealValue, TuplePoint, ULongUtils}
 import tech.ytsaurus.spyt.wrapper.YtWrapper.PivotKey
-import tech.ytsaurus.spyt.common.utils.{ExpressionTransformer, MInfinity, PInfinity, Point, RealValue}
 import tech.ytsaurus.spyt.types.UInt64Long
 import tech.ytsaurus.ysontree.{YTree, YTreeBinarySerializer, YTreeBooleanNodeImpl, YTreeDoubleNodeImpl, YTreeEntityNodeImpl, YTreeIntegerNodeImpl, YTreeNode, YTreeStringNodeImpl}
 
@@ -107,8 +106,10 @@ object PivotKeysConverter {
       new YTreeDoubleNodeImpl(rValue.value.asInstanceOf[Double], null)
     case rValue: RealValue[_] if rValue.value.isInstanceOf[Long] =>
       new YTreeIntegerNodeImpl(true, rValue.value.asInstanceOf[Long], null)
-    case rValue: RealValue[_] if rValue.value.isInstanceOf[UInt64Long] =>
-      new YTreeIntegerNodeImpl(false, rValue.value.asInstanceOf[UInt64Long].value, null)
+    case RealValue(bigDecimal: java.math.BigDecimal) =>
+      new YTreeIntegerNodeImpl(false, ULongUtils.tryToUnsignedLong(bigDecimal).getOrElse {
+        throw new IllegalArgumentException("" + bigDecimal)
+      }, null)
     case rValue: RealValue[_] if rValue.value.isInstanceOf[Boolean] =>
       new YTreeBooleanNodeImpl(rValue.value.asInstanceOf[Boolean], null)
     case rValue: RealValue[_] if rValue.value.isInstanceOf[String] =>

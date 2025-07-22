@@ -5,24 +5,29 @@ import org.apache.spark.sql.execution.SparkPlan
 import org.apache.spark.sql.execution.datasources.PartitionedFile
 import org.apache.spark.sql.execution.datasources.v2.BatchScanExec
 import org.apache.spark.sql.functions.col
-import org.apache.spark.sql.types.{StringType, StructField, StructType}
+import org.apache.spark.sql.types.{LongType, StringType, StructField, StructType}
 import org.apache.spark.sql.v2.Utils.{extractRawKeys, extractYtScan, getParsedKeys}
 import org.mockito.scalatest.MockitoSugar
 import org.scalatest.{FlatSpec, Matchers}
+import tech.ytsaurus.client.rows.{UnversionedRow, UnversionedValue}
+import tech.ytsaurus.core.tables.{ColumnValueType, TableSchema}
 import tech.ytsaurus.spyt.common.utils.{TuplePoint, TupleSegment}
 import tech.ytsaurus.spyt.format.YtInputSplit
 import tech.ytsaurus.spyt.format.conf.SparkYtConfiguration
 import tech.ytsaurus.spyt.serializers.PivotKeysConverter
-import tech.ytsaurus.spyt.test.{DynTableTestUtils, LocalSpark, TmpDir}
+import tech.ytsaurus.spyt.test.{DynTableTestUtils, LocalSpark, TestUtils, TmpDir}
 import tech.ytsaurus.spyt.{YtReader, YtWriter}
 import tech.ytsaurus.spyt.common.utils.{MInfinity, PInfinity, RealValue}
 import tech.ytsaurus.spyt.format.YtPartitionedFileDelegate
+import tech.ytsaurus.spyt.wrapper.YtWrapper
+import tech.ytsaurus.spyt.wrapper.table.OptimizeMode.Scan
+import tech.ytsaurus.ysontree.{YTree, YTreeNode}
 
 import java.sql.{Date, Timestamp}
 import java.time.LocalDate
 
 class SortedTablesKeyPartitioningTest extends FlatSpec with Matchers with LocalSpark
-  with TmpDir with MockitoSugar with DynTableTestUtils {
+  with TmpDir with MockitoSugar with DynTableTestUtils with TestUtils {
   behavior of "YtScan"
 
   import spark.implicits._
@@ -264,6 +269,28 @@ class SortedTablesKeyPartitioningTest extends FlatSpec with Matchers with LocalS
       TuplePoint(Seq(RealValue("c"))),
       TuplePoint(Seq(RealValue("d"))),
       TuplePoint(Seq(RealValue("f")))
+    )
+  }
+
+  it should "get single pivot key" in {
+    val tableSchema = TableSchema.builder()
+      .addKey("key", ColumnValueType.INT64)
+      .addValue("value", ColumnValueType.INT64)
+      .build()
+    val sparkSchema = StructType(Seq(StructField("key", LongType)))
+    def createRow(n: Int) = new UnversionedRow(java.util.List.of(
+      new UnversionedValue(0, ColumnValueType.INT64, false, (n / 50).toLong),
+      new UnversionedValue(1, ColumnValueType.INT64, false, n.toLong)
+    ))
+    writeTableFromURow((0 to 9999).map(createRow), tmpPath, tableSchema, optimizeFor = Scan)
+
+    val files = Seq(
+      YtPartitionedFileDelegate.static(tmpPath, 0, 10000, 0)
+    )
+
+    val res = YtFilePartition.getPivotKeys(sparkSchema, Seq("key"), files)
+    res should contain theSameElementsAs Seq(
+      TuplePoint(Seq(MInfinity()))
     )
   }
 

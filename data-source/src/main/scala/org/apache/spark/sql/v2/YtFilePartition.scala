@@ -297,8 +297,13 @@ object YtFilePartition {
     res
   }
 
+  private val mInfinitySeq = Seq(TuplePoint(Seq(MInfinity())))
+
   private[v2] def getPivotKeys(schema: StructType, keys: Seq[String], files: Seq[YtPartitionedFile])
                           (implicit yt: CompoundClient): Seq[TuplePoint] = {
+    if (files.size < 2) {
+      return mInfinitySeq
+    }
     val hadoopPath = SparkAdapter.instance.getHadoopFilePath(files.head)
     val basePath = YPathEnriched.fromPath(hadoopPath).toYPath.withColumns(keys: _*)
     val pathWithRanges = files.tail.map(_.delegate.beginRow)
@@ -309,7 +314,7 @@ object YtFilePartition {
       reportBytesRead = _ => ()
     )
     try {
-      (TuplePoint(Seq(MInfinity())) +: getParsedRows(tableIterator, schema)).sorted
+      (mInfinitySeq ++ getParsedRows(tableIterator, schema)).sorted
     } finally {
       tableIterator.close()
     }

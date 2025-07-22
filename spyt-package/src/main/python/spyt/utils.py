@@ -21,10 +21,11 @@ logger = logging.getLogger(__name__)
 
 
 class SparkCluster(object):
-    def __init__(self, master_endpoint, master_web_ui_url, master_rest_endpoint, operation_id, shs_url,
+    def __init__(self, master_endpoint, master_web_ui_url, master_web_ui_schemed_url, master_rest_endpoint, operation_id, shs_url,
                  livy_url, spark_cluster_version, children_operation_ids):
         self.master_endpoint = master_endpoint
         self.master_web_ui_url = master_web_ui_url
+        self.master_web_ui_schemed_url = master_web_ui_schemed_url
         self.master_rest_endpoint = master_rest_endpoint
         self.operation_id = operation_id
         self.shs_url = shs_url
@@ -104,6 +105,9 @@ class SparkDiscovery(object):
 
     def master_webui(self):
         return self.discovery().join("webui")
+
+    def master_webui_url(self):
+        return self.discovery().join("webui_url")
 
     def master_rest(self):
         return self.discovery().join("rest")

@@ -10,7 +10,7 @@ def test_cluster_startup(yt_client, spyt_cluster):
     assert_items_equal(yt_client.list(spyt_cluster.discovery_path),
                        ["discovery", "logs"])
     assert_items_equal(yt_client.list(spyt_cluster.discovery_path + "/discovery"),
-                       ["conf", "master_wrapper", "operation", "rest", "spark_address", "version", "webui"])
+                       ["conf", "master_wrapper", "operation", "rest", "spark_address", "version", "webui", "webui_url"])
 
 
 def test_prometheus_endpoint(yt_client, spyt_cluster):

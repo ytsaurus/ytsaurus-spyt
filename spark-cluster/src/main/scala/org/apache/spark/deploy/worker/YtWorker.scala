@@ -30,7 +30,7 @@ class YtWorker(rpcEnv: RpcEnv,
     webUiField.setAccessible(true)
     val webUi = webUiField.get(this).asInstanceOf[WorkerWebUI]
     webUiField.setAccessible(false)
-    AddressUtils.writeAddressToFile("worker", rpcEnv.address.host, webUi.boundPort, None, None)
+    AddressUtils.writeAddressToFile("worker", rpcEnv.address.host, webUi.boundPort, None, Some(webUi.webUrl), None)
   }
 }
 

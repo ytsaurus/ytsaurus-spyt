@@ -410,6 +410,7 @@ private[spark] object YTsaurusOperationManager extends Logging {
       val spytHome = if (isSquashFs) "/usr/lib/spyt" else s"$home/spyt-package"
       val sparkClassPath = s"$home/*:$spytHome/conf/:$spytHome/jars/*:$sparkHome/jars/*"
       environment.put("SPARK_HOME", YTree.stringNode(sparkHome))
+      environment.put("SPYT_HOME", YTree.stringNode(spytHome))
 
       if (conf.get(Config.YTSAURUS_METRICS_ENABLED)) {
         enrichMetricsEnvironment(spytHome, conf, environment)

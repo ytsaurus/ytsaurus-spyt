@@ -53,6 +53,8 @@ if [ ! $use_squashfs ]; then
   if [ $enable_livy ]; then
     tar --warning=no-unknown-keyword -xf livy.tgz -C $spark_home
   fi
+else
+  spyt_home=$SPYT_HOME
 fi
 
 for file in $(ls); do

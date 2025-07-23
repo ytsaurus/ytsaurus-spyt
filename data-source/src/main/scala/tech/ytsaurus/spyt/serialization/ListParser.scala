@@ -4,6 +4,7 @@ import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.GenericInternalRow
 import org.apache.spark.sql.catalyst.util.{ArrayBasedMapData, ArrayData}
 import org.apache.spark.sql.types.{StructField, StructType}
+import tech.ytsaurus.spyt.serialization.ExceptionUtils.YsonParseException
 import tech.ytsaurus.yson.YsonTags
 
 trait ListParser {
@@ -17,7 +18,7 @@ trait ListParser {
       try {
         res += parseNode(token, allowEof, elementType)
       } catch {
-        case e: Exception => throw new RuntimeException("" + index, e)
+        case e: Exception => throw new YsonParseException(index, e)
       }
     }
     ArrayData.toArrayData(res.result())
@@ -39,7 +40,7 @@ trait ListParser {
           fieldName, throw new NoSuchElementException(s"$fieldName is not found in schema map")
         ).dataType)
       } catch {
-        case e: Exception => throw new RuntimeException(fieldName, e)
+        case e: Exception => throw new YsonParseException(fieldName, e)
       }
     }
     new GenericInternalRow(res)
@@ -55,7 +56,7 @@ trait ListParser {
           parseNode(token, allowEof, IndexedDataType.NoneType)
         }
       } catch {
-        case e: Exception => throw new RuntimeException("" + index, e)
+        case e: Exception => throw new YsonParseException(index, e)
       }
     }
     res

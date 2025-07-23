@@ -19,6 +19,7 @@ import tech.ytsaurus.client.rpc.{RpcOptions, YTsaurusClientAuth}
 import tech.ytsaurus.core.GUID
 import tech.ytsaurus.spyt.{BuildInfo, SparkAdapter, SparkVersionUtils}
 import tech.ytsaurus.spyt.wrapper.{Utils => YtUtils, YtWrapper}
+import tech.ytsaurus.spyt.wrapper.Utils.ytHostIpBashInlineWrapper
 import tech.ytsaurus.ysontree._
 
 import java.net.URI
@@ -142,6 +143,10 @@ private[spark] class YTsaurusOperationManager(val ytClient: YTsaurusClient,
       k + "=\"" + v + "\""
     } ++ Seq(s"-D${Config.DRIVER_OPERATION_ID}=$$YT_OPERATION_ID")
 
+    val netOpt = conf.get(YTSAURUS_NETWORK_PROJECT)
+      .map(_ => s"-D${DRIVER_HOST_ADDRESS.key}=${ytHostIpBashInlineWrapper("YT_IP_ADDRESS_DEFAULT")}")
+      .toSeq
+
     val driverOpts = conf.get(DRIVER_JAVA_OPTIONS).getOrElse("")
 
     val additionalArgs: Seq[String] = appArgs.mainAppResourceType match {
@@ -162,6 +167,7 @@ private[spark] class YTsaurusOperationManager(val ytClient: YTsaurusClient,
       s"-Xmx${driverMemoryMiB}m",
       "-cp", sparkClassPath) ++
       sparkJavaOpts ++
+      netOpt ++
       ytsaurusJavaOptions ++ Seq(
       driverOpts,
       SparkAdapter.instance.defaultModuleOptions(),

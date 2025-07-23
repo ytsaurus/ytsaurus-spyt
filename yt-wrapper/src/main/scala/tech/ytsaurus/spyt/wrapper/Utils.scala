@@ -41,6 +41,10 @@ object Utils {
     }
   }
 
+  def ytHostIpBashInlineWrapper(addressEnvVar: String): String =
+    """$(if [[ "$%1$s" == *:* ]]; then echo "[$%1$s]"; else echo "$%1$s"; fi)"""
+      .format(addressEnvVar)
+
   lazy val sparkSystemProperties: Map[String, String] = {
     import scala.collection.JavaConverters._
     System.getProperties.stringPropertyNames().asScala.collect {

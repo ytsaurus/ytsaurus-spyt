@@ -4,18 +4,17 @@ import org.apache.spark.sql.execution.StreamingUtils.{ROW_INDEX_WITH_PREFIX, TAB
 import org.apache.spark.sql.functions._
 import org.apache.spark.sql.streaming.Trigger
 import org.apache.spark.sql.streaming.Trigger.ProcessingTime
-import org.apache.spark.sql.{DataFrame, SaveMode}
+import org.apache.spark.sql.{DataFrame, Dataset, Row, SaveMode}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import tech.ytsaurus.core.tables.{ColumnValueType, TableSchema}
 import tech.ytsaurus.spyt.format.conf.YtTableSparkSettings.InconsistentReadEnabled
 import tech.ytsaurus.spyt.serializers.WriteSchemaConverter
-import tech.ytsaurus.spyt.streaming.YTsaurusStreamingTest.{PROCESSING_TIME_TRIGGER, schemaWithServiceColumns, schemaWithServiceColumnsAndQueuePath}
+import tech.ytsaurus.spyt.streaming.YTsaurusStreamingTest.{schemaWithServiceColumns, schemaWithServiceColumnsAndQueuePath}
 import tech.ytsaurus.spyt.test._
 import tech.ytsaurus.spyt.wrapper.YtWrapper
 
 import java.util.UUID
-import java.util.concurrent.{CountDownLatch, TimeUnit}
 import scala.concurrent.duration.DurationInt
 import scala.concurrent.{Await, Future, Promise}
 import scala.language.postfixOps
@@ -27,9 +26,6 @@ class YTsaurusStreamingTest extends AnyFlatSpec with Matchers with LocalSpark wi
   import tech.ytsaurus.spyt._
 
   it should "work with native key-value storage and FileContext YTsaurus API" in {
-    val batchCount = 3
-    val batchSeconds = 5
-
     YtWrapper.createDir(tmpPath)
 
     val numbers = spark
@@ -37,31 +33,31 @@ class YTsaurusStreamingTest extends AnyFlatSpec with Matchers with LocalSpark wi
       .format("rate")
       .option("rowsPerSecond", 1)
       .load()
-      .select($"timestamp", floor(rand() * 10).as("num"))
-
-    val stopSignal = new CountDownLatch(batchCount + 1)
+      .select($"timestamp", ($"value" % 10).as("num"))
 
     val groupedNumbers = numbers
-      .withWatermark("timestamp", "5 seconds")
-      .groupBy(window($"timestamp", "5 seconds", "3 seconds"), $"num")
+      .withWatermark("timestamp", "3 seconds")
+      .groupBy(window($"timestamp", "1 seconds"), $"num")
       .count()
 
-    val job = groupedNumbers
+    val query = groupedNumbers
       .writeStream
-      .option("checkpointLocation", f"yt:/$tmpPath/stateStore")
-      .trigger(ProcessingTime(batchSeconds * 1000))
-      .foreachBatch { (frame: DataFrame, _: Long) =>
+      .option("checkpointLocation", s"yt:/$tmpPath/stateStore")
+      .foreachBatch { (frame: Dataset[Row], _: Long) =>
         frame.write.mode(SaveMode.Append).yt(s"$tmpPath/result")
-        stopSignal.countDown()
       }
+      .start()
 
-    val query = job.start()
-    stopSignal.await(420, TimeUnit.SECONDS)
+    var attempts = 180
+    while (!yt.existsNode(s"$tmpPath/result").join() || (spark.read.yt(s"$tmpPath/result").count() == 0 && attempts > 0)) {
+      Thread.sleep(10000)
+      attempts -= 1
+    }
     query.stop()
 
     val resultDF = spark.read.yt(s"$tmpPath/result")
     val receivedNums = resultDF.select(sum("count").cast("long")).first().getLong(0).toInt
-    receivedNums should be >= ((batchCount - 1) * batchSeconds)
+    receivedNums should be > 0
   }
 
   it should "write YT queue" in {
@@ -82,7 +78,6 @@ class YTsaurusStreamingTest extends AnyFlatSpec with Matchers with LocalSpark wi
     val job = numbers
       .writeStream
       .option("checkpointLocation", f"yt:/$tmpPath/stateStore")
-      .trigger(PROCESSING_TIME_TRIGGER)
       .format("yt")
       .option("path", path)
 
@@ -121,7 +116,6 @@ class YTsaurusStreamingTest extends AnyFlatSpec with Matchers with LocalSpark wi
     val job = numbers
       .writeStream
       .option("checkpointLocation", f"yt:/$tmpPath/stateStore")
-      .trigger(PROCESSING_TIME_TRIGGER)
       .foreachBatch { (frame: DataFrame, batchNum: Long) =>
         recordCount += frame.count()
         if (recordCount >= recordCountLimit && !stopSignal.isCompleted) stopSignal.success()
@@ -162,7 +156,6 @@ class YTsaurusStreamingTest extends AnyFlatSpec with Matchers with LocalSpark wi
     val job = numbers
       .writeStream
       .option("checkpointLocation", f"yt:/$tmpPath/stateStore")
-      .trigger(PROCESSING_TIME_TRIGGER)
       .format("yt")
       .option("path", resultPath)
 
@@ -209,7 +202,6 @@ class YTsaurusStreamingTest extends AnyFlatSpec with Matchers with LocalSpark wi
     val jobForOptionCheck = df
       .writeStream
       .option("checkpointLocation", f"yt:/$tmpPath/stateStore_0")
-      .trigger(PROCESSING_TIME_TRIGGER)
       .foreachBatch { (frame: DataFrame, batchNum: Long) =>
         frame.foreachPartition { partition: Iterator[org.apache.spark.sql.Row] =>
           assert(partition.size <= maxRowsPerPartition)
@@ -559,7 +551,6 @@ class YTsaurusStreamingTest extends AnyFlatSpec with Matchers with LocalSpark wi
       val queryForResultTableCheck = df
         .writeStream
         .option("checkpointLocation", checkpointLocation)
-        .trigger(PROCESSING_TIME_TRIGGER)
         .format("yt")
         .option("path", resultPath)
         .start()

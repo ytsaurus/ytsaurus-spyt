@@ -113,7 +113,7 @@ private[spark] class YTsaurusOperationManager(val ytClient: YTsaurusClient,
     val additionalSpecParameters = conf.getOption(s"spark.ytsaurus.$taskName.operation.parameters")
       .map(YTreeTextSerializer.deserialize(_).asMap().asScala).getOrElse(mutable.HashMap[String, YTreeNode]())
 
-    val secureVault = additionalSpecParameters.getOrElseUpdate("secure_vault", YTree.mapBuilder().build())
+    val secureVault = additionalSpecParameters.getOrElseUpdate("secure_vault", YTree.mapBuilder().buildMap())
     if (secureVault.isMapNode) {
       val map = secureVault.mapNode().asMap()
       map.putIfAbsent("YT_USER", YTree.stringNode(user))
@@ -127,7 +127,7 @@ private[spark] class YTsaurusOperationManager(val ytClient: YTsaurusClient,
 
     val annotations = SpecificationUtils.getAnnotationsAsYTreeMapNode(conf, taskName)
     if (!annotations.isEmpty) {
-      val node = additionalSpecParameters.getOrElseUpdate("annotations", YTree.mapBuilder().build())
+      val node = additionalSpecParameters.getOrElseUpdate("annotations", YTree.mapBuilder().buildMap())
       if (node.isMapNode) {
         annotations.asMap().forEach(node.mapNode().asMap().putIfAbsent)
       }

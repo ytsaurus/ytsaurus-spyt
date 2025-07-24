@@ -267,6 +267,17 @@ class YTsaurusOperationManagerSuite extends SparkFunSuite with BeforeAndAfter wi
     result.get("command").stringValue() shouldEqual expectedExecutorCommand
   }
 
+  test("createSpec should work") {
+    val conf = confForAnnotationTests()
+
+    val opManager = createYTsaurusOperationManagerStub()
+    val execOpParams = opManager.executorParams(conf, "appId", testResourceProfile, 5)
+    opManager.createSpec(conf, "executor", execOpParams).getAdditionalSpecParameters.get("secure_vault").asMap() shouldBe Map(
+      "YT_TOKEN" -> YTree.stringNode("testToken"),
+      "YT_USER" -> YTree.stringNode("testUser"),
+    ).asJava
+  }
+
   test("It should be possible to set secure vault") {
     val conf = confForAnnotationTests()
       .set("spark.ytsaurus.executor.operation.parameters", "{secure_vault={docker_auth=docker_auth}}")

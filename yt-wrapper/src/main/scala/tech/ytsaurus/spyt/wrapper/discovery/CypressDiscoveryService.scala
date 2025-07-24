@@ -57,7 +57,7 @@ class CypressDiscoveryService(baseDiscoveryPath: String)(implicit yt: CompoundCl
                               clusterVersion: String,
                               masterWrapperEndpoint: HostAndPort,
                               clusterConf: SparkConfYsonable): Unit = {
-    val clearDir = discoverAddress() match {
+    val clearDir = getPath(operationPath) match {
       case Success(_) if operation.exists(_ != operationId) && operationInfo.exists(!_.state.isFinished) =>
         throw new IllegalStateException(s"Spark instance with path $discoveryPath already exists")
       case Success(_) =>
@@ -138,7 +138,7 @@ class CypressDiscoveryService(baseDiscoveryPath: String)(implicit yt: CompoundCl
       _ <- getPath(confPath).recover { case InvalidCatalogException(msg) => EmptyDirectoryException(msg) }
       hostAndPort <- cypressHostAndPort(addressPath)
       webUiHostAndPort <- cypressHostAndPort(webUiPath)
-      webUiUrl <- getPath(webUiPath).map(URI.create)
+      webUiUrl <- getPath(webUiUrlPath).map(URI.create)
       restHostAndPort <- cypressHostAndPort(restPath)
     } yield Address(hostAndPort, webUiHostAndPort, webUiUrl, restHostAndPort)
 

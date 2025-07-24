@@ -6,6 +6,7 @@ require_yt_client()
 
 from yt.wrapper import get, YPath, list as yt_list, exists  # noqa: E402
 from yt.wrapper.common import update_inplace  # noqa: E402
+from .utils import get_spyt_conf_dir  # noqa: E402
 from .version import __scala_version__  # noqa: E402
 from pyspark import __version__ as spark_version  # noqa: E402
 
@@ -133,7 +134,7 @@ def read_spark_defaults_conf():
 def read_conf(filename, delimiter=None):
     props = {}
     try:
-        conf_dir = os.environ.get("SPARK_CONF_DIR")
+        conf_dir = get_spyt_conf_dir()
         filepath = os.path.join(conf_dir, filename)
         with open(filepath, 'r') as f:
             for line in f:

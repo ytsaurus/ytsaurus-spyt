@@ -364,3 +364,7 @@ def check_spark_version(less_than=None, greater_than_or_equal=None):
     if greater_than_or_equal:
         result = result and current_version >= Version(greater_than_or_equal)
     return result
+
+
+def get_spyt_conf_dir():
+    return os.path.join(get_spyt_home(), "conf")

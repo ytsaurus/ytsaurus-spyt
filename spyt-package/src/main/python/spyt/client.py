@@ -14,7 +14,7 @@ from yt.wrapper.http_helpers import get_token, get_user_name, get_proxy_address_
 
 from .arcadia import checked_extract_spark  # noqa: E402
 from .utils import default_token, default_discovery_dir, get_spark_master, set_conf, \
-    SparkDiscovery, parse_memory, format_memory, base_spark_conf, parse_bool, get_spyt_home, \
+    SparkDiscovery, parse_memory, format_memory, base_spark_conf, parse_bool, get_spyt_conf_dir, \
     check_spark_version  # noqa: E402
 from .conf import read_remote_conf, read_global_conf, validate_versions_compatibility, \
     read_cluster_conf, SELF_VERSION  # noqa: E402
@@ -167,7 +167,7 @@ def _configure_client_mode(spark_conf,
 
 def _set_spark_conf_dir():
     if "SPARK_CONF_DIR" not in os.environ:
-        os.environ["SPARK_CONF_DIR"] = os.path.join(get_spyt_home(), "conf")
+        os.environ["SPARK_CONF_DIR"] = get_spyt_conf_dir()
 
 
 def _validate_resources(num_executors, cores_per_executor, executor_memory_per_core):

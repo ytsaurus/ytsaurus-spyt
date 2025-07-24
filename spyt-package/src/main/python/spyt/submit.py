@@ -12,7 +12,7 @@ from subprocess import Popen, PIPE
 from py4j.protocol import Py4JJavaError
 from enum import Enum
 from datetime import timedelta
-from .utils import scala_buffer_to_list, get_spark_home, get_spyt_home
+from .utils import scala_buffer_to_list, get_spark_home, get_spyt_home, get_spyt_conf_dir
 
 
 logger = logging.getLogger(__name__)
@@ -55,7 +55,7 @@ def launch_gateway(memory="512m",
         env.update(additional_environ or {})
         env["_SPYT_SUBMIT_CONN_INFO_PATH"] = conn_info_file
         env["SPARK_HOME"] = spark_home
-        env["SPARK_CONF_DIR"] = os.path.join(get_spyt_home(), "conf")
+        env["SPARK_CONF_DIR"] = get_spyt_conf_dir()
 
         # Launch the Java gateway.
         popen_kwargs = {'stdin': PIPE, 'env': env}
@@ -360,7 +360,7 @@ class SparkLauncher(object):
 
 def create_base_spark_env(spark_home):
     spark_env = os.environ.copy()
-    spark_env["SPARK_CONF_DIR"] = os.path.join(get_spyt_home(), "conf")
+    spark_env["SPARK_CONF_DIR"] = get_spyt_conf_dir()
     if spark_home:
         spark_env["SPARK_HOME"] = spark_home
     return spark_env

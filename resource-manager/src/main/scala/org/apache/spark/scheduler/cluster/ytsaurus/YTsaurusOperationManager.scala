@@ -27,6 +27,7 @@ import java.nio.file.Paths
 import java.time.Duration
 import java.util.Properties
 import scala.collection.JavaConverters._
+import scala.collection.mutable
 import scala.collection.mutable.ArrayBuffer
 import scala.concurrent.duration.DurationInt
 
@@ -107,31 +108,33 @@ private[spark] class YTsaurusOperationManager(val ytClient: YTsaurusClient,
   }
 
   private[ytsaurus] def createSpec(conf: SparkConf, taskName: String, opParams: OperationParameters): VanillaSpec = {
-    val poolParameters = conf.get(YTSAURUS_POOL).map(pool => Map("pool" -> YTree.stringNode(pool))).getOrElse(Map.empty)
-
     val opSpecBuilder: VanillaSpec.BuilderBase[_] = VanillaSpec.builder()
     opSpecBuilder.setTask(taskName, opParams.taskSpec)
 
-    val secureVault = YTree.mapBuilder()
-      .key("YT_USER").value(user)
-      .key("YT_TOKEN").value(token)
-      .buildMap()
+    val additionalSpecParameters = conf.getOption(s"spark.ytsaurus.$taskName.operation.parameters")
+      .map(YTreeTextSerializer.deserialize(_).asMap().asScala).getOrElse(mutable.HashMap[String, YTreeNode]())
 
-    val title = s"Spark $taskName for ${conf.get("spark.app.name")}${opParams.attemptId}"
-
-    val userParameters = conf.getOption(s"spark.ytsaurus.$taskName.operation.parameters")
-      .map(YTreeTextSerializer.deserialize(_).asMap().asScala).getOrElse(Map.empty)
+    val secureVault = additionalSpecParameters.getOrElseUpdate("secure_vault", YTree.mapBuilder().buildMap())
+    if (secureVault.isMapNode) {
+      val map = secureVault.mapNode().asMap()
+      map.putIfAbsent("YT_USER", YTree.stringNode(user))
+      map.putIfAbsent("YT_TOKEN", YTree.stringNode(token))
+    }
+    additionalSpecParameters.getOrElseUpdate("max_failed_job_count", YTree.integerNode(opParams.maxFailedJobCount))
+    additionalSpecParameters.getOrElseUpdate("preemption_mode", YTree.stringNode("normal"))
+    additionalSpecParameters.getOrElseUpdate(
+      "title", YTree.stringNode(s"Spark $taskName for ${conf.get("spark.app.name")}${opParams.attemptId}")
+    )
 
     val annotations = SpecificationUtils.getAnnotationsAsYTreeMapNode(conf, taskName)
-    val additionalParameters: Map[String, YTreeNode] = (userParameters ++ Map(
-      "secure_vault" -> secureVault,
-      "max_failed_job_count" -> YTree.integerNode(opParams.maxFailedJobCount),
-      "preemption_mode" -> YTree.stringNode("normal"),
-      "title" -> YTree.stringNode(title),
-    ) ++ (if (!annotations.isEmpty) Map("annotations" -> annotations) else Map.empty) ++
-      poolParameters).toMap
-
-    opSpecBuilder.setAdditionalSpecParameters(additionalParameters.asJava)
+    if (!annotations.isEmpty) {
+      val node = additionalSpecParameters.getOrElseUpdate("annotations", YTree.mapBuilder().buildMap())
+      if (node.isMapNode) {
+        annotations.asMap().forEach(node.mapNode().asMap().putIfAbsent)
+      }
+    }
+    conf.get(YTSAURUS_POOL).foreach(pool => additionalSpecParameters.getOrElseUpdate("pool", YTree.stringNode(pool)))
+    opSpecBuilder.setAdditionalSpecParameters(additionalSpecParameters.asJava)
     opSpecBuilder.build()
   }
 

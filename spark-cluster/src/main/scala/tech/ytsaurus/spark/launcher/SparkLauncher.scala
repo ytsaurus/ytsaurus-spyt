@@ -130,22 +130,25 @@ trait SparkLauncher {
     }
   }
 
+  // https://archive.apache.org/dist/spark/docs/3.2.2/spark-standalone.html#starting-a-cluster-manually
+  private def injectYTEnvPortsToArgs(positionalArgs: ArrayBuffer[String]): Unit = {
+    for (port <- sys.env.get("YT_PORT_0")) {
+      positionalArgs += "--port"
+      positionalArgs += port
+    }
+    for (port <- sys.env.get("YT_PORT_1")) {
+      positionalArgs += "--webui-port"
+      positionalArgs += port
+    }
+  }
+
   def startMaster(reverseProxyUrl: Option[String]): MasterService = {
     log.info("Start Spark master")
     val config = SparkDaemonConfig.fromProperties("master", "512M")
     reverseProxyUrl.foreach(url => log.info(f"Reverse proxy url is $url"))
     val reverseProxyUrlProp = reverseProxyUrl.map(url => f"-Dspark.ui.reverseProxyUrl=$url")
     val positionalArgs = ArrayBuffer[String]()
-    for (port <- sys.env.get("YT_PORT_0")) {
-      // https://github.com/apache/spark/blob/676cac0/core/src/main/scala/org/apache/spark/deploy/master/MasterArguments.scala#L65
-      positionalArgs += "--port"
-      positionalArgs += port
-    }
-    for (port <- sys.env.get("YT_PORT_1")) {
-      // https://github.com/apache/spark/blob/676cac0/core/src/main/scala/org/apache/spark/deploy/master/MasterArguments.scala#L69
-      positionalArgs += "--webui-port"
-      positionalArgs += port
-    }
+    injectYTEnvPortsToArgs(positionalArgs)
     val thread = runSparkThread(
       masterClass,
       config.memory,
@@ -164,16 +167,7 @@ trait SparkLauncher {
                   enableSquashfs: Boolean): BasicService = {
     val config = SparkDaemonConfig.fromProperties("worker", "512M")
     val positionalArgs = ArrayBuffer[String]()
-    for (port <- sys.env.get("YT_PORT_0")) {
-      // https://github.com/apache/spark/blob/676cac0/core/src/main/scala/org/apache/spark/deploy/worker/WorkerArguments.scala#L78
-      positionalArgs += "--port"
-      positionalArgs += port
-    }
-    for (port <- sys.env.get("YT_PORT_1")) {
-      // https://github.com/apache/spark/blob/676cac0/core/src/main/scala/org/apache/spark/deploy/worker/WorkerArguments.scala#L94
-      positionalArgs += "--webui-port"
-      positionalArgs += port
-    }
+    injectYTEnvPortsToArgs(positionalArgs)
     positionalArgs += s"spark://${master.hostAndPort}"
     val thread = runSparkThread(
       workerClass,

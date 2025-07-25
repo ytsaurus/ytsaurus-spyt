@@ -291,7 +291,7 @@ def build_master_spec(builder: VanillaSpecBuilder, common_params: CommonSpecPara
         .memory_limit(parse_memory(config.master_memory_limit)) \
         .cpu_limit(2) \
         .spec(master_task_spec)
-    if common_params.spark_conf.get("spark.yt.use_port_count.master") == "true":
+    if common_params.spark_conf.get("spark.ytsaurus.use_assigned_ports.master") == "true":
         task.port_count(2)
     task.end_task()
 
@@ -396,7 +396,7 @@ def build_worker_spec(builder: VanillaSpecBuilder, job_type: str, ytserver_proxy
         .cpu_limit(config.res.cores + worker_cores_overhead) \
         .spec(spec) \
         .file_paths(worker_file_paths)
-    if common_params.spark_conf.get("spark.yt.use_port_count.worker") == "true":
+    if common_params.spark_conf.get("spark.ytsaurus.use_assigned_ports.worker") == "true":
         task.port_count(2)
     task.end_task()
 

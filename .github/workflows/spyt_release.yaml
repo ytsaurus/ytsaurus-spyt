@@ -96,7 +96,7 @@ jobs:
           ln -sf /usr/bin/python3.11 /usr/bin/python3
           python3 -m pip install twine
           python3 -m pip install ytsaurus-client==0.13.20
-      
+
       - name: Publish to PyPi
         run: |
           sbt -Dpypi.password=${{ secrets.PYPI_API_TOKEN }} publishToPypi
@@ -128,8 +128,8 @@ jobs:
       - name: Write credentials
         run: |
           mkdir -p ~/.sbt
-          echo "realm=Sonatype Nexus Repository Manager" > ~/.sbt/.ossrh_credentials
-          echo "host=central.sonatype.com" >> ~/.sbt/.ossrh_credentials
+          echo "realm=OSSRH Staging API Service" > ~/.sbt/.ossrh_credentials
+          echo "host=ossrh-staging-api.central.sonatype.com" >> ~/.sbt/.ossrh_credentials
           echo "user=${{ secrets.OSSRH_USERNAME }}" >> ~/.sbt/.ossrh_credentials
           echo "password=${{ secrets.OSSRH_PASSWORD }}" >> ~/.sbt/.ossrh_credentials
 

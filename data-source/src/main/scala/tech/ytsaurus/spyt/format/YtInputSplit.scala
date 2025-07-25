@@ -214,6 +214,10 @@ object YtInputSplit {
       new YTreeDoubleNodeImpl(rValue.value.asInstanceOf[Double], null)
     case rValue: RealValue[_] if rValue.value.isInstanceOf[Long] =>
       new YTreeIntegerNodeImpl(true, rValue.value.asInstanceOf[Long], null)
+    case RealValue(bigDecimal: java.math.BigDecimal) =>
+      new YTreeIntegerNodeImpl(false, ULongUtils.tryToUnsignedLong(bigDecimal).getOrElse {
+        throw new IllegalArgumentException("" + bigDecimal)
+      }, null)
     case rValue: RealValue[_] if rValue.value.isInstanceOf[Boolean] =>
       new YTreeBooleanNodeImpl(rValue.value.asInstanceOf[Boolean], null)
     case rValue: RealValue[_] if rValue.value.isInstanceOf[String] =>

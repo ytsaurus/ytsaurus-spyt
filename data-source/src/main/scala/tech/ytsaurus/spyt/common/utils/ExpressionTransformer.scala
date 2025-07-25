@@ -6,6 +6,7 @@ import org.apache.spark.unsafe.types.UTF8String
 import Segment.Segment
 import tech.ytsaurus.spyt.logger.YtLogger
 import tech.ytsaurus.spyt.common.utils
+import tech.ytsaurus.spyt.types.UInt64Long
 import tech.ytsaurus.ysontree._
 
 object ExpressionTransformer {
@@ -33,6 +34,7 @@ object ExpressionTransformer {
       case x: Float => Some(RealValue(x.doubleValue()))
       case x: String => Some(RealValue(x))
       case x: UTF8String => Some(RealValue(x.toString))
+      case x: java.math.BigDecimal => Some(RealValue(x))
       case _ => None
     }
   }
@@ -112,7 +114,7 @@ object ExpressionTransformer {
     case b: YTreeBooleanNode => RealValue(b.getValue)
     case s: YTreeStringNode => RealValue(s.getValue)
     case d: YTreeDoubleNode => RealValue(d.getValue)
-    case l: YTreeIntegerNode => RealValue(l.getLong)
+    case l: YTreeIntegerNode => if (l.isSigned) RealValue(l.getLong) else RealValue(ULongUtils.toBigDecimal(l.getLong))
     case e: YTreeEntityNode =>
       val t = e.getAttribute("type")
       if (t.isPresent) {

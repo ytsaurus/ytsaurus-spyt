@@ -1,11 +1,13 @@
 package tech.ytsaurus.spyt.types
 
-case class UInt64Long(value: Long) {
+case class UInt64Long(value: Long) extends Ordered[UInt64Long] {
   def toLong: Long = value
 
   override def toString: String = UInt64Long.toString(value)
 
   override def hashCode(): Int = value.toInt
+
+  override def compare(that: UInt64Long): Int = java.lang.Long.compareUnsigned(value, that.value)
 }
 
 object UInt64Long {

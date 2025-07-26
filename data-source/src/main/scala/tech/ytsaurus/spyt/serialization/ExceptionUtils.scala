@@ -9,6 +9,7 @@ object ExceptionUtils {
   class InterruptedRuntimeException(cause: Throwable) extends RuntimeException(cause)
   class ExecutionRuntimeException(cause: Throwable) extends RuntimeException(cause)
   class TimeoutRuntimeException(cause: Throwable) extends RuntimeException(cause)
+  class YsonParseException(index: Any, cause: Throwable) extends RuntimeException(s"Yson parse error at index $index", cause)
 
   def translate(e: Exception): RuntimeException = e match {
     case exception: RuntimeException => exception

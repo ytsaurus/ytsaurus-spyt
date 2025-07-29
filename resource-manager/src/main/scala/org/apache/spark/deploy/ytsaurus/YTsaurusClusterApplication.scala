@@ -125,8 +125,7 @@ private[spark] object ApplicationArguments {
       case Array("--proxy-user", user: String) =>
         proxyUser = Some(user)
       case other =>
-        val invalid = other.mkString(" ")
-        throw new RuntimeException(s"Unknown arguments: $invalid")
+        throw new RuntimeException(s"Unknown arguments: ${other.toSeq}")
     }
 
     require(mainClass.isDefined, "Main class must be specified via --main-class")

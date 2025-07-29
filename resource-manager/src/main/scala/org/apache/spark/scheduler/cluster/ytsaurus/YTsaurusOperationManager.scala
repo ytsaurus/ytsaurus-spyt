@@ -1,6 +1,7 @@
 
 package org.apache.spark.scheduler.cluster.ytsaurus
 
+import org.apache.commons.text.StringEscapeUtils.escapeXSI
 import org.apache.spark.deploy.ytsaurus.Config._
 import org.apache.spark.deploy.ytsaurus.YTsaurusUtils.isShell
 import org.apache.spark.deploy.ytsaurus.{ApplicationArguments, Config, YTsaurusUtils}
@@ -18,7 +19,7 @@ import tech.ytsaurus.client.request.{CompleteOperation, GetOperation, UpdateOper
 import tech.ytsaurus.client.rpc.{RpcOptions, YTsaurusClientAuth}
 import tech.ytsaurus.core.GUID
 import tech.ytsaurus.spyt.{BuildInfo, SparkAdapter, SparkVersionUtils}
-import tech.ytsaurus.spyt.wrapper.{Utils => YtUtils, YtWrapper}
+import tech.ytsaurus.spyt.wrapper.{YtWrapper, Utils => YtUtils}
 import tech.ytsaurus.spyt.wrapper.Utils.ytHostIpBashInlineWrapper
 import tech.ytsaurus.ysontree._
 
@@ -138,13 +139,10 @@ private[spark] class YTsaurusOperationManager(val ytClient: YTsaurusClient,
     opSpecBuilder.build()
   }
 
-  private def driverParams(conf: SparkConf, appArgs: ApplicationArguments): OperationParameters = {
+  private[ytsaurus] def driverParams(conf: SparkConf, appArgs: ApplicationArguments): OperationParameters = {
     val driverMemoryMiB = conf.get(DRIVER_MEMORY)
 
-    val sparkJavaOpts = Utils.sparkJavaOpts(conf).map { opt =>
-      val Array(k, v) = opt.split("=", 2)
-      k + "=\"" + v + "\""
-    } ++ Seq(s"-D${Config.DRIVER_OPERATION_ID}=$$YT_OPERATION_ID")
+    val sparkJavaOpts = Utils.sparkJavaOpts(conf) ++ Seq(s"-D${Config.DRIVER_OPERATION_ID}=$$YT_OPERATION_ID")
 
     val netOpt = conf.get(YTSAURUS_NETWORK_PROJECT)
       .map(_ => s"-D${DRIVER_HOST_ADDRESS.key}=${ytHostIpBashInlineWrapper("YT_IP_ADDRESS_DEFAULT")}")
@@ -163,20 +161,17 @@ private[spark] class YTsaurusOperationManager(val ytClient: YTsaurusClient,
       case _ => Seq.empty
     }
 
-    var driverCommand = (Seq(
-      prepareEnvCommand,
-      "&&",
+    var driverCommand = prepareEnvCommand + " && " + (Seq(
       javaCommand,
       s"-Xmx${driverMemoryMiB}m",
       "-cp", sparkClassPath) ++
       sparkJavaOpts ++
       netOpt ++
-      ytsaurusJavaOptions ++ Seq(
-      driverOpts,
-      SparkAdapter.instance.defaultModuleOptions(),
+      ytsaurusJavaOptions
+    ).map(escapeXSI).mkString(" ") + s" $driverOpts ${SparkAdapter.instance.defaultModuleOptions()} " ++ (Seq(
       "org.apache.spark.deploy.ytsaurus.DriverWrapper",
       appArgs.mainClass
-    ) ++ additionalArgs ++ appArgs.driverArgs).mkString(" ")
+    ) ++ additionalArgs ++ appArgs.driverArgs).map(escapeXSI).mkString(" ")
 
     driverCommand = addRedirectToStderrIfNeeded(conf, driverCommand)
 
@@ -240,10 +235,7 @@ private[spark] class YTsaurusOperationManager(val ytClient: YTsaurusClient,
       isPythonApp,
       Map.empty)
 
-    val sparkJavaOpts = Utils.sparkJavaOpts(conf, SparkConf.isExecutorStartupConf).map { opt =>
-      val Array(k, v) = opt.split("=", 2)
-      k + "=\"" + v + "\""
-    }
+    val sparkJavaOpts = Utils.sparkJavaOpts(conf, SparkConf.isExecutorStartupConf)
 
     val executorOpts = conf.get(EXECUTOR_JAVA_OPTIONS).getOrElse("")
 
@@ -262,23 +254,19 @@ private[spark] class YTsaurusOperationManager(val ytClient: YTsaurusClient,
 
     val execCores = SparkAdapter.instance.getExecutorCores(execResources)
 
-    var executorCommand = (Seq(
-      prepareEnvCommand,
-      "&&",
+    var executorCommand = prepareEnvCommand + " && " + (Seq(
       javaCommand,
       "-cp", sparkClassPath,
       s"-Xmx${execResources.executorMemoryMiB}m") ++
       // classpath
       sparkJavaOpts ++
-      ytsaurusJavaOptions ++ Seq(
-      executorOpts,
+      ytsaurusJavaOptions
+    ).map(escapeXSI).mkString(" ") + s" $executorOpts " + Seq(
       "org.apache.spark.executor.YTsaurusCoarseGrainedExecutorBackend",
       "--driver-url", driverUrl,
-      "--executor-id", "$YT_TASK_JOB_INDEX",
       "--cores", execCores.toString,
       "--app-id", appId,
-      "--hostname", "$HOSTNAME"
-    )).mkString(" ")
+    ).map(escapeXSI).mkString(" ") + """ --executor-id "$YT_TASK_JOB_INDEX" --hostname "$HOSTNAME""""
 
     executorCommand = addRedirectToStderrIfNeeded(conf, executorCommand)
 

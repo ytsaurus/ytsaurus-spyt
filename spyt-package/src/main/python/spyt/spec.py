@@ -285,13 +285,15 @@ def build_master_spec(builder: VanillaSpecBuilder, common_params: CommonSpecPara
     master_environment = update(common_params.environment, master_environment)
     master_task_spec = copy.deepcopy(common_params.task_spec)
     master_task_spec["environment"] = master_environment
-    builder.begin_task("master") \
+    task = builder.begin_task("master") \
         .job_count(1) \
         .command(master_command) \
         .memory_limit(parse_memory(config.master_memory_limit)) \
         .cpu_limit(2) \
-        .spec(master_task_spec) \
-        .end_task()
+        .spec(master_task_spec)
+    if common_params.spark_conf.get("spark.ytsaurus.use_assigned_ports.master") == "true":
+        task.port_count(2)
+    task.end_task()
 
 
 def build_worker_spec(builder: VanillaSpecBuilder, job_type: str, ytserver_proxy_path: str, tvm_enabled: bool,
@@ -387,14 +389,16 @@ def build_worker_spec(builder: VanillaSpecBuilder, job_type: str, ytserver_proxy
         driver_environment["SPARK_DRIVER_RESOURCE"] = str(config.res.cores)
 
     spec = driver_task_spec if "drivers" == job_type else worker_task_spec
-    builder.begin_task(job_type) \
+    task = builder.begin_task(job_type) \
         .job_count(config.res.num) \
         .command(worker_command) \
         .memory_limit(worker_ram_memory + parse_memory(config.res.memory_overhead)) \
         .cpu_limit(config.res.cores + worker_cores_overhead) \
         .spec(spec) \
-        .file_paths(worker_file_paths) \
-        .end_task()
+        .file_paths(worker_file_paths)
+    if common_params.spark_conf.get("spark.ytsaurus.use_assigned_ports.worker") == "true":
+        task.port_count(2)
+    task.end_task()
 
 
 def build_spark_operation_spec(config: dict, client: YtClient,

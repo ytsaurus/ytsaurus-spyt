@@ -131,14 +131,29 @@ trait SparkLauncher {
     }
   }
 
+  // https://archive.apache.org/dist/spark/docs/3.2.2/spark-standalone.html#starting-a-cluster-manually
+  private def injectYTEnvPortsToArgs(positionalArgs: ArrayBuffer[String]): Unit = {
+    for (port <- sys.env.get("YT_PORT_0")) {
+      positionalArgs += "--port"
+      positionalArgs += port
+    }
+    for (port <- sys.env.get("YT_PORT_1")) {
+      positionalArgs += "--webui-port"
+      positionalArgs += port
+    }
+  }
+
   def startMaster(reverseProxyUrl: Option[String]): MasterService = {
     log.info("Start Spark master")
     val config = SparkDaemonConfig.fromProperties("master", "512M")
     reverseProxyUrl.foreach(url => log.info(f"Reverse proxy url is $url"))
     val reverseProxyUrlProp = reverseProxyUrl.map(url => f"-Dspark.ui.reverseProxyUrl=$url")
+    val positionalArgs = ArrayBuffer[String]()
+    injectYTEnvPortsToArgs(positionalArgs)
     val thread = runSparkThread(
       masterClass,
       config.memory,
+      positionalArgs = positionalArgs,
       namedArgs = Map("host" -> ytHostnameOrIpAddress),
       systemProperties = commonJavaOpts ++ reverseProxyUrlProp.toSeq
     )
@@ -154,6 +169,9 @@ trait SparkLauncher {
                   extraEnv: Map[String, String],
                   enableSquashfs: Boolean): BasicServiceWithUi = {
     val config = SparkDaemonConfig.fromProperties("worker", "512M")
+    val positionalArgs = ArrayBuffer[String]()
+    injectYTEnvPortsToArgs(positionalArgs)
+    positionalArgs += s"spark://${master.hostAndPort}"
     val thread = runSparkThread(
       workerClass,
       config.memory,
@@ -162,7 +180,7 @@ trait SparkLauncher {
         "memory" -> memory,
         "host" -> ytHostnameOrIpAddress
       ) ++ (if (enableSquashfs) Map("work-dir" -> s"$home/work") else Map()),
-      positionalArgs = Seq(s"spark://${master.hostAndPort}"),
+      positionalArgs = positionalArgs,
       systemProperties = commonJavaOpts,
       extraEnv = extraEnv
     )

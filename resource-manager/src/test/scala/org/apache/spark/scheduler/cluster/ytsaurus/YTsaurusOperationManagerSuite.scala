@@ -46,7 +46,7 @@ class YTsaurusOperationManagerSuite extends SparkFunSuite with BeforeAndAfter wi
 
   private val expectedExecutorCommand = "./setup-spyt-env.sh --some-key some-value && " +
     "'/usr/bin/java' '-cp' './*:/usr/lib/spyt/conf/:/usr/lib/spyt/jars/*:/usr/lib/spark/jars/*' '-Xmx1024m' " +
-    "'-Dspark.driver.port=12345'   " +
+    "'-Dspark.driver.port=12345' " +
     "org.apache.spark.executor.YTsaurusCoarseGrainedExecutorBackend " +
     """--driver-url 'spark://CoarseGrainedScheduler@some-host:12345' --executor-id "$YT_TASK_JOB_INDEX" """ +
     """--cores '1' --app-id 'appId' --hostname "$HOSTNAME""""

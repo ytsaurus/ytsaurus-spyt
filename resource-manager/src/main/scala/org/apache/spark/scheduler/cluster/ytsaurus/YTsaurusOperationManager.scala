@@ -1,7 +1,6 @@
 
 package org.apache.spark.scheduler.cluster.ytsaurus
 
-import org.apache.commons.text.StringEscapeUtils.escapeXSI
 import org.apache.spark.deploy.ytsaurus.Config._
 import org.apache.spark.deploy.ytsaurus.YTsaurusUtils.isShell
 import org.apache.spark.deploy.ytsaurus.{ApplicationArguments, Config, YTsaurusUtils}
@@ -20,7 +19,7 @@ import tech.ytsaurus.client.rpc.{RpcOptions, YTsaurusClientAuth}
 import tech.ytsaurus.core.GUID
 import tech.ytsaurus.spyt.{BuildInfo, SparkAdapter, SparkVersionUtils}
 import tech.ytsaurus.spyt.wrapper.{YtWrapper, Utils => YtUtils}
-import tech.ytsaurus.spyt.wrapper.Utils.ytHostIpBashInlineWrapper
+import tech.ytsaurus.spyt.wrapper.Utils.{bashCommand, ytHostIpBashInlineWrapper}
 import tech.ytsaurus.ysontree._
 
 import java.net.URI
@@ -142,11 +141,9 @@ private[spark] class YTsaurusOperationManager(val ytClient: YTsaurusClient,
   private[ytsaurus] def driverParams(conf: SparkConf, appArgs: ApplicationArguments): OperationParameters = {
     val driverMemoryMiB = conf.get(DRIVER_MEMORY)
 
-    val sparkJavaOpts = Utils.sparkJavaOpts(conf) ++ Seq(s"-D${Config.DRIVER_OPERATION_ID}=$$YT_OPERATION_ID")
-
-    val netOpt = conf.get(YTSAURUS_NETWORK_PROJECT)
-      .map(_ => s"-D${DRIVER_HOST_ADDRESS.key}=${ytHostIpBashInlineWrapper("YT_IP_ADDRESS_DEFAULT")}")
-      .toSeq
+    val netOptBash = conf.get(YTSAURUS_NETWORK_PROJECT)
+      .map(_ => s""""-D${DRIVER_HOST_ADDRESS.key}=${ytHostIpBashInlineWrapper("YT_IP_ADDRESS_DEFAULT")}"""")
+      .getOrElse("")
 
     val driverOpts = conf.get(DRIVER_JAVA_OPTIONS).getOrElse("")
 
@@ -161,17 +158,16 @@ private[spark] class YTsaurusOperationManager(val ytClient: YTsaurusClient,
       case _ => Seq.empty
     }
 
-    var driverCommand = prepareEnvCommand + " && " + (Seq(
-      javaCommand,
-      s"-Xmx${driverMemoryMiB}m",
-      "-cp", sparkClassPath) ++
-      sparkJavaOpts ++
-      netOpt ++
-      ytsaurusJavaOptions
-    ).map(escapeXSI).mkString(" ") + s" $driverOpts ${SparkAdapter.instance.defaultModuleOptions()} " ++ (Seq(
-      "org.apache.spark.deploy.ytsaurus.DriverWrapper",
-      appArgs.mainClass
-    ) ++ additionalArgs ++ appArgs.driverArgs).map(escapeXSI).mkString(" ")
+    var driverCommand = (
+      s"$prepareEnvCommand && ${bashCommand(javaCommand, s"-Xmx${driverMemoryMiB}m", "-cp", sparkClassPath)}"
+        + s" ${bashCommand(Utils.sparkJavaOpts(conf): _*)}"
+        + s""" "-D${Config.DRIVER_OPERATION_ID}=$$YT_OPERATION_ID""""
+        + s" $netOptBash"
+        + s" ${bashCommand(ytsaurusJavaOptions: _*)}"
+        + s" $driverOpts ${SparkAdapter.instance.defaultModuleOptions()}"
+        + s" org.apache.spark.deploy.ytsaurus.DriverWrapper ${bashCommand(appArgs.mainClass)}"
+        + s" ${bashCommand(additionalArgs: _*)} ${bashCommand(appArgs.driverArgs: _*)}"
+      )
 
     driverCommand = addRedirectToStderrIfNeeded(conf, driverCommand)
 
@@ -254,19 +250,16 @@ private[spark] class YTsaurusOperationManager(val ytClient: YTsaurusClient,
 
     val execCores = SparkAdapter.instance.getExecutorCores(execResources)
 
-    var executorCommand = prepareEnvCommand + " && " + (Seq(
-      javaCommand,
-      "-cp", sparkClassPath,
-      s"-Xmx${execResources.executorMemoryMiB}m") ++
-      // classpath
-      sparkJavaOpts ++
-      ytsaurusJavaOptions
-    ).map(escapeXSI).mkString(" ") + s" $executorOpts " + Seq(
-      "org.apache.spark.executor.YTsaurusCoarseGrainedExecutorBackend",
-      "--driver-url", driverUrl,
-      "--cores", execCores.toString,
-      "--app-id", appId,
-    ).map(escapeXSI).mkString(" ") + """ --executor-id "$YT_TASK_JOB_INDEX" --hostname "$HOSTNAME""""
+    var executorCommand = (
+      s"$prepareEnvCommand && ${bashCommand(javaCommand, "-cp", sparkClassPath, s"-Xmx${execResources.executorMemoryMiB}m")}"
+        + s" ${bashCommand(sparkJavaOpts: _*)} ${bashCommand(ytsaurusJavaOptions: _*)} $executorOpts"
+        + s" org.apache.spark.executor.YTsaurusCoarseGrainedExecutorBackend"
+        + s" --driver-url ${bashCommand(driverUrl)}"
+        + """ --executor-id "$YT_TASK_JOB_INDEX""""
+        + s" --cores ${bashCommand(execCores.toString)}"
+        + s" --app-id ${bashCommand(appId)}"
+        + """ --hostname "$HOSTNAME""""
+      )
 
     executorCommand = addRedirectToStderrIfNeeded(conf, executorCommand)
 

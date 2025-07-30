@@ -2,14 +2,13 @@ package tech.ytsaurus.spark.launcher
 
 import io.circe.generic.auto._
 import io.circe.parser._
-import org.apache.commons.text.StringEscapeUtils.escapeXSI
 import org.apache.spark.deploy.history.YtHistoryServer
 import org.apache.spark.deploy.master.YtMaster
 import org.apache.spark.deploy.worker.YtWorker
 import org.slf4j.{Logger, LoggerFactory}
 import tech.ytsaurus.client.CompoundClient
 import tech.ytsaurus.spark.launcher.Service.{BasicService, MasterService}
-import tech.ytsaurus.spyt.wrapper.Utils.{parseDuration, ytHostnameOrIpAddress}
+import tech.ytsaurus.spyt.wrapper.Utils.{bashCommand, parseDuration, ytHostnameOrIpAddress}
 import tech.ytsaurus.spyt.wrapper.YtWrapper
 import tech.ytsaurus.spyt.wrapper.client.{YtClientConfiguration, YtClientProvider}
 import tech.ytsaurus.spyt.wrapper.discovery._
@@ -341,11 +340,11 @@ trait SparkLauncher {
       // when using MTN, Spark should use ip address and not hostname, because hostname is not in DNS
       "SPARK_LOCAL_HOSTNAME" -> ytHostnameOrIpAddress,
       "SPARK_DAEMON_MEMORY" -> memory,
-      "SPARK_DAEMON_JAVA_OPTS" -> (
+      "SPARK_DAEMON_JAVA_OPTS" -> bashCommand(
         Seq(workerLog4j)
           ++ systemProperties
-          ++ sparkSystemProperties.map { case (k, v) => s"-D$k=$v" }
-        ).map(escapeXSI).mkString(" "),
+          ++ sparkSystemProperties.map { case (k, v) => s"-D$k=$v" }: _*
+        ),
     )
     if (javaHome != null) {
       processExtraEnv += ("JAVA_HOME" -> javaHome)

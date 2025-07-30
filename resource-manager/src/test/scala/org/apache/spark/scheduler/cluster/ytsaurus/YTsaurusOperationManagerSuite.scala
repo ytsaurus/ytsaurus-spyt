@@ -299,7 +299,17 @@ class YTsaurusOperationManagerSuite extends SparkFunSuite with BeforeAndAfter wi
     val opManager = createYTsaurusOperationManagerStub()
     val execOpParams = opManager.driverParams(conf, ApplicationArguments.fromCommandLineArgs(Array("--main-class", "Main")))
     val command = execOpParams.taskSpec.prepare(YTree.builder(), null, null).build().asMap().get("command").stringValue()
-    command should include("""'-Dspark.ytsaurus.executor.task.parameters={secure_vault={docker_auth={username="user";password="pass"}}}'""")
+    command should include(""" '-Dspark.ytsaurus.executor.task.parameters={secure_vault={docker_auth={username="user";password="pass"}}}' """)
+  }
+
+  test("It should not be possible to inject shell") {
+    val conf = confForAnnotationTests()
+      .set("spark.ytsaurus.executor.task.parameters", """{foo="$(exit 1)"}""")
+
+    val opManager = createYTsaurusOperationManagerStub()
+    val execOpParams = opManager.driverParams(conf, ApplicationArguments.fromCommandLineArgs(Array("--main-class", "Main")))
+    val command = execOpParams.taskSpec.prepare(YTree.builder(), null, null).build().asMap().get("command").stringValue()
+    command should include(""" '-Dspark.ytsaurus.executor.task.parameters={foo="$(exit 1)"}' """)
   }
 
   def confForAnnotationTests(): SparkConf = {

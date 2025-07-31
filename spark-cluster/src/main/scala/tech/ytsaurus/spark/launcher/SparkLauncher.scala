@@ -8,7 +8,7 @@ import org.apache.spark.deploy.worker.YtWorker
 import org.slf4j.{Logger, LoggerFactory}
 import tech.ytsaurus.client.CompoundClient
 import tech.ytsaurus.spark.launcher.Service.{BasicService, MasterService}
-import tech.ytsaurus.spyt.wrapper.Utils.{parseDuration, ytHostnameOrIpAddress}
+import tech.ytsaurus.spyt.wrapper.Utils.{bashCommand, parseDuration, ytHostnameOrIpAddress}
 import tech.ytsaurus.spyt.wrapper.YtWrapper
 import tech.ytsaurus.spyt.wrapper.client.{YtClientConfiguration, YtClientProvider}
 import tech.ytsaurus.spyt.wrapper.discovery._
@@ -325,16 +325,13 @@ trait SparkLauncher {
                             memory: String,
                             log: Logger,
                             extraEnv: Map[String, String]): Process = {
-    val command = s"$sparkHome/bin/spark-class " +
-      s"$className " +
-      s"${namedArgs.map { case (k, v) => s"--$k $v" }.mkString(" ")} " +
-      s"${positionalArgs.mkString(" ")}"
+    val command = Seq(s"$sparkHome/bin/spark-class", className) ++
+      namedArgs.flatMap { case (k, v) => Seq(s"--$k", v) } ++ positionalArgs
 
     log.info(s"Run command: $command")
 
     val workerLog4j = s"-Dlog4j.configuration=file://$spytHome/conf/log4j.worker.properties"
     val sparkLocalDirs = env("SPARK_LOCAL_DIRS", "./tmpfs")
-    val javaOpts = (workerLog4j +: (systemProperties ++ sparkSystemProperties.map { case (k, v) => s"-D$k=$v" })).mkString(" ")
     val processExtraEnv = ArrayBuffer(
       "SPARK_HOME" -> sparkHome,
       "SPARK_CONF_DIR" -> s"$spytHome/conf",
@@ -343,7 +340,11 @@ trait SparkLauncher {
       // when using MTN, Spark should use ip address and not hostname, because hostname is not in DNS
       "SPARK_LOCAL_HOSTNAME" -> ytHostnameOrIpAddress,
       "SPARK_DAEMON_MEMORY" -> memory,
-      "SPARK_DAEMON_JAVA_OPTS" -> javaOpts,
+      "SPARK_DAEMON_JAVA_OPTS" -> bashCommand(
+        Seq(workerLog4j)
+          ++ systemProperties
+          ++ sparkSystemProperties.map { case (k, v) => s"-D$k=$v" }: _*
+        ),
     )
     if (javaHome != null) {
       processExtraEnv += ("JAVA_HOME" -> javaHome)

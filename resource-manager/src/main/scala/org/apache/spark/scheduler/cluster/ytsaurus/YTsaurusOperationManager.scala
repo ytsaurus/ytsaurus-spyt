@@ -10,6 +10,7 @@ import org.apache.spark.launcher.SparkLauncher
 import org.apache.spark.resource.ResourceProfile
 import org.apache.spark.rpc.RpcEndpointAddress
 import org.apache.spark.scheduler.cluster.CoarseGrainedSchedulerBackend
+import org.apache.spark.util.Utils.splitCommandString
 import org.apache.spark.util.{Utils, VersionUtils}
 import org.apache.spark.{SparkConf, SparkContext, SparkException}
 import tech.ytsaurus.client.{YTsaurusClient, YTsaurusClientConfig}
@@ -18,8 +19,8 @@ import tech.ytsaurus.client.request.{CompleteOperation, GetOperation, UpdateOper
 import tech.ytsaurus.client.rpc.{RpcOptions, YTsaurusClientAuth}
 import tech.ytsaurus.core.GUID
 import tech.ytsaurus.spyt.{BuildInfo, SparkAdapter, SparkVersionUtils}
-import tech.ytsaurus.spyt.wrapper.{Utils => YtUtils, YtWrapper}
-import tech.ytsaurus.spyt.wrapper.Utils.ytHostIpBashInlineWrapper
+import tech.ytsaurus.spyt.wrapper.{YtWrapper, Utils => YtUtils}
+import tech.ytsaurus.spyt.wrapper.Utils.{bashCommand, ytHostIpBashInlineWrapper}
 import tech.ytsaurus.ysontree._
 
 import java.net.URI
@@ -28,7 +29,6 @@ import java.time.Duration
 import java.util.Properties
 import scala.collection.JavaConverters._
 import scala.collection.mutable
-import scala.collection.mutable.ArrayBuffer
 import scala.concurrent.duration.DurationInt
 
 
@@ -41,7 +41,7 @@ private[spark] class YTsaurusOperationManager(val ytClient: YTsaurusClient,
                                               prepareEnvCommand: String,
                                               sparkClassPath: String,
                                               javaCommand: String,
-                                              ytsaurusJavaOptions: Seq[String])
+                                              ytsaurusJavaOptionsBash: String)
   extends Logging {
 
   import YTsaurusOperationManager._
@@ -138,19 +138,14 @@ private[spark] class YTsaurusOperationManager(val ytClient: YTsaurusClient,
     opSpecBuilder.build()
   }
 
-  private def driverParams(conf: SparkConf, appArgs: ApplicationArguments): OperationParameters = {
+  private[ytsaurus] def driverParams(conf: SparkConf, appArgs: ApplicationArguments): OperationParameters = {
     val driverMemoryMiB = conf.get(DRIVER_MEMORY)
 
-    val sparkJavaOpts = Utils.sparkJavaOpts(conf).map { opt =>
-      val Array(k, v) = opt.split("=", 2)
-      k + "=\"" + v + "\""
-    } ++ Seq(s"-D${Config.DRIVER_OPERATION_ID}=$$YT_OPERATION_ID")
+    val netOptBash = conf.get(YTSAURUS_NETWORK_PROJECT)
+      .map(_ => s""""-D${DRIVER_HOST_ADDRESS.key}=${ytHostIpBashInlineWrapper("YT_IP_ADDRESS_DEFAULT")}"""")
+      .getOrElse("")
 
-    val netOpt = conf.get(YTSAURUS_NETWORK_PROJECT)
-      .map(_ => s"-D${DRIVER_HOST_ADDRESS.key}=${ytHostIpBashInlineWrapper("YT_IP_ADDRESS_DEFAULT")}")
-      .toSeq
-
-    val driverOpts = conf.get(DRIVER_JAVA_OPTIONS).getOrElse("")
+    val driverOpts = splitCommandString(conf.get(DRIVER_JAVA_OPTIONS).getOrElse(""))
 
     val additionalArgs: Seq[String] = appArgs.mainAppResourceType match {
       case "python" =>
@@ -163,20 +158,15 @@ private[spark] class YTsaurusOperationManager(val ytClient: YTsaurusClient,
       case _ => Seq.empty
     }
 
-    var driverCommand = (Seq(
-      prepareEnvCommand,
-      "&&",
-      javaCommand,
-      s"-Xmx${driverMemoryMiB}m",
-      "-cp", sparkClassPath) ++
-      sparkJavaOpts ++
-      netOpt ++
-      ytsaurusJavaOptions ++ Seq(
-      driverOpts,
-      SparkAdapter.instance.defaultModuleOptions(),
-      "org.apache.spark.deploy.ytsaurus.DriverWrapper",
-      appArgs.mainClass
-    ) ++ additionalArgs ++ appArgs.driverArgs).mkString(" ")
+    var driverCommand = (
+      s"$prepareEnvCommand && ${bashCommand(javaCommand, s"-Xmx${driverMemoryMiB}m", "-cp", sparkClassPath)}"
+        + s" ${bashCommand(Utils.sparkJavaOpts(conf): _*)}"
+        + s""" "-D${Config.DRIVER_OPERATION_ID}=$$YT_OPERATION_ID""""
+        + s" $netOptBash"
+        + s" $ytsaurusJavaOptionsBash ${bashCommand(driverOpts ++ splitCommandString(SparkAdapter.instance.defaultModuleOptions()): _*)}"
+        + s" org.apache.spark.deploy.ytsaurus.DriverWrapper ${bashCommand(appArgs.mainClass)}"
+        + s" ${bashCommand(additionalArgs: _*)} ${bashCommand(appArgs.driverArgs: _*)}"
+      )
 
     driverCommand = addRedirectToStderrIfNeeded(conf, driverCommand)
 
@@ -240,12 +230,9 @@ private[spark] class YTsaurusOperationManager(val ytClient: YTsaurusClient,
       isPythonApp,
       Map.empty)
 
-    val sparkJavaOpts = Utils.sparkJavaOpts(conf, SparkConf.isExecutorStartupConf).map { opt =>
-      val Array(k, v) = opt.split("=", 2)
-      k + "=\"" + v + "\""
-    }
+    val sparkJavaOpts = Utils.sparkJavaOpts(conf, SparkConf.isExecutorStartupConf)
 
-    val executorOpts = conf.get(EXECUTOR_JAVA_OPTIONS).getOrElse("")
+    val executorOpts = splitCommandString(conf.get(EXECUTOR_JAVA_OPTIONS).getOrElse(""))
 
     if (isPythonApp && conf.get(YTSAURUS_PYTHON_EXECUTABLE).isDefined) {
       environment.put("PYSPARK_EXECUTOR_PYTHON", YTree.stringNode(conf.get(YTSAURUS_PYTHON_EXECUTABLE).get))
@@ -262,23 +249,16 @@ private[spark] class YTsaurusOperationManager(val ytClient: YTsaurusClient,
 
     val execCores = SparkAdapter.instance.getExecutorCores(execResources)
 
-    var executorCommand = (Seq(
-      prepareEnvCommand,
-      "&&",
-      javaCommand,
-      "-cp", sparkClassPath,
-      s"-Xmx${execResources.executorMemoryMiB}m") ++
-      // classpath
-      sparkJavaOpts ++
-      ytsaurusJavaOptions ++ Seq(
-      executorOpts,
-      "org.apache.spark.executor.YTsaurusCoarseGrainedExecutorBackend",
-      "--driver-url", driverUrl,
-      "--executor-id", "$YT_TASK_JOB_INDEX",
-      "--cores", execCores.toString,
-      "--app-id", appId,
-      "--hostname", "$HOSTNAME"
-    )).mkString(" ")
+    var executorCommand = (
+      s"$prepareEnvCommand && ${bashCommand(javaCommand, "-cp", sparkClassPath, s"-Xmx${execResources.executorMemoryMiB}m")}"
+        + s" ${bashCommand(sparkJavaOpts: _*)} $ytsaurusJavaOptionsBash ${bashCommand(executorOpts: _*)}"
+        + s" org.apache.spark.executor.YTsaurusCoarseGrainedExecutorBackend"
+        + s" --driver-url ${bashCommand(driverUrl)}"
+        + """ --executor-id "$YT_TASK_JOB_INDEX""""
+        + s" --cores ${bashCommand(execCores.toString)}"
+        + s" --app-id ${bashCommand(appId)}"
+        + """ --hostname "$HOSTNAME""""
+      )
 
     executorCommand = addRedirectToStderrIfNeeded(conf, executorCommand)
 
@@ -441,11 +421,10 @@ private[spark] object YTsaurusOperationManager extends Logging {
 
       conf.set("spark.executor.resource.gpu.discoveryScript", s"$spytHome/bin/getGpusResources.sh")
 
-      val ytsaurusJavaOptions = ArrayBuffer[String]()
-      ytsaurusJavaOptions += s"$$(cat $spytHome/conf/java-opts)"
+      var ytsaurusJavaOptionsBash = s"$$(cat ${bashCommand(spytHome)}/conf/java-opts)"
       if (conf.getBoolean("spark.hadoop.yt.preferenceIpv6.enabled", defaultValue = false)) {
         if (SparkVersionUtils.lessThan("3.4.0")) {
-          ytsaurusJavaOptions += "-Djava.net.preferIPv6Addresses=true"
+          ytsaurusJavaOptionsBash += " -Djava.net.preferIPv6Addresses=true"
         } else {
           val driverJavaOptions = conf.get(DRIVER_JAVA_OPTIONS).getOrElse("")
           if (!driverJavaOptions.contains("java.net.preferIPv6Addresses")) {
@@ -480,7 +459,7 @@ private[spark] object YTsaurusOperationManager extends Logging {
         prepareEnvCommand,
         sparkClassPath,
         javaCommand,
-        ytsaurusJavaOptions
+        ytsaurusJavaOptionsBash,
       )
     } catch {
       case t: Throwable =>

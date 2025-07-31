@@ -1,6 +1,7 @@
 
 package org.apache.spark.scheduler.cluster.ytsaurus
 
+import org.apache.spark.deploy.ytsaurus.ApplicationArguments
 import org.apache.spark.deploy.ytsaurus.Config._
 import org.apache.spark.internal.config.{ARCHIVES, DRIVER_HOST_ADDRESS, DRIVER_PORT, FILES, JARS, SUBMIT_PYTHON_FILES}
 import org.apache.spark.launcher.SparkLauncher
@@ -37,18 +38,18 @@ class YTsaurusOperationManagerSuite extends SparkFunSuite with BeforeAndAfter wi
     prepareEnvCommand: String = "./setup-spyt-env.sh --some-key some-value",
     sparkClassPath: String = "./*:/usr/lib/spyt/conf/:/usr/lib/spyt/jars/*:/usr/lib/spark/jars/*",
     javaCommand: String = "/usr/bin/java",
-    ytsaurusJavaOptions: Seq[String] = Seq.empty[String]
+    ytsaurusJavaOptionsBash: String = "",
   ): YTsaurusOperationManager = {
     new YTsaurusOperationManager(ytClient, user, token, layerPaths, filePaths, environment, home,
-      prepareEnvCommand, sparkClassPath, javaCommand, ytsaurusJavaOptions)
+      prepareEnvCommand, sparkClassPath, javaCommand, ytsaurusJavaOptionsBash)
   }
 
   private val expectedExecutorCommand = "./setup-spyt-env.sh --some-key some-value && " +
-    "/usr/bin/java -cp ./*:/usr/lib/spyt/conf/:/usr/lib/spyt/jars/*:/usr/lib/spark/jars/* -Xmx1024m " +
-    "-Dspark.driver.port=\"12345\"  " +
+    "'/usr/bin/java' '-cp' './*:/usr/lib/spyt/conf/:/usr/lib/spyt/jars/*:/usr/lib/spark/jars/*' '-Xmx1024m' " +
+    "'-Dspark.driver.port=12345'   " +
     "org.apache.spark.executor.YTsaurusCoarseGrainedExecutorBackend " +
-    "--driver-url spark://CoarseGrainedScheduler@some-host:12345 " +
-    "--executor-id $YT_TASK_JOB_INDEX --cores 1 --app-id appId --hostname $HOSTNAME"
+    """--driver-url 'spark://CoarseGrainedScheduler@some-host:12345' --executor-id "$YT_TASK_JOB_INDEX" """ +
+    """--cores '1' --app-id 'appId' --hostname "$HOSTNAME""""
 
   test("Generate application files for python spark-submit in cluster mode") {
     val conf = new SparkConf()
@@ -289,6 +290,26 @@ class YTsaurusOperationManagerSuite extends SparkFunSuite with BeforeAndAfter wi
       "YT_USER" -> YTree.stringNode("testUser"),
       "docker_auth" -> YTree.stringNode("docker_auth"),
     ).asJava
+  }
+
+  test("It should be possible to set executor secure vault docker_auth") {
+    val conf = confForAnnotationTests()
+      .set("spark.ytsaurus.executor.task.parameters", """{secure_vault={docker_auth={username="user";password="pass"}}}""")
+
+    val opManager = createYTsaurusOperationManagerStub()
+    val execOpParams = opManager.driverParams(conf, ApplicationArguments.fromCommandLineArgs(Array("--main-class", "Main")))
+    val command = execOpParams.taskSpec.prepare(YTree.builder(), null, null).build().asMap().get("command").stringValue()
+    command should include(""" '-Dspark.ytsaurus.executor.task.parameters={secure_vault={docker_auth={username="user";password="pass"}}}' """)
+  }
+
+  test("It should not be possible to inject shell") {
+    val conf = confForAnnotationTests()
+      .set("spark.ytsaurus.executor.task.parameters", """{foo="$(exit 1)"}""")
+
+    val opManager = createYTsaurusOperationManagerStub()
+    val execOpParams = opManager.driverParams(conf, ApplicationArguments.fromCommandLineArgs(Array("--main-class", "Main")))
+    val command = execOpParams.taskSpec.prepare(YTree.builder(), null, null).build().asMap().get("command").stringValue()
+    command should include(""" '-Dspark.ytsaurus.executor.task.parameters={foo="$(exit 1)"}' """)
   }
 
   def confForAnnotationTests(): SparkConf = {

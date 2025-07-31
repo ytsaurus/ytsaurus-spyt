@@ -7,6 +7,7 @@ import org.apache.spark.deploy.ytsaurus.Config.{SUBMISSION_ID, YTSAURUS_DRIVER_O
 import org.apache.spark.internal.Logging
 import org.apache.spark.scheduler.cluster.ytsaurus.YTsaurusOperationManager
 import org.apache.spark.scheduler.cluster.ytsaurus.YTsaurusOperationManager.{getOperation, getOperationState, getWebUIAddress, isCompletedState}
+import tech.ytsaurus.spyt.wrapper.Utils.bashCommand
 
 import scala.collection.concurrent.TrieMap
 import scala.collection.mutable
@@ -125,8 +126,7 @@ private[spark] object ApplicationArguments {
       case Array("--proxy-user", user: String) =>
         proxyUser = Some(user)
       case other =>
-        val invalid = other.mkString(" ")
-        throw new RuntimeException(s"Unknown arguments: $invalid")
+        throw new RuntimeException(s"Unknown arguments: ${bashCommand(other: _*)}")
     }
 
     require(mainClass.isDefined, "Main class must be specified via --main-class")

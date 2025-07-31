@@ -38,15 +38,15 @@ class YTsaurusOperationManagerSuite extends SparkFunSuite with BeforeAndAfter wi
     prepareEnvCommand: String = "./setup-spyt-env.sh --some-key some-value",
     sparkClassPath: String = "./*:/usr/lib/spyt/conf/:/usr/lib/spyt/jars/*:/usr/lib/spark/jars/*",
     javaCommand: String = "/usr/bin/java",
-    ytsaurusJavaOptions: Seq[String] = Seq.empty[String]
+    ytsaurusJavaOptionsBash: String = "",
   ): YTsaurusOperationManager = {
     new YTsaurusOperationManager(ytClient, user, token, layerPaths, filePaths, environment, home,
-      prepareEnvCommand, sparkClassPath, javaCommand, ytsaurusJavaOptions)
+      prepareEnvCommand, sparkClassPath, javaCommand, ytsaurusJavaOptionsBash)
   }
 
   private val expectedExecutorCommand = "./setup-spyt-env.sh --some-key some-value && " +
     "'/usr/bin/java' '-cp' './*:/usr/lib/spyt/conf/:/usr/lib/spyt/jars/*:/usr/lib/spark/jars/*' '-Xmx1024m' " +
-    "'-Dspark.driver.port=12345' " +
+    "'-Dspark.driver.port=12345'   " +
     "org.apache.spark.executor.YTsaurusCoarseGrainedExecutorBackend " +
     """--driver-url 'spark://CoarseGrainedScheduler@some-host:12345' --executor-id "$YT_TASK_JOB_INDEX" """ +
     """--cores '1' --app-id 'appId' --hostname "$HOSTNAME""""

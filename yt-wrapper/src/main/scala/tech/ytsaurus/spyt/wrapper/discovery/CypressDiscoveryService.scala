@@ -7,7 +7,8 @@ import tech.ytsaurus.spyt.wrapper.operation.OperationStatus
 import tech.ytsaurus.client.CompoundClient
 import tech.ytsaurus.client.request.GetOperation
 import tech.ytsaurus.core.GUID
-import tech.ytsaurus.ysontree.YTreeNode
+import tech.ytsaurus.spyt.wrapper.YtWrapper.readDocument
+import tech.ytsaurus.ysontree.{YTree, YTreeNode}
 
 import java.net.URI
 import java.util.Optional
@@ -24,7 +25,9 @@ class CypressDiscoveryService(baseDiscoveryPath: String)(implicit yt: CompoundCl
 
   private def webUiPath: String = s"$discoveryPath/webui"
 
-  private def webUiUrlPath: String = s"$discoveryPath/webui_url"
+  private def masterJobsPath: String = s"$discoveryPath/master_jobs"
+
+  private def webUiUrlAttribute: String = "webui_url"
 
   private def restPath: String = s"$discoveryPath/rest"
 
@@ -77,7 +80,6 @@ class CypressDiscoveryService(baseDiscoveryPath: String)(implicit yt: CompoundCl
       YtWrapper.createDir(s"$addressPath/${YtWrapper.escape(address.hostAndPort.toString)}", tr)
       Map(
         webUiPath -> YtWrapper.escape(address.webUiHostAndPort.toString),
-        webUiUrlPath -> YtWrapper.escape(address.webUiUri.toString),
         restPath -> YtWrapper.escape(address.restHostAndPort.toString),
         operationPath -> operationId,
         clusterVersionPath -> clusterVersion,
@@ -85,6 +87,9 @@ class CypressDiscoveryService(baseDiscoveryPath: String)(implicit yt: CompoundCl
       ).foreach { case (path, value) =>
         YtWrapper.createDir(s"$path/$value", tr)
       }
+      YtWrapper.createDocument(s"$discoveryPath/master_jobs/${System.getenv("YT_JOB_ID")}", YTree.mapBuilder()
+        .key(webUiUrlAttribute).value(address.webUiUri.toString)
+        .endMap().build(), tr, recursive = true)
       YtWrapper.createDocumentFromProduct(confPath, clusterConf, tr)
     } catch {
       case e: Throwable =>
@@ -138,7 +143,9 @@ class CypressDiscoveryService(baseDiscoveryPath: String)(implicit yt: CompoundCl
       _ <- getPath(confPath).recover { case InvalidCatalogException(msg) => EmptyDirectoryException(msg) }
       hostAndPort <- cypressHostAndPort(addressPath)
       webUiHostAndPort <- cypressHostAndPort(webUiPath)
-      webUiUrl <- getPath(webUiUrlPath).map(URI.create)
+      webUiUrl <- getPath(masterJobsPath).map(jobId =>
+        URI.create(readDocument(s"$masterJobsPath/$jobId").mapNode().getOrThrow(webUiUrlAttribute).stringValue())
+      )
       restHostAndPort <- cypressHostAndPort(restPath)
     } yield Address(hostAndPort, webUiHostAndPort, webUiUrl, restHostAndPort)
 

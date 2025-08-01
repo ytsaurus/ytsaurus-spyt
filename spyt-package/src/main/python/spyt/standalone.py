@@ -8,7 +8,7 @@ from spyt.dependency_utils import require_yt_client
 
 require_yt_client()
 
-from yt.wrapper.cypress_commands import exists, copy as cypress_copy  # noqa: E402
+from yt.wrapper.cypress_commands import exists, copy as cypress_copy, get as yt_get, list as yt_list  # noqa: E402
 from yt.wrapper.acl_commands import check_permission  # noqa: E402
 from yt.wrapper.file_commands import upload_file_to_cache  # noqa: E402
 from yt.wrapper.http_helpers import get_token, get_user_name  # noqa: E402
@@ -642,8 +642,7 @@ def start_spark_cluster(worker_cores, worker_memory, worker_num, worker_cores_ov
             _wait_child_start(op_driver, spark_discovery, client)
             logger.info("Driver operation %s", op_driver.id)
 
-        master_address = SparkDiscovery.get(spark_discovery.master_webui(), client=client)
-        logger.info("Spark Master's Web UI: http://{0}".format(master_address))
+        logger.info("Spark Master's Web UI: {0}".format(find_spark_cluster(discovery_path, client).master_web_ui()))
         return op
     except Exception as err:
         logging.error(err, exc_info=True)
@@ -668,10 +667,13 @@ def find_spark_cluster(discovery_path=None, client=None):
     :return: None
     """
     discovery = SparkDiscovery(discovery_path=discovery_path)
+    master_jobs_path = discovery.discovery().join("master_jobs")
+    master_jobs = yt_list(master_jobs_path, client=client)
+    master_job = yt_get(master_jobs_path.join(master_jobs[0]), client=client) if master_jobs else None
     return SparkCluster(
         master_endpoint=SparkDiscovery.getOption(discovery.master_spark(), client=client),
         master_web_ui_url=SparkDiscovery.getOption(discovery.master_webui(), client=client),
-        master_web_ui_schemed_url=SparkDiscovery.getOption(discovery.master_webui_url(), client=client),
+        master_web_ui_schemed_url=master_job["webui_url"] if master_job else None,
         master_rest_endpoint=SparkDiscovery.getOption(discovery.master_rest(), client=client),
         operation_id=SparkDiscovery.getOption(discovery.operation(), client=client),
         shs_url=SparkDiscovery.getOption(discovery.shs(), client=client),

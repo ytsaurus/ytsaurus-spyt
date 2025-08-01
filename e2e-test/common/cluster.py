@@ -124,6 +124,16 @@ class SpytCluster(ClusterBase):
             yield session
 
 
+class ReverseProxySpytCluster(SpytCluster):
+    @staticmethod
+    def get_params():
+        params = SpytCluster.get_params()
+        spark_conf = params.setdefault("spark_conf", {})
+        spark_conf["spark.ui.reverseProxy"] = "true"
+        spark_conf["spark.ui.reverseProxyUrl"] = "https://some-host/some-path/"
+        return params
+
+
 class LivyServer(ClusterBase):
     def __init__(self, proxy, discovery_path=None, group_id=None, yt_root_path=None, master_address=None,
                  dump_dir=None):

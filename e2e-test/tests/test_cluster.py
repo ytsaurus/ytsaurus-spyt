@@ -10,8 +10,18 @@ def test_cluster_startup(yt_client, spyt_cluster):
     assert_items_equal(yt_client.list(spyt_cluster.discovery_path),
                        ["discovery", "logs"])
     assert_items_equal(yt_client.list(spyt_cluster.discovery_path + "/discovery"),
-                       ["conf", "master_wrapper", "operation", "rest", "spark_address", "version", "webui", "webui_url"])
+                       ["conf", "master_wrapper", "operation", "rest", "spark_address", "version", "webui", "master_jobs"])
 
+
+def test_reverse_proxy_cluster_startup(yt_client, reverse_proxy_spyt_cluster):
+    assert_items_equal(yt_client.list(reverse_proxy_spyt_cluster.discovery_path),
+                       ["discovery", "logs"])
+    assert_items_equal(yt_client.list(reverse_proxy_spyt_cluster.discovery_path + "/discovery"),
+                       ["conf", "master_wrapper", "operation", "rest", "spark_address", "version", "webui", "master_jobs"])
+    job_id = yt_client.list(reverse_proxy_spyt_cluster.discovery_path + "/discovery/master_jobs")[0]
+    assert yt_client.get(reverse_proxy_spyt_cluster.discovery_path + f"/discovery/master_jobs/{job_id}") == {
+        "webui_url": "https://some-host/some-path/"
+    }
 
 def test_prometheus_endpoint(yt_client, spyt_cluster):
     webui_endpoint = yt_client.list(spyt_cluster.discovery_path + "/discovery/webui")[0]

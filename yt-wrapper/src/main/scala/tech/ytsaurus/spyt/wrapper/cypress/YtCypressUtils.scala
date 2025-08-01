@@ -257,24 +257,25 @@ trait YtCypressUtils {
     yt.getNode(request).join()
   }
 
-  def createEmptyDocument(path: String, transaction: Option[String] = None)
+  def createEmptyDocument(path: String, transaction: Option[String] = None, recursive: Boolean = false)
                          (implicit yt: CompoundClient): Unit = {
     log.debug(s"Create document: $path, transaction $transaction")
     val request = CreateNode.builder()
       .setPath(YPath.simple(formatPath(path)))
+      .setRecursive(recursive)
       .setType(CypressNodeType.DOCUMENT)
       .optionalTransaction(transaction)
       .build()
     yt.createNode(request).join()
   }
 
-  def createDocument[T: YsonWriter](path: String, doc: T, transaction: Option[String] = None)
-                                   (implicit yt: CompoundClient): Unit = {
-    import YsonSyntax._
-    createEmptyDocument(formatPath(path), transaction)
+  def createDocument(path: String, doc: YTreeNode, transaction: Option[String] = None, recursive: Boolean = false)
+                    (implicit yt: CompoundClient): Unit = {
+    createEmptyDocument(formatPath(path), transaction, recursive)
     val request = SetNode.builder()
       .setPath(YPath.simple(formatPath(path)))
-      .setValue(doc.toYson)
+      .setRecursive(recursive)
+      .setValue(doc)
       .optionalTransaction(transaction)
       .build()
     yt.setNode(request).join()
@@ -282,8 +283,7 @@ trait YtCypressUtils {
 
   def createDocumentFromProduct[T <: Product](path: String, doc: T, transaction: Option[String] = None)
                                              (implicit yt: CompoundClient): Unit = {
-    import YsonableProduct._
-    createDocument(path, doc, transaction)
+    createDocument(path, YsonableProduct.ysonWriter.toYson(doc), transaction)
   }
 
   def concatenate(from: Array[String], to: String, transaction: Option[String] = None)

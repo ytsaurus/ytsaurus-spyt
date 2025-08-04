@@ -660,6 +660,8 @@ private[spark] object YTsaurusOperationManager extends Logging {
   val WEB_UI_KEY = "Web UI"
   private val WEB_UI_PATH = List("runtime_parameters", "annotations", "description", WEB_UI_KEY)
 
+  val EXECUTORS_OPERATION_ID_KEY = "Executors operation ID"
+
   def getOperationState(operation: YTreeNode): String = {
     operation.mapNode().getStringO("state").orElse("undefined")
   }

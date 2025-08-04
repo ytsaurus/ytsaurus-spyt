@@ -51,7 +51,15 @@ private[spark] class YTsaurusSchedulerBackend (
 
   override def start(): Unit = {
     super.start()
-    operationManager.startExecutors(sc, applicationId(), defaultProfile, initialExecutors)
+    logInfo(s"Starting YTsaurusSchedulerBackend with initial executors count: $initialExecutors")
+    val executorOperation = operationManager.startExecutors(sc, applicationId(), defaultProfile, initialExecutors)
+    sc.conf.getOption(DRIVER_OPERATION_ID).foreach { driverOperationId =>
+      val driverOperation = YTsaurusOperation(GUID.valueOf(driverOperationId))
+      operationManager.setOperationDescription(
+        driverOperation,
+        Map(YTsaurusOperationManager.EXECUTORS_OPERATION_ID_KEY -> executorOperation.id.toString)
+      )
+    }
   }
 
   override def stop(): Unit = {

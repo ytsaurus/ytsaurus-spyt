@@ -21,29 +21,29 @@ class CypressDiscoveryService(baseDiscoveryPath: String)(implicit yt: CompoundCl
 
   private val discoveryPath: String = s"$baseDiscoveryPath/discovery"
 
-  private def addressPath: String = s"$discoveryPath/spark_address"
+  private val addressPath: String = s"$discoveryPath/spark_address"
 
-  private def webUiPath: String = s"$discoveryPath/webui"
+  private val webUiPath: String = s"$discoveryPath/webui"
 
-  private def masterJobsPath: String = s"$discoveryPath/master_jobs"
+  private val masterJobsPath: String = s"$discoveryPath/master_jobs"
 
-  private def webUiUrlAttribute: String = "webui_url"
+  private val webUiUrlAttribute: String = "webui_url"
 
-  private def restPath: String = s"$discoveryPath/rest"
+  private val restPath: String = s"$discoveryPath/rest"
 
-  private def operationPath: String = s"$discoveryPath/operation"
+  private val operationPath: String = s"$discoveryPath/operation"
 
-  private def childrenOperationsPath: String = s"$discoveryPath/children_operations"
+  private val childrenOperationsPath: String = s"$discoveryPath/children_operations"
 
-  private def shsPath: String = s"$discoveryPath/shs"
+  private val shsPath: String = s"$discoveryPath/shs"
 
-  private def livyPath: String = s"$discoveryPath/livy"
+  private val livyPath: String = s"$discoveryPath/livy"
 
-  private def clusterVersionPath: String = s"$discoveryPath/version"
+  private val clusterVersionPath: String = s"$discoveryPath/version"
 
-  private def confPath: String = s"$discoveryPath/conf"
+  private val confPath: String = s"$discoveryPath/conf"
 
-  private def masterWrapperPath: String = s"$discoveryPath/master_wrapper"
+  private val masterWrapperPath: String = s"$discoveryPath/master_wrapper"
 
   override def operationInfo: Option[OperationInfo] = operation.flatMap(oid => {
     val id = GUID.valueOf(oid)
@@ -87,7 +87,7 @@ class CypressDiscoveryService(baseDiscoveryPath: String)(implicit yt: CompoundCl
       ).foreach { case (path, value) =>
         YtWrapper.createDir(s"$path/$value", tr)
       }
-      YtWrapper.createDocument(s"$discoveryPath/master_jobs/${System.getenv("YT_JOB_ID")}", YTree.mapBuilder()
+      YtWrapper.createDocument(s"$masterJobsPath/${System.getenv("YT_JOB_ID")}", YTree.mapBuilder()
         .key(webUiUrlAttribute).value(address.webUiUri.toString)
         .endMap().build(), tr, recursive = true)
       YtWrapper.createDocumentFromProduct(confPath, clusterConf, tr)
@@ -143,14 +143,15 @@ class CypressDiscoveryService(baseDiscoveryPath: String)(implicit yt: CompoundCl
       _ <- getPath(confPath).recover { case InvalidCatalogException(msg) => EmptyDirectoryException(msg) }
       hostAndPort <- cypressHostAndPort(addressPath)
       webUiHostAndPort <- cypressHostAndPort(webUiPath)
-      webUiUrl <- getPath(masterJobsPath).map(jobId =>
-        URI.create(readDocument(s"$masterJobsPath/$jobId").mapNode().getOrThrow(webUiUrlAttribute).stringValue())
-      )
+      webUiUrl <- getWebUiUrl()
       restHostAndPort <- cypressHostAndPort(restPath)
     } yield Address(hostAndPort, webUiHostAndPort, webUiUrl, restHostAndPort)
 
   def clusterVersion: Try[String] = getPath(clusterVersionPath)
 
+  private def getWebUiUrl(): Try[URI] = getPath(masterJobsPath).map(jobId =>
+    URI.create(readDocument(s"$masterJobsPath/$jobId").mapNode().getOrThrow(webUiUrlAttribute).stringValue())
+  )
 
   override def masterWrapperEndpoint(): Option[HostAndPort] = cypressHostAndPort(masterWrapperPath).toOption
 

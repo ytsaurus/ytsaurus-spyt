@@ -19,7 +19,7 @@ class YtCypressUtilsTest extends FlatSpec with Matchers with LocalYtClient with 
       new YTreeBuilder().beginMap().key("a").value(t.a).key("b").value(t.b).endMap().build()
     }
 
-    YtWrapper.createDocumentFromProduct(tmpPath, new TestDoc("A", 1))
+    YtWrapper.createDocumentFromProduct(tmpPath, TestDoc("A", 1))
 
     val res = YtWrapper.readDocument(tmpPath).asMap()
     res.keySet().asScala should contain theSameElementsAs Seq("a", "b")
@@ -60,7 +60,7 @@ class YtCypressUtilsTest extends FlatSpec with Matchers with LocalYtClient with 
     implicit val ysonWriter: YsonWriter[TestDoc] = (t: TestDoc) => {
       new YTreeBuilder().beginMap().key("a").value(t.a).key("b").value(t.b).endMap().build()
     }
-    YtWrapper.createDocumentFromProduct(tmpPath, new TestDoc("A", 1))
+    YtWrapper.createDocumentFromProduct(tmpPath, TestDoc("A", 1))
     YtWrapper.isDir(tmpPath) shouldBe false
   }
 
@@ -86,7 +86,7 @@ class YtCypressUtilsTest extends FlatSpec with Matchers with LocalYtClient with 
     }
     val tmpPath2 = s"$testDir/test-${UUID.randomUUID()}"
     try {
-      YtWrapper.createDocumentFromProduct(tmpPath, new TestDoc("A", 1))
+      YtWrapper.createDocumentFromProduct(tmpPath, TestDoc("A", 1))
       YtWrapper.createLink(tmpPath, tmpPath2)
       YtWrapper.readDocument(tmpPath2).asMap().getOrThrow("a").stringValue() shouldEqual "A"
     }

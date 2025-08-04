@@ -24,15 +24,24 @@ class SparkConfTest extends AnyFlatSpec with Matchers {
   }
 
   it should "set spark properties from environment" in {
+    setEnvVariable("SPARK_YT_VERSION", "value")
+    val conf = new SparkConf()
+    conf.getOption("spark.yt.version") shouldBe Some("value")
+  }
+
+  it should "set spark properties from secure vault" in {
+    setEnvVariable("YT_SECURE_VAULT_SPARK_SOME_SECRET_KEY", "aKeyToHide")
+    val conf = new SparkConf()
+    conf.getOption("spark.some.secret.key") shouldBe Some("aKeyToHide")
+  }
+
+  private def setEnvVariable(name: String, value: String): Unit = {
     //Setting environment variable value in java.util.Collections.UnmodifiableMap using reflection
     val envMap = System.getenv()
     val field = envMap.getClass.getDeclaredField("m")
     field.setAccessible(true)
     val innerEnvMap = field.get(envMap).asInstanceOf[java.util.Map[String, String]]
-    innerEnvMap.put("SPARK_YT_VERSION", "value")
+    innerEnvMap.put(name, value)
     field.setAccessible(false)
-
-    val conf = new SparkConf()
-    conf.getOption("spark.yt.version") shouldBe Some("value")
   }
 }

@@ -39,5 +39,5 @@ def wait_for_operation(yt_client, operation_id):
             current_state = yt_client.get_operation_state(operation_id)
             logging.info(f"Operation: {operation_id}, State: {current_state}")
             if current_state.is_finished():
-                break
+                return current_state
             time.sleep(1)

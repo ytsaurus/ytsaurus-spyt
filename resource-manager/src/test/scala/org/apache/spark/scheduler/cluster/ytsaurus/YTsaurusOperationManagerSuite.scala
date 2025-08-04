@@ -8,16 +8,14 @@ import org.apache.spark.launcher.SparkLauncher
 import org.apache.spark.resource.ResourceProfile
 import org.apache.spark.scheduler.cluster.ytsaurus.YTsaurusOperationManager.{ApplicationFile, DRIVER_TASK, EXECUTOR_TASK}
 import org.apache.spark.{SparkConf, SparkFunSuite}
-import org.scalatest.BeforeAndAfter
+import org.scalatest.{BeforeAndAfter, BeforeAndAfterEach}
 import org.scalatest.matchers.should.Matchers
-import tech.ytsaurus.client.YTsaurusClient
-import tech.ytsaurus.client.operations.VanillaSpec
-import tech.ytsaurus.spyt.wrapper.file.YtFileUtils
+import tech.ytsaurus.client.operations.Spec
 import tech.ytsaurus.ysontree._
 
 import scala.collection.JavaConverters._
 
-class YTsaurusOperationManagerSuite extends SparkFunSuite with BeforeAndAfter with Matchers {
+class YTsaurusOperationManagerSuite extends SparkFunSuite with BeforeAndAfterEach with Matchers {
 
   private val testSparkConf: SparkConf = {
     new SparkConf()
@@ -27,21 +25,32 @@ class YTsaurusOperationManagerSuite extends SparkFunSuite with BeforeAndAfter wi
 
   private val testResourceProfile: ResourceProfile = ResourceProfile.getOrCreateDefaultProfile(testSparkConf)
 
-  private def createYTsaurusOperationManagerStub(
-    ytClient: YTsaurusClient = null,
-    user: String = "testUser",
-    token: String = "testToken",
-    layerPaths: YTreeNode = YTree.listBuilder().buildList(),
-    filePaths: YTreeNode = YTree.listBuilder().buildList(),
-    environment: YTreeMapNode = YTree.mapBuilder().buildMap(),
-    home: String = ".",
-    prepareEnvCommand: String = "./setup-spyt-env.sh --some-key some-value",
-    sparkClassPath: String = "./*:/usr/lib/spyt/conf/:/usr/lib/spyt/jars/*:/usr/lib/spark/jars/*",
-    javaCommand: String = "/usr/bin/java",
-    ytsaurusJavaOptionsBash: String = "",
-  ): YTsaurusOperationManager = {
-    new YTsaurusOperationManager(ytClient, user, token, layerPaths, filePaths, environment, home,
-      prepareEnvCommand, sparkClassPath, javaCommand, ytsaurusJavaOptionsBash)
+  private var opManagerStub: YTsaurusOperationManager = _
+  override def beforeEach(): Unit = {
+    super.beforeEach()
+    opManagerStub = new YTsaurusOperationManager(
+      ytClient = null,
+      token = "testToken",
+      layerPaths = YTree.listBuilder().buildList(),
+      filePaths = YTree.listBuilder().buildList(),
+      environment = YTree.mapBuilder().buildMap(),
+      home = ".",
+      prepareEnvCommand = "./setup-spyt-env.sh --some-key some-value",
+      sparkClassPath = "./*:/usr/lib/spyt/conf/:/usr/lib/spyt/jars/*:/usr/lib/spark/jars/*",
+      javaCommand = "/usr/bin/java",
+      ytsaurusJavaOptionsBash = ""
+    )
+  }
+
+  private val baseDriverArgs = ApplicationArguments.fromCommandLineArgs(Array("--main-class", "Main"))
+
+  private def createBaseSparkConf(): SparkConf = {
+    new SparkConf()
+      .set("spark.app.name", "test-app-name")
+  }
+
+  private def getCommandFromTaskSpec(spec: Spec): String = {
+    spec.prepare(YTree.builder(), null, null).build().asMap().get("command").stringValue()
   }
 
   private val expectedExecutorCommand = "./setup-spyt-env.sh --some-key some-value && " +
@@ -189,14 +198,14 @@ class YTsaurusOperationManagerSuite extends SparkFunSuite with BeforeAndAfter wi
   }
 
   test("Generate empty annotations for driver ans executors") {
-    val conf = confForAnnotationTests()
+    val conf = createBaseSparkConf()
     val emptyStructure = YTree.mapBuilder().buildMap()
     SpecificationUtils.getAnnotationsAsYTreeMapNode(conf, DRIVER_TASK) shouldBe emptyStructure
     SpecificationUtils.getAnnotationsAsYTreeMapNode(conf, EXECUTOR_TASK) shouldBe emptyStructure
   }
 
   test("Merge 2 ways of passing annotations") {
-    val conf = confForAnnotationTests()
+    val conf = createBaseSparkConf()
       .set(SPYT_ANNOTATIONS + ".key1" + ".n1", "123")
       .set(SPYT_ANNOTATIONS + ".key1" + ".n2", "common_annotation_n2")
       .set(SPYT_DRIVER_ANNOTATIONS + ".key2", "driver_annotation,driver_annotation_2")
@@ -245,8 +254,7 @@ class YTsaurusOperationManagerSuite extends SparkFunSuite with BeforeAndAfter wi
     val conf = testSparkConf.clone()
     conf.set("spark.ytsaurus.executor.task.parameters", "{ disk_request={ disk_space=536870912000 } }")
 
-    val opManager = createYTsaurusOperationManagerStub()
-    val execOpParams = opManager.executorParams(conf, "appId", testResourceProfile, 5)
+    val execOpParams = opManagerStub.executorParams(conf, "appId", testResourceProfile, 5)
     val result = execOpParams.taskSpec.prepare(YTree.builder(), null, null).build().asMap()
     result.containsKey("disk_request") shouldBe true
     result.get("disk_request").asMap().get("disk_space").longValue() shouldBe 536870912000L
@@ -260,8 +268,7 @@ class YTsaurusOperationManagerSuite extends SparkFunSuite with BeforeAndAfter wi
       """{ command="/some/malicious/command"; disk_request={ disk_space=536870912000 } }"""
     )
 
-    val opManager = createYTsaurusOperationManagerStub()
-    val execOpParams = opManager.executorParams(conf, "appId", testResourceProfile, 5)
+    val execOpParams = opManagerStub.executorParams(conf, "appId", testResourceProfile, 5)
     val result = execOpParams.taskSpec.prepare(YTree.builder(), null, null).build().asMap()
     result.containsKey("disk_request") shouldBe true
     result.get("disk_request").asMap().get("disk_space").longValue() shouldBe 536870912000L
@@ -269,51 +276,67 @@ class YTsaurusOperationManagerSuite extends SparkFunSuite with BeforeAndAfter wi
   }
 
   test("createSpec should work") {
-    val conf = confForAnnotationTests()
+    val conf = createBaseSparkConf()
 
-    val opManager = createYTsaurusOperationManagerStub()
-    val execOpParams = opManager.executorParams(conf, "appId", testResourceProfile, 5)
-    opManager.createSpec(conf, "executor", execOpParams).getAdditionalSpecParameters.get("secure_vault").asMap() shouldBe Map(
-      "YT_TOKEN" -> YTree.stringNode("testToken"),
-      "YT_USER" -> YTree.stringNode("testUser"),
+    val execOpParams = opManagerStub.executorParams(conf, "appId", testResourceProfile, 5)
+    opManagerStub.createSpec(conf, "executor", execOpParams).getAdditionalSpecParameters.get("secure_vault").asMap() shouldBe Map(
+      "YT_TOKEN" -> YTree.stringNode("testToken")
     ).asJava
   }
 
   test("It should be possible to set secure vault") {
-    val conf = confForAnnotationTests()
+    val conf = createBaseSparkConf()
       .set("spark.ytsaurus.executor.operation.parameters", "{secure_vault={docker_auth=docker_auth}}")
 
-    val opManager = createYTsaurusOperationManagerStub()
-    val execOpParams = opManager.executorParams(conf, "appId", testResourceProfile, 5)
-    opManager.createSpec(conf, "executor", execOpParams).getAdditionalSpecParameters.get("secure_vault").asMap() shouldBe Map(
+    val execOpParams = opManagerStub.executorParams(conf, "appId", testResourceProfile, 5)
+    opManagerStub.createSpec(conf, "executor", execOpParams).getAdditionalSpecParameters.get("secure_vault").asMap() shouldBe Map(
       "YT_TOKEN" -> YTree.stringNode("testToken"),
-      "YT_USER" -> YTree.stringNode("testUser"),
       "docker_auth" -> YTree.stringNode("docker_auth"),
     ).asJava
   }
 
   test("It should be possible to set executor secure vault docker_auth") {
-    val conf = confForAnnotationTests()
+    val conf = createBaseSparkConf()
       .set("spark.ytsaurus.executor.task.parameters", """{secure_vault={docker_auth={username="user";password="pass"}}}""")
 
-    val opManager = createYTsaurusOperationManagerStub()
-    val execOpParams = opManager.driverParams(conf, ApplicationArguments.fromCommandLineArgs(Array("--main-class", "Main")))
-    val command = execOpParams.taskSpec.prepare(YTree.builder(), null, null).build().asMap().get("command").stringValue()
+    val driverParams = opManagerStub.driverParams(conf, baseDriverArgs)
+    val command = getCommandFromTaskSpec(driverParams.taskSpec)
     command should include(""" '-Dspark.ytsaurus.executor.task.parameters={secure_vault={docker_auth={username="user";password="pass"}}}' """)
   }
 
   test("It should not be possible to inject shell") {
-    val conf = confForAnnotationTests()
+    val conf = createBaseSparkConf()
       .set("spark.ytsaurus.executor.task.parameters", """{foo="$(exit 1)"}""")
 
-    val opManager = createYTsaurusOperationManagerStub()
-    val execOpParams = opManager.driverParams(conf, ApplicationArguments.fromCommandLineArgs(Array("--main-class", "Main")))
-    val command = execOpParams.taskSpec.prepare(YTree.builder(), null, null).build().asMap().get("command").stringValue()
+    val driverParams = opManagerStub.driverParams(conf, baseDriverArgs)
+    val command = getCommandFromTaskSpec(driverParams.taskSpec)
     command should include(""" '-Dspark.ytsaurus.executor.task.parameters={foo="$(exit 1)"}' """)
   }
 
-  def confForAnnotationTests(): SparkConf = {
-    new SparkConf()
-      .set("spark.app.name", "test-app-name")
+  test("It should hide secret parameters from driver command and put it to secure vault") {
+    val conf = createBaseSparkConf()
+      .set("spark.redaction.regex", "(?i)secret|password|token")
+      .set("spark.some.secret.key", "aKeyToHide")
+      .set("spark.some.password", "p@ssw0rd")
+      .set("spark.external.service.token", "t0k3n")
+
+    val driverParams = opManagerStub.driverParams(conf, baseDriverArgs)
+    val driverCommand = getCommandFromTaskSpec(driverParams.taskSpec)
+    driverCommand should not include "-Dspark.some.secret.key"
+    driverCommand should not include "-Dspark.some.password"
+    driverCommand should not include "-Dspark.external.service.token"
+    driverCommand should include("-Dspark.app.name")
+
+    driverParams.secrets should contain theSameElementsAs Seq(
+      "SPARK_SOME_SECRET_KEY" -> "aKeyToHide",
+      "SPARK_SOME_PASSWORD" -> "p@ssw0rd",
+      "SPARK_EXTERNAL_SERVICE_TOKEN" -> "t0k3n"
+    )
+
+    val driverOperationSpec = opManagerStub.createSpec(conf, "driver", driverParams)
+    val secureVault = driverOperationSpec.getAdditionalSpecParameters.get("secure_vault").asMap()
+    secureVault.get("SPARK_SOME_SECRET_KEY").stringValue() shouldEqual "aKeyToHide"
+    secureVault.get("SPARK_SOME_PASSWORD").stringValue() shouldEqual "p@ssw0rd"
+    secureVault.get("SPARK_EXTERNAL_SERVICE_TOKEN").stringValue() shouldEqual "t0k3n"
   }
 }

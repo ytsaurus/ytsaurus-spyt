@@ -147,6 +147,38 @@ def test_cluster_mode_with_dependencies(yt_client, tmp_dir, direct_submitter):
     assert_items_equal(yt_client.read_table(table_out), result_rows)
 
 
+def test_cluster_mode_with_secret_parameters(yt_client, tmp_dir, direct_submitter):
+    table_out = f"{tmp_dir}/t_secret_out"
+    upload_file(yt_client, "jobs/spark_secrets.py", f"{tmp_dir}/spark_secrets.py")
+
+    operation_id = direct_submitter.submit(f"yt:/{tmp_dir}/spark_secrets.py", job_args=[table_out], conf={
+        "spark.some.secret.key": "aKeyToHide",
+        "spark.some.password": "p@ssw0rd",
+        "spark.external.service.token": "t0k3n",
+    })
+
+    assert operation_id is not None
+
+    opeartion = yt_client.get_operation(operation_id)
+    command = opeartion['spec']['tasks']['driver']['command']
+    assert "spark.some.secret.key" not in command
+    assert "spark.some.password" not in command
+    assert "spark.external.service.token" not in command
+
+    final_state = wait_for_operation(yt_client, operation_id)
+    assert not final_state.is_unsuccessfully_finished()
+
+    result_rows = [{
+        "secret": "aKeyToHide",
+        "password": "p@ssw0rd",
+        "token": "t0k3n",
+        "secret_env": "aKeyToHide",
+        "password_env": "p@ssw0rd",
+        "token_env": "t0k3n",
+    }]
+    assert_items_equal(yt_client.read_table(table_out), result_rows)
+
+
 def test_archives(yt_client, tmp_dir, direct_submitter):
     table_out = f"{tmp_dir}/t_arc_out"
 

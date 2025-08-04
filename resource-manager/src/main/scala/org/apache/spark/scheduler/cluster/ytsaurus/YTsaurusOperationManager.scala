@@ -26,14 +26,14 @@ import tech.ytsaurus.ysontree._
 import java.net.URI
 import java.nio.file.Paths
 import java.time.Duration
-import java.util.Properties
+import java.util.{Locale, Properties}
 import scala.collection.JavaConverters._
 import scala.collection.mutable
 import scala.concurrent.duration.DurationInt
 
 
 private[spark] class YTsaurusOperationManager(val ytClient: YTsaurusClient,
-                                              user: String, token: String,
+                                              token: String,
                                               layerPaths: YTreeNode,
                                               filePaths: YTreeNode,
                                               environment: YTreeMapNode,
@@ -98,8 +98,9 @@ private[spark] class YTsaurusOperationManager(val ytClient: YTsaurusClient,
     ytClient.close()
   }
 
-  private def startVanillaOperation(
-                                     conf: SparkConf, taskName: String, opParams: OperationParameters): YTsaurusOperation = {
+  private def startVanillaOperation(conf: SparkConf,
+                                    taskName: String,
+                                    opParams: OperationParameters): YTsaurusOperation = {
     val jobSpec = createSpec(conf, taskName, opParams)
     val operationSpec = VanillaOperation.builder().setSpec(jobSpec).build()
     val runningOperation = ytClient.startVanilla(operationSpec).get()
@@ -115,11 +116,12 @@ private[spark] class YTsaurusOperationManager(val ytClient: YTsaurusClient,
       .map(YTreeTextSerializer.deserialize(_).asMap().asScala).getOrElse(mutable.HashMap[String, YTreeNode]())
 
     val secureVault = additionalSpecParameters.getOrElseUpdate("secure_vault", YTree.mapBuilder().buildMap())
-    if (secureVault.isMapNode) {
-      val map = secureVault.mapNode().asMap()
-      map.putIfAbsent("YT_USER", YTree.stringNode(user))
-      map.putIfAbsent("YT_TOKEN", YTree.stringNode(token))
+    val secureVaultMap = secureVault.mapNode().asMap()
+    secureVaultMap.putIfAbsent("YT_TOKEN", YTree.stringNode(token))
+    opParams.secrets.foreach { case (key, value) =>
+      secureVaultMap.put(key, YTree.stringNode(value))
     }
+
     additionalSpecParameters.getOrElseUpdate("max_failed_job_count", YTree.integerNode(opParams.maxFailedJobCount))
     additionalSpecParameters.getOrElseUpdate("preemption_mode", YTree.stringNode("normal"))
     additionalSpecParameters.getOrElseUpdate(
@@ -158,9 +160,18 @@ private[spark] class YTsaurusOperationManager(val ytClient: YTsaurusClient,
       case _ => Seq.empty
     }
 
+    val filterKey: String => Boolean = {
+      val pattern = conf.get(SECRET_REDACTION_PATTERN)
+      key => pattern.findFirstIn(key).isEmpty
+    }
+    val sparkJavaOpts = Utils.sparkJavaOpts(conf, filterKey)
+    val secrets = conf.getAll.filter { case (k, _) => !filterKey(k) }.map {
+      case (k, v) => k.toUpperCase(Locale.ROOT).replace('.', '_') -> v
+    }
+
     var driverCommand = (
       s"$prepareEnvCommand && ${bashCommand(javaCommand, s"-Xmx${driverMemoryMiB}m", "-cp", sparkClassPath)}"
-        + s" ${bashCommand(Utils.sparkJavaOpts(conf): _*)}"
+        + s" ${bashCommand(sparkJavaOpts: _*)}"
         + s""" "-D${Config.DRIVER_OPERATION_ID}=$$YT_OPERATION_ID""""
         + s" $netOptBash"
         + s" $ytsaurusJavaOptionsBash ${bashCommand(driverOpts ++ splitCommandString(SparkAdapter.instance.defaultModuleOptions()): _*)}"
@@ -200,7 +211,7 @@ private[spark] class YTsaurusOperationManager(val ytClient: YTsaurusClient,
       setCommonSpecParams(specBuilder, conf, DRIVER_TASK).endMap()
     }
 
-    OperationParameters(spec, conf.get(YTSAURUS_MAX_DRIVER_FAILURES), "")
+    OperationParameters(spec, conf.get(YTSAURUS_MAX_DRIVER_FAILURES), "", secrets)
   }
 
   private def addRedirectToStderrIfNeeded(conf: SparkConf, cmd: String): String = {
@@ -285,7 +296,7 @@ private[spark] class YTsaurusOperationManager(val ytClient: YTsaurusClient,
     }
 
     val attemptId = s" [${sys.env.getOrElse("YT_TASK_JOB_INDEX", "0")}]"
-    OperationParameters(spec, conf.get(YTSAURUS_MAX_EXECUTOR_FAILURES) * numExecutors, attemptId)
+    OperationParameters(spec, conf.get(YTSAURUS_MAX_EXECUTOR_FAILURES) * numExecutors, attemptId, Nil)
   }
 
 
@@ -316,7 +327,7 @@ private[spark] object YTsaurusOperationManager extends Logging {
 
   def create(ytProxy: String, conf: SparkConf, networkName: Option[String], proxyRole: Option[String]): YTsaurusOperationManager = {
     logDebug("Entering YTsaurusOperationManager.create")
-    val (user, token) = YTsaurusUtils.userAndToken(conf)
+    val token = YTsaurusUtils.getToken(conf)
     logDebug("User and token were retrieved, now creating YTsaurus client")
     val ytClient: YTsaurusClient = buildClient(ytProxy, token, networkName, proxyRole, conf)
     logDebug("YTsaurus client has been successfully created")
@@ -450,7 +461,6 @@ private[spark] object YTsaurusOperationManager extends Logging {
       logDebug("Creating YTsaurusOperationManager instance")
       new YTsaurusOperationManager(
         ytClient,
-        user,
         token,
         layerPaths,
         filePaths,
@@ -722,4 +732,7 @@ private[spark] object YTsaurusOperationManager extends Logging {
 
 private[spark] case class YTsaurusOperation(id: GUID)
 
-private[spark] case class OperationParameters(taskSpec: Spec, maxFailedJobCount: Int, attemptId: String)
+private[spark] case class OperationParameters(taskSpec: Spec,
+                                              maxFailedJobCount: Int,
+                                              attemptId: String,
+                                              secrets: Seq[(String, String)])

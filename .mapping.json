@@ -261,6 +261,7 @@
   "e2e-test/tests/jobs/spark_job_archives.py":"yt/spark/spark-over-yt/e2e-test/tests/jobs/spark_job_archives.py",
   "e2e-test/tests/jobs/spark_job_with_dependencies.py":"yt/spark/spark-over-yt/e2e-test/tests/jobs/spark_job_with_dependencies.py",
   "e2e-test/tests/jobs/spark_no_inputs.py":"yt/spark/spark-over-yt/e2e-test/tests/jobs/spark_no_inputs.py",
+  "e2e-test/tests/jobs/spark_secrets.py":"yt/spark/spark-over-yt/e2e-test/tests/jobs/spark_secrets.py",
   "e2e-test/tests/test_base_jobs.py":"yt/spark/spark-over-yt/e2e-test/tests/test_base_jobs.py",
   "e2e-test/tests/test_cluster.py":"yt/spark/spark-over-yt/e2e-test/tests/test_cluster.py",
   "e2e-test/tests/test_data_types.py":"yt/spark/spark-over-yt/e2e-test/tests/test_data_types.py",

@@ -60,6 +60,8 @@ object SparkYtConfiguration {
 
       case object YtPathCountLimit extends ConfigEntry[Int](s"$prefix.ytPathCount.limit", Some(100))
     }
+
+    case object Transactional extends ConfigEntry[Boolean](s"$prefix.transactional", Some(true))
   }
 
   object Transaction {

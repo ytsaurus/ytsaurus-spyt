@@ -642,7 +642,7 @@ def start_spark_cluster(worker_cores, worker_memory, worker_num, worker_cores_ov
             _wait_child_start(op_driver, spark_discovery, client)
             logger.info("Driver operation %s", op_driver.id)
 
-        logger.info("Spark Master's Web UI: {0}".format(find_spark_cluster(discovery_path, client).master_web_ui()))
+        logger.info("Spark Master's Web UI: {0}".format(find_spark_cluster(discovery_path, client).master_webui()))
         return op
     except Exception as err:
         logging.error(err, exc_info=True)

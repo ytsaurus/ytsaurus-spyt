@@ -33,7 +33,7 @@ class SparkCluster(object):
         self.spark_cluster_version = spark_cluster_version
         self.children_operation_ids = children_operation_ids
 
-    def master_web_ui(self):
+    def master_webui(self):
         return self.master_web_ui_schemed_url or "http://{}/".format(self.master_web_ui_url)
 
     def operation_url(self, client=None):

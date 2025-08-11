@@ -19,6 +19,7 @@ import tech.ytsaurus.spyt.format.YtPartitionedFileDelegate.YtPartitionedFile
 import tech.ytsaurus.spyt.format.conf.FilterPushdownConfig
 import tech.ytsaurus.spyt.logger.{YtDynTableLogger, YtDynTableLoggerConfig}
 import tech.ytsaurus.spyt.serializers.SchemaConverter
+import tech.ytsaurus.spyt.types.UInt64Long
 import tech.ytsaurus.ysontree.{YTreeBooleanNodeImpl, YTreeBuilder, YTreeDoubleNodeImpl, YTreeEntityNodeImpl, YTreeIntegerNodeImpl, YTreeNode, YTreeStringNodeImpl}
 
 import scala.annotation.tailrec
@@ -214,10 +215,8 @@ object YtInputSplit {
       new YTreeDoubleNodeImpl(rValue.value.asInstanceOf[Double], null)
     case rValue: RealValue[_] if rValue.value.isInstanceOf[Long] =>
       new YTreeIntegerNodeImpl(true, rValue.value.asInstanceOf[Long], null)
-    case RealValue(bigDecimal: java.math.BigDecimal) =>
-      new YTreeIntegerNodeImpl(false, ULongUtils.tryToUnsignedLong(bigDecimal).getOrElse {
-        throw new IllegalArgumentException("" + bigDecimal)
-      }, null)
+    case RealValue(uLong: UInt64Long) =>
+      new YTreeIntegerNodeImpl(false, uLong.value, null)
     case rValue: RealValue[_] if rValue.value.isInstanceOf[Boolean] =>
       new YTreeBooleanNodeImpl(rValue.value.asInstanceOf[Boolean], null)
     case rValue: RealValue[_] if rValue.value.isInstanceOf[String] =>

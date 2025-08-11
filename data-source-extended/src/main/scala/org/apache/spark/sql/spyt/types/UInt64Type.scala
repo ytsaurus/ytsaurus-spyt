@@ -1,8 +1,9 @@
 package org.apache.spark.sql.spyt.types
 
-import org.apache.spark.sql.catalyst.expressions.Expression
+import org.apache.spark.sql.catalyst.analysis.TypeCoercionRule
+import org.apache.spark.sql.catalyst.expressions.{BinaryOperator, Expression, Literal, In}
 import org.apache.spark.sql.catalyst.expressions.codegen.Block.BlockHelper
-import org.apache.spark.sql.catalyst.expressions.codegen.{Block, CodegenContext, ExprValue}
+import org.apache.spark.sql.catalyst.expressions.codegen.{Block, ExprValue}
 import org.apache.spark.sql.catalyst.expressions.objects.{Invoke, StaticInvoke}
 import org.apache.spark.sql.expressions.UserDefinedFunction
 import org.apache.spark.sql.functions.udf
@@ -101,4 +102,29 @@ object UInt64CastToString extends (Any => Any) {
 object UInt64CastToStringCode extends ((ExprValue, ExprValue, ExprValue) => Block) {
   def apply(c: ExprValue, evPrim: ExprValue, evNull: ExprValue): Block =
     code"$evPrim = UTF8String.fromString(tech.ytsaurus.spyt.types.UInt64Long$$.MODULE$$.toString($c));"
+}
+
+object UInt64LiteralsCast extends TypeCoercionRule {
+
+  override def transform: PartialFunction[Expression, Expression] = {
+    case e if !e.childrenResolved => e
+
+    case b @ BinaryOperator(left, right) if left.dataType != right.dataType => (left, right) match {
+      case (l: Literal, r) if r.dataType.isInstanceOf[UInt64Type] &&
+          l.dataType.isInstanceOf[IntegralType] &&
+          l.value.asInstanceOf[Number].longValue() >= 0 =>
+        b.withNewChildren(Seq(SparkAdapter.instance.createCast(l, UInt64Type), r))
+
+      case (l, r: Literal) if l.dataType.isInstanceOf[UInt64Type] &&
+          r.dataType.isInstanceOf[IntegralType] &&
+          r.value.asInstanceOf[Number].longValue() >= 0 =>
+        b.withNewChildren(Seq(l, SparkAdapter.instance.createCast(r, UInt64Type)))
+
+      case _ => b
+    }
+
+    case i @ In(attr, values) if attr.dataType.isInstanceOf[UInt64Type] &&
+        values.forall(expr => expr.isInstanceOf[Literal]) =>
+      i.withNewChildren(i.children.map(SparkAdapter.instance.createCast(_, UInt64Type)))
+  }
 }

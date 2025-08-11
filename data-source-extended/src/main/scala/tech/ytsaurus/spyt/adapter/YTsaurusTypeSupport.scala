@@ -1,7 +1,7 @@
 package tech.ytsaurus.spyt.adapter
 
+import org.apache.spark.sql.catalyst.analysis.TypeCoercionRule
 import org.apache.spark.sql.catalyst.expressions.Expression
-import org.apache.spark.sql.catalyst.expressions.codegen.CodegenContext
 import org.apache.spark.sql.spyt.types._
 import org.apache.spark.sql.types.DataType
 import tech.ytsaurus.spyt.adapter.TypeSupport.CastFunction
@@ -27,4 +27,6 @@ class YTsaurusTypeSupport extends TypeSupport {
   override def isDateTimeDataType(dt: DataType): Boolean = dt.isInstanceOf[DatetimeType]
   override val dateTimeCastToTimestamp: Any => Any = DatetimeCastToTimestamp
   override val dateTimeCastToTimestampCode: CastFunction = DatetimeCastToTimestampCode
+
+  override val typeCoercionRules: Seq[TypeCoercionRule] = Seq(UInt64LiteralsCast)
 }

@@ -3,44 +3,25 @@ package tech.ytsaurus.spyt.format
 import org.apache.spark.sql.catalyst.expressions.{AttributeReference, Expression, PredicateHelper, SubqueryExpression}
 import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
 import org.apache.spark.sql.execution.datasources.v2.DataSourceV2Implicits.TableHelper
-import org.apache.spark.sql.execution.datasources.v2.{BatchScanExec, DataSourceV2Relation, PushDownUtils}
+import org.apache.spark.sql.execution.datasources.v2.DataSourceV2Relation
 import org.apache.spark.sql.functions.col
 import org.apache.spark.sql.sources._
-import org.apache.spark.sql.{Column, DataFrame, Row}
-import org.mockito.scalatest.MockitoSugar
-import org.scalatest.prop.TableDrivenPropertyChecks
-import org.scalatest.{FlatSpec, Matchers}
+import org.apache.spark.sql.Row
 import tech.ytsaurus.spyt._
 import tech.ytsaurus.spyt.common.utils.ExpressionTransformer.expressionToSegmentSet
 import tech.ytsaurus.spyt.format.YtInputSplit.{getKeyFilterSegments, pushdownFiltersToYPath}
-import tech.ytsaurus.spyt.format.conf.SparkYtConfiguration
-import tech.ytsaurus.spyt.test._
 import tech.ytsaurus.spyt.wrapper.YtWrapper
 import tech.ytsaurus.spyt.wrapper.table.OptimizeMode
 import tech.ytsaurus.core.tables.{ColumnValueType, TableSchema}
 import tech.ytsaurus.spyt.common.utils.{MInfinity, PInfinity, RealValue, Segment, SegmentSet}
 import tech.ytsaurus.spyt.format.conf.FilterPushdownConfig
-import tech.ytsaurus.spyt.test.{DynTableTestUtils, TestRow}
+import tech.ytsaurus.spyt.test.TestRow
 
 import scala.language.postfixOps
 import scala.util.Random
 
-class YtInputSplitTest extends FlatSpec with Matchers with LocalSpark with DynTableTestUtils
-  with TmpDir with TestUtils with MockitoSugar with TableDrivenPropertyChecks {
-  behavior of "YtInputSplit"
-
+class YtInputSplitTest extends YtInputSplitTestBase {
   import spark.implicits._
-
-  override def beforeAll(): Unit = {
-    super.beforeAll()
-    spark.conf.set(s"spark.yt.${SparkYtConfiguration.Read.KeyColumnsFilterPushdown.Enabled.name}", value = true)
-    spark.conf.set(s"spark.yt.${SparkYtConfiguration.Read.KeyColumnsFilterPushdown.YtPathCountLimit.name}", value = 10)
-  }
-
-  override def afterAll(): Unit = {
-    super.afterAll()
-    spark.conf.set(s"spark.yt.${SparkYtConfiguration.Read.KeyColumnsFilterPushdown.Enabled.name}", value = false)
-  }
 
   it should "create SegmentSet from Filter" in {
     val a1 = LessThan("a", 5L)
@@ -436,49 +417,6 @@ class YtInputSplitTest extends FlatSpec with Matchers with LocalSpark with DynTa
         res.filter(input).count() shouldBe output.size
         res.filter(input).collect() should contain theSameElementsAs output.map(Row.fromTuple)
     }
-  }
-
-  it should "reduce number of read rows in dynamic tables" in {
-    forEvery(Table("schema", testSchema, testSchemaUnsigned)) { schema =>
-      YtWrapper.removeDirIfExists(tmpPath, recursive = true, force = true)
-      prepareTestTable(
-        tmpPath,
-        (1L to 1000L).map(x => (x / 10, x % 10, 0.toString)).map { case (a, b, c) => TestRow(a, b, c) },
-        Seq(Seq(), Seq(6, 0), Seq(7, 0), Seq(50), Seq(80, 0)),
-        schema = schema,
-      )
-
-      val res = spark.read.option("enable_inconsistent_read", "true").yt(tmpPath)
-      val test = Seq(
-        (res("a") <= 50 && res("a") >= 50 - 1 && res("b") === 1L, 20L),
-        (res("a") >= 77L && res("b").isin(0L) && res("c") === "0", 300L),
-        (res("a") === 6, 20L),
-        (res("a") < 10 || res("a") > 20, 950L),
-        (res("a") < 10 && res("a") > 20, 0L),
-        (res("a") < 50 && res("c") < "1", 550L),
-        (res("a").isin(10, 20, 30, 49), 50L)
-      )
-      test.foreach { case (filter, rowLimit) => getNumOutputRows(res, filter) should be <= rowLimit }
-    }
-  }
-
-  it should "not lose non-empty partitions when key columns are unsigned" in {
-    prepareTestTable(
-      tmpPath, (0L until 16L).map(x => (x << 60, x % 10, 0.toString)).map { case (a, b, c) => TestRow(a, b, c) },
-      Seq(Seq(), Seq(Long.MaxValue / 2), Seq(Long.MinValue), Seq(Long.MinValue / 2)),
-      schema = testSchemaUnsigned,
-    )
-    withConf(s"spark.yt.${SparkYtConfiguration.Read.YtPartitioningEnabled.name}", "true") {
-      spark.read.yt(tmpPath).cache().count() shouldBe 16
-    }
-  }
-
-  private def getNumOutputRows(res: DataFrame, filter: Column): Long = {
-    val query = res.filter(filter)
-    query.collect()
-    query.queryExecution.executedPlan.collectFirst {
-      case b: BatchScanExec => b.metrics("numOutputRows").value
-    }.get
   }
 
   private def checkPushedFilters(plan: LogicalPlan, expected: Seq[Filter]) = {

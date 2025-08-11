@@ -44,6 +44,8 @@ trait YTsaurusTypes {
   def sparkTypeFor(tiType: TiType): DataType
 
   def supportsInnerDataType(dataType: DataType): Option[Boolean]
+
+  def castUInt64Value(uInt64: UInt64Long): Any
 }
 
 object YTsaurusTypes {
@@ -99,6 +101,8 @@ class BaseYTsaurusTypes extends YTsaurusTypes {
   }
 
   override def supportsInnerDataType(dataType: DataType): Option[Boolean] = None
+
+  override def castUInt64Value(uInt64: UInt64Long): Any = uInt64.toBigDecimal
 
   private def typeNotSupported(dataType: DataType): Nothing = {
     throw new IllegalArgumentException(s"Data type $dataType is not supported. Maybe you should put " +

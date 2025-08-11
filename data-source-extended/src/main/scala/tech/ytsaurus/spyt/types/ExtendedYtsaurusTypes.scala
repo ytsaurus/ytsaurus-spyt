@@ -104,6 +104,8 @@ class ExtendedYtsaurusTypes extends YTsaurusTypes {
     case _ => None
   }
 
+  override def castUInt64Value(uInt64: UInt64Long): Any = uInt64
+
   private def toYsonBytes(value: Any): Array[Byte] = {
     val output = new ByteArrayOutputStream(64)
     val node = new YTreeBuilder().value(value).build()

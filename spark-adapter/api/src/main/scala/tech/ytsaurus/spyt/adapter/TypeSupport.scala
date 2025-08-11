@@ -1,5 +1,6 @@
 package tech.ytsaurus.spyt.adapter
 
+import org.apache.spark.sql.catalyst.analysis.TypeCoercionRule
 import org.apache.spark.sql.catalyst.expressions.Expression
 import org.apache.spark.sql.catalyst.expressions.codegen.{Block, CodegenContext, ExprValue}
 import org.apache.spark.sql.types.DataType
@@ -25,6 +26,8 @@ trait TypeSupport {
   def isDateTimeDataType(dt: DataType): Boolean
   val dateTimeCastToTimestamp: Any => Any
   val dateTimeCastToTimestampCode: CastFunction
+
+  val typeCoercionRules: Seq[TypeCoercionRule]
 }
 
 object TypeSupport {

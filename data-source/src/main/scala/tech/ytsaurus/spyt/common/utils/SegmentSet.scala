@@ -16,19 +16,22 @@ object Segment {
 
   private [utils]def toFilters(varName: String, segmentsAndPoints: Seq[Segment]): List[Filter] = {
     val (points, segments) = segmentsAndPoints.partition { segment => segment.left == segment.right }
-    val pointFilters =
-      if (points.nonEmpty) List(In(varName, points.map { case Segment(_, RealValue(value)) => value }.toArray))
-      else Nil
+    val pointFilters = if (points.nonEmpty) {
+      List(In(varName, points.map { case Segment(_, rv: RealValue[_]) => rv.canonicalValue }.toArray))
+    } else {
+      Nil
+    }
     val segmentFilters = segments.flatMap(segmentToFilter(varName, _))
     pointFilters ++ segmentFilters
   }
 
   private [utils]def segmentToFilter(varName: String, segment: Segment): Option[Filter] = segment match {
     case Segment(MInfinity(), PInfinity()) => None
-    case Segment(MInfinity(), RealValue(value)) => Some(LessThanOrEqual(varName, value))
-    case Segment(RealValue(value), PInfinity()) => Some(GreaterThanOrEqual(varName, value))
-    case Segment(RealValue(left), RealValue(right)) =>
-      Some(And(GreaterThanOrEqual(varName, left), LessThanOrEqual(varName, right)))
+    case Segment(MInfinity(), rv: RealValue[_]) => Some(LessThanOrEqual(varName, rv.canonicalValue))
+    case Segment(rv: RealValue[_], PInfinity()) => Some(GreaterThanOrEqual(varName, rv.canonicalValue))
+    case Segment(leftRv: RealValue[_], rightRv: RealValue[_]) =>
+      Some(And(GreaterThanOrEqual(varName, leftRv.canonicalValue), LessThanOrEqual(varName, rightRv.canonicalValue)))
+    case _ => throw new IllegalArgumentException("Invalid segment: left value must be less than or equal to right")
   }
 }
 

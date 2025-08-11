@@ -34,7 +34,7 @@ object ExpressionTransformer {
       case x: Float => Some(RealValue(x.doubleValue()))
       case x: String => Some(RealValue(x))
       case x: UTF8String => Some(RealValue(x.toString))
-      case x: java.math.BigDecimal => Some(RealValue(x))
+      case x: java.math.BigDecimal => Some(RealValue(UInt64Long(x)))
       case _ => None
     }
   }
@@ -114,7 +114,7 @@ object ExpressionTransformer {
     case b: YTreeBooleanNode => RealValue(b.getValue)
     case s: YTreeStringNode => RealValue(s.getValue)
     case d: YTreeDoubleNode => RealValue(d.getValue)
-    case l: YTreeIntegerNode => if (l.isSigned) RealValue(l.getLong) else RealValue(ULongUtils.toBigDecimal(l.getLong))
+    case l: YTreeIntegerNode => if (l.isSigned) RealValue(l.getLong) else RealValue(UInt64Long(l.getLong))
     case e: YTreeEntityNode =>
       val t = e.getAttribute("type")
       if (t.isPresent) {

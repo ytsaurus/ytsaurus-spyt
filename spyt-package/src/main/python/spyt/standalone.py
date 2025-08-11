@@ -8,7 +8,7 @@ from spyt.dependency_utils import require_yt_client
 
 require_yt_client()
 
-from yt.wrapper.cypress_commands import exists, copy as cypress_copy, get as yt_get, list as yt_list  # noqa: E402
+from yt.wrapper.cypress_commands import exists, copy as cypress_copy, get as yt_get  # noqa: E402
 from yt.wrapper.acl_commands import check_permission  # noqa: E402
 from yt.wrapper.file_commands import upload_file_to_cache  # noqa: E402
 from yt.wrapper.http_helpers import get_token, get_user_name  # noqa: E402
@@ -668,7 +668,7 @@ def find_spark_cluster(discovery_path=None, client=None):
     """
     discovery = SparkDiscovery(discovery_path=discovery_path)
     master_jobs_path = discovery.discovery().join("master_jobs")
-    master_jobs = yt_list(master_jobs_path, client=client)
+    master_jobs = SparkDiscovery.getOptions(master_jobs_path, client=client)
     master_job = yt_get(master_jobs_path.join(master_jobs[0]), client=client) if master_jobs else None
     return SparkCluster(
         master_endpoint=SparkDiscovery.getOption(discovery.master_spark(), client=client),

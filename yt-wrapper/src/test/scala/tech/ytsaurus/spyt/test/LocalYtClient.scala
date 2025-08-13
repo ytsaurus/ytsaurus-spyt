@@ -1,5 +1,6 @@
 package tech.ytsaurus.spyt.test
 
+import org.apache.hadoop.conf.Configuration
 import org.scalatest.{BeforeAndAfterAll, TestSuite}
 import tech.ytsaurus.spyt.wrapper.client._
 import tech.ytsaurus.client.CompoundClient
@@ -43,6 +44,14 @@ trait LocalYtClient extends LocalYt {
     extendedFileTimeout = true,
     proxyNetworkName = None
   )
+
+  protected val fsConf: Configuration = {
+    val c = new Configuration()
+    c.set("yt.proxy", s"${LocalYt.host}:${LocalYt.proxyPort}")
+    c.set("yt.user", "root")
+    c.set("yt.token", "")
+    c
+  }
 
   override protected def ytRpcClient: YtRpcClient = {
     YtClientProvider.ytRpcClient(conf)

@@ -1,6 +1,5 @@
 package tech.ytsaurus.spyt.fs
 
-import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.{Path, PathNotFoundException}
 import org.apache.hadoop.io.IOUtils
 import org.scalatest.{FlatSpec, Matchers}
@@ -18,13 +17,6 @@ class YtFileSystemTest extends FlatSpec with Matchers with LocalYtClient with Tm
 
   override def testDir: String = "/tmp/test" // should start with single slash
 
-  private val fsConf = {
-    val c = new Configuration()
-    c.set("yt.proxy", s"${LocalYt.host}:${LocalYt.proxyPort}")
-    c.set("yt.user", "root")
-    c.set("yt.token", "")
-    c
-  }
   private val fs = new YtFileSystem
   fs.initialize(new Path("/").toUri, fsConf)
   fs.setConf(fsConf)

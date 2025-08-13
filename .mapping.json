@@ -230,6 +230,7 @@
   "data-source/src/test/scala/tech/ytsaurus/spyt/format/types/UuidConverterTest.scala":"yt/spark/spark-over-yt/data-source/src/test/scala/tech/ytsaurus/spyt/format/types/UuidConverterTest.scala",
   "data-source/src/test/scala/tech/ytsaurus/spyt/format/types/UuidTypeTest.scala":"yt/spark/spark-over-yt/data-source/src/test/scala/tech/ytsaurus/spyt/format/types/UuidTypeTest.scala",
   "data-source/src/test/scala/tech/ytsaurus/spyt/fs/YtClusterSelectionTest.scala":"yt/spark/spark-over-yt/data-source/src/test/scala/tech/ytsaurus/spyt/fs/YtClusterSelectionTest.scala",
+  "data-source/src/test/scala/tech/ytsaurus/spyt/fs/YtTableFileSystemTest.scala":"yt/spark/spark-over-yt/data-source/src/test/scala/tech/ytsaurus/spyt/fs/YtTableFileSystemTest.scala",
   "data-source/src/test/scala/tech/ytsaurus/spyt/logger/LogRow.scala":"yt/spark/spark-over-yt/data-source/src/test/scala/tech/ytsaurus/spyt/logger/LogRow.scala",
   "data-source/src/test/scala/tech/ytsaurus/spyt/logger/YtDynTableLoggerTest.scala":"yt/spark/spark-over-yt/data-source/src/test/scala/tech/ytsaurus/spyt/logger/YtDynTableLoggerTest.scala",
   "data-source/src/test/scala/tech/ytsaurus/spyt/serialization/YsonDecoderProperties.scala":"yt/spark/spark-over-yt/data-source/src/test/scala/tech/ytsaurus/spyt/serialization/YsonDecoderProperties.scala",

@@ -14,6 +14,7 @@ import org.apache.spark.sql.execution.streaming.FileStreamSink
 import org.apache.spark.sql.types.StructType
 import org.apache.spark.sql.v2.YtInMemoryFileIndex.bulkListLeafFiles
 import org.apache.spark.util.SerializableConfiguration
+import tech.ytsaurus.spyt.fs.YtTableFileSystem.DEFAULT_FILTER
 
 import java.io.FileNotFoundException
 import scala.annotation.tailrec
@@ -231,16 +232,39 @@ object YtInMemoryFileIndex extends Logging {
 
     // Short-circuits parallel listing when serial listing is likely to be faster.
     if (paths.size <= sparkSession.sessionState.conf.parallelPartitionDiscoveryThreshold) {
-      return paths.map { path =>
-        val leafFiles = listLeafFiles(
-          path,
-          hadoopConf,
-          filter,
-          Some(sparkSession),
-          ignoreMissingFiles = ignoreMissingFiles,
-          ignoreLocality = ignoreLocality,
-          isRootPath = areRootPaths)
-        (path, leafFiles)
+      if (paths.isEmpty) {
+        return Nil
+      } else if (paths.size > 1 && areRootPaths) {
+        // Here we suppose that almost all paths belong to the same parent directory so we can list and filter it
+        // in a single request to YTsaurus.
+        return paths.groupBy(p => p.getParent).flatMap { case (dir, children) =>
+          val names = children.map(p => p.getName).toSet
+          val leafFiles = listLeafFiles(
+            dir,
+            hadoopConf,
+            filter,
+            Some(sparkSession),
+            ignoreMissingFiles = ignoreMissingFiles,
+            ignoreLocality = ignoreLocality,
+            isRootPath = areRootPaths,
+            childFilter = (p: Path) => names.contains(p.getName)
+          )
+          children.sorted.zip(leafFiles.sortBy(_.getPath)).map {
+            case (path, fileStatus) => path -> Seq(fileStatus)
+          }
+        }.toSeq
+      } else {
+        return paths.map { path =>
+          val leafFiles = listLeafFiles(
+            path,
+            hadoopConf,
+            filter,
+            Some(sparkSession),
+            ignoreMissingFiles = ignoreMissingFiles,
+            ignoreLocality = ignoreLocality,
+            isRootPath = areRootPaths)
+          (path, leafFiles)
+        }
       }
     }
 
@@ -348,7 +372,9 @@ object YtInMemoryFileIndex extends Logging {
       sessionOpt: Option[SparkSession],
       ignoreMissingFiles: Boolean,
       ignoreLocality: Boolean,
-      isRootPath: Boolean): Seq[FileStatus] = {
+      isRootPath: Boolean,
+      childFilter: PathFilter = DEFAULT_FILTER
+  ): Seq[FileStatus] = {
     logTrace(s"Listing $path")
     val fs = path.getFileSystem(hadoopConf)
 
@@ -366,7 +392,7 @@ object YtInMemoryFileIndex extends Logging {
             def next(): LocatedFileStatus = remoteIter.next
             def hasNext(): Boolean = remoteIter.hasNext
           }.toArray
-        case _ => fs.listStatus(path)
+        case _ => fs.listStatus(path, childFilter)
       }
     } catch {
       // If we are listing a root path (e.g. a top level directory of a table), we need to

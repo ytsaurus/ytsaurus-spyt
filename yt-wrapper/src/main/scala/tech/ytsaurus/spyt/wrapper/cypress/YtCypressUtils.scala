@@ -117,11 +117,18 @@ trait YtCypressUtils {
   }
 
   def listDir(path: YPath, transaction: Option[String])(implicit yt: CompoundClient): Array[String] = {
+    listDir(path, transaction, Seq.empty).view.map(_.stringValue()).toArray
+  }
+
+  def listDir(path: YPath, transaction: Option[String], attributes: Seq[String])
+             (implicit yt: CompoundClient): Iterable[YTreeNode] = {
     log.debug(s"List directory: $path, transaction $transaction")
     import scala.collection.JavaConverters._
-    val request = ListNode.builder().setPath(path).optionalTransaction(transaction).build()
-    val response = yt.listNode(request).join().asList()
-    response.asScala.view.map(_.stringValue()).toArray
+    val requestBuilder = ListNode.builder().setPath(path).optionalTransaction(transaction)
+    if (attributes.nonEmpty) {
+      requestBuilder.setAttributes(attributes.asJava)
+    }
+    yt.listNode(requestBuilder.build()).join().asList().asScala
   }
 
   def copy(src: String, dst: String, transaction: Option[String] = None, force: Boolean = false)

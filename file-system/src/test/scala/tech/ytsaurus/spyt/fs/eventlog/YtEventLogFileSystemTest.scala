@@ -26,19 +26,16 @@ class YtEventLogFileSystemTest extends FlatSpec with Matchers with LocalSpark wi
 
   def metaTableLocation: String = getMetaPath(tableLocation)
 
-  private val fsConf = {
-    val c = new Configuration()
+  private val elFsConf = {
+    val c = fsConf
     c.set("yt.dynTable.rowSize", "2")
     c.set("fs.ytEventLog.singleReadLimit", "2")
-    c.set("yt.proxy", s"${LocalYt.host}:${LocalYt.proxyPort}")
-    c.set("yt.user", "root")
-    c.set("yt.token", "")
     c
   }
   private val fs = new YtEventLogFileSystem
-  fs.initialize(new Path("/").toUri, fsConf)
+  fs.initialize(new Path("/").toUri, elFsConf)
   fs.setClock(Clock.fixed(LocalDateTime.parse("2021-07-05T12:00:00").toInstant(ZoneOffset.UTC), ZoneOffset.UTC))
-  fs.setConf(fsConf)
+  fs.setConf(elFsConf)
 
 
   private def getNameAndFileLocation(fileName: String): (String, String) = {

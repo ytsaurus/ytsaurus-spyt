@@ -260,6 +260,10 @@ private[spark] class YTsaurusOperationManager(val ytClient: YTsaurusClient,
 
     val execCores = SparkAdapter.instance.getExecutorCores(execResources)
 
+    val hostname = conf.get(YTSAURUS_NETWORK_PROJECT)
+      .map(_ => s"${ytHostIpBashInlineWrapper("YT_IP_ADDRESS_DEFAULT")}")
+      .getOrElse("$HOSTNAME")
+
     var executorCommand = (
       s"$prepareEnvCommand && ${bashCommand(javaCommand, "-cp", sparkClassPath, s"-Xmx${execResources.executorMemoryMiB}m")}"
         + s" ${bashCommand(sparkJavaOpts: _*)} $ytsaurusJavaOptionsBash ${bashCommand(executorOpts: _*)}"
@@ -268,7 +272,7 @@ private[spark] class YTsaurusOperationManager(val ytClient: YTsaurusClient,
         + """ --executor-id "$YT_TASK_JOB_INDEX""""
         + s" --cores ${bashCommand(execCores.toString)}"
         + s" --app-id ${bashCommand(appId)}"
-        + """ --hostname "$HOSTNAME""""
+        + s""" --hostname "${hostname}""""
       )
 
     executorCommand = addRedirectToStderrIfNeeded(conf, executorCommand)

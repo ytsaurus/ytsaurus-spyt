@@ -1,4 +1,4 @@
-FROM mirror.gcr.io/ubuntu:focal
+FROM mirror.gcr.io/ubuntu:noble
 
 USER root
 
@@ -20,10 +20,11 @@ RUN apt-get update && DEBIAN_FRONTEND=noninteractive TZ=Etc/UTC apt-get install 
   iputils-ping \
   lsb-release \
   openjdk-11-jdk \
-  python3.12
+  python3.12 \
+  python3-pip
 
-RUN curl -sS https://bootstrap.pypa.io/get-pip.py | python3.12
-RUN python3.12 -m pip install ytsaurus-client==0.13.20
+RUN rm /usr/lib/python3.12/EXTERNALLY-MANAGED
+RUN python3.12 -m pip install requests ytsaurus-client==0.13.35
 
 COPY ${BUILD_OUTPUT_PATH}/version.json /data/
 COPY ${BUILD_OUTPUT_PATH}/conf /data/conf

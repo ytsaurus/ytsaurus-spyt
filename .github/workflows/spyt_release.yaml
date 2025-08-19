@@ -52,7 +52,7 @@ jobs:
     steps:
       - name: Test deadsnakes
         run: |
-          echo "FROM ubuntu:focal" > Dockerfile
+          echo "FROM ubuntu:noble" > Dockerfile
           head -25 tools/release/spyt_image/Dockerfile | tail +4 >> Dockerfile
           docker build .
 

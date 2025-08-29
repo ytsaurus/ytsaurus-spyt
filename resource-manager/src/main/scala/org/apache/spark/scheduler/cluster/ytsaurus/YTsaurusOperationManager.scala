@@ -318,6 +318,7 @@ private[spark] class YTsaurusOperationManager(val ytClient: YTsaurusClient,
       .key("file_paths").value(filePaths)
       .key("environment").value(environment)
       .key("enable_rpc_proxy_in_job_proxy").value(conf.get(YTSAURUS_RPC_JOB_PROXY_ENABLED))
+      .key("enable_shuffle_service_in_job_proxy").value(conf.get(YTSAURUS_SHUFFLE_ENABLED))
 
     conf.get(YTSAURUS_NETWORK_PROJECT).foreach { networkProject =>
       specBuilder.key("network_project").value(networkProject)

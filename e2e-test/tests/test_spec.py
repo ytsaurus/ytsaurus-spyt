@@ -43,8 +43,9 @@ def test_format_memory():
 def _build_configs(enable_tmpfs=False):
     enablers = SpytEnablers(enable_byop=False, enable_profiling=False)
     discovery = SparkDiscovery("//home/cluster")
-    common_config = CommonComponentConfig(container_home="./spark",
-                                          enable_tmpfs=enable_tmpfs, enablers=enablers, rpc_job_proxy_thread_pool_size=6, spark_discovery=discovery)
+    common_config = CommonComponentConfig(container_home="./spark", enable_tmpfs=enable_tmpfs, enablers=enablers,
+                                          rpc_job_proxy_thread_pool_size=6, spark_discovery=discovery,
+                                          enable_ytsaurus_shuffle=True)
     common_params = CommonSpecParams(
         spark_distributive="spark-3.2.2-bin-hadoop3.2.tgz", java_home="/opt/jdk",
         extra_java_opts=["-Dtest=true"], environment={"TEST_ENV": "True"}, spark_conf={"spark.yt.option": "2024"},
@@ -112,6 +113,7 @@ def test_worker_spec_builder():
                     'SPARK_LOCAL_DIRS': '.'},
                 'rpc_proxy_worker_thread_pool_size': 6,
                 'cuda_toolkit_version': '11.0',
+                'enable_shuffle_service_in_job_proxy': True,
                 'gpu_limit': 1
             }
         }
@@ -148,6 +150,7 @@ def test_worker_spec_builder_enable_tmpfs():
                     'SPARK_LOCAL_DIRS': './tmpfs'},
                 'rpc_proxy_worker_thread_pool_size': 6,
                 'cuda_toolkit_version': '11.0',
+                'enable_shuffle_service_in_job_proxy': True,
                 'gpu_limit': 1
             }
         }

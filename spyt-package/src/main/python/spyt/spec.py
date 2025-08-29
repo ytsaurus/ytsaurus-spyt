@@ -72,6 +72,7 @@ class CommonComponentConfig():
     cluster_log_level: str = "INFO"
     rpc_job_proxy: bool = False
     rpc_job_proxy_thread_pool_size: int = 4
+    enable_ytsaurus_shuffle: bool = False
     tcp_proxy_range_start: int = 30000
     tcp_proxy_range_size: int = 100
     enable_stderr_table: bool = False
@@ -364,6 +365,7 @@ def build_worker_spec(builder: VanillaSpecBuilder, job_type: str, ytserver_proxy
     worker_task_spec = copy.deepcopy(common_params.task_spec)
     worker_task_spec["environment"] = worker_environment
     worker_task_spec["rpc_proxy_worker_thread_pool_size"] = common_params.config.rpc_job_proxy_thread_pool_size
+    worker_task_spec["enable_shuffle_service_in_job_proxy"] = common_params.config.enable_ytsaurus_shuffle
     worker_ram_memory = parse_memory(config.res.memory)
     worker_local_dirs = "."
     if config.worker_disk_limit:

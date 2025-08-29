@@ -193,4 +193,9 @@ object Config {
     .version("2.6.0")
     .stringConf
     .createWithDefault(s"/opt/jdk${Runtime.version().feature()}")
+
+  val YTSAURUS_SHUFFLE_ENABLED = ConfigBuilder("spark.ytsaurus.shuffle.enabled")
+    .version("2.7.2")
+    .booleanConf
+    .createWithDefault(false)
 }

@@ -339,7 +339,7 @@ def start_livy_server(operation_alias=None, discovery_path=None, pool=None, enab
 
     common_config = CommonComponentConfig(
         operation_alias, pool, enable_tmpfs, network_project, tvm_id, tvm_secret, enablers, preemption_mode,
-        cluster_log_level, rpc_job_proxy, rpc_job_proxy_thread_pool_size, tcp_proxy_range_start,
+        cluster_log_level, rpc_job_proxy, rpc_job_proxy_thread_pool_size, False, tcp_proxy_range_start,
         tcp_proxy_range_size, enable_stderr_table, "livy", spark_discovery, group_id, cluster_java_home
     )
     livy_config = LivyConfig(
@@ -383,7 +383,7 @@ def start_history_server(operation_alias=None, discovery_path=None, pool=None, e
 
     common_config = CommonComponentConfig(
         operation_alias, pool, enable_tmpfs, network_project, tvm_id, tvm_secret, enablers, preemption_mode,
-        cluster_log_level, rpc_job_proxy, rpc_job_proxy_thread_pool_size, tcp_proxy_range_start,
+        cluster_log_level, rpc_job_proxy, rpc_job_proxy_thread_pool_size, False, tcp_proxy_range_start,
         tcp_proxy_range_size, enable_stderr_table, "shs", spark_discovery, None, cluster_java_home
     )
     hs_config = HistoryServerConfig(
@@ -432,7 +432,7 @@ def start_spark_cluster(worker_cores, worker_memory, worker_num, worker_cores_ov
                         livy_max_sessions=SparkDefaultArguments.LIVY_MAX_SESSIONS, rpc_job_proxy=False,
                         rpc_job_proxy_thread_pool_size=4, tcp_proxy_range_start=30000,
                         tcp_proxy_range_size=100, enable_stderr_table=False, group_id=None,
-                        worker_gpu_limit=0, cluster_java_home=None):
+                        worker_gpu_limit=0, cluster_java_home=None, enable_ytsaurus_shuffle=False):
     """Start Spark cluster
     :param operation_alias: alias for the underlying YT operation
     :param pool: pool for the underlying YT operation
@@ -500,6 +500,7 @@ def start_spark_cluster(worker_cores, worker_memory, worker_num, worker_cores_ov
     :param group_id: discovery group id
     :param worker_gpu_limit: number of gpu for each worker
     :param cluster_java_home: custom java home for cluster vanilla operation
+    :param enable_ytsaurus_shuffle: use YTsaurus shuffle service
     :return:
     """
     worker_res = WorkerResources(worker_cores, worker_memory, worker_num, worker_cores_overhead, worker_timeout,
@@ -559,8 +560,14 @@ def start_spark_cluster(worker_cores, worker_memory, worker_num, worker_cores_ov
     if ytserver_proxy_path:
         dynamic_config["ytserver_proxy_path"] = ytserver_proxy_path
     dynamic_config['spark_conf']['spark.dedicated_operation_mode'] = dedicated_operation_mode
-    dynamic_config['spark_conf']['spark.shuffle.service.enabled'] = 'true'
-    set_random_shuffle_service_port(dynamic_config['spark_conf'])
+    if enable_ytsaurus_shuffle:
+        dynamic_config['spark_conf']['spark.shuffle.manager'] = \
+            'org.apache.spark.shuffle.ytsaurus.YTsaurusShuffleManager'
+        dynamic_config['spark_conf']['spark.shuffle.sort.io.plugin.class'] = \
+            'tech.ytsaurus.spyt.shuffle.YTsaurusShuffleDataIO'
+    else:
+        dynamic_config['spark_conf']['spark.shuffle.service.enabled'] = 'true'
+        set_random_shuffle_service_port(dynamic_config['spark_conf'])
     if autoscaler_period:
         dynamic_config['spark_conf']['spark.autoscaler.enabled'] = True
         dynamic_config['spark_conf']['spark.autoscaler.period'] = autoscaler_period
@@ -585,8 +592,9 @@ def start_spark_cluster(worker_cores, worker_memory, worker_num, worker_cores_ov
 
     common_config = CommonComponentConfig(
         operation_alias, pool, enable_tmpfs, network_project, tvm_id, tvm_secret, enablers, preemption_mode,
-        cluster_log_level, rpc_job_proxy, rpc_job_proxy_thread_pool_size, tcp_proxy_range_start,
-        tcp_proxy_range_size, enable_stderr_table, "spark", spark_discovery, group_id, cluster_java_home
+        cluster_log_level, rpc_job_proxy, rpc_job_proxy_thread_pool_size, enable_ytsaurus_shuffle,
+        tcp_proxy_range_start, tcp_proxy_range_size, enable_stderr_table, "spark", spark_discovery, group_id,
+        cluster_java_home
     )
     master_config = MasterConfig(master_memory_limit, master_port)
     worker_config = WorkerConfig(

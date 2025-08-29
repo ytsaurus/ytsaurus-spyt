@@ -142,6 +142,10 @@ private[spark] class SparkSubmitSpyt {
 
     if (clusterManager == YTSAURUS) {
       sparkConf.set("spark.ytsaurus.primary.resource", args.primaryResource)
+      if (sparkConf.getBoolean("spark.ytsaurus.shuffle.enabled", false)) {
+        sparkConf.set("spark.shuffle.manager", "org.apache.spark.shuffle.ytsaurus.YTsaurusShuffleManager")
+        sparkConf.set("spark.shuffle.sort.io.plugin.class", "tech.ytsaurus.spyt.shuffle.YTsaurusShuffleDataIO")
+      }
     }
 
     (childArgsSeq ++ childArgs, childClasspath, sparkConf, childMainClass)

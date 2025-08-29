@@ -51,6 +51,7 @@ def main(raw_args=None):
     add_parser_group(parser, '--enable-byop', '--disable-byop', 'enable_byop', default_enablers.enable_byop)
     add_parser_group(parser, '--enable-yt-metrics', '--disable-yt-metrics', 'enable_yt_metrics',
                      default_enablers.enable_yt_metrics)
+    add_parser_group(parser, '--enable-ytsaurus-shuffle', '--disable-ytsaurus-shuffle', 'enable_ytsaurus_shuffle', False)
 
     parser.set_defaults(enable_tmpfs=True)
 
@@ -175,7 +176,8 @@ def main(raw_args=None):
                         enable_stderr_table=args.enable_stderr_table,
                         group_id=args.group_id,
                         worker_gpu_limit=args.worker_gpu_limit,
-                        cluster_java_home=args.cluster_java_home
+                        cluster_java_home=args.cluster_java_home,
+                        enable_ytsaurus_shuffle=args.enable_ytsaurus_shuffle
                         )
 
 

@@ -70,7 +70,8 @@ public class YTsaurusShuffleMapOutputWriter implements ShuffleMapOutputWriter {
         if (!buffer.isEmpty()) {
             flushBuffer();
         }
-        writeFuture.thenCompose(unused -> ytsaurusWriter.finish()).join();
+        writeFuture.join();
+        ytsaurusWriter.finish().join();
         if (log.isTraceEnabled()) {
             log.trace(
                     "Bytes has been written for {} - {}; partition lengths are {}",
@@ -101,7 +102,8 @@ public class YTsaurusShuffleMapOutputWriter implements ShuffleMapOutputWriter {
     }
 
     private void flushBuffer() {
-        writeFuture = writeFuture.thenCompose(unused -> ytsaurusWriter.write(buffer));
+        writeFuture.join();
+        writeFuture = ytsaurusWriter.write(buffer);
     }
 
     private class YTsaurusShufflePartitionWriter implements ShufflePartitionWriter {

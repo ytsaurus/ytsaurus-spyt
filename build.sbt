@@ -72,7 +72,6 @@ lazy val `yt-wrapper` = (project in file("yt-wrapper"))
   )
 
 lazy val `file-system` = (project in file("file-system"))
-  .enablePlugins(CommonPlugin)
   .dependsOn(`yt-wrapper` % "compile->compile;test->test;provided->provided;compileprovided->compileprovided;testprovided->testprovided")
 
 lazy val `data-source-base` = (project in file("data-source"))
@@ -115,6 +114,12 @@ lazy val `spark-submit` = (project in file("spark-submit"))
     resolvedJavaAgents := javaAgents.value
   )
 
+lazy val `spyt-connect` = (project in file("spyt-connect"))
+  .dependsOn(`resource-manager` % "compile->compile;test->test;provided->provided;compileprovided->compileprovided;testprovided->testprovided")
+  .settings(
+    libraryDependencies ++= sparkConnect
+  )
+
 lazy val `spyt-test` = (project in file("spyt-test"))
   .dependsOn(
     `spark-submit` % "compile->compile;test->test;provided->provided;compileprovided->compileprovided;testprovided->testprovided",
@@ -130,6 +135,7 @@ lazy val `spyt-package` = (project in file("spyt-package"))
   .dependsOn(
     `spark-submit` % "compile->compile;test->test",
     `shuffle-service` % "compile->compile;test->test",
+    `spyt-connect`,
     `spark-patch`,
     `spark-adapter-impl-322`,
     `spark-adapter-impl-330`,
@@ -261,6 +267,7 @@ lazy val root = (project in file("."))
     `spark-submit`,
     `spark-patch`,
     `shuffle-service`,
+    `spyt-connect`,
     `spyt-test`,
     `spyt-package`
   )

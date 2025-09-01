@@ -54,6 +54,10 @@ object Dependencies {
 
   lazy val sparkTestDep = sparkTest(testSparkVersion)
 
+  lazy val sparkConnect = Seq(
+    "org.apache.spark" %% "spark-connect" % compileSparkVersion % Provided
+  )
+
   lazy val ytsaurusClient = Seq(
     "tech.ytsaurus" % "ytsaurus-client" % ytsaurusClientVersion excludeAll(
     ExclusionRule(organization = "io.netty"),

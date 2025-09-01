@@ -4,6 +4,7 @@ import os
 import shlex
 from dataclasses import dataclass
 from typing import List, NamedTuple
+from pyspark import __version__ as spark_version
 
 from spyt.dependency_utils import require_yt_client
 
@@ -194,6 +195,22 @@ def _launcher_command(component: str, common_params: CommonSpecParams, additiona
         "{} tech.ytsaurus.spark.launcher.{}Launcher {}".format(run_launcher, component, launcher_opts)
     ]
     return " && ".join(commands)
+
+
+def _create_file_and_layer_paths(config, enable_squashfs: bool, spark_distributive_path):
+    file_paths = [path for path in config["file_paths"] if
+                  not enable_squashfs or
+                  not path.endswith('spyt-package.zip')]
+    layer_paths = []
+
+    if enable_squashfs:
+        layer_paths.append(f"{config['spark_yt_base_path']}/spyt-package.squashfs")
+        layer_paths.append(spark_distributive_path)
+    else:
+        file_paths.append(spark_distributive_path)
+
+    layer_paths += config["squashfs_layer_paths" if enable_squashfs else "layer_paths"]
+    return file_paths, layer_paths
 
 
 def build_livy_spec(builder: VanillaSpecBuilder, common_params: CommonSpecParams, config: LivyConfig):
@@ -490,18 +507,9 @@ def build_spark_operation_spec(config: dict, client: YtClient,
         environment["SPARK_YT_TCP_PROXY_RANGE_START"] = str(common_config.tcp_proxy_range_start)
         environment["SPARK_YT_TCP_PROXY_RANGE_SIZE"] = str(common_config.tcp_proxy_range_size)
 
-    file_paths = [path for path in config["file_paths"] if
-                  not common_config.enablers.enable_squashfs or
-                  not path.endswith('spyt-package.zip')]
-    layer_paths = []
-
-    if common_config.enablers.enable_squashfs:
-        layer_paths.append(f"{config['spark_yt_base_path']}/spyt-package.squashfs")
-        layer_paths.append(spark_distributive_path)
-    else:
-        file_paths.append(spark_distributive_path)
-
-    layer_paths += config["squashfs_layer_paths" if common_config.enablers.enable_squashfs else "layer_paths"]
+    file_paths, layer_paths = _create_file_and_layer_paths(config,
+                                                           common_config.enablers.enable_squashfs,
+                                                           spark_distributive_path)
 
     common_task_spec = {
         "restart_completed_jobs": True,
@@ -545,4 +553,70 @@ def build_spark_operation_spec(config: dict, client: YtClient,
 
     return builder \
         .secure_vault(secure_vault) \
+        .spec(operation_spec)
+
+
+def build_spark_connect_server_spec(client: YtClient, config, spark_conf: dict, enablers: SpytEnablers, java_home: str,
+                                    driver_memory: str, num_executors: int, executor_cores: int, executor_memory: str,
+                                    prefer_ipv6: bool, pool: str, grpc_port_start: int):
+    component_config = CommonComponentConfig(enable_tmpfs=False, rpc_job_proxy=True, enablers=enablers)
+
+    spark_distributive, spark_distributive_path = get_spark_distributive(client, enablers.enable_squashfs)
+    setup = setup_spyt_env(component_config.container_home, spark_distributive, enablers.enable_squashfs, [])
+    user = get_user_name(client=client)
+    yt_proxy = call_get_proxy_address_url(required=True, client=client)
+    spark_connect_jar = f"spark-connect_2.12-{spark_version}.jar"
+    network_project = spark_conf.get("spark.ytsaurus.network.project")
+    command = [
+        f"{component_config.spark_home}/bin/spark-submit",
+        f"--master ytsaurus://{yt_proxy}",
+        "--deploy-mode client",
+        "--class org.apache.spark.sql.connect.ytsaurus.SpytConnectServer",
+        f"--num-executors {num_executors}",
+        f"--executor-cores {executor_cores}",
+        f"--executor-memory {executor_memory}",
+        f"--queue {pool or user}",
+        f'--name "Spark connect driver for {user}"',
+        f"--conf spark.driver.extraJavaOptions='-Djava.net.preferIPv6Addresses={prefer_ipv6}'",
+        f"--conf spark.connect.grpc.binding.port={grpc_port_start}",
+        f"--jars {spark_connect_jar}",
+    ] + [f"--conf {key}={spark_conf[key]}" for key in spark_conf] + ["spark-internal"]
+
+    operation_spec = {
+        "title": "Spark connect server"
+    }
+
+    secure_vault = {
+        "YT_TOKEN": get_token(client=client)
+    }
+
+    file_paths, layer_paths = _create_file_and_layer_paths(config, enablers.enable_squashfs, spark_distributive_path)
+
+    file_paths.append(f"//home/spark/distrib/{spark_version.replace('.', '/')}/spark-connect_2.12-{spark_version}.jar")
+
+    environment = copy.deepcopy(config["environment"])
+    environment["JAVA_HOME"] = java_home
+    environment["SPARK_CONF_DIR"] = f"{component_config.spyt_home}/conf".replace("$HOME/", "")
+    environment["SPARK_CONNECT_CLASSPATH"] = f"{spark_connect_jar}"
+
+    task_spec = {
+        "layer_paths": layer_paths,
+        "file_paths": file_paths,
+        "enable_rpc_proxy_in_job_proxy": component_config.rpc_job_proxy,
+        "environment": environment,
+    }
+
+    if network_project:
+        task_spec["network_project"] = network_project
+
+    builder = VanillaSpecBuilder()
+    builder.begin_task("spark_connect_driver") \
+        .command(" ".join([setup, "&&"] + command)) \
+        .job_count(1) \
+        .cpu_limit(1) \
+        .memory_limit(parse_memory(driver_memory)) \
+        .spec(task_spec) \
+        .end_task()
+
+    return builder.secure_vault(secure_vault) \
         .spec(operation_spec)

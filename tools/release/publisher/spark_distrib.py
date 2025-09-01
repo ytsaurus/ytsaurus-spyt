@@ -9,6 +9,7 @@ from .utils import configure_logger
 logger = configure_logger("Spark distrib uploader")
 
 SPARK_BASE_URL = 'https://archive.apache.org/dist/spark'
+MAVEN_CONNECT_URL = 'https://repo1.maven.org/maven2/org/apache/spark/spark-connect_2.12'
 VERSION_REGEX = re.compile(r"^(\d+)\.(\d+)\.(\d+)$")
 
 
@@ -21,12 +22,15 @@ def _parse_version(version):
     return [int(match[i + 1]) for i in range(3)]
 
 
-def spark_download_url(version):
+def spark_download_urls(version):
     minor = _parse_version(version)[1]
     if minor <= 2:
-        return f"{SPARK_BASE_URL}/spark-{version}/spark-{version}-bin-hadoop3.2.tgz"
-    else:
-        return f"{SPARK_BASE_URL}/spark-{version}/spark-{version}-bin-hadoop3.tgz"
+        return [f"{SPARK_BASE_URL}/spark-{version}/spark-{version}-bin-hadoop3.2.tgz"]
+    urls = [f"{SPARK_BASE_URL}/spark-{version}/spark-{version}-bin-hadoop3.tgz"]
+    if minor >= 4:
+        connect_url = f"{MAVEN_CONNECT_URL}/{version}/spark-connect_2.12-{version}.jar"
+        urls.append(connect_url)
+    return urls
 
 
 def validate_and_check_version(version):
@@ -42,45 +46,49 @@ def validate_and_check_version(version):
         logger.error(msg)
         raise RuntimeError(msg)
 
-    tgz_url = spark_download_url(version)
+    artifact_urls = spark_download_urls(version)
 
-    response = requests.head(tgz_url)
+    for url in artifact_urls:
+        response = requests.head(url)
 
-    if response.status_code != 200:
-        msg = f"Spark version {version} does not exist at {tgz_url}"
-        logger.error(msg)
-        raise RuntimeError(msg)
+        if response.status_code != 200:
+            msg = f"Required artifact for Spark version {version} does not exist at {url}"
+            logger.error(msg)
+            raise RuntimeError(msg)
 
 
-def upload_distributive(version, client: Client, ignore_existing: bool, distrib_bytes=None, use_cache=False,
-                        cache_path: str = "/tmp"):
-    logger.info(f"Uploading Spark {version} distributive")
-    tgz_url = spark_download_url(version)
+def upload_distributive(version, client: Client, ignore_existing: bool, distrib_bytes, filename: str):
     maj, min, patch = _parse_version(version)
     distrib_root = spark_distrib_remote_dir(maj, min, patch)
-    filename = tgz_url.split("/")[-1]
     distrib_path = f"{distrib_root}/{filename}"
     if client.exists(distrib_path) and not ignore_existing:
         logger.info(f"Spark {version} distributive already exists")
         return
+    logger.info(f"Uploading Spark {version} distributive file {filename}")
+    if not client.exists(distrib_root):
+        client.mkdir(distrib_root)
+    client.write_file(distrib_bytes, distrib_path)
 
-    client.mkdir(distrib_root, ignore_existing=ignore_existing)
 
-    if distrib_bytes is None:
+def upload_artifacts(version, client: Client, ignore_existing: bool, use_cache=False, cache_path: str = "/tmp"):
+    artifact_urls = spark_download_urls(version)
+
+    for url in artifact_urls:
+        filename = url.split("/")[-1]
+
         if use_cache:
             cached_file = f"{cache_path}/{filename}"
             logger.info(f"Cache is enabled. File {cached_file} will be used")
             if not os.path.exists(cached_file):
-                logger.info(f"No cached archive found, downloading it from {tgz_url}")
+                logger.info(f"No cached archive found, downloading it from {url}")
                 with open(cached_file, 'wb') as f:
-                    f.write(requests.get(tgz_url).content)
+                    f.write(requests.get(url).content)
             with open(cached_file, 'rb') as f:
                 distrib_bytes = f.read()
         else:
-            response = requests.get(tgz_url)
+            response = requests.get(url)
             distrib_bytes = response.content
-
-    client.write_file(distrib_bytes, distrib_path)
+        upload_distributive(version, client, ignore_existing, distrib_bytes, filename)
 
 
 def main(versions, root, ignore_existing, use_cache, cache_path):
@@ -91,7 +99,7 @@ def main(versions, root, ignore_existing, use_cache, cache_path):
     client = Client(ClientBuilder(root_path=root))
 
     for version in versions:
-        upload_distributive(version, client, ignore_existing, use_cache=use_cache, cache_path=cache_path)
+        upload_artifacts(version, client, ignore_existing, use_cache=use_cache, cache_path=cache_path)
 
 
 if __name__ == '__main__':

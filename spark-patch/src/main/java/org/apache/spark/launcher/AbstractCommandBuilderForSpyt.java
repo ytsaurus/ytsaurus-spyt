@@ -40,6 +40,10 @@ abstract class AbstractCommandBuilderForSpyt extends AbstractCommandBuilder {
             sparkClasspathPos++;
         }
         classPath.add(sparkClasspathPos, getenv("SPYT_CLASSPATH"));
+        String sparkConnectClasspath = System.getenv("SPARK_CONNECT_CLASSPATH");
+        if (sparkConnectClasspath != null) {
+            classPath.add(sparkConnectClasspath);
+        }
 
         return classPath;
     }

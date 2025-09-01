@@ -313,7 +313,8 @@ lazy val root = (project in file("."))
         `resource-manager` / publishSigned,
         `cluster` / publishSigned,
         `spark-submit` / publishSigned,
-        `shuffle-service` / publishSigned
+        `shuffle-service` / publishSigned,
+        `spyt-connect` / publishSigned
       ).value
     }
   )

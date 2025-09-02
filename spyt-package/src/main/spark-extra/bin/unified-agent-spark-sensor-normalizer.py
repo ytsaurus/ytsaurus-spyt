@@ -5,18 +5,20 @@ import traceback
 
 
 def extract_spark_component(sensor):
-    component = None
+    spark_component = None
     if '_driver_' in sensor:
-        component = 'driver'
+        spark_component = 'driver'
     elif '_executor_' in sensor:
-        component = 'executor'
-    return component
+        spark_component = 'executor'
+    return spark_component
 
 
-def extract_app_id_and_clean_sensor(sensor, component):
+def extract_app_id_and_clean_sensor(sensor, spark_component, spark_component_label_missed=False):
     sensor_parts = sensor.split('_')
     spark_application_id = sensor_parts[1]
-    length_to_delete = 3 if component == 'driver' else 4
+    length_to_delete = 3 if spark_component == 'driver' else 4
+    if spark_component_label_missed:
+        length_to_delete -= 1
     del sensor_parts[1:length_to_delete]
     clean_sensor = "_".join(sensor_parts)
     return clean_sensor, spark_application_id
@@ -25,15 +27,22 @@ def extract_app_id_and_clean_sensor(sensor, component):
 def process_sensors(payload):
     if 'sensors' in  payload:
         sensors = payload['sensors']
+        component = payload["commonLabels"]['component']
         for sensor in sensors:
             sensor_name = sensor["labels"]["sensor"]
-            component = extract_spark_component(sensor_name)
-            if component:
-                clean_name, app_id = extract_app_id_and_clean_sensor(sensor_name, component)
+            is_spark_component_label_missed = False
+            spark_component = extract_spark_component(sensor_name)
+            if spark_component is None and component in ('driver', 'executor'):
+                # special case with missed executor tag in name we inherit from job task name
+                is_spark_component_label_missed = True
+                spark_component = component
+            if spark_component:
+                clean_name, app_id = extract_app_id_and_clean_sensor(sensor_name, spark_component,
+                                                                     is_spark_component_label_missed)
                 labels = sensor["labels"]
                 labels['sensor'] = clean_name
                 labels['spark_application_id'] = app_id
-                labels['spark_component'] = component
+                labels['spark_component'] = spark_component
 
 
 def process_line(line):

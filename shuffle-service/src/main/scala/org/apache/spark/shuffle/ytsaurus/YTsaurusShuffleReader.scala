@@ -10,7 +10,8 @@ import tech.ytsaurus.client.{AsyncReader, CompoundClient}
 import tech.ytsaurus.client.request.CreateShuffleReader
 import tech.ytsaurus.ysontree.YTreeNode
 
-import java.io.{ByteArrayInputStream, InputStream}
+import java.io.{ByteArrayInputStream, InputStream, SequenceInputStream}
+import java.nio.ByteBuffer
 import java.util.concurrent.CompletableFuture
 import scala.collection.JavaConverters._
 
@@ -45,8 +46,8 @@ class YTsaurusShuffleReader[K, C](compoundHandle: CompoundShuffleHandle[K, _, C]
   }
 
   override def read(): Iterator[Product2[K, C]] = {
-    val shuffleRowInputStream = new ShuffleRowInputStream(startPartition, endPartition, readerSupplier, readMetrics)
-    val recordIter = deserializer(shuffleRowInputStream)
+    val recordIter =
+      new ShuffleRecordIterator[K, C](startPartition, endPartition, readerSupplier, deserializer, readMetrics)
 
     // Here and below until the end of the method - a copypaste from
     // org.apache.spark.shuffle.BlockStoreShuffleReader.read method
@@ -63,66 +64,104 @@ class YTsaurusShuffleReader[K, C](compoundHandle: CompoundShuffleHandle[K, _, C]
   }
 }
 
-class ShuffleRowInputStream(
+class ShuffleRecordIterator[K, C](
   startPartition: Int,
   endPartition: Int,
   readerSupplier: Int => CompletableFuture[AsyncReader[UnversionedRow]],
+  deserializer: InputStream => Iterator[(K, C)],
   readMetrics: ShuffleReadMetricsReporter
-) extends InputStream {
+) extends Iterator[(K, C)] {
 
   private val partitionIterator: Iterator[Int] = (startPartition until endPartition).iterator
-  private var rowIterator: Iterator[UnversionedRow] = Iterator.empty
   private var reader: AsyncReader[UnversionedRow] = _
-  private var rowBytesReader: ByteArrayInputStream = _
+  private var rowIterator: Iterator[UnversionedRow] = Iterator.empty
+  private var currentRow: UnversionedRow = _
+  private var recordIterator: Iterator[(K, C)] = Iterator.empty
 
-  private def hasNext: Boolean = {
+  def hasNext: Boolean = {
+    if (!recordIterator.hasNext) {
+      recordIterator = nextInputStream() match {
+        case Some(inputStream) => deserializer(inputStream)
+        case None => Iterator.empty
+      }
+    }
+    recordIterator.hasNext
+  }
+
+  private def shuffleRowBytes(shuffleRow: UnversionedRow): Array[Byte] = {
+    shuffleRow.getValues.get(1).bytesValue()
+  }
+
+  private def mapIdByRow(shuffleRow: UnversionedRow): Long = {
+    ByteBuffer.wrap(shuffleRowBytes(shuffleRow), 0, 8).getLong
+  }
+
+  private def nextInputStream(): Option[InputStream] = {
+    val streamEnumeration = new java.util.Enumeration[InputStream] {
+      private var nextStream: InputStream = _
+      private var mapId: Option[Long] = None
+
+      override def hasMoreElements: Boolean = {
+        if (nextStream != null) {
+          return true
+        }
+        val nextRowOpt = nextRow()
+        if (nextRowOpt.isEmpty) {
+          return false
+        }
+        currentRow = nextRowOpt.get
+        val rowMapId = mapIdByRow(currentRow)
+        if (mapId.nonEmpty && mapId.get != rowMapId) {
+          return false
+        }
+        if (mapId.isEmpty) {
+          mapId = Some(rowMapId)
+        }
+        val batchBytes = shuffleRowBytes(currentRow)
+        readMetrics.incRemoteBytesRead(batchBytes.length)
+        nextStream = new ByteArrayInputStream(batchBytes, 8, batchBytes.length - 8)
+        currentRow = null
+        true
+      }
+
+      override def nextElement(): InputStream = {
+        val next = nextStream
+        nextStream = null
+        next
+      }
+    }
+
+    if (streamEnumeration.hasMoreElements) {
+      Some(new SequenceInputStream(streamEnumeration))
+    } else {
+      None
+    }
+  }
+
+  private def nextRow(): Option[UnversionedRow] = {
+    if (currentRow != null) {
+      return Some(currentRow)
+    }
     while (!rowIterator.hasNext && (reader != null || partitionIterator.hasNext)) {
-      if (reader == null) {
+      if (reader != null) {
+        val batch = reader.next().join()
+
+        if (batch != null) {
+          rowIterator = batch.iterator().asScala
+        } else {
+          reader = null
+        }
+      } else {
         reader = readerSupplier(partitionIterator.next()).join()
       }
-
-      val batch = reader.next().join()
-
-      if (batch != null) {
-        rowIterator = batch.iterator().asScala
-      } else {
-        reader = null
-      }
-    }
-    rowIterator.hasNext
-  }
-
-  private def next(): UnversionedRow = rowIterator.next()
-
-  override def read(): Int = {
-    throw new UnsupportedOperationException("ShuffleRowInputStream doesn't support reading per byte, please use " +
-      "method int read(byte b[], int off, int len)")
-  }
-
-  override def read(b: Array[Byte], off: Int, len: Int): Int = {
-    if (len == 0) {
-      return 0
     }
 
-    var bytesRead = 0
-    var pos = off
-    while (bytesRead < len && (rowBytesReader != null || hasNext)) {
-      if (rowBytesReader == null && hasNext) {
-        rowBytesReader = new ByteArrayInputStream(next().getValues.get(1).bytesValue())
-      }
-      if (rowBytesReader != null) {
-        val bytesReadFromRow = rowBytesReader.read(b, pos, len - bytesRead)
-        bytesRead += bytesReadFromRow
-        pos += bytesReadFromRow
-        if (rowBytesReader.available() == 0) {
-          rowBytesReader = null
-        }
-      }
+    if (rowIterator.hasNext) {
+      Some(rowIterator.next())
+    } else {
+      None
     }
-
-    if (bytesRead > 0) {
-      readMetrics.incRemoteBytesRead(bytesRead)
-      bytesRead
-    } else -1
   }
+
+  def next(): (K, C) = recordIterator.next()
 }

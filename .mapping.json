@@ -369,6 +369,7 @@
   "shuffle-service/src/main/scala/org/apache/spark/shuffle/ytsaurus/YTsaurusShuffleExecutorComponents.scala":"yt/spark/spark-over-yt/shuffle-service/src/main/scala/org/apache/spark/shuffle/ytsaurus/YTsaurusShuffleExecutorComponents.scala",
   "shuffle-service/src/main/scala/org/apache/spark/shuffle/ytsaurus/YTsaurusShuffleManager.scala":"yt/spark/spark-over-yt/shuffle-service/src/main/scala/org/apache/spark/shuffle/ytsaurus/YTsaurusShuffleManager.scala",
   "shuffle-service/src/main/scala/org/apache/spark/shuffle/ytsaurus/YTsaurusShuffleReader.scala":"yt/spark/spark-over-yt/shuffle-service/src/main/scala/org/apache/spark/shuffle/ytsaurus/YTsaurusShuffleReader.scala",
+  "shuffle-service/src/test/scala/org/apache/spark/shuffle/ytsaurus/YTsaurusShuffleManagerTest.scala":"yt/spark/spark-over-yt/shuffle-service/src/test/scala/org/apache/spark/shuffle/ytsaurus/YTsaurusShuffleManagerTest.scala",
   "spark-adapter":"yt/spark/spark-over-yt/spark-adapter",
   "spark-adapter/api/src/main/scala/org/apache/spark/deploy/SubmitSupport.scala":"yt/spark/spark-over-yt/spark-adapter/api/src/main/scala/org/apache/spark/deploy/SubmitSupport.scala",
   "spark-adapter/api/src/main/scala/org/apache/spark/deploy/rest/RestSubmitSupport.scala":"yt/spark/spark-over-yt/spark-adapter/api/src/main/scala/org/apache/spark/deploy/rest/RestSubmitSupport.scala",

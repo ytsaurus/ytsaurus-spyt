@@ -132,6 +132,9 @@ public class YTsaurusShuffleMapOutputWriter implements ShuffleMapOutputWriter {
                             reducePartitionId,
                             b
                     );
+                    if (buffer.position() == 0) {
+                        buffer.putLong(mapTaskId);
+                    }
                     buffer.put((byte) b);
                     bytesWritten++;
                 }
@@ -150,6 +153,9 @@ public class YTsaurusShuffleMapOutputWriter implements ShuffleMapOutputWriter {
                                 reducePartitionId,
                                 Hex.encodeHexString(toWrite)
                         );
+                    }
+                    if (buffer.position() == 0) {
+                        buffer.putLong(mapTaskId);
                     }
                     buffer.put(b, off, len);
                     bytesWritten += len;

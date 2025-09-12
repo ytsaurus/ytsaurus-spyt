@@ -5,6 +5,7 @@ import javassist.bytecode.{CodeAttribute, ConstPool, Opcode, StackMapTable, YTsa
 import org.apache.hadoop.conf.{Configuration => HadoopConfiguration}
 import org.apache.spark.SparkConf
 import org.apache.spark.deploy.SubmitSupport.instance._
+import org.apache.spark.internal.config
 import org.apache.spark.internal.config._
 import org.apache.spark.launcher.SparkLauncher
 import org.apache.spark.util.{DependencyUtils, Utils}
@@ -142,9 +143,25 @@ private[spark] class SparkSubmitSpyt {
 
     if (clusterManager == YTSAURUS) {
       sparkConf.set("spark.ytsaurus.primary.resource", args.primaryResource)
-      if (sparkConf.getBoolean("spark.ytsaurus.shuffle.enabled", false)) {
+
+      val dynAllocationEnabled = sparkConf.get(config.DYN_ALLOCATION_ENABLED)
+      val shuffleEnabled  = sparkConf.getBoolean("spark.ytsaurus.shuffle.enabled", false)
+
+      // validate settings
+      if(dynAllocationEnabled && !shuffleEnabled){
+        error("Dynamic allocation requires YTsaurus shuffle service. " +
+          "You may enable this through spark.ytsaurus.shuffle.enabled")
+      }
+
+      // adjust settings
+      if (shuffleEnabled) {
         sparkConf.set("spark.shuffle.manager", "org.apache.spark.shuffle.ytsaurus.YTsaurusShuffleManager")
         sparkConf.set("spark.shuffle.sort.io.plugin.class", "tech.ytsaurus.spyt.shuffle.YTsaurusShuffleDataIO")
+        if(dynAllocationEnabled){
+          sparkConf.set(config.DYN_ALLOCATION_SHUFFLE_TRACKING_ENABLED, false)
+          // it is required for down scaling YT operation jobs
+          sparkConf.set(config.DECOMMISSION_ENABLED, true)
+        }
       }
     }
 
@@ -282,7 +299,7 @@ class ClusterManagerInitializerBytecodeModifier extends MethodProcesor {
     var samplePos = 0
     while (ci.hasNext && !found) {
       val index = ci.next()
-      val op = ci.byteAt(index);
+      val op = ci.byteAt(index)
       if (op == Opcode.ALOAD && ci.byteAt(ci.lookAhead()) == Opcode.LDC_W) {
         val ldcwOpIndex = ci.next()
         val ldcwArgument = ci.u16bitAt(ldcwOpIndex + 1)
@@ -349,7 +366,7 @@ class ClusterManagerInitializerBytecodeModifier extends MethodProcesor {
 
   private def updateErrorMessage(cp: ConstPool): Unit = {
     val invalidClusterManagerMsgId = findStringConstant(cp, _.startsWith("Master must either"))
-    val invalidClusterManagerMsg = cp.getStringInfo(invalidClusterManagerMsgId);
+    val invalidClusterManagerMsg = cp.getStringInfo(invalidClusterManagerMsgId)
     updateUtf8Constant(
       cp, getUtf8ConstantId(cp, invalidClusterManagerMsgId),
       invalidClusterManagerMsg.replace("k8s,", "k8s, ytsaurus")

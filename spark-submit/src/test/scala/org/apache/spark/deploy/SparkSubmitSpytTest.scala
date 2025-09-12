@@ -1,6 +1,7 @@
 package org.apache.spark.deploy
 
-import org.apache.spark.internal.config.{CORES_MAX, EXECUTOR_INSTANCES, FILES, SUBMIT_PYTHON_FILES}
+import org.apache.spark.SparkException
+import org.apache.spark.internal.config.{CORES_MAX, DECOMMISSION_ENABLED, DYN_ALLOCATION_SHUFFLE_TRACKING_ENABLED, EXECUTOR_INSTANCES, FILES, SUBMIT_PYTHON_FILES}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -73,6 +74,23 @@ class SparkSubmitSpytTest extends AnyFlatSpec with Matchers {
     SparkSubmitSpyt.isBinary("spark-internal") shouldBe false
   }
 
+  it should "fail dynamic allocation when YTsaurus shuffle service is disabled" in {
+    val appArgs = new SparkSubmitArguments(dynamicAllocationArgs(false))
+    val ex = intercept[SparkException] {
+      submit.prepareSubmitEnvironment(appArgs)
+    }
+    ex.getMessage should include ("Dynamic allocation requires YTsaurus shuffle service.")
+  }
+
+  it should "set proper parameters when dynamic allocation is enabled" in {
+    val appArgs = new SparkSubmitArguments(dynamicAllocationArgs(true))
+
+    val (childArgs, classpath, conf, mainClass) = submit.prepareSubmitEnvironment(appArgs)
+
+    conf.get(DYN_ALLOCATION_SHUFFLE_TRACKING_ENABLED) shouldBe false
+    conf.get(DECOMMISSION_ENABLED) shouldBe true
+  }
+
   private def ytArgs(deployMode: String): Seq[String] = Seq(
     "--master", "ytsaurus://my.yt.cluster",
     "--deploy-mode", deployMode,
@@ -93,6 +111,18 @@ class SparkSubmitSpytTest extends AnyFlatSpec with Matchers {
     "--conf", "spark.master.rest.enabled=true",
     "yt:///path/to/my/super/app.py",
     "some", "--weird", "args"
+  )
+
+  private def dynamicAllocationArgs(ytsaurusShuffleEnabled: Boolean): Seq[String] = Seq(
+    "--master", "ytsaurus://my.yt.cluster",
+    "--deploy-mode", "cluster",
+    "--num-executors", "2",
+    "--queue", "research",
+    "--py-files", "yt:///path/to/my/super/lib.zip",
+    "--conf", "spark.hadoop.fs.yt.impl=tech.ytsaurus.spyt.fs.MockYtFileSystem",
+    "--conf", "spark.dynamicAllocation.enabled=true",
+    "--conf", f"spark.ytsaurus.shuffle.enabled=${ytsaurusShuffleEnabled.toString}",
+    "yt:///path/to/my/super/app.py"
   )
 
 }

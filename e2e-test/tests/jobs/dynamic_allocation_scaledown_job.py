@@ -1,14 +1,12 @@
 import spyt
 
 from pyspark.sql import SparkSession
-import sys
-
-table_in = sys.argv[1]
-table_out = sys.argv[2]
+from datetime import datetime
+from time import sleep
 
 spark = SparkSession.builder.getOrCreate()
 try:
-    df = spark.read.yt(table_in)
-    df.write.yt(table_out)
+    print(datetime.now(), spark.sql("SELECT 1").count())
+    sleep(15)
 finally:
     spark.stop()

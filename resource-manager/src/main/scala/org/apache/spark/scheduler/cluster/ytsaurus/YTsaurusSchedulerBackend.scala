@@ -4,12 +4,15 @@ package org.apache.spark.scheduler.cluster.ytsaurus
 import org.apache.spark.SparkContext
 import org.apache.spark.deploy.ytsaurus.Config._
 import org.apache.spark.internal.config.SUBMIT_DEPLOY_MODE
-import org.apache.spark.scheduler.TaskSchedulerImpl
+import org.apache.spark.resource.ResourceProfile
+import org.apache.spark.scheduler.{ExecutorDecommissionInfo, TaskSchedulerImpl}
 import org.apache.spark.scheduler.cluster.{CoarseGrainedSchedulerBackend, SchedulerBackendUtils}
 import org.apache.spark.util.Utils
 import tech.ytsaurus.client.CompoundClient
 import tech.ytsaurus.core.GUID
 import tech.ytsaurus.spyt.wrapper.TcpProxyService
+
+import scala.concurrent.Future
 
 private[spark] class YTsaurusSchedulerBackend (
   scheduler: TaskSchedulerImpl,
@@ -19,6 +22,8 @@ private[spark] class YTsaurusSchedulerBackend (
 
   private val defaultProfile = scheduler.sc.resourceProfileManager.defaultResourceProfile
   private val initialExecutors = SchedulerBackendUtils.getInitialTargetExecutorNumber(conf)
+
+  private val executorsJobsAllocator = new YTJobsExecutorAllocator(conf, operationManager.ytClient)
 
   def initialize(): Unit = {
     if (sc.conf.get(SUBMIT_DEPLOY_MODE) == "cluster" && sc.uiWebUrl.isDefined) {
@@ -80,5 +85,18 @@ private[spark] class YTsaurusSchedulerBackend (
 
   override def applicationId(): String = {
     conf.getOption("spark.app.id").getOrElse(super.applicationId())
+  }
+
+  protected override def doRequestTotalExecutors(resourceProfileToTotalExecs: Map[ResourceProfile, Int]): Future[Boolean] = {
+    logInfo(s"Requesting ${resourceProfileToTotalExecs.values.sum} executor(s) from the cluster manager")
+    val patchOperationState = executorsJobsAllocator.setTotalExpectedExecutors(resourceProfileToTotalExecs)
+    Future.successful(patchOperationState)
+  }
+
+  override def decommissionExecutors(executorsAndDecomInfo: Array[(String, ExecutorDecommissionInfo)],
+                                     adjustTargetNumExecutors: Boolean,
+                                     triggeredByExecutor: Boolean): Seq[String] = {
+    logInfo("Decommissioning executors: " + executorsAndDecomInfo.map(_._1).mkString(", "))
+    super.decommissionExecutors(executorsAndDecomInfo, adjustTargetNumExecutors, triggeredByExecutor)
   }
 }

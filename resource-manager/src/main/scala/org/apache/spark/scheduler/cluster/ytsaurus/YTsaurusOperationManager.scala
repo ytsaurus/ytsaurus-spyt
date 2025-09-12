@@ -15,9 +15,10 @@ import org.apache.spark.util.{Utils, VersionUtils}
 import org.apache.spark.{SparkConf, SparkContext, SparkException}
 import tech.ytsaurus.client.{YTsaurusClient, YTsaurusClientConfig}
 import tech.ytsaurus.client.operations.{Spec, VanillaSpec}
-import tech.ytsaurus.client.request.{CompleteOperation, GetOperation, UpdateOperationParameters, VanillaOperation}
+import tech.ytsaurus.client.request.{CompleteOperation, GetOperation, PatchOperationSpec, UpdateOperationParameters, VanillaOperation}
 import tech.ytsaurus.client.rpc.{RpcOptions, YTsaurusClientAuth}
 import tech.ytsaurus.core.GUID
+import tech.ytsaurus.core.cypress.YPath
 import tech.ytsaurus.spyt.{BuildInfo, SparkAdapter, SparkVersionUtils}
 import tech.ytsaurus.spyt.wrapper.{YtWrapper, Utils => YtUtils}
 import tech.ytsaurus.spyt.wrapper.Utils.{bashCommand, ytHostIpBashInlineWrapper}
@@ -30,6 +31,7 @@ import java.util.{Locale, Properties}
 import scala.collection.JavaConverters._
 import scala.collection.mutable
 import scala.concurrent.duration.DurationInt
+import scala.util.{Failure, Success, Try}
 
 
 private[spark] class YTsaurusOperationManager(val ytClient: YTsaurusClient,
@@ -289,6 +291,7 @@ private[spark] class YTsaurusOperationManager(val ytClient: YTsaurusClient,
         .key("job_count").value(numExecutors)
         .key("cpu_limit").value(execCores)
         .key("memory_limit").value(memoryLimit)
+        .key("restart_completed_jobs").value(false.toString)
 
       if (gpuLimit > 0) {
         specBuilder
@@ -486,6 +489,22 @@ private[spark] object YTsaurusOperationManager extends Logging {
   def getOperation(operation: YTsaurusOperation, ytClient: YTsaurusClient): YTreeNode = {
     val request = GetOperation.builder().setOperationId(operation.id).build()
     ytClient.getOperation(request).join()
+  }
+
+  def patchOperation(operation: YTsaurusOperation, newTotalJobsCount: Int, ytClient: YTsaurusClient): Boolean = {
+    Try {
+      val req = PatchOperationSpec.builder()
+        .setOperationId(operation.id)
+        .addPatch(YPath.relative("/tasks/executor/job_count"), YTree.builder.value(newTotalJobsCount).build)
+        .build()
+
+      ytClient.patchOperationSpec(req).get()
+      true
+    }.recover {
+      case ex: Exception =>
+        logWarning(s"Patch failed: ${ex.getMessage}")
+        false
+    }.get
   }
 
   private[ytsaurus] def getLayerPaths(conf: SparkConf,

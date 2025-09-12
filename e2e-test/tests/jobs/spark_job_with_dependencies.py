@@ -12,9 +12,9 @@ table_out = sys.argv[2]
 idmapUDF = udf(lambda x: id_mapper(x), StringType())
 
 spark = SparkSession.builder.getOrCreate()
-
-df = spark.read.yt(table_in)
-result = df.select(idmapUDF(col("num")).alias(key_column_name()))
-result.write.yt(table_out)
-
-spark.stop()
+try:
+    df = spark.read.yt(table_in)
+    result = df.select(idmapUDF(col("num")).alias(key_column_name()))
+    result.write.yt(table_out)
+finally:
+    spark.stop()

@@ -1,5 +1,6 @@
 import argparse
 from common.cypress import patch_conf
+from hashlib import sha256
 import logging
 from yt.wrapper import YtClient
 
@@ -10,6 +11,9 @@ def main(proxy, python_path, java_home):
     # Patches for standalone cluster discovery
     client.set("//home/spark/conf/global/environment/YT_NETWORK_PROJECT_ID", "0")
     client.set("//home/spark/conf/global/environment/YT_IP_ADDRESS_DEFAULT", "localhost")
+    token_hash = sha256(b"token").hexdigest()
+    client.create("map_node", f"//sys/cypress_tokens/{token_hash}")
+    client.set(f"//sys/cypress_tokens/{token_hash}/@user", "root")
     logging.info(f"SPYT cluster conf patched. Python path: {python_path}, Java home: {java_home}")
 
 

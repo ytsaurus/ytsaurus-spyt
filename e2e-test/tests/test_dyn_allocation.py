@@ -6,6 +6,7 @@ from utils import upload_file
 
 
 spark_conf_dynamic_allocation = {
+    "spark.ytsaurus.rpc.job.proxy.enabled": "true",
     "spark.ytsaurus.shuffle.enabled": "true",
     "spark.executor.cores": "1",
     "spark.dynamicAllocation.enabled": "true",

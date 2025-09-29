@@ -2,13 +2,14 @@ package tech.ytsaurus.spyt.format
 
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.GenericInternalRow
-import tech.ytsaurus.spyt.common.utils.{TuplePoint, TupleSegment}
-import YtPartitionedFileDelegate._
-import tech.ytsaurus.spyt.serializers.PivotKeysConverter
-import tech.ytsaurus.spyt.wrapper.YtWrapper
+import tech.ytsaurus.client.request.TablePartitionCookie
 import tech.ytsaurus.core.cypress.{Range, RangeCriteria, RangeLimit, YPath}
 import tech.ytsaurus.spyt.SparkAdapter
+import tech.ytsaurus.spyt.common.utils.{TuplePoint, TupleSegment}
+import tech.ytsaurus.spyt.format.YtPartitionedFileDelegate._
 import tech.ytsaurus.spyt.fs.YtHadoopPath
+import tech.ytsaurus.spyt.serializers.PivotKeysConverter
+import tech.ytsaurus.spyt.wrapper.YtWrapper
 import tech.ytsaurus.ysontree.{YTreeBinarySerializer, YTreeNode}
 
 import java.io.ByteArrayInputStream
@@ -17,7 +18,10 @@ import java.io.ByteArrayInputStream
 class YtPartitionedFileDelegate(val serializedYPath: Array[Byte],
                                 override val byteLength: Long,
                                 override val partitionValues: InternalRow,
-                                val hadoopPath: YtHadoopPath) extends YtPartitioningDelegate {
+                                val hadoopPath: YtHadoopPath,
+                                val distributedReadingEnabled: Boolean = false,
+                                val cookie: Option[TablePartitionCookie] = None
+                               ) extends YtPartitioningDelegate {
 
   override val filePath: String = getPath(serializedYPath)
   override val start: Long = getNormalizedStart(serializedYPath)
@@ -108,10 +112,17 @@ object YtPartitionedFileDelegate {
 
   def apply(yPath: YPath, byteLength: Long, partitionValues: InternalRow,
             hadoopPath: YtHadoopPath): YtPartitionedFile = {
+    apply(yPath, byteLength, partitionValues, hadoopPath, distributedReading = false, None)
+  }
+
+  def apply(yPath: YPath, byteLength: Long, partitionValues: InternalRow, hadoopPath: YtHadoopPath,
+            distributedReading: Boolean, cookie: Option[TablePartitionCookie]): YtPartitionedFile = {
     val serializedYPath: Array[Byte] = serializeYPath(yPath)
-    val delegate = new YtPartitionedFileDelegate(serializedYPath, byteLength, partitionValues, hadoopPath)
+    val delegate = new YtPartitionedFileDelegate(serializedYPath, byteLength, partitionValues, hadoopPath,
+      distributedReading, cookie)
     SparkAdapter.instance.createYtPartitionedFile(delegate)
   }
+
 
   private def getAttributeFromYPath[T](attributeGetter: YPath => T)(serializedPath: Array[Byte]): T = {
     attributeGetter(deserializeYPath(serializedPath))

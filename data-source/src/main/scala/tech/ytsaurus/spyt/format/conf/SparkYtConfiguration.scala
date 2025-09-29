@@ -33,6 +33,9 @@ object SparkYtConfiguration {
 
     case object YtPartitioningEnabled extends ConfigEntry[Boolean](s"$prefix.ytPartitioning.enabled", Some(false))
 
+    case object YtDistributedReadingEnabled
+      extends ConfigEntry[Boolean](s"$prefix.ytDistributedReading.enabled", Some(false))
+
     case object CountOptimizationEnabled
       extends ConfigEntry[Boolean](s"$prefix.countOptimization.enabled", Some(true))
 

@@ -11,10 +11,11 @@ import tech.ytsaurus.spyt.test.LocalYtClient
 
 import scala.language.postfixOps
 
-class SparkSessionTransactionTest extends FlatSpec with Matchers with LocalYtClient with TmpDir with TestUtils {
+class SparkSessionTransactionTest extends FlatSpec with Matchers with LocalYtClient with TmpDir with TestUtils
+  with YtDistributedReadingTestUtils {
   behavior of "SparkSession"
 
-  it should "create transaction and commit it when session is closed" in {
+  testWithDistributedReading("create transaction and commit it when session is closed") { _ =>
     writeTableFromYson(Seq(
       """{value = 1}""",
       """{value = 2}"""

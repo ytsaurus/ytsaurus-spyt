@@ -16,9 +16,11 @@ import org.apache.spark.sql.{AnalysisException, SparkSession}
 import org.apache.spark.util.SerializableConfiguration
 import tech.ytsaurus.spyt.SparkAdapter
 import tech.ytsaurus.spyt.common.utils.SegmentSet
+import tech.ytsaurus.spyt.format.conf.SparkYtConfiguration.Read.YtDistributedReadingEnabled
 import tech.ytsaurus.spyt.format.conf.{FilterPushdownConfig, KeyPartitioningConfig, YtTableSparkSettings}
 import tech.ytsaurus.spyt.fs.YtHadoopPath
 import tech.ytsaurus.spyt.logger.YtDynTableLoggerConfig
+import tech.ytsaurus.spyt.wrapper.config.SparkYtSparkSession
 
 import java.util.{Locale, OptionalLong}
 import scala.collection.JavaConverters._
@@ -52,7 +54,8 @@ case class YtScan(sparkSession: SparkSession,
     val adapter = YtPartitionReaderFactoryAdapter(sparkSession.sessionState.conf, broadcastedConf,
       dataSchema, readDataSchema, readPartitionSchema,
       options.asScala.toMap ++ keyPartitionedOptions,
-      pushedFilterSegments, filterPushdownConf, YtDynTableLoggerConfig.fromSpark(sparkSession)
+      pushedFilterSegments, filterPushdownConf, YtDynTableLoggerConfig.fromSpark(sparkSession),
+      sparkSession.ytConf(YtDistributedReadingEnabled)
     )
     SparkAdapter.instance.createYtPartitionReaderFactory(adapter)
   }
@@ -90,7 +93,7 @@ case class YtScan(sparkSession: SparkSession,
   }
 
   // for tests
-  private[v2] def getPartitions: Seq[FilePartition] = partitions
+  def getPartitions: Seq[FilePartition] = partitions
 
   private def tryGetKeyPartitioning(columns: Option[Seq[String]] = None): Option[Seq[FilePartition]] = {
     val splitFiles = preparePartitioning()
@@ -182,6 +185,7 @@ object YtScan {
     def singleKeyPartitioning(scanDescO: Option[ScanDescription]): Option[ScanDescription] = {
       scanDescO.flatMap { case (scan, vars) => scan.tryKeyPartitioning(Some(vars)).map((_, vars)) }
     }
+
     (leftScanDescO, rightScanDescO) match {
       case (Some(leftDesc), Some(rightDesc)) =>
         trySyncKeyPartitioning(leftDesc, rightDesc)

@@ -77,9 +77,24 @@ object YPathUtils {
   def endRowOption(ypath: YPath): Option[Long] = rangeOption(ypath).map(_.upper.rowIndex)
 
   def rowCount(ypath: YPath): Option[Long] = {
-    rangeOption(ypath).flatMap(range =>
-      getOnlyIndex(range.upper).flatMap(endRow =>
-        getOnlyIndex(range.lower).map(beginRow => endRow - beginRow))
-    )
+    import scala.collection.JavaConverters._
+    val ranges = ypath.getRanges.asScala.map(_.toRange)
+
+    if (ranges.isEmpty) {
+      None
+    } else {
+      var totalRows: Long = 0L
+
+      for (range <- ranges) {
+        (getOnlyIndex(range.lower), getOnlyIndex(range.upper)) match {
+          case (Some(lower), Some(upper)) =>
+            totalRows += (upper - lower)
+          case _ =>
+            return None
+        }
+      }
+
+      Some(totalRows)
+    }
   }
 }

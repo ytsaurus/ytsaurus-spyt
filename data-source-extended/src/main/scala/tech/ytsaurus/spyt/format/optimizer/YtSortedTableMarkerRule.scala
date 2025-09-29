@@ -1,5 +1,6 @@
 package tech.ytsaurus.spyt.format.optimizer
 
+import org.apache.spark.SparkConf
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.expressions.{And, Attribute, AttributeReference, EqualTo, Expression}
 import org.apache.spark.sql.catalyst.plans.Inner
@@ -11,12 +12,12 @@ import org.apache.spark.sql.v2.{YtFilePartition, YtScan}
 import tech.ytsaurus.spyt.SparkAdapter
 import tech.ytsaurus.spyt.format.conf.SparkYtConfiguration
 import tech.ytsaurus.spyt.format.optimizer.YtSortedTableMarkerRule._
+import tech.ytsaurus.spyt.wrapper.config.SparkYtSparkSession
 
 import scala.annotation.tailrec
 
 class YtSortedTableMarkerRule(spark: SparkSession) extends Rule[LogicalPlan] {
   override def apply(plan: LogicalPlan): LogicalPlan = {
-    import tech.ytsaurus.spyt.wrapper.config._
     if (spark.ytConf(SparkYtConfiguration.Read.PlanOptimizationEnabled)) {
       logInfo("Plan optimization try")
       transformPlan(plan)
@@ -26,29 +27,33 @@ class YtSortedTableMarkerRule(spark: SparkSession) extends Rule[LogicalPlan] {
     }
   }
 
-  private def transformPlan(plan: LogicalPlan): LogicalPlan = plan transformDown {
-    case agg@Aggregate(_, _, inner) =>
-      val res = for {
-        vars <- getVars(agg.groupingExpressions)
-        scan <- getYtScan(inner)
-        newScan <- scan.tryKeyPartitioning(Some(vars))
-      } yield {
-        agg.copy(child = LogicalSortedMarker(vars, replaceYtScan(inner, newScan)))
-      }
-      res.getOrElse(agg)
-    case join@Join(left, right, Inner, _, _) =>
-      val res = for {
-        condition <- join.condition
-      } yield {
-        val clauses = parseAndClauses(condition)
-        val checkedClauses = findAttributes(left.output, right.output, clauses)
-        if (checkedClauses.isEmpty) {
-          join
-        } else {
-          patchJoin(join, checkedClauses)
+  private def transformPlan(plan: LogicalPlan): LogicalPlan = {
+    validatePlanOptimizationAvailability(spark)
+
+    plan transformDown {
+      case agg@Aggregate(_, _, inner) =>
+        val res = for {
+          vars <- getVars(agg.groupingExpressions)
+          scan <- getYtScan(inner)
+          newScan <- scan.tryKeyPartitioning(Some(vars))
+        } yield {
+          agg.copy(child = LogicalSortedMarker(vars, replaceYtScan(inner, newScan)))
         }
-      }
-      res.getOrElse(join)
+        res.getOrElse(agg)
+      case join@Join(left, right, Inner, _, _) =>
+        val res = for {
+          condition <- join.condition
+        } yield {
+          val clauses = parseAndClauses(condition)
+          val checkedClauses = findAttributes(left.output, right.output, clauses)
+          if (checkedClauses.isEmpty) {
+            join
+          } else {
+            patchJoin(join, checkedClauses)
+          }
+        }
+        res.getOrElse(join)
+    }
   }
 
   private def patchJoin(join: Join, checkedClauses: Seq[EqualClause]): Join = {
@@ -150,6 +155,19 @@ object YtSortedTableMarkerRule {
       case r: DataSourceV2ScanRelation if r.scan.isInstanceOf[YtScan] =>
         SparkAdapter.instance.copyDataSourceV2ScanRelation(r, newYtScan)
       case _ => throw new IllegalArgumentException("Couldn't replace yt scan, optimization broke execution plan")
+    }
+  }
+
+  private def validatePlanOptimizationAvailability(spark: SparkSession): Unit = {
+    if (
+      spark.ytConf(SparkYtConfiguration.Read.YtDistributedReadingEnabled) &&
+      spark.ytConf(SparkYtConfiguration.Read.PlanOptimizationEnabled)
+    ) {
+      throw new IllegalArgumentException(
+          s"${SparkYtConfiguration.Read.PlanOptimizationEnabled.name} and " +
+          s"${SparkYtConfiguration.Read.YtDistributedReadingEnabled.name} " +
+          "cannot be both enabled simultaneously"
+      )
     }
   }
 }

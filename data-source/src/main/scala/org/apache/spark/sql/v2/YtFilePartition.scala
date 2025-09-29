@@ -7,22 +7,20 @@ import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.execution.datasources.{FilePartition, PartitionDirectory, PartitionedFile}
 import org.apache.spark.sql.types.StructType
 import org.slf4j.LoggerFactory
-import tech.ytsaurus.spyt.common.utils.TuplePoint
-import tech.ytsaurus.spyt.format.{YtInputSplit, YtPartitionedFileDelegate}
-import tech.ytsaurus.spyt.wrapper.client.YtClientConfigurationConverter.ytClientConfiguration
-import tech.ytsaurus.spyt.wrapper.config.{SparkYtSparkSession, YT_MIN_PARTITION_BYTES}
-import tech.ytsaurus.spyt.fs.path.YPathEnriched
-import tech.ytsaurus.spyt.serializers.{InternalRowDeserializer, PivotKeysConverter}
-import tech.ytsaurus.spyt.wrapper.YtWrapper
 import tech.ytsaurus.client.CompoundClient
 import tech.ytsaurus.core.cypress.RangeLimit
 import tech.ytsaurus.spyt.SparkAdapter
-import tech.ytsaurus.spyt.common.utils.{ExpressionTransformer, MInfinity, PInfinity}
+import tech.ytsaurus.spyt.common.utils.{ExpressionTransformer, MInfinity, PInfinity, TuplePoint}
 import tech.ytsaurus.spyt.format.YtPartitionedFileDelegate.{YtPartitionedFile, YtPartitionedFileExt}
 import tech.ytsaurus.spyt.format.conf.{KeyPartitioningConfig, SparkYtConfiguration}
+import tech.ytsaurus.spyt.format.{YtInputSplit, YtPartitionedFileDelegate}
 import tech.ytsaurus.spyt.fs.YtHadoopPath
-import tech.ytsaurus.spyt.serializers.SchemaConverter
+import tech.ytsaurus.spyt.fs.path.YPathEnriched
+import tech.ytsaurus.spyt.serializers.{InternalRowDeserializer, PivotKeysConverter, SchemaConverter}
+import tech.ytsaurus.spyt.wrapper.YtWrapper
+import tech.ytsaurus.spyt.wrapper.client.YtClientConfigurationConverter.ytClientConfiguration
 import tech.ytsaurus.spyt.wrapper.client.YtClientProvider
+import tech.ytsaurus.spyt.wrapper.config.{SparkYtSparkSession, YT_MIN_PARTITION_BYTES}
 import tech.ytsaurus.spyt.wrapper.table.OptimizeMode
 import tech.ytsaurus.ysontree.YTreeNode
 
@@ -48,7 +46,9 @@ object YtFilePartition {
 
     val maxSplitBytes = maybeReadParallelism
       .map { readParallelism => totalBytes / readParallelism + 1 }
-      .getOrElse { Math.max(minSplitBytes, Math.min(defaultMaxSplitBytes, Math.max(openCostInBytes, bytesPerCore))) }
+      .getOrElse {
+        Math.max(minSplitBytes, Math.min(defaultMaxSplitBytes, Math.max(openCostInBytes, bytesPerCore)))
+      }
 
     val paths = selectedPartitions.flatMap(pd =>
       SparkAdapter.instance.getPartitionFileStatuses(pd).map(_.getPath.toString)
@@ -64,7 +64,8 @@ object YtFilePartition {
   private def splitTableYtPartitioning(path: YtHadoopPath,
                                        maxSplitBytes: Long,
                                        partitionValues: InternalRow,
-                                       readDataSchema: Option[StructType] = None)
+                                       readDataSchema: Option[StructType] = None,
+                                       distributedReadingEnabled: Boolean = false)
                                       (implicit yt: CompoundClient): Seq[PartitionedFile] = {
     import scala.collection.JavaConverters._
     val richYPath = readDataSchema match {
@@ -72,15 +73,36 @@ object YtFilePartition {
         YtInputSplit.addColumnsList(path.toYPath, st)
       case _ => path.toYPath
     }
-    val multiTablePartitions = YtWrapper.splitTables(richYPath, maxSplitBytes)
-    multiTablePartitions.flatMap { multiTablePartition =>
-      val tableRanges = multiTablePartition.getTableRanges.asScala
-      tableRanges.flatMap { tableRange =>
-        // TODO(alex-shishkin): Legacy part, YtPartitionedFile used to contain at most one range
-        val ranges = tableRange.getRanges.asScala
-        ranges.map { range =>
-          val ypathWithSingleRange = tableRange.ranges(range)
-          YtPartitionedFileDelegate(ypathWithSingleRange, maxSplitBytes, partitionValues, path)
+
+    if (distributedReadingEnabled) {
+      require(!YtWrapper.isOrdered(path.toStringPath), s"Distributed reading is not yet supported for an ordered " +
+        s"dynamic table. Only for static and sorted dynamic tables")
+
+      val multiTablePartitions = YtWrapper.partitionTables(richYPath, maxSplitBytes, enableCookies = true)
+      multiTablePartitions.map { multiTablePartition =>
+        val allRanges = multiTablePartition.getTableRanges.asScala
+        val combinedYPath = allRanges.foldLeft(path.toYPath) { (currentPath, tableRange) =>
+          tableRange.getRanges.asScala.foldLeft(currentPath) { (path, range) =>
+            path.plusRange(range)
+          }
+        }
+        val cookie = multiTablePartition.getCookie
+
+        YtPartitionedFileDelegate(combinedYPath, maxSplitBytes, partitionValues, path, distributedReading = true,
+          cookie = Some(cookie))
+      }
+    } else {
+      val multiTablePartitions = YtWrapper.partitionTables(richYPath, maxSplitBytes)
+      multiTablePartitions.flatMap { multiTablePartition =>
+        val tableRanges = multiTablePartition.getTableRanges.asScala
+        tableRanges.flatMap { tableRange =>
+          // TODO(alex-shishkin): Legacy part, YtPartitionedFile used to contain at most one range
+          val ranges = tableRange.getRanges.asScala
+          ranges.map { range =>
+            val ypathWithSingleRange = tableRange.ranges(range)
+
+            YtPartitionedFileDelegate(ypathWithSingleRange, maxSplitBytes, partitionValues, path)
+          }
         }
       }
     }
@@ -134,15 +156,21 @@ object YtFilePartition {
       case yp: YtHadoopPath =>
         implicit val yt: CompoundClient = YtClientProvider.ytClientWithProxy(
           ytClientConfiguration(sparkSession.sessionState.conf), yp.ypath.cluster)
-        val keyColumns = YtWrapper.keyColumns(yp.toYPath, yp.ypath.transaction)
-        // TODO(alex-shishkin): Ordered dynamic tables could not be partitioned by YT partitioning.
-        if (sparkSession.ytConf(SparkYtConfiguration.Read.YtPartitioningEnabled) && !(yp.meta.isDynamic && keyColumns.isEmpty)) {
-          splitTableYtPartitioning(yp, maxSplitBytes, partitionValues, readDataSchema)
+
+        val distributedReadingEnabled = sparkSession.ytConf(SparkYtConfiguration.Read.YtDistributedReadingEnabled)
+        if (distributedReadingEnabled) {
+          splitTableYtPartitioning(yp, maxSplitBytes, partitionValues, readDataSchema, distributedReadingEnabled = true)
         } else {
-          if (yp.meta.isDynamic) {
-            splitDynamicTableManual(yp, keyColumns, partitionValues)
+          val keyColumns = YtWrapper.keyColumns(yp.toYPath, yp.ypath.transaction)
+          // TODO(alex-shishkin): Ordered dynamic tables could not be partitioned by YT partitioning.
+          if (sparkSession.ytConf(SparkYtConfiguration.Read.YtPartitioningEnabled) && !(yp.meta.isDynamic && keyColumns.isEmpty)) {
+            splitTableYtPartitioning(yp, maxSplitBytes, partitionValues, readDataSchema)
           } else {
-            splitStaticTableManual(yp, maxSplitBytes, partitionValues)
+            if (yp.meta.isDynamic) {
+              splitDynamicTableManual(yp, keyColumns, partitionValues)
+            } else {
+              splitStaticTableManual(yp, maxSplitBytes, partitionValues)
+            }
           }
         }
       case _ =>
@@ -287,7 +315,7 @@ object YtFilePartition {
   }
 
   private[v2] def getFilesWithUniquePivots(keys: Seq[String],
-                                       filesGroupedByPoint: Seq[(TuplePoint, Seq[YtPartitionedFile])]): Seq[YtPartitionedFile] = {
+                                           filesGroupedByPoint: Seq[(TuplePoint, Seq[YtPartitionedFile])]): Seq[YtPartitionedFile] = {
     val maxPoint = TuplePoint(Seq(PInfinity()))
     val (_, res) = filesGroupedByPoint.reverse
       .foldLeft((maxPoint, Seq.empty[YtPartitionedFile])) {
@@ -300,7 +328,7 @@ object YtFilePartition {
   private val mInfinitySeq = Seq(TuplePoint(Seq(MInfinity())))
 
   private[v2] def getPivotKeys(schema: StructType, keys: Seq[String], files: Seq[YtPartitionedFile])
-                          (implicit yt: CompoundClient): Seq[TuplePoint] = {
+                              (implicit yt: CompoundClient): Seq[TuplePoint] = {
     if (files.size < 2) {
       return mInfinitySeq
     }
@@ -308,6 +336,8 @@ object YtFilePartition {
     val basePath = YPathEnriched.fromPath(hadoopPath).toYPath.withColumns(keys: _*)
     val pathWithRanges = files.tail.map(_.delegate.beginRow)
       .foldLeft(basePath) { case (path, br) => path.withRange(br, br + 1) }
+
+    // TODO (mihailagei): Add method for distributed reading, when getPivotKeys will be used with distributed reading
     val tableIterator = YtWrapper.readTable(
       pathWithRanges,
       InternalRowDeserializer.getOrCreate(schema),

@@ -16,18 +16,19 @@ import org.apache.spark.sql.vectorized.{ColumnVector, ColumnarBatch, SingleValue
 import org.apache.spark.util.SerializableConfiguration
 import org.slf4j.LoggerFactory
 import tech.ytsaurus.client.CompoundClient
-import tech.ytsaurus.spyt.common.utils.SegmentSet
+import tech.ytsaurus.spyt.common.utils.{SegmentSet, YtReadingUtils}
 import tech.ytsaurus.spyt.format.YtInputSplit
 import tech.ytsaurus.spyt.format.YtPartitionedFileDelegate.YtPartitionedFile
 import tech.ytsaurus.spyt.format.conf.FilterPushdownConfig
 import tech.ytsaurus.spyt.format.conf.SparkYtConfiguration.Read.{CountOptimizationEnabled, VectorizedCapacity}
-import tech.ytsaurus.spyt.wrapper.client.YtClientConfigurationConverter.ytClientConfiguration
 import tech.ytsaurus.spyt.fs.YtHadoopPath
-import tech.ytsaurus.spyt.wrapper.config._
 import tech.ytsaurus.spyt.logger.{TaskInfo, YtDynTableLoggerConfig}
 import tech.ytsaurus.spyt.serializers.InternalRowDeserializer
 import tech.ytsaurus.spyt.wrapper.YtWrapper
-import tech.ytsaurus.spyt.wrapper.client.YtClientProvider
+import tech.ytsaurus.spyt.wrapper.client.YtClientConfigurationConverter.ytClientConfiguration
+import tech.ytsaurus.spyt.wrapper.client.{YtClientConfiguration, YtClientProvider}
+import tech.ytsaurus.spyt.wrapper.config._
+import tech.ytsaurus.spyt.wrapper.table.TableIterator
 
 
 case class YtPartitionReaderFactoryAdapter(sqlConf: SQLConf,
@@ -38,7 +39,8 @@ case class YtPartitionReaderFactoryAdapter(sqlConf: SQLConf,
                                            options: Map[String, String],
                                            pushedFilterSegments: SegmentSet,
                                            filterPushdownConf: FilterPushdownConfig,
-                                           ytLoggerConfig: Option[YtDynTableLoggerConfig])
+                                           ytLoggerConfig: Option[YtDynTableLoggerConfig],
+                                           distributedReadingEnabled: Boolean)
   extends PartitionReaderFactoryAdapter with Logging {
 
   private val resultSchema = StructType(readDataSchema.fields)
@@ -136,12 +138,9 @@ case class YtPartitionReaderFactoryAdapter(sqlConf: SQLConf,
 
   private def createRowBaseReader(split: YtInputSplit, hadoopPath: YtHadoopPath)
                                  (implicit yt: CompoundClient): RecordReader[Void, InternalRow] = {
-    val iter = YtWrapper.readTable(
-      split.ytPathWithFiltersDetailed,
-      InternalRowDeserializer.getOrCreate(resultSchema),
-      ytClientConf.timeout, hadoopPath.ypath.transaction,
-      bytesReadReporter(broadcastedConf)
-    )
+    val iter: TableIterator[InternalRow] = YtReadingUtils.createRowBaseReader(split, hadoopPath.ypath.transaction, resultSchema,
+      ytClientConf, broadcastedConf, distributedReadingEnabled)
+
     val unsafeProjection = UnsafeProjection.create(resultSchema)
 
     new RecordReader[Void, InternalRow] {
@@ -184,6 +183,7 @@ case class YtPartitionReaderFactoryAdapter(sqlConf: SQLConf,
       reportBytesRead = bytesReadReporter(broadcastedConf),
       countOptimizationEnabled = countOptimizationEnabled,
       hadoopPath = hadoopPath,
+      distributedReadingEnabled
     )
   }
 }

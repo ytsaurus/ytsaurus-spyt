@@ -9,7 +9,9 @@ import org.apache.spark.sql.catalyst.rules.Rule
 import org.apache.spark.sql.execution.datasources.{PartitionDirectory, PartitionedFile}
 import org.apache.spark.sql.v2.YtFilePartition
 import org.apache.spark.sql.yt.YtSourceScanExec
+import tech.ytsaurus.spyt.format.conf.SparkYtConfiguration
 import tech.ytsaurus.spyt.format.optimizer.YtSortedTableMarkerRule
+import tech.ytsaurus.spyt.wrapper.config.SparkYtSparkSession
 
 class YTsaurusStorageSupport extends StorageSupport {
   override def shouldUseYtSplitFiles(): Boolean = {
@@ -27,7 +29,11 @@ class YTsaurusStorageSupport extends StorageSupport {
   }
 
   override def createExtraOptimizations(spark: SparkSession): Seq[Rule[LogicalPlan]] = {
-    Seq(new YtSortedTableMarkerRule(spark))
+    if (spark.ytConf(SparkYtConfiguration.Read.YtDistributedReadingEnabled)) {
+      Seq()
+    } else {
+      Seq(new YtSortedTableMarkerRule(spark))
+    }
   }
 
   override val ytsaurusExternalCatalogName: String = classOf[YTsaurusExternalCatalog].getCanonicalName

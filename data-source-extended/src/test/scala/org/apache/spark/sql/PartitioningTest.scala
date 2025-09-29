@@ -6,12 +6,11 @@ import org.apache.spark.sql.execution.joins.BroadcastHashJoinExec
 import org.apache.spark.sql.internal.SQLConf.{CODEGEN_FACTORY_MODE, WHOLESTAGE_CODEGEN_ENABLED}
 import org.mockito.scalatest.MockitoSugar
 import org.scalatest.{FlatSpec, Matchers}
-import tech.ytsaurus.spyt.YtReader
-import tech.ytsaurus.spyt.YtWriter
+import tech.ytsaurus.spyt.{YtDistributedReadingTestUtils, YtReader, YtWriter}
 import tech.ytsaurus.spyt.test.{DynTableTestUtils, LocalSpark, TmpDir}
 
-class PartitioningTest extends FlatSpec with Matchers with LocalSpark
-  with TmpDir with MockitoSugar with DynTableTestUtils {
+class PartitioningTest extends FlatSpec with Matchers with LocalSpark with TmpDir with MockitoSugar
+  with DynTableTestUtils with YtDistributedReadingTestUtils {
   import spark.implicits._
 
   private val conf = Map(
@@ -23,7 +22,7 @@ class PartitioningTest extends FlatSpec with Matchers with LocalSpark
     "spark.yt.minPartitionBytes" -> "1Kb"
   )
 
-  it should "serialize partitioning" in {
+  testWithDistributedReading("serialize partitioning") { _ =>
     withConfs(conf) {
       (0 to 1000).map(x => (x, "q")).toDF("a", "b").write.yt(tmpPath)
       spark.read.yt(tmpPath).createOrReplaceTempView("table")

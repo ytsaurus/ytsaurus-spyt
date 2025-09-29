@@ -117,6 +117,10 @@ trait YtDynTableUtils {
     waitUnmount(timeout.toMillis)
   }
 
+  def isMounted(path: String)(implicit yt: CompoundClient): Boolean = {
+    tabletState(path) == TabletState.Mounted
+  }
+
   def isDynamicTable(path: String)(implicit yt: CompoundClient): Boolean = {
     exists(path) && attributes(path, None, Set.empty[String]).get("dynamic").exists(_.boolValue())
   }
@@ -125,8 +129,8 @@ trait YtDynTableUtils {
     exists(path) && isMounted(path)
   }
 
-  def isMounted(path: String)(implicit yt: CompoundClient): Boolean = {
-    tabletState(path) == TabletState.Mounted
+  def isOrdered(path: String)(implicit yt: CompoundClient): Boolean = {
+    isDynamicTable(path) && !attributes(path, None, Set.empty[String]).get("sorted").exists(_.boolValue())
   }
 
   def createDynTableAndMount(path: String,

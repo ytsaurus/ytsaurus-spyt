@@ -11,9 +11,10 @@ import tech.ytsaurus.spyt._
 import tech.ytsaurus.spyt.test.{LocalSpark, TestUtils, TmpDir}
 import tech.ytsaurus.spyt.types.UInt64Long
 
-class ExtendedYtFileFormatTest extends AnyFlatSpec with Matchers with LocalSpark with TmpDir with TestUtils {
+class ExtendedYtFileFormatTest extends AnyFlatSpec with Matchers with LocalSpark with TmpDir with TestUtils
+  with YtDistributedReadingTestUtils {
 
-  it should "read primitives in any column" in {
+  testWithDistributedReading("read primitives in any column") { _ =>
     val data = Seq(
       Seq[Any](0L, 0.0, 0.0f, false, 0.toByte, UInt64Long(0)),
       Seq[Any](65L, 1.5, 7.2f, true, 3.toByte, UInt64Long(4)))
@@ -53,5 +54,4 @@ class ExtendedYtFileFormatTest extends AnyFlatSpec with Matchers with LocalSpark
     val wireRes = spark.read.disableArrow.schemaHint(schemaHint).yt(tmpPath).collect()
     wireRes should contain theSameElementsAs ans
   }
-
 }

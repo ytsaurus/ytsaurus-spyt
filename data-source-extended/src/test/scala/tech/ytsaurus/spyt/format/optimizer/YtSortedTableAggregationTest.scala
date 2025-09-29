@@ -4,7 +4,8 @@ import org.apache.spark.sql.DataFrame
 import org.apache.spark.sql.execution.FakeSortShuffleExchangeExec
 import org.apache.spark.sql.execution.exchange.ShuffleExchangeExec
 import org.mockito.scalatest.MockitoSugar
-import org.scalatest.{FlatSpec, Matchers}
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
 import tech.ytsaurus.spyt._
 import tech.ytsaurus.spyt.format.conf.SparkYtConfiguration
 import tech.ytsaurus.spyt.test.{DynTableTestUtils, LocalSpark, TmpDir}
@@ -12,8 +13,8 @@ import tech.ytsaurus.spyt.test.{DynTableTestUtils, LocalSpark, TmpDir}
 import java.util.UUID
 import scala.language.postfixOps
 
-class YtSortedTableAggregationTest extends FlatSpec with Matchers with LocalSpark
-  with TmpDir with MockitoSugar with DynTableTestUtils {
+class YtSortedTableAggregationTest extends AnyFlatSpec with Matchers with LocalSpark
+  with TmpDir with MockitoSugar with DynTableTestUtils with YtDistributedReadingTestUtils {
   behavior of "YtInputSplit"
 
   import spark.implicits._
@@ -181,6 +182,37 @@ class YtSortedTableAggregationTest extends FlatSpec with Matchers with LocalSpar
 
       findFakeShuffles(res).length shouldBe 0
       findRealShuffles(res).length shouldBe 1
+    }
+  }
+
+  List(true, false).foreach { planOptEnabled =>
+    List(true, false).foreach { distributedReadEnabled =>
+      it should s"${if (planOptEnabled && distributedReadEnabled) "fail" else "pass"} when " +
+        s"YtDistributedReadingEnabled = $distributedReadEnabled and PlanOptimizationEnabled = $planOptEnabled" in {
+        val testConf = Map(
+          s"spark.yt.${SparkYtConfiguration.Read.KeyPartitioning.Enabled.name}" -> "true",
+          s"spark.yt.${SparkYtConfiguration.Read.KeyPartitioning.UnionLimit.name}" -> "2",
+          s"spark.sql.adaptive.enabled" -> "false",
+          "spark.sql.files.maxPartitionBytes" -> "1Kb",
+          "spark.yt.minPartitionBytes" -> "1Kb",
+          s"spark.yt.${SparkYtConfiguration.Read.PlanOptimizationEnabled.name}" -> planOptEnabled.toString,
+          s"spark.yt.${SparkYtConfiguration.Read.YtDistributedReadingEnabled.name}" -> distributedReadEnabled.toString
+        )
+
+        val res = spark.read.yt(commonTable).groupBy("a").count()
+
+        withConfs(testConf) {
+          if (planOptEnabled && distributedReadEnabled) {
+            intercept[IllegalArgumentException] {
+              res.collect()
+            }
+          } else {
+            noException should be thrownBy {
+              res.collect()
+            }
+          }
+        }
+      }
     }
   }
 }

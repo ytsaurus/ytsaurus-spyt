@@ -5,7 +5,7 @@ import org.apache.spark.sql.types._
 import org.apache.spark.unsafe.types.UTF8String
 import tech.ytsaurus.client.rows.{WireRowDeserializer, WireValueDeserializer}
 import tech.ytsaurus.core.common.Decimal.binaryToText
-import tech.ytsaurus.core.tables.ColumnValueType
+import tech.ytsaurus.core.tables.{ColumnValueType, TableSchema}
 import tech.ytsaurus.spyt.common.utils.UuidUtils
 import tech.ytsaurus.spyt.serialization.YsonDecoder
 import tech.ytsaurus.spyt.serializers.SchemaConverter.MetadataFields
@@ -18,9 +18,19 @@ abstract class WireDeserializer[T](schema: StructType) extends WireRowDeserializ
   protected var _values: Array[Any] = _
   private val indexedSchema = schema.fields.map(_.dataType).toIndexedSeq
   private val indexedDataTypes = schema.fields.map(f => SchemaConverter.indexedDataType(f.dataType))
+  private var serverIdToSparkIndex: Array[Int] = _
 
   private var _currentType: ColumnValueType = ColumnValueType.THE_BOTTOM
   private var _index = 0
+
+  override def updateSchema(ytSchema: TableSchema): Unit = {
+    val sparkFieldIndex: Map[String, Int] = this.schema.fields.map(_.name).zipWithIndex.toMap
+    serverIdToSparkIndex = new Array[Int](ytSchema.getColumns.size())
+    for (i <- 0 until ytSchema.getColumns.size()) {
+      val name = ytSchema.getColumns.get(i).getName
+      serverIdToSparkIndex(i) = sparkFieldIndex.getOrElse(name, -1)
+    }
+  }
 
   override def onNewRow(columnCount: Int): WireValueDeserializer[_] = {
     _values = new Array[Any](schema.length)
@@ -32,7 +42,11 @@ abstract class WireDeserializer[T](schema: StructType) extends WireRowDeserializ
   override def onNullRow(): T = throw new IllegalArgumentException("Null rows are not supported")
 
   override def setId(id: Int): Unit = {
-    _index = id
+    if (id >= 0 && id < serverIdToSparkIndex.length) {
+      _index = serverIdToSparkIndex(id)
+    } else {
+      _index = -1
+    }
   }
 
   override def setType(`type`: ColumnValueType): Unit = {
@@ -46,15 +60,13 @@ abstract class WireDeserializer[T](schema: StructType) extends WireRowDeserializ
   override def build(): Any = null
 
   private def addValue(value: Any): Unit = {
-    if (_index < _values.length) {
-      _values(_index) = value
-    }
+    _values(_index) = value
   }
 
   override def onEntity(): Unit = addValue(null)
 
   override def onInteger(value: Long): Unit = {
-    if (_index < _values.length) {
+    if (isIndexValid) {
       _currentType match {
         case ColumnValueType.INT64 | ColumnValueType.UINT64 =>
           indexedSchema(_index) match {
@@ -87,7 +99,7 @@ abstract class WireDeserializer[T](schema: StructType) extends WireRowDeserializ
   }
 
   override def onBoolean(value: Boolean): Unit = {
-    if (_index < _values.length) {
+    if (isIndexValid) {
       _currentType match {
         case ColumnValueType.BOOLEAN =>
           indexedSchema(_index) match {
@@ -105,7 +117,7 @@ abstract class WireDeserializer[T](schema: StructType) extends WireRowDeserializ
   }
 
   override def onDouble(value: Double): Unit = {
-    if (_index < _values.length) {
+    if (isIndexValid) {
       _currentType match {
         case ColumnValueType.DOUBLE =>
           indexedSchema(_index) match {
@@ -126,7 +138,7 @@ abstract class WireDeserializer[T](schema: StructType) extends WireRowDeserializ
   private def getString(bytes: Array[Byte]): String = new String(bytes, StandardCharsets.UTF_8)
 
   override def onBytes(bytes: Array[Byte]): Unit = {
-    if (_index < _values.length) {
+    if (isIndexValid) {
       _currentType match {
         case ColumnValueType.STRING =>
           indexedSchema(_index) match {
@@ -173,5 +185,9 @@ abstract class WireDeserializer[T](schema: StructType) extends WireRowDeserializ
 
   private def throwValueTypeViolation(ysonType: String): Unit = {
     throw new IllegalArgumentException(s"Value of YSON type $ysonType does not match value type ${_currentType}")
+  }
+
+  private def isIndexValid: Boolean = {
+    _index >= 0 && _index < _values.length
   }
 }

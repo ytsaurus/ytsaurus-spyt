@@ -4,7 +4,6 @@ import org.apache.spark.SparkConf
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.execution.PartialReducerPartitionSpec
 import org.apache.spark.sql.execution.adaptive.AQEShuffleReadExec
-import org.apache.spark.sql.execution.exchange.ShuffleExchangeExec
 import org.apache.spark.sql.internal.SQLConf._
 import org.scalatest.prop.TableDrivenPropertyChecks
 import org.scalatest.{FlatSpec, Matchers}
@@ -13,7 +12,8 @@ import tech.ytsaurus.spyt.test.{LocalSpark, TmpDir}
 
 import scala.language.postfixOps
 
-class AdaptiveTest extends FlatSpec with Matchers with LocalSpark with TmpDir with TableDrivenPropertyChecks {
+class AdaptiveTest extends FlatSpec with Matchers with LocalSpark with TmpDir with TableDrivenPropertyChecks
+  with YtDistributedReadingTestUtils {
 
   import spark.implicits._
 
@@ -40,7 +40,7 @@ class AdaptiveTest extends FlatSpec with Matchers with LocalSpark with TmpDir wi
     }
   }
 
-  it should "join df from yt" in {
+  testWithDistributedReading("join df from yt") { _ =>
     val df1 = (1 to 10).zip(11 to 20).toDF("key", "value1")
     val df2 = (1 to 10).zip(111 to 120).toDF("key", "value2")
     df1.coalesce(1).write.yt(s"$tmpPath/1")
@@ -60,7 +60,7 @@ class AdaptiveTest extends FlatSpec with Matchers with LocalSpark with TmpDir wi
     }
   }
 
-  it should "group df from yt" in {
+  testWithDistributedReading("group df from yt") { _ =>
     val df1 = (1 to 10).zip(11 to 20).toDF("key", "value1")
     df1.repartition(10).write.yt(s"$tmpPath/1")
     val dfYt1 = spark.read.yt(s"$tmpPath/1")

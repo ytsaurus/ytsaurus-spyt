@@ -2,14 +2,14 @@ package tech.ytsaurus.spyt.format
 
 import org.apache.log4j.{Level, Logger}
 import org.apache.spark.SparkException
+import org.apache.spark.sql._
 import org.apache.spark.sql.execution.InputAdapter
 import org.apache.spark.sql.execution.exchange.ShuffleExchangeExec
 import org.apache.spark.sql.functions.col
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.internal.SQLConf._
-import org.apache.spark.sql.types._
 import org.apache.spark.sql.spyt.types.Datetime
-import org.apache.spark.sql.{AnalysisException, DataFrame, DataFrameReader, Row, SaveMode}
+import org.apache.spark.sql.types._
 import org.apache.spark.test.UtilsWrapper
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -34,7 +34,7 @@ import scala.language.postfixOps
 import scala.util.Random
 
 class YtFileFormatTest extends AnyFlatSpec with Matchers with LocalSpark
-  with TmpDir with TestUtils with TableDrivenPropertyChecks {
+  with TmpDir with TestUtils with TableDrivenPropertyChecks with YtDistributedReadingTestUtils {
   behavior of "YtFileFormat"
 
   import spark.implicits._
@@ -51,7 +51,7 @@ class YtFileFormatTest extends AnyFlatSpec with Matchers with LocalSpark
     .addValue("value", ColumnValueType.ANY)
     .build()
 
-  it should "read dataset" in {
+  testWithDistributedReading("read dataset") { distributedReadingEnabled =>
     writeTableFromYson(Seq(
       """{a = 1; b = "a"; c = 0.3}""",
       """{a = 2; b = "b"; c = 0.5}"""
@@ -66,7 +66,7 @@ class YtFileFormatTest extends AnyFlatSpec with Matchers with LocalSpark
     )
   }
 
-  it should "read partitioned dataset" in {
+  testWithDistributedReading("read partitioned dataset") { distributedReadingEnabled =>
     YtWrapper.createDir(tmpPath)
     writeTableFromYson(Seq(
       """{a = 1; b = "a"; c = 0.3}""",
@@ -88,7 +88,7 @@ class YtFileFormatTest extends AnyFlatSpec with Matchers with LocalSpark
     )
   }
 
-  it should "read dataset with custom maxSplitRows" in {
+  testWithDistributedReading("read dataset with custom maxSplitRows") { distributedReadingEnabled =>
     writeTableFromYson(Seq(
       """{a = 1; b = "a"; c = 0.3}""",
       """{a = 2; b = "b"; c = 0.5}"""
@@ -103,7 +103,7 @@ class YtFileFormatTest extends AnyFlatSpec with Matchers with LocalSpark
     )
   }
 
-  it should "read utf8" in {
+  testWithDistributedReading("read utf8") { distributedReadingEnabled =>
     writeTableFromYson(Seq(
       """{utf8 = "12"}""",
       """{utf8 = "23"}""",
@@ -125,7 +125,7 @@ class YtFileFormatTest extends AnyFlatSpec with Matchers with LocalSpark
     )
   }
 
-  it should "read date, datetime datatypes" in {
+  testWithDistributedReading("read date, datetime datatypes") { distributedReadingEnabled =>
     writeTableFromYson(Seq(
       """{date = 1; datetime = 1;}""",
       """{date = 9999; datetime = 1611733954}"""
@@ -148,10 +148,10 @@ class YtFileFormatTest extends AnyFlatSpec with Matchers with LocalSpark
     )
   }
 
-  it should "read timestamp, interval datatypes" in {
+  testWithDistributedReading("read timestamp, interval datatypes") { distributedReadingEnabled =>
     writeTableFromYson(Seq(
-      """{timestamp = 1; interval = 1}""",
-      """{timestamp = 4; interval = 5}"""
+      """{timestamp = 1; interval = 2}""",
+      """{timestamp = 3; interval = 4}"""
     ), tmpPath, TableSchema.builder()
       .setUniqueKeys(false)
       .addValue("timestamp", TiType.timestamp())
@@ -161,12 +161,12 @@ class YtFileFormatTest extends AnyFlatSpec with Matchers with LocalSpark
 
     val res = spark.read.yt(tmpPath)
     res.collect() should contain theSameElementsAs Seq(
-      Row(convertUTCtoLocal("1970-01-01T00:00:00.000001Z", getUtcHoursOffset), 1),
-      Row(convertUTCtoLocal("1970-01-01T00:00:00.000004Z", getUtcHoursOffset), 5)
+      Row(convertUTCtoLocal("1970-01-01T00:00:00.000001Z", getUtcHoursOffset), 2),
+      Row(convertUTCtoLocal("1970-01-01T00:00:00.000003Z", getUtcHoursOffset), 4)
     )
   }
 
-  it should "read dataset with nulls" in {
+  testWithDistributedReading("read dataset with nulls") { distributedReadingEnabled =>
     writeTableFromYson(Seq(
       """{a = 1; b = #; c = 0.3}""",
       """{a = 2; b = "b"; c = #}"""
@@ -186,7 +186,7 @@ class YtFileFormatTest extends AnyFlatSpec with Matchers with LocalSpark
     f(spark.read.disableArrow)
   }
 
-  it should "read float datatype" in {
+  testWithDistributedReading("read float datatype") { distributedReadingEnabled =>
     Seq(Some(0.3f), Some(0.5f), None)
       .toDF("c").write.optimizeFor(OptimizeMode.Scan).yt(tmpPath)
 
@@ -202,14 +202,14 @@ class YtFileFormatTest extends AnyFlatSpec with Matchers with LocalSpark
     }
   }
 
-  it should "write several partitions" in {
+  testWithDistributedReading("write several partitions") { distributedReadingEnabled =>
     import spark.implicits._
     (1 to 100).toDF.repartition(10).write.yt(tmpPath)
 
     spark.read.yt(tmpPath).as[Long].collect() should contain theSameElementsAs (1 to 100)
   }
 
-  it should "write several batches" in {
+  testWithDistributedReading("write several batches") { distributedReadingEnabled =>
     import spark.implicits._
 
     spark.sqlContext.setConf("spark.yt.write.batchSize", "10")
@@ -219,7 +219,7 @@ class YtFileFormatTest extends AnyFlatSpec with Matchers with LocalSpark
     spark.read.yt(tmpPath).as[Long].collect() should contain theSameElementsAs (1 to 80)
   }
 
-  it should "write all atomic datatypes" in {
+  testWithDistributedReading("write all atomic datatypes") { distributedReadingEnabled =>
     val data = Seq(
       (Some(true), Some(1.toByte), Some(1.0), Some(1.0f), Some(1), Some(1L), Some(1.toShort), Some("a")),
       (None, None, None, None, None, None, None, None)
@@ -233,7 +233,7 @@ class YtFileFormatTest extends AnyFlatSpec with Matchers with LocalSpark
     )
   }
 
-  it should "write binary type" in {
+  testWithDistributedReading("write binary type") { distributedReadingEnabled =>
     val data = Seq(
       Array[Byte](1, 2, 3),
       Array[Byte](4, 5, 6),
@@ -246,7 +246,7 @@ class YtFileFormatTest extends AnyFlatSpec with Matchers with LocalSpark
     result should contain theSameElementsAs data
   }
 
-  it should "clean all temporary files if job failed" in {
+  testWithDistributedReading("clean all temporary files if job failed") { distributedReadingEnabled =>
     import spark.implicits._
 
     Logger.getRootLogger.setLevel(Level.OFF)
@@ -261,7 +261,7 @@ class YtFileFormatTest extends AnyFlatSpec with Matchers with LocalSpark
     YtWrapper.exists(s"$tmpPath-tmp") shouldEqual false
   }
 
-  it should "fail if table already exists" in {
+  testWithDistributedReading("fail if table already exists") { distributedReadingEnabled =>
     import spark.implicits._
 
     Seq(1, 2, 3).toDF.coalesce(1).write.yt(tmpPath)
@@ -270,7 +270,7 @@ class YtFileFormatTest extends AnyFlatSpec with Matchers with LocalSpark
     }
   }
 
-  it should "overwrite table" in {
+  testWithDistributedReading("overwrite table") { distributedReadingEnabled =>
     import spark.implicits._
 
     Seq(1, 2, 3).toDF.coalesce(1).write.yt(tmpPath)
@@ -281,7 +281,7 @@ class YtFileFormatTest extends AnyFlatSpec with Matchers with LocalSpark
     res.as[Long].collect() should contain theSameElementsAs Seq(4L, 5L, 6L)
   }
 
-  it should "not lose old table while overwriting by table with errors" in {
+  testWithDistributedReading("not lose old table while overwriting by table with errors") { distributedReadingEnabled =>
     import spark.implicits._
 
     Seq(1, 2, 3).toDF.coalesce(1).write.yt(tmpPath)
@@ -294,7 +294,7 @@ class YtFileFormatTest extends AnyFlatSpec with Matchers with LocalSpark
     res.as[Long].collect() should contain theSameElementsAs Seq(1L, 2L, 3L)
   }
 
-  it should "append rows to table" in {
+  testWithDistributedReading("append rows to table") { distributedReadingEnabled =>
     import spark.implicits._
 
     Seq(1, 2, 3).toDF.coalesce(1).write.yt(tmpPath)
@@ -304,7 +304,7 @@ class YtFileFormatTest extends AnyFlatSpec with Matchers with LocalSpark
     res.as[Long].collect() should contain theSameElementsAs Seq(1L, 2L, 3L, 4L, 5L, 6L)
   }
 
-  it should "ignore write if table already exists" in {
+  testWithDistributedReading("ignore write if table already exists") { distributedReadingEnabled =>
     import spark.implicits._
 
     Seq(1, 2, 3).toDF.coalesce(1).write.yt(tmpPath)
@@ -315,7 +315,7 @@ class YtFileFormatTest extends AnyFlatSpec with Matchers with LocalSpark
     res.as[Long].collect() should contain theSameElementsAs Seq(1L, 2L, 3L)
   }
 
-  it should "count df" in {
+  testWithDistributedReading("count df") { distributedReadingEnabled =>
     writeTableFromYson(Seq(
       """{a = 1; b = "a"; c = 0.3}""",
       """{a = 2; b = "b"; c = 0.5}"""
@@ -326,7 +326,7 @@ class YtFileFormatTest extends AnyFlatSpec with Matchers with LocalSpark
     res shouldEqual 2
   }
 
-  it should "count large table" in {
+  testWithDistributedReading("count large table") { distributedReadingEnabled =>
     val rng = new Random(0)
     val data = List.fill(10000)(rng.nextInt(200))
 
@@ -342,7 +342,7 @@ class YtFileFormatTest extends AnyFlatSpec with Matchers with LocalSpark
     res shouldBe 10000
   }
 
-  it should "count all partitions" in {
+  testWithDistributedReading("count all partitions") { distributedReadingEnabled =>
     writeTableFromYson(Seq.fill(100)(
       """{a = 1; b = "a"; c = 0.3}"""
     ), tmpPath, atomicSchema)
@@ -354,7 +354,7 @@ class YtFileFormatTest extends AnyFlatSpec with Matchers with LocalSpark
     res shouldEqual 100
   }
 
-  it should "optimize table for scan" in {
+  testWithDistributedReading("optimize table for scan") { distributedReadingEnabled =>
     import spark.implicits._
 
     Seq(1, 2, 3).toDF.coalesce(1).write.optimizeFor(OptimizeMode.Scan).yt(tmpPath)
@@ -362,7 +362,7 @@ class YtFileFormatTest extends AnyFlatSpec with Matchers with LocalSpark
     YtWrapper.attribute(tmpPath, "optimize_for").stringValue() shouldEqual "scan"
   }
 
-  it should "use external transaction in writing" in {
+  testWithDistributedReading("use external transaction in writing") { distributedReadingEnabled =>
     Seq(("a", 1L), ("b", 2L), ("c", 3L)).toDF("c1", "c2").write.yt(tmpPath)
 
     val transaction = YtWrapper.createTransaction(None, 10 minute)
@@ -382,7 +382,7 @@ class YtFileFormatTest extends AnyFlatSpec with Matchers with LocalSpark
     )
   }
 
-  it should "work with several transactions" in {
+  testWithDistributedReading("work with several transactions") { distributedReadingEnabled =>
     val data1 = Seq(("a", 1L), ("b", 2L), ("c", 3L))
     val data2 = Seq(("d", 4L))
     val data3 = Seq(("e", 5L))
@@ -417,7 +417,7 @@ class YtFileFormatTest extends AnyFlatSpec with Matchers with LocalSpark
     }
   }
 
-  it should "kill transaction when failed because of timeout" in {
+  testWithDistributedReading("kill transaction when failed because of timeout") { distributedReadingEnabled =>
     import spark.implicits._
     spark.sqlContext.setConf("spark.yt.timeout", "5")
     spark.sqlContext.setConf("spark.yt.write.timeout", "0")
@@ -437,7 +437,7 @@ class YtFileFormatTest extends AnyFlatSpec with Matchers with LocalSpark
   }
 
 
-  it should "read int32" in {
+  testWithDistributedReading("read int32") { distributedReadingEnabled =>
     import scala.collection.JavaConverters._
 
     val schema = YTree.builder()
@@ -470,14 +470,14 @@ class YtFileFormatTest extends AnyFlatSpec with Matchers with LocalSpark
     result.collect() should contain theSameElementsAs Seq(Row(1), Row(2))
   }
 
-  it should "read empty table" in {
+  testWithDistributedReading("read empty table") { distributedReadingEnabled =>
     createEmptyTable(tmpPath, atomicSchema)
     val res = spark.read.yt(tmpPath)
     res.columns should contain theSameElementsAs Seq("a", "b", "c")
     res.collect().isEmpty shouldEqual true
   }
 
-  it should "set custom cypress attributes" in {
+  testWithDistributedReading("set custom cypress attributes") { distributedReadingEnabled =>
     val expirationTime = "2025-06-30T20:44:09.000000Z"
     val myCustomAttribute = "elephant"
     Seq(1, 2, 3).toDF
@@ -490,7 +490,7 @@ class YtFileFormatTest extends AnyFlatSpec with Matchers with LocalSpark
     YtWrapper.attribute(tmpPath, "_my_custom_attribute").stringValue() shouldEqual myCustomAttribute
   }
 
-  it should "read many tables" in {
+  testWithDistributedReading("read many tables") { distributedReadingEnabled =>
     YtWrapper.createDir(tmpPath)
     val tableCount = 3
     (1 to tableCount).foreach(i =>
@@ -511,7 +511,7 @@ class YtFileFormatTest extends AnyFlatSpec with Matchers with LocalSpark
     ))
   }
 
-  it should "read subdirectories" in {
+  testWithDistributedReading("read subdirectories") { distributedReadingEnabled =>
     YtWrapper.createDir(tmpPath)
     YtWrapper.createDir(s"$tmpPath/subdir")
     val table = s"$tmpPath/subdir/table"
@@ -536,7 +536,7 @@ class YtFileFormatTest extends AnyFlatSpec with Matchers with LocalSpark
     }.get
   }
 
-  it should "enable/disable batch reading" in {
+  testWithDistributedReading("enable/disable batch reading") { distributedReadingEnabled =>
     import OptimizeMode._
     spark.conf.set(SQLConf.PARALLEL_PARTITION_DISCOVERY_THRESHOLD.key, "3")
     val table = Table(
@@ -564,7 +564,7 @@ class YtFileFormatTest extends AnyFlatSpec with Matchers with LocalSpark
     }
   }
 
-  it should "enable batch for yson types" in {
+  testWithDistributedReading("enable batch for yson types") { distributedReadingEnabled =>
     writeTableFromYson(Seq(
       """{value = {a = 1; b = "a"}}""",
       """{value = {a = 2; b = "b"}}"""
@@ -582,7 +582,7 @@ class YtFileFormatTest extends AnyFlatSpec with Matchers with LocalSpark
     batchEnabled shouldEqual false
   }
 
-  it should "enable batch for count" in {
+  testWithDistributedReading("enable batch for count") { distributedReadingEnabled =>
     writeTableFromYson(
       Seq(
         """{a = 1; b = "a"; c = 0.3}""",
@@ -602,7 +602,7 @@ class YtFileFormatTest extends AnyFlatSpec with Matchers with LocalSpark
     batchEnabled shouldEqual true
   }
 
-  it should "read arrow" in {
+  testWithDistributedReading("read arrow") { distributedReadingEnabled =>
     writeTableFromYson(Seq(
       """{a = 1; b = "a"; c = 0.3}""",
       """{a = 2; b = "b"; c = 0.5}"""
@@ -616,7 +616,7 @@ class YtFileFormatTest extends AnyFlatSpec with Matchers with LocalSpark
     )
   }
 
-  it should "read categorical arrow" in {
+  testWithDistributedReading("read categorical arrow") { distributedReadingEnabled =>
     val data = (0 to 500).map(i => if (i % 2 == 0) "a" else "b")
     data.toDF("a").write.optimizeFor("scan").yt(tmpPath)
 
@@ -624,7 +624,7 @@ class YtFileFormatTest extends AnyFlatSpec with Matchers with LocalSpark
     df.select("a").collect().map(_.get(0)) should contain theSameElementsAs data
   }
 
-  it should "read primitives in any column" in {
+  testWithDistributedReading("read primitives in any column") { distributedReadingEnabled =>
     val data = Seq(
       Seq[Any](0L, 0.0, 0.0f, false, 0.toByte, BigDecimal(0).bigDecimal),
       Seq[Any](65L, 1.5, 7.2f, true, 3.toByte, BigDecimal(4).bigDecimal),
@@ -671,7 +671,7 @@ class YtFileFormatTest extends AnyFlatSpec with Matchers with LocalSpark
     wireRes should contain theSameElementsAs ans
   }
 
-  it should "read wire" in {
+  testWithDistributedReading("read wire") { distributedReadingEnabled =>
     writeTableFromYson(Seq(
       """{a = 1; b = "a"; c = 0.3}""",
       """{a = 2; b = "b"; c = 0.5}"""
@@ -685,7 +685,7 @@ class YtFileFormatTest extends AnyFlatSpec with Matchers with LocalSpark
     )
   }
 
-  it should "read arrow when schema was changed" in {
+  testWithDistributedReading("read arrow when schema was changed") { distributedReadingEnabled =>
     val newSchema = TableSchema.builder()
       .setUniqueKeys(false)
       .addAll(atomicSchema.getColumns)
@@ -716,7 +716,7 @@ class YtFileFormatTest extends AnyFlatSpec with Matchers with LocalSpark
     )
   }
 
-  it should "write null type" in {
+  testWithDistributedReading("write null type") { distributedReadingEnabled =>
     val data = Seq((null, null), (null, null))
 
     a[IllegalArgumentException] shouldBe thrownBy {
@@ -728,14 +728,14 @@ class YtFileFormatTest extends AnyFlatSpec with Matchers with LocalSpark
     spark.read.yt(tmpPath).collect() should contain theSameElementsAs data.map(Row.fromTuple)
   }
 
-  it should "write double" in {
+  testWithDistributedReading("write double") { distributedReadingEnabled =>
     val data = Seq(0.4, 0.5, 0.6)
     data.toDF().coalesce(1).write.yt(tmpPath)
 
     spark.read.yt(tmpPath).as[Double].collect() should contain theSameElementsAs data
   }
 
-  it should "write date, datetime, timestamp, interval datatypes" in {
+  testWithDistributedReading("write date, datetime, timestamp, interval datatypes") { distributedReadingEnabled =>
     val data = Seq(
       (Date.valueOf(LocalDate.ofEpochDay(1)), new Timestamp(1000), 1, 1),
       (Date.valueOf(LocalDate.ofEpochDay(9999)), new Timestamp(1611733954000L), 4, 5)
@@ -752,7 +752,7 @@ class YtFileFormatTest extends AnyFlatSpec with Matchers with LocalSpark
     )
   }
 
-  it should "ytTable:/ write and read" in {
+  testWithDistributedReading("ytTable:/ write and read") { distributedReadingEnabled =>
     val customPath = "ytTable:/" + tmpPath
     val data = Seq(0.4, 0.5, 0.6)
     data.toDF().coalesce(1).write.yt(customPath)
@@ -761,13 +761,13 @@ class YtFileFormatTest extends AnyFlatSpec with Matchers with LocalSpark
   }
 
   // The only accepted schema in table path is ytTable. So user specified should be ignored
-  it should "read with wrong schema for tables" in {
+  testWithDistributedReading("read with wrong schema for tables") { distributedReadingEnabled =>
     val data = Seq(0.4, 0.5, 0.6)
     data.toDF().coalesce(1).write.yt(tmpPath)
     spark.read.yt("yt:/" + tmpPath).as[Double].collect() should contain theSameElementsAs data
   }
 
-  it should "read dataframe from several tables" in {
+  testWithDistributedReading("read dataframe from several tables") { distributedReadingEnabled =>
     YtWrapper.createDir(tmpPath)
     val table1 = s"$tmpPath/t1"
     val table2 = s"$tmpPath/t2"
@@ -787,7 +787,7 @@ class YtFileFormatTest extends AnyFlatSpec with Matchers with LocalSpark
     )
   }
 
-  it should "read with strong schema" in {
+  testWithDistributedReading("read with strong schema") { distributedReadingEnabled =>
     writeTableFromYson(Seq(
       """{a = 1; b = "5"; c = 0.3; d = %true}""",
       """{a = 2; b = "6"; c = 1.5; d = %false}"""
@@ -801,8 +801,8 @@ class YtFileFormatTest extends AnyFlatSpec with Matchers with LocalSpark
     forAll(Table("arrow_enabled", true, false)) { arrow =>
 
       val df1 = spark.read.enableArrow(arrow).schema(StructType(Seq(
-          StructField("a", StringType), StructField("b", DoubleType),
-          StructField("c", LongType), StructField("d", StringType),
+        StructField("a", StringType), StructField("b", DoubleType),
+        StructField("c", LongType), StructField("d", StringType),
       ))).yt(tmpPath)
       isBatchEnabled(df1) shouldBe arrow
       df1.collect() should contain theSameElementsAs Seq(Row("1", 5.0, 0, "true"), Row("2", 6.0, 1, "false"))
@@ -823,6 +823,7 @@ class YtFileFormatTest extends AnyFlatSpec with Matchers with LocalSpark
     }
   }
 
+  // TODO: wrap with testWithDistributedReading when TRspReadTablePartitionMeta will contain statistics
   it should "count input statistics" in {
     val customPath = "ytTable:/" + tmpPath
     val data = Stream.from(1).take(1000)

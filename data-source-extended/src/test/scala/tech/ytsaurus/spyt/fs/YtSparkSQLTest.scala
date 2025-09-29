@@ -6,8 +6,9 @@ import org.apache.spark.sql.types.{ArrayType, LongType, MapType, StringType}
 import org.apache.spark.sql.spyt.types.YsonBinary
 import org.apache.spark.test.UtilsWrapper
 import org.mockito.scalatest.MockitoSugar
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
 import org.scalatest.prop.TableDrivenPropertyChecks
-import org.scalatest.{FlatSpec, Matchers}
 import tech.ytsaurus.core.cypress.YPath
 import tech.ytsaurus.core.tables.{ColumnValueType, TableSchema}
 import tech.ytsaurus.spyt._
@@ -20,8 +21,8 @@ import tech.ytsaurus.ysontree.{YTree, YTreeNode}
 import scala.collection.mutable
 import scala.language.postfixOps
 
-class YtSparkSQLTest extends FlatSpec with Matchers with LocalSpark with TmpDir
-  with TestUtils with MockitoSugar with TableDrivenPropertyChecks with DynTableTestUtils {
+class YtSparkSQLTest extends AnyFlatSpec with Matchers with LocalSpark with TmpDir with TestUtils with MockitoSugar 
+  with TableDrivenPropertyChecks with DynTableTestUtils with YtDistributedReadingTestUtils {
   import spark.implicits._
 
   private val atomicSchema = TableSchema.builder()
@@ -52,7 +53,7 @@ class YtSparkSQLTest extends FlatSpec with Matchers with LocalSpark with TmpDir
     spark.sessionState.catalog.invalidateAllCachedTables()
   }
 
-  it should "select rows using views" in {
+  testWithDistributedReading("select rows using views") { _ =>
     YtWrapper.createDir(tmpPath)
     forAll(testModes) { optimizeFor =>
       val path = s"$tmpPath/${optimizeFor.name}"
@@ -73,7 +74,7 @@ class YtSparkSQLTest extends FlatSpec with Matchers with LocalSpark with TmpDir
     }
   }
 
-  it should "select rows" in {
+  testWithDistributedReading("select rows") { _ =>
     YtWrapper.createDir(tmpPath)
     forAll(testModes) { optimizeFor =>
       val path = s"$tmpPath/${optimizeFor.name}"
@@ -100,7 +101,7 @@ class YtSparkSQLTest extends FlatSpec with Matchers with LocalSpark with TmpDir
     }
   }
 
-  it should "select rows with wrong schema" in {
+  testWithDistributedReading("select rows with wrong schema") { _ =>
     writeTableFromYson(Seq(
       """{a = 1; b = "a"; c = 0.3}"""
     ), tmpPath, atomicSchema)
@@ -109,7 +110,7 @@ class YtSparkSQLTest extends FlatSpec with Matchers with LocalSpark with TmpDir
     res.collect() should contain theSameElementsAs Seq(Row(1, "a", 0.3))
   }
 
-  it should "select rows in complex table" in {
+  testWithDistributedReading("select rows in complex table") { _ =>
     val data = Seq("""{array = [1; 2; 3]; map = {k1 = "a"; k2 = "b"}}""")
     val correctResult = Array(Seq(
       YsonEncoder.encode(List(1L, 2L, 3L), ArrayType(LongType), false).toList,
@@ -130,7 +131,7 @@ class YtSparkSQLTest extends FlatSpec with Matchers with LocalSpark with TmpDir
     }
   }
 
-  it should "apply functions" in {
+  testWithDistributedReading("apply functions") { _ =>
     Seq(1, 2).toDF("a").write.yt(tmpPath)
     val res = spark.sql(s"SELECT md5(CAST (a as STRING)) FROM yt.`ytTable:/$tmpPath`")
 
@@ -140,7 +141,7 @@ class YtSparkSQLTest extends FlatSpec with Matchers with LocalSpark with TmpDir
     )
   }
 
-  it should "filter rows" in {
+  testWithDistributedReading("filter rows") { _ =>
     YtWrapper.createDir(tmpPath)
     forAll(testModes) { optimizeFor =>
       val path = s"$tmpPath/${optimizeFor.name}"
@@ -158,7 +159,7 @@ class YtSparkSQLTest extends FlatSpec with Matchers with LocalSpark with TmpDir
     }
   }
 
-  it should "sort rows" in {
+  testWithDistributedReading("sort rows") { _ =>
     YtWrapper.createDir(tmpPath)
     forAll(testModes) { optimizeFor =>
       val path = s"$tmpPath/${optimizeFor.name}"
@@ -177,7 +178,7 @@ class YtSparkSQLTest extends FlatSpec with Matchers with LocalSpark with TmpDir
     }
   }
 
-  it should "group rows" in {
+  testWithDistributedReading("group rows") { _ =>
     YtWrapper.createDir(tmpPath)
     forAll(testModes) { optimizeFor =>
       val path = s"$tmpPath/${optimizeFor.name}"
@@ -195,7 +196,7 @@ class YtSparkSQLTest extends FlatSpec with Matchers with LocalSpark with TmpDir
     }
   }
 
-  it should "join tables" in {
+  testWithDistributedReading("join tables") { _ =>
     YtWrapper.createDir(tmpPath)
     forAll(testModes) { optimizeFor =>
       val path1 = s"$tmpPath/${optimizeFor.name}_1"
@@ -224,7 +225,7 @@ class YtSparkSQLTest extends FlatSpec with Matchers with LocalSpark with TmpDir
     }
   }
 
-  it should "select from dynamic table" in {
+  testWithDistributedReading("select from dynamic table") { _ =>
     prepareTestTable(tmpPath, testData, Seq(Seq(), Seq(3), Seq(6, 12)))
     // @latest_version is required
     // otherwise it will be appended to path in runtime and fail because of nested "directory" reading
@@ -233,14 +234,14 @@ class YtSparkSQLTest extends FlatSpec with Matchers with LocalSpark with TmpDir
     res.select("a", "b", "c").selectAs[TestRow].collect() should contain theSameElementsAs testData
   }
 
-  it should "select from dynamic table without timestamp attribute" in {
+  testWithDistributedReading("select from dynamic table without timestamp attribute") { _ =>
     prepareTestTable(tmpPath, testData, Seq(Seq(), Seq(3), Seq(6, 12)))
     val res = spark.sql(s"SELECT * FROM yt.`ytTable:/$tmpPath`")
     res.columns should contain theSameElementsAs Seq("a", "b", "c")
     res.select("a", "b", "c").selectAs[TestRow].collect() should contain theSameElementsAs testData
   }
 
-  it should "select from a table using custom UDF" in {
+  testWithDistributedReading("select from a table using custom UDF") { _ =>
     writeTableFromYson(Seq(
       """{a = 1; b = "a"; c = 0.3}""",
       """{a = 2; b = "b"; c = 0.5}""",
@@ -257,7 +258,7 @@ class YtSparkSQLTest extends FlatSpec with Matchers with LocalSpark with TmpDir
     )
   }
 
-  it should "select from a table using constant expressions" in {
+  testWithDistributedReading("select from a table using constant expressions") { _ =>
     writeTableFromYson(Seq(
       """{a = 2; d = "hello"}"""
     ), tmpPath, anotherSchema)
@@ -267,7 +268,7 @@ class YtSparkSQLTest extends FlatSpec with Matchers with LocalSpark with TmpDir
     df.collect() should contain theSameElementsAs Seq(Row(10))
   }
 
-  it should "join static table with dynamic one" in {
+  testWithDistributedReading("join static table with dynamic one") { _ =>
     val path1 = s"$tmpPath/dynamic"
     prepareTestTable(path1, testData, Seq(Seq(), Seq(3), Seq(6, 12)))
 
@@ -292,14 +293,14 @@ class YtSparkSQLTest extends FlatSpec with Matchers with LocalSpark with TmpDir
     )
   }
 
-  it should "cast nested null values" in {
+  testWithDistributedReading("cast nested null values") { _ =>
     val df = spark.sql("SELECT col1, col3, cast(array(NULL) as array<int>) FROM VALUES (1, 2, 3)")
     val result = df.collect()
 
     result should contain theSameElementsAs Seq(Row(1, 3, mutable.WrappedArray.make(Array(null))))
   }
 
-  it should "create table" in {
+  testWithDistributedReading("create table") { _ =>
     spark.sql(s"CREATE TABLE yt.`ytTable:/$tmpPath` (id INT, name STRING, age INT) USING yt")
     val res = spark.read.yt(tmpPath)
     res.columns should contain theSameElementsAs Seq("id", "name", "age")
@@ -310,14 +311,14 @@ class YtSparkSQLTest extends FlatSpec with Matchers with LocalSpark with TmpDir
     }
   }
 
-  it should "create a table without specifying ytTable:/ prefix" in {
+  testWithDistributedReading("create a table without specifying ytTable:/ prefix") { _ =>
     spark.sql(s"CREATE TABLE yt.`$tmpPath` (id INT, name STRING, age INT) USING yt")
     val res = spark.read.yt(tmpPath)
     res.columns should contain theSameElementsAs Seq("id", "name", "age")
     res.collect() should contain theSameElementsAs Seq()
   }
 
-  it should "create table with custom attributes" in {
+  testWithDistributedReading("create table with custom attributes") { _ =>
     spark.sql(s"CREATE TABLE yt.`ytTable:/$tmpPath` (id INT, name STRING, age INT) " +
       s"USING yt TBLPROPERTIES ('custom1'='value1','custom2'='4','key_columns'='[id]')")
 
@@ -329,14 +330,14 @@ class YtSparkSQLTest extends FlatSpec with Matchers with LocalSpark with TmpDir
     attrs("sorted_by") shouldBe YTree.listBuilder().value(YTree.stringNode("id")).endList().build()
   }
 
-  it should "create table as select" in {
+  testWithDistributedReading("create table as select") { _ =>
     spark.sql(s"CREATE TABLE yt.`ytTable:/$tmpPath` USING yt AS SELECT col1, col2 FROM VALUES (1, false)")
     val res = spark.read.yt(tmpPath)
     res.columns should contain theSameElementsAs Seq("col1", "col2")
     res.collect() should contain theSameElementsAs Seq(Row(1, false))
   }
 
-  it should "create table as select from existing table" in {
+  testWithDistributedReading("create table as select from existing table") { _ =>
     YtWrapper.createDir(tmpPath)
     val originalPath = s"$tmpPath/original"
     val copyPath = s"$tmpPath/copy"
@@ -351,7 +352,7 @@ class YtSparkSQLTest extends FlatSpec with Matchers with LocalSpark with TmpDir
     res.collect() should contain theSameElementsAs Seq(Row(1, "a"), Row(2, "b"))
   }
 
-  it should "drop table" in {
+  testWithDistributedReading("drop table") { _ =>
     spark.sql(s"CREATE TABLE yt.`ytTable:/$tmpPath` (id INT, age INT) USING yt")
     YtWrapper.exists(tmpPath) shouldBe true
 
@@ -365,7 +366,7 @@ class YtSparkSQLTest extends FlatSpec with Matchers with LocalSpark with TmpDir
     spark.sql(s"DROP TABLE IF EXISTS yt.`ytTable:/$tmpPath`")
   }
 
-  it should "not create a table or other cypress node when there were errors" in {
+  testWithDistributedReading("not create a table or other cypress node when there were errors") { _ =>
     YtWrapper.createDir(tmpPath)
     val originalPath = s"$tmpPath/original"
     val copyPath = s"$tmpPath/copy"
@@ -384,7 +385,7 @@ class YtSparkSQLTest extends FlatSpec with Matchers with LocalSpark with TmpDir
     YtWrapper.exists(copyPath) shouldBe false
   }
 
-  it should "insert to table" in {
+  testWithDistributedReading("insert to table") { _ =>
     YtWrapper.createDir(tmpPath)
     val path = s"$tmpPath/original"
     val path2 = s"$tmpPath/copy"
@@ -414,14 +415,14 @@ class YtSparkSQLTest extends FlatSpec with Matchers with LocalSpark with TmpDir
     }
   }
 
-  it should "work without specified scheme" in {
+  testWithDistributedReading("work without specified scheme") { _ =>
     spark.sql(s"CREATE TABLE yt.`$tmpPath`(id INT) USING yt")
     spark.sql(s"INSERT INTO TABLE yt.`$tmpPath` VALUES (7), (6), (5)")
     val res = spark.sql(s"SELECT * FROM yt.`$tmpPath`")
     res.collect() should contain theSameElementsAs Seq(Row(7), Row(6), Row(5))
   }
 
-  it should "refresh when modified externally" in {
+  testWithDistributedReading("refresh when modified externally") { _ =>
     writeTableFromYson(Seq(
       """{a = 1; b = "qwe"; c = 0.0}""",
     ), tmpPath, atomicSchema)
@@ -438,6 +439,7 @@ class YtSparkSQLTest extends FlatSpec with Matchers with LocalSpark with TmpDir
     res2.collect() shouldBe Seq(Row(1, "str1"), Row(2, "str2"))
   }
 
+  // TODO: wrap with testWithDistributedReading when TRspReadTablePartitionMeta will contain statistics
   it should "count io statistics" in {
     val customPath = "ytTable:/" + tmpPath
     val data = Stream.from(1).take(1000)
@@ -457,10 +459,9 @@ class YtSparkSQLTest extends FlatSpec with Matchers with LocalSpark with TmpDir
 
     totalInput should be > totalInputBefore
     totalOutput should be > totalOutputBefore
-
   }
 
-  it should "work with cluster specification" in {
+  testWithDistributedReading("work with cluster specification") { _ =>
     val df1 = Seq((1, "q"), (3, "c")).toDF("num", "name")
     df1.write.yt(tmpPath)
 
@@ -471,7 +472,7 @@ class YtSparkSQLTest extends FlatSpec with Matchers with LocalSpark with TmpDir
     res2.collect() should contain theSameElementsAs Seq(Row(1, "q"), Row(3, "c"))
   }
 
-  it should "cast some expression to string without any errors" in  {
+  testWithDistributedReading("cast some expression to string without any errors") { _ =>
     val df = spark.sql(s"""SELECT cast((date('2025-01-17') - INTERVAL 2 WEEK) AS STRING) AS some_date""")
     df.collect() should contain theSameElementsAs Seq(Row("2025-01-03"))
   }

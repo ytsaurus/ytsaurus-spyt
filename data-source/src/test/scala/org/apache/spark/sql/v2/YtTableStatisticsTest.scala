@@ -1,19 +1,20 @@
 package org.apache.spark.sql.v2
 
-import org.apache.hadoop.fs.Path
-import org.apache.spark.sql.{DataFrame, Row}
 import org.apache.spark.sql.catalyst.expressions.CodegenObjectFactoryMode
 import org.apache.spark.sql.execution.datasources.v2.BatchScanExec
 import org.apache.spark.sql.internal.SQLConf.{CODEGEN_FACTORY_MODE, WHOLESTAGE_CODEGEN_ENABLED}
 import org.apache.spark.sql.v2.Utils.getStatistics
+import org.apache.spark.sql.{DataFrame, Row}
 import org.mockito.scalatest.MockitoSugar
-import org.scalatest.{FlatSpec, Matchers}
-import tech.ytsaurus.spyt.{SparkAdapter, YtReader, YtWriter}
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
 import tech.ytsaurus.spyt.test.{DynTableTestUtils, LocalSpark, TmpDir}
 import tech.ytsaurus.spyt.wrapper.YtWrapper
+import tech.ytsaurus.spyt.{SparkAdapter, YtDistributedReadingTestUtils, YtReader, YtWriter}
 
-class YtTableStatisticsTest extends FlatSpec with Matchers with LocalSpark
-  with TmpDir with MockitoSugar with DynTableTestUtils {
+class YtTableStatisticsTest extends AnyFlatSpec with Matchers with LocalSpark with TmpDir with MockitoSugar
+   with YtDistributedReadingTestUtils {
+
   import spark.implicits._
 
   protected val conf = Map(
@@ -25,7 +26,7 @@ class YtTableStatisticsTest extends FlatSpec with Matchers with LocalSpark
     "spark.sql.cbo.joinReorder.enabled" -> "true",
   )
 
-  it should "calc table statistics" in {
+  testWithDistributedReading("calc table statistics"){ _ =>
     val data = (0 until 123).map(x => (x / 100, x / 10, x, -x))
     data.toDF("a", "b", "c", "d").write.yt(tmpPath)
     val size = YtWrapper.fileSize(tmpPath, None)
@@ -35,7 +36,7 @@ class YtTableStatisticsTest extends FlatSpec with Matchers with LocalSpark
     statistics.sizeInBytes().getAsLong shouldBe size
   }
 
-  it should "calc table statistics for directory" in {
+  testWithDistributedReading("calc table statistics for directory"){ _ =>
     YtWrapper.createDir(tmpPath)
     (0 until 150).toDF("a").write.yt(s"$tmpPath/t1")
     (0 until 71).map(x => -x).toDF("a").write.yt(s"$tmpPath/t2")
@@ -52,7 +53,7 @@ class YtTableStatisticsTest extends FlatSpec with Matchers with LocalSpark
     }
   }
 
-  it should "reorder joins" in {
+  testWithDistributedReading("reorder joins"){ _ =>
     withConfs(conf) {
       YtWrapper.createDir(tmpPath)
       (0 until 100).map(x => (x / 10, -x)).toDF("a", "b").write.yt(s"$tmpPath/t1")

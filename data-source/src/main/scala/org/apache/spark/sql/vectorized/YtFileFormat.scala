@@ -21,6 +21,7 @@ import org.apache.spark.util.SerializableConfiguration
 import org.slf4j.LoggerFactory
 import tech.ytsaurus.client.CompoundClient
 import tech.ytsaurus.core.cypress.{RichYPath, YPath}
+import tech.ytsaurus.spyt.common.utils.YtReadingUtils
 import tech.ytsaurus.spyt.format.YtPartitionedFileDelegate.YtPartitionedFile
 import tech.ytsaurus.spyt.format._
 import tech.ytsaurus.spyt.format.conf.SparkYtConfiguration.Read._
@@ -67,6 +68,7 @@ class YtFileFormat extends FileFormat with DataSourceRegister with StreamSourceP
 
     val batchMaxSize = hadoopConf.ytConf(VectorizedCapacity)
     val countOptimizationEnabled = hadoopConf.ytConf(CountOptimizationEnabled)
+    val distributedReadingEnabled = sparkSession.ytConf(YtDistributedReadingEnabled)
 
     val log = LoggerFactory.getLogger(getClass)
     log.info(s"Batch read enabled: $readBatch")
@@ -94,7 +96,8 @@ class YtFileFormat extends FileFormat with DataSourceRegister with StreamSourceP
             timeout = ytClientConf.timeout,
             reportBytesRead = bytesReadReporter(broadcastedConf),
             countOptimizationEnabled = countOptimizationEnabled,
-            hadoopPath = ypf.delegate.hadoopPath
+            hadoopPath = ypf.delegate.hadoopPath,
+            distributedReadingEnabled
           )
           val iter = new RecordReaderIterator(ytVectorizedReader)
           Option(TaskContext.get()).foreach(_.addTaskCompletionListener[Unit](_ => iter.close()))
@@ -109,13 +112,8 @@ class YtFileFormat extends FileFormat with DataSourceRegister with StreamSourceP
             iter.asInstanceOf[Iterator[InternalRow]]
           }
         } else {
-          val tableIterator = YtWrapper.readTable(
-            split.ytPathWithFilters,
-            InternalRowDeserializer.getOrCreate(requiredSchema),
-            ytClientConf.timeout,
-            None,
-            bytesReadReporter(broadcastedConf)
-          )
+          val tableIterator = YtReadingUtils.createRowBaseReader(split, None, requiredSchema,
+            ytClientConf, broadcastedConf, distributedReadingEnabled)
           val unsafeProjection = UnsafeProjection.create(requiredSchema)
           tableIterator.map(unsafeProjection(_))
         }

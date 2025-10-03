@@ -7,36 +7,24 @@ import org.apache.spark.sql.types._
 import org.apache.spark.sql.v2.YtUtils
 import org.apache.spark.unsafe.types.{CalendarInterval, UTF8String}
 import org.scalatest.{FlatSpec, Matchers}
+import tech.ytsaurus.client.ApiServiceTransaction
+import tech.ytsaurus.core.cypress.YPath
 import tech.ytsaurus.spyt._
+import tech.ytsaurus.spyt.format.conf.SparkYtWriteConfiguration
 import tech.ytsaurus.spyt.format.conf.YtTableSparkSettings.{SortColumns, UniqueKeys}
+import tech.ytsaurus.spyt.fs.path.YPathEnriched
 import tech.ytsaurus.spyt.serializers.SchemaConverter.{SortOption, Sorted, Unordered}
 import tech.ytsaurus.spyt.test.{LocalSpark, TmpDir}
 import tech.ytsaurus.spyt.wrapper.YtWrapper
-import tech.ytsaurus.spyt.wrapper.client.YtClientConfiguration
-import tech.ytsaurus.client.{ApiServiceTransaction, CompoundClient, TableWriter}
-import tech.ytsaurus.core.cypress.YPath
-import tech.ytsaurus.core.tables.{ColumnValueType, TableSchema}
-import tech.ytsaurus.spyt.format.conf.SparkYtWriteConfiguration
-import tech.ytsaurus.spyt.fs.path.YPathEnriched
 
 import java.time.temporal.ChronoUnit
 import java.time.{Instant, LocalDate}
-import java.util
-import java.util.concurrent.CompletableFuture
 import scala.concurrent.duration._
 import scala.language.postfixOps
 
 class YtOutputWriterTest extends FlatSpec with TmpDir with LocalSpark with Matchers {
   import YtOutputWriterTest._
   private val schema = StructType(Seq(StructField("a", IntegerType)))
-
-  "YtOutputWriterTest" should "write several batches" in {
-    runTestWithSpecificPath(tmpPath)
-  }
-
-  it should "write several batches with '#' in path" in {
-    runTestWithSpecificPath(tmpPath + "#")
-  }
 
   it should "exception while writing several batches with relative in path" in {
     an[IllegalArgumentException] shouldBe thrownBy {
@@ -110,19 +98,6 @@ class YtOutputWriterTest extends FlatSpec with TmpDir with LocalSpark with Match
     result should contain theSameElementsAs sampleData.map(_.nested)
   }
 
-  def runTestWithSpecificPath(path: String): Unit = {
-    prepareWrite(path, Unordered) { transaction =>
-      val p = YPathEnriched.fromString(path).withTransaction(transaction.getId.toString)
-      val writer = new MockYtOutputWriter(p, 2, Unordered)
-      val rows = Seq(Row(1), Row(2), Row(3), Row(4))
-
-      writeRows(rows, writer, transaction)
-
-      spark.read.yt(path).collect() should contain theSameElementsAs rows
-      YtWrapper.chunkCount(path) shouldEqual 2
-    }
-  }
-
   def prepareWrite(path: String, sortOption: SortOption)
                   (f: ApiServiceTransaction => Unit): Unit = {
     val transaction = YtWrapper.createTransaction(parent = None, timeout = 1 minute)
@@ -161,30 +136,9 @@ class YtOutputWriterTest extends FlatSpec with TmpDir with LocalSpark with Match
     extends YtOutputWriter(
       path,
       schema,
-      SparkYtWriteConfiguration(1, batchSize, batchSize, 5 minutes, typeV3Format = false),
+      SparkYtWriteConfiguration(1, batchSize, 5 minutes, typeV3Format = false, distributedWrite = false),
       Map("sort_columns" -> SortColumns.set(sortOption.keys), "unique_keys" -> UniqueKeys.set(sortOption.uniqueKeys))
     ) {
-    override protected def initializeWriter(): TableWriter[InternalRow] = {
-      val writer = super.initializeWriter()
-
-      new TableWriter[InternalRow] {
-        override def getSchema: TableSchema = writer.getSchema
-
-        override def write(rows: util.List[InternalRow], schema: TableSchema): Boolean = writer.write(rows, schema)
-
-        override def readyEvent(): CompletableFuture[Void] = writer.readyEvent()
-
-        override def close(): CompletableFuture[_] = {
-          Thread.sleep((5 seconds).toMillis) // to prevent instant closing that shades some bugs
-          writer.close()
-        }
-
-        override def getTableSchema: CompletableFuture[TableSchema] = writer.getTableSchema
-
-        override def cancel(): Unit = writer.cancel()
-      }
-    }
-
     override protected def initialize(): Unit = {}
   }
 

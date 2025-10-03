@@ -7,7 +7,7 @@ import org.apache.spark.sql.sources.Filter
 import org.apache.spark.sql.spyt.types._
 import org.apache.spark.sql.types._
 import org.slf4j.LoggerFactory
-import tech.ytsaurus.client.TableWriter
+import tech.ytsaurus.client.AsyncWriter
 import tech.ytsaurus.client.rows.{WireProtocolWriteable, WireRowSerializer}
 import tech.ytsaurus.core.tables.{ColumnValueType, TableSchema}
 import tech.ytsaurus.spyt.serialization.YsonEncoder
@@ -132,33 +132,12 @@ class InternalRowSerializer(schema: StructType, writeSchemaConverter: WriteSchem
 
 object InternalRowSerializer {
   private val deserializers: ThreadLocal[mutable.Map[StructType, InternalRowSerializer]] = ThreadLocal.withInitial(() => mutable.ListMap.empty)
-  private val context = ExecutionContext.fromExecutor(Executors.newFixedThreadPool(4))
 
   def getOrCreate(schema: StructType,
                   schemaHint: Map[String, YtLogicalType],
                   filters: Array[Filter] = Array.empty,
                   typeV3Format: Boolean = false): InternalRowSerializer = {
     deserializers.get().getOrElseUpdate(schema, new InternalRowSerializer(schema, new WriteSchemaConverter(schemaHint, typeV3Format)))
-  }
-
-  final def writeRows(writer: TableWriter[InternalRow],
-                      rows: java.util.ArrayList[InternalRow],
-                      timeout: Duration): Future[Unit] = {
-    Future {
-      writeRowsRecursive(writer, rows, timeout)
-    }(context)
-  }
-
-  @tailrec
-  private def writeRowsRecursive(writer: TableWriter[InternalRow],
-                                 rows: java.util.ArrayList[InternalRow],
-                                 timeout: Duration): Unit = {
-    if (!writer.write(rows)) {
-      YtMetricsRegister.time(writeReadyEventTime, writeReadyEventTimeSum) {
-        writer.readyEvent().get(timeout.toMillis, TimeUnit.MILLISECONDS)
-      }
-      writeRowsRecursive(writer, rows, timeout)
-    }
   }
 
   private def valueId(id: Int, idMapping: Array[Int]): Int = {

@@ -1,5 +1,7 @@
 package tech.ytsaurus.spyt.format
 
+import com.google.common.base.Charsets
+import com.google.protobuf.ByteString
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
 import org.apache.hadoop.mapreduce.TaskAttemptContext
@@ -7,6 +9,7 @@ import org.apache.spark.sql.execution.datasources.{OutputWriter, OutputWriterFac
 import org.apache.spark.sql.types.StructType
 import org.slf4j.LoggerFactory
 import tech.ytsaurus.client.CompoundClient
+import tech.ytsaurus.client.request.DistributedWriteCookie
 import tech.ytsaurus.spyt.format.conf.{SparkYtWriteConfiguration, YtTableSparkSettings}
 import tech.ytsaurus.spyt.fs.path.YPathEnriched
 import tech.ytsaurus.spyt.serializers.{SchemaConverter, WriteSchemaConverter}
@@ -23,7 +26,13 @@ class YtOutputWriterFactory(ytClientConf: YtClientConfiguration,
   override def newInstance(f: String, dataSchema: StructType, context: TaskAttemptContext): OutputWriter = {
     log.debug(s"[${Thread.currentThread().getName}] Creating new output writer for ${context.getTaskAttemptID.getTaskID} at path $f")
 
-    implicit val ytClient: CompoundClient = YtClientProvider.ytClient(ytClientConf)
+    implicit val ytClient: CompoundClient = YtClientProvider.ytClient(ytClientConf, Some(WriteStatisticsReporter))
+
+    if (writeConfiguration.distributedWrite) {
+      val cookie = YtOutputCommitProtocol.getCookieForTask(context)
+      return new YtDistributedOutputWriter(f, cookie, dataSchema, writeConfiguration, options)
+    }
+
     val path = YPathEnriched.fromPath(new Path(f))
 
     if (YtWrapper.isDynamicTable(path.toStringYPath)) {

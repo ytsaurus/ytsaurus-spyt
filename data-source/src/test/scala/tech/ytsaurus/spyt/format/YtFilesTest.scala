@@ -1,6 +1,6 @@
 package tech.ytsaurus.spyt.format
 
-import org.apache.spark.sql.Row
+import org.apache.spark.sql.{Row, SparkSession}
 import org.scalatest.{FlatSpec, Matchers}
 import tech.ytsaurus.core.tables.{ColumnValueType, TableSchema}
 import tech.ytsaurus.spyt.YtReader
@@ -18,9 +18,10 @@ import scala.language.postfixOps
 class YtFilesTest extends FlatSpec with Matchers with LocalSpark with TmpDir with TestUtils {
   behavior of "YtDataSource"
 
-  import spark.implicits._
+  override def reinstantiateSparkSession: Boolean = true
 
-  it should "write parquet files to yt" in {
+  private def testWriteParquet(_spark: SparkSession): Unit = {
+    import _spark.implicits._
     Seq(1, 2, 3).toDF.write.parquet(s"yt:/$tmpPath")
 
     YtWrapper.isDir(tmpPath) shouldEqual true
@@ -33,17 +34,27 @@ class YtFilesTest extends FlatSpec with Matchers with LocalSpark with TmpDir wit
       val localPath = new File(tmpLocalDir.toFile, name).getPath
       YtWrapper.downloadFile(s"$tmpPath/$name", localPath)
     }
-    spark.read.parquet(s"file://$tmpLocalDir").as[Int].collect() should contain theSameElementsAs Seq(1, 2, 3)
+    _spark.read.parquet(s"file://$tmpLocalDir").as[Int].collect() should contain theSameElementsAs Seq(1, 2, 3)
+  }
+
+  it should "write parquet files to yt" in withSparkSession() { _spark =>
+    testWriteParquet(_spark)
+  }
+
+  it should "use YtOutputCommitProtocol for writing parquet even if spark.yt.write.distributed.enabled is true" in
+    withSparkSession(Map("spark.yt.write.distributed.enabled" -> "true")) { _spark =>
+      testWriteParquet(_spark)
   }
 
   // Ignored while YtFsInputStream's backward `seek` method is not implemented
-  it should "read parquet files from yt" ignore {
+  it should "read parquet files from yt" ignore withSparkSession() { _spark =>
+    import _spark.implicits._
     Seq(1, 2, 3).toDF.write.parquet(s"yt:/$tmpPath")
 
-    spark.read.parquet(s"yt:/$tmpPath").as[Int].collect() should contain theSameElementsAs Seq(1, 2, 3)
+    _spark.read.parquet(s"yt:/$tmpPath").as[Int].collect() should contain theSameElementsAs Seq(1, 2, 3)
   }
 
-  it should "read csv" in {
+  it should "read csv" in withSparkSession() { _spark =>
     YtWrapper.createFile(tmpPath)
     val os = YtWrapper.writeFile(tmpPath, 1 minute, None)
     try {
@@ -53,7 +64,7 @@ class YtFilesTest extends FlatSpec with Matchers with LocalSpark with TmpDir wit
           |4,5,6""".stripMargin.getBytes(StandardCharsets.UTF_8))
     } finally os.close()
 
-    val res = spark.read.option("header", "true").csv(tmpPath.drop(1))
+    val res = _spark.read.option("header", "true").csv(tmpPath.drop(1))
 
     res.columns should contain theSameElementsAs Seq("a", "b", "c")
     res.select("a", "b", "c").collect() should contain theSameElementsAs Seq(
@@ -62,12 +73,12 @@ class YtFilesTest extends FlatSpec with Matchers with LocalSpark with TmpDir wit
     )
   }
 
-  it should "read large csv" in {
+  it should "read large csv" in withSparkSession() { _spark =>
     writeFileFromResource("test.csv", tmpPath)
-    spark.read.csv(s"yt:/$tmpPath").count() shouldEqual 100000
+    _spark.read.csv(s"yt:/$tmpPath").count() shouldEqual 100000
   }
 
-  it should "read table from yt and write json files to external storage" in {
+  it should "read table from yt and write json files to external storage" in withSparkSession() { _spark =>
     val tableSchema = TableSchema.builder()
       .addValue("id", ColumnValueType.INT64)
       .addValue("value", ColumnValueType.STRING)
@@ -79,7 +90,7 @@ class YtFilesTest extends FlatSpec with Matchers with LocalSpark with TmpDir wit
       """{id = 3; value = "value 3"}""",
     ), tmpPath, tableSchema)
 
-    val df = spark.read.yt(tmpPath)
+    val df = _spark.read.yt(tmpPath)
     val tmpDirPath = Files.createTempDirectory("test_json_write_to_local_filesystem")
     val resultPath = tmpDirPath.resolve("result")
 

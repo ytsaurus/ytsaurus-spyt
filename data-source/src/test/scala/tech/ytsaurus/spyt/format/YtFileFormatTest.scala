@@ -212,8 +212,7 @@ class YtFileFormatTest extends AnyFlatSpec with Matchers with LocalSpark
   testWithDistributedReading("write several batches") { distributedReadingEnabled =>
     import spark.implicits._
 
-    spark.sqlContext.setConf("spark.yt.write.batchSize", "10")
-    spark.sqlContext.setConf("spark.yt.write.miniBatchSize", "2")
+    spark.sqlContext.setConf("spark.yt.write.bufferSize", "2")
     (1 to 80).toDF.repartition(2).write.yt(tmpPath)
 
     spark.read.yt(tmpPath).as[Long].collect() should contain theSameElementsAs (1 to 80)

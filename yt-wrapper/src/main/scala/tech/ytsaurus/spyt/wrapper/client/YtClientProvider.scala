@@ -9,7 +9,8 @@ import tech.ytsaurus.spyt.wrapper.YtWrapper
 import scala.collection.concurrent.TrieMap
 
 trait YtClientProvider {
-  def ytClient(conf: YtClientConfiguration): CompoundClient
+  def ytClient(conf: YtClientConfiguration): CompoundClient = ytClient(conf, None)
+  def ytClient(conf: YtClientConfiguration, rpcClientListener: Option[SpytRpcClientListener]): CompoundClient
 }
 
 object YtClientProvider extends YtClientProvider {
@@ -20,7 +21,9 @@ object YtClientProvider extends YtClientProvider {
   // testing
   private[spyt] def getClients: TrieMap[String, YtRpcClient] = clients
 
-  def ytClient(conf: YtClientConfiguration): CompoundClient = ytRpcClient(conf).yt
+  def ytClient(conf: YtClientConfiguration, rpcClientListener: Option[SpytRpcClientListener]): CompoundClient = {
+    ytRpcClient(conf, rpcClientListener).yt
+  }
 
   def ytClientWithProxy(conf: => YtClientConfiguration, proxy: Option[String]): CompoundClient = {
     ytRpcClientWithProxy(conf, proxy).yt
@@ -30,12 +33,14 @@ object YtClientProvider extends YtClientProvider {
     ytRpcClient(conf.replaceProxy(proxy))
   }
 
-  def ytRpcClient(conf: => YtClientConfiguration): YtRpcClient = this.synchronized {
+  def ytRpcClient(conf: => YtClientConfiguration,
+                  rpcClientListener: Option[SpytRpcClientListener] = None): YtRpcClient = this.synchronized {
     val normalizedProxy = conf.normalizedProxy
-    clients.getOrElseUpdate(normalizedProxy, {
+    val key = Seq(normalizedProxy, rpcClientListener.map(_.id).getOrElse("")).mkString(";")
+    clients.getOrElseUpdate(key, {
       val clientThreads = getClientThreads
       log.info(s"Create YtClient for proxy $normalizedProxy and $clientThreads clientThreads")
-      YtWrapper.createRpcClient(conf, clientThreads)
+      YtWrapper.createRpcClient(conf, clientThreads, rpcClientListener)
     })
   }
 

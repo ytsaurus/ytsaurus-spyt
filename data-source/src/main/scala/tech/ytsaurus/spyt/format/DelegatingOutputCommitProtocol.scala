@@ -2,24 +2,47 @@ package tech.ytsaurus.spyt.format
 
 import org.apache.hadoop.fs.{FileSystem, Path}
 import org.apache.hadoop.mapreduce.{JobContext, TaskAttemptContext}
+import org.apache.spark.{SparkConf, SparkEnv}
 import org.apache.spark.internal.io.FileCommitProtocol
 import org.apache.spark.sql.execution.datasources.SQLHadoopMapReduceCommitProtocol
+import tech.ytsaurus.client.CompoundClient
+import tech.ytsaurus.spyt.format.conf.SparkYtConfiguration.Write
+import tech.ytsaurus.spyt.format.conf.YtTableSparkSettings
+import tech.ytsaurus.spyt.wrapper.YtWrapper
+import tech.ytsaurus.spyt.wrapper.config.SparkYtSparkConf
 
 class DelegatingOutputCommitProtocol(jobId: String,
                                      outputPath: String,
                                      dynamicPartitionOverwrite: Boolean) extends FileCommitProtocol with Serializable {
   import DelegatingOutputCommitProtocol._
 
-  private val delegate: FileCommitProtocol = {
-    if (isYtsaurusFileSystem(outputPath)) {
-      new YtOutputCommitProtocol(jobId, outputPath, dynamicPartitionOverwrite)
+  @transient private var isTable: Boolean = _
+  private lazy val delegate: FileCommitProtocol = createDelegate()
+
+  private def createDelegate(): FileCommitProtocol = {
+    if (!isYtsaurusFileSystem(outputPath)) {
+      return new SQLHadoopMapReduceCommitProtocol(jobId, outputPath, dynamicPartitionOverwrite)
+    }
+
+    implicit val ytClient: CompoundClient = YtOutputCommitProtocol.cachedClient
+
+    if (YtWrapper.isDynamicTable(outputPath)) {
+      new DynamicTableOutputCommitProtocol(jobId, outputPath, dynamicPartitionOverwrite)
+    } else if (isDistributedWrite(SparkEnv.get.conf)) {
+      new DistributedWriteOutputCommitProtocol(jobId, outputPath, dynamicPartitionOverwrite)
     } else {
-      new SQLHadoopMapReduceCommitProtocol(jobId, outputPath, dynamicPartitionOverwrite)
+      new YtOutputCommitProtocol(jobId, outputPath, dynamicPartitionOverwrite)
     }
   }
 
-  override def setupJob(jobContext: JobContext): Unit =
+  private def isDistributedWrite(conf: SparkConf): Boolean = {
+    conf.getYtConf(Write.Distributed.Enabled).get && isTable
+  }
+
+  override def setupJob(jobContext: JobContext): Unit = {
+    isTable = YtTableSparkSettings.isTable(jobContext.getConfiguration)
     delegate.setupJob(jobContext)
+  }
 
   override def commitJob(jobContext: JobContext, taskCommits: Seq[FileCommitProtocol.TaskCommitMessage]): Unit =
     delegate.commitJob(jobContext, taskCommits)
@@ -50,7 +73,7 @@ class DelegatingOutputCommitProtocol(jobId: String,
 }
 
 object DelegatingOutputCommitProtocol {
-  def isYtsaurusFileSystem(outputPath: String): Boolean = {
+  private def isYtsaurusFileSystem(outputPath: String): Boolean = {
     val schemaPos = outputPath.indexOf(":/")
     if (schemaPos < 0) {
       // Output paths without specified schema should be treated as ytTable,

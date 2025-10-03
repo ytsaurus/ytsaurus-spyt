@@ -1,6 +1,7 @@
 package tech.ytsaurus.spyt.format.conf
 
 import org.apache.hadoop.conf.Configuration
+import org.apache.spark.SparkConf
 import org.apache.spark.sql.types.{DataType, StructType}
 import tech.ytsaurus.spyt.wrapper.config._
 import tech.ytsaurus.spyt.serializers.SchemaConverter.{SortOption, Sorted, Unordered}

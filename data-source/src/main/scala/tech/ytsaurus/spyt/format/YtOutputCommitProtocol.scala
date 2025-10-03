@@ -2,28 +2,57 @@ package tech.ytsaurus.spyt.format
 
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.{FileSystem, Path}
-import org.apache.hadoop.mapreduce.{JobContext, TaskAttemptContext}
+import org.apache.hadoop.mapreduce.{JobContext, TaskAttemptContext, TaskAttemptID}
+import org.apache.spark.broadcast.Broadcast
 import org.apache.spark.internal.io.FileCommitProtocol
+import org.apache.spark.scheduler.{DAGSchedulerUtils, SparkListener, SparkListenerJobStart}
+import org.apache.spark.sql.SparkSession
+import org.apache.spark.{SparkEnv, TaskContext}
 import org.slf4j.LoggerFactory
-import tech.ytsaurus.spyt.format.conf.YtTableSparkSettings._
-import tech.ytsaurus.spyt.format.conf.{SparkYtConfiguration, YtTableSparkSettings}
-import tech.ytsaurus.spyt.wrapper.client.YtClientConfigurationConverter.ytClientConfiguration
-import tech.ytsaurus.spyt.wrapper.config._
-import tech.ytsaurus.spyt.fs.path.YPathEnriched
-import tech.ytsaurus.spyt.wrapper.YtWrapper
-import tech.ytsaurus.client.{ApiServiceTransaction, CompoundClient}
+import tech.ytsaurus.client.request.{DistributedWriteCookie, StartDistributedWriteSession, WriteFragmentResult}
+import tech.ytsaurus.client.{ApiServiceTransaction, CompoundClient, DistributedWriteHandle}
 import tech.ytsaurus.spyt.exceptions._
 import tech.ytsaurus.spyt.format.YtOutputCommitProtocol._
 import tech.ytsaurus.spyt.format.conf.SparkYtConfiguration.Write.DynBatchSize
-import tech.ytsaurus.spyt.fs.path.YPathEnriched.CLUSTER_KEY
-import tech.ytsaurus.spyt.wrapper.config.ConfigEntry
-import tech.ytsaurus.spyt.wrapper.client.{YtClientConfiguration, YtClientProvider}
+import tech.ytsaurus.spyt.format.conf.YtTableSparkSettings._
+import tech.ytsaurus.spyt.format.conf.{SparkYtConfiguration, YtTableSparkSettings}
+import tech.ytsaurus.spyt.fs.path.YPathEnriched
+import tech.ytsaurus.spyt.wrapper.YtWrapper
+import tech.ytsaurus.spyt.wrapper.client.YtClientConfigurationConverter.ytClientConfiguration
+import tech.ytsaurus.spyt.wrapper.client.YtClientProvider
+import tech.ytsaurus.spyt.wrapper.config.{ConfigEntry, _}
 
-class YtOutputCommitProtocol(jobId: String,
-                             outputPath: String,
-                             dynamicPartitionOverwrite: Boolean) extends FileCommitProtocol with Serializable {
+import java.io.{IOException, ObjectOutputStream}
+import java.util.concurrent.{ConcurrentHashMap, ConcurrentMap, Semaphore}
+import scala.collection.JavaConverters._
+import scala.concurrent.Promise
 
-  private val rootPath = YPathEnriched.fromPath(new Path(outputPath))
+abstract class AbstractYtOutputCommitProtocol(
+  jobId: String,
+  outputPath: String,
+  dynamicPartitionOverwrite: Boolean,
+) extends FileCommitProtocol with Serializable {
+
+  protected val rootPath: YPathEnriched = YPathEnriched.fromPath(new Path(outputPath))
+
+  @transient protected lazy implicit val client: CompoundClient = cachedClient
+
+  protected def setupTable(path: YPathEnriched, conf: Configuration, transaction: Option[String] = None): Unit = {
+    val options = YtTableSparkSettings.deserialize(conf)
+    YtWrapper.createTable(path.toStringYPath, options, transaction, ignoreExisting = true)
+  }
+
+  override def newTaskTempFileAbsPath(taskContext: TaskAttemptContext, absoluteDir: String, ext: String): String = {
+    rootPath.toStringPath
+  }
+}
+
+class YtOutputCommitProtocol(
+  jobId: String,
+  outputPath: String,
+  dynamicPartitionOverwrite: Boolean
+) extends AbstractYtOutputCommitProtocol(jobId, outputPath, dynamicPartitionOverwrite) {
+
   private val tmpRichPath = rootPath.withName(rootPath.name + "_tmp")
 
   @transient private val deletedDirectories = ThreadLocal.withInitial[Seq[Path]](() => Nil)
@@ -39,83 +68,48 @@ class YtOutputCommitProtocol(jobId: String,
 
   override def setupJob(jobContext: JobContext): Unit = {
     val conf = jobContext.getConfiguration
-    implicit val ytClient: CompoundClient = yt(conf)
-    cachedClient = ytClient
 
     val externalTransaction = conf.getYtConf(WriteTransaction)
 
     log.debug(s"Setting up job for path $rootPath")
-    if (isDynamicTable(conf)) {
-      validateDynamicTable(rootPath, conf)
-    } else {
-      withTransaction(createTransaction(conf, GlobalTransaction, externalTransaction)) { transaction =>
-        deletedDirectories.get().map(YPathEnriched.fromPath(_).toStringYPath).foreach(YtWrapper.remove(_, Some(transaction)))
-        deletedDirectories.set(Nil)
-        if (isTable(conf)) {
-          if (isTableSorted(conf)) {
-            setupTmpTablesDirectory(transaction)
-            setupTable(rootPath, conf, transaction)
-          }
-        } else {
-          setupFiles(transaction)
+    withTransaction(createTransaction(conf, GlobalTransaction, externalTransaction)) { transaction =>
+      deletedDirectories.get().map(YPathEnriched.fromPath(_).toStringYPath).foreach(YtWrapper.remove(_, Some(transaction)))
+      deletedDirectories.set(Nil)
+      if (isTable(conf)) {
+        if (isTableSorted(conf)) {
+          setupTmpTablesDirectory(transaction)
+          setupTable(rootPath, conf, Some(transaction))
         }
+      } else {
+        setupFiles(transaction)
       }
     }
   }
 
-  private def setupTmpTablesDirectory(transaction: String)(implicit yt: CompoundClient): Unit = {
+  private def setupTmpTablesDirectory(transaction: String): Unit = {
     YtWrapper.createDir(tmpRichPath.toYPath, Some(transaction), ignoreExisting = false)
   }
 
-  private def setupFiles(transaction: String)(implicit yt: CompoundClient): Unit = {
+  private def setupFiles(transaction: String): Unit = {
     YtWrapper.createDir(rootPath.toYPath, Some(transaction), ignoreExisting = false)
   }
 
-  private def setupTable(path: YPathEnriched, conf: Configuration, transaction: String)
-                        (implicit yt: CompoundClient): Unit = {
-    val options = YtTableSparkSettings.deserialize(conf)
-    YtWrapper.createTable(path.toStringYPath, options, Some(transaction), ignoreExisting = true)
-  }
-
-  private def validateDynamicTable(path: YPathEnriched, conf: Configuration)(implicit yt: CompoundClient): Unit = {
-    if (!YtWrapper.isMounted(path.toStringYPath)) {
-      throw TableNotMountedException("Dynamic table should be mounted before writing to it")
-    }
-
-    val inconsistentDynamicWrite = conf.ytConf(InconsistentDynamicWrite)
-    if (!inconsistentDynamicWrite) {
-      throw InconsistentDynamicWriteException("For dynamic tables you should explicitly specify an additional " +
-        "option inconsistent_dynamic_write with true value so that you do agree that there is no support (yet) for " +
-        "transactional writes to dynamic tables")
-    }
-
-    val maxDynBatchSize = DynBatchSize.default.get
-    val dynBatchSize = conf.get(s"spark.yt.${DynBatchSize.name}", maxDynBatchSize.toString).toInt
-    if (dynBatchSize > maxDynBatchSize) {
-      throw TooLargeBatchException(s"spark.yt.write.batchSize must be set to no more than $maxDynBatchSize for dynamic tables")
-    }
-  }
-
-  private def setupSortedTablePart(taskContext: TaskAttemptContext)(implicit yt: CompoundClient): YPathEnriched = {
+  private def setupSortedTablePart(taskContext: TaskAttemptContext): YPathEnriched = {
     val tmpPath = tmpRichPath.child(s"part-${taskContext.getTaskAttemptID.getTaskID.getId}")
     withTransaction(getWriteTransaction(taskContext.getConfiguration)) { transaction =>
-      setupTable(tmpPath, taskContext.getConfiguration, transaction)
+      setupTable(tmpPath, taskContext.getConfiguration, Some(transaction))
     }
     tmpPath
   }
 
   override def setupTask(taskContext: TaskAttemptContext): Unit = {
     val conf = taskContext.getConfiguration
-    implicit val ytClient: CompoundClient = yt(conf)
-    cachedClient = ytClient
     initWrittenTables()  // Executors will have null value after deserialization
-    if (!isDynamicTable(conf)) {
-      val parent = YtOutputCommitProtocol.getGlobalWriteTransaction(conf)
-      createTransaction(
-        conf, Transaction, Some(parent),
-        title = Some(s"YT Operation ID ${System.getenv("YT_OPERATION_ID")}, YT Job ID ${System.getenv("YT_JOB_ID")}, Spark ${taskContext.getTaskAttemptID}"),
-      )
-    }
+    val parent = YtOutputCommitProtocol.getGlobalWriteTransaction(conf)
+    createTransaction(
+      conf, Transaction, Some(parent),
+      title = Some(s"YT Operation ID ${System.getenv("YT_OPERATION_ID")}, YT Job ID ${System.getenv("YT_JOB_ID")}, Spark ${taskContext.getTaskAttemptID}"),
+    )
   }
 
   override def abortJob(jobContext: JobContext): Unit = {
@@ -127,7 +121,7 @@ class YtOutputCommitProtocol(jobId: String,
     abortTransactionIfExists(taskContext.getConfiguration, Transaction)
   }
 
-  private def concatenateSortedTables(conf: Configuration, transaction: String)(implicit yt: CompoundClient): Unit = {
+  private def concatenateSortedTables(conf: Configuration, transaction: String): Unit = {
     val sRichPath = rootPath.toStringYPath
     val sTmpRichPath = tmpRichPath.toStringYPath
     val tmpTables = YtWrapper.listDir(sTmpRichPath, Some(transaction)).map(tmpRichPath.child).map(_.toStringYPath)
@@ -142,8 +136,7 @@ class YtOutputCommitProtocol(jobId: String,
     YtWrapper.remove(sTmpRichPath, Some(transaction))
   }
 
-  private def renameTmpPartitionTables(taskMessages: Seq[TaskMessage], transaction: Option[String])
-                                      (implicit yt: CompoundClient): Unit = {
+  private def renameTmpPartitionTables(taskMessages: Seq[TaskMessage], transaction: Option[String]): Unit = {
     val tables = taskMessages.flatMap(_.tables).filter(_.name.startsWith(tmpPartitionPrefix)).distinct
     tables.foreach { path =>
       val targetPath = path.withName(path.name.drop(tmpPartitionPrefix.length))
@@ -153,23 +146,19 @@ class YtOutputCommitProtocol(jobId: String,
 
   override def commitJob(jobContext: JobContext, taskCommits: Seq[FileCommitProtocol.TaskCommitMessage]): Unit = {
     val conf = jobContext.getConfiguration
-    implicit val ytClient: CompoundClient = yt(conf)
-    if (!isDynamicTable(conf)) {
-      withTransaction(YtOutputCommitProtocol.getGlobalWriteTransaction(conf)) { transaction =>
-        renameTmpPartitionTables(taskCommits.map(_.obj.asInstanceOf[TaskMessage]), Some(transaction))
-        if (isTableSorted(conf)) {
-          concatenateSortedTables(conf, transaction)
-        }
-        commitTransaction(conf, GlobalTransaction)
+    withTransaction(YtOutputCommitProtocol.getGlobalWriteTransaction(conf)) { transaction =>
+      renameTmpPartitionTables(taskCommits.map(_.obj.asInstanceOf[TaskMessage]), Some(transaction))
+      if (isTableSorted(conf)) {
+        concatenateSortedTables(conf, transaction)
       }
+      commitTransaction(conf, GlobalTransaction)
     }
   }
 
   override def commitTask(taskContext: TaskAttemptContext): FileCommitProtocol.TaskCommitMessage = {
     val conf = taskContext.getConfiguration
-    implicit val ytClient: CompoundClient = yt(conf)
     val optTaskTransactionId = conf.getYtConf(Transaction)
-    if (!isDynamicTable(conf) && optTaskTransactionId.isDefined) {
+    if (optTaskTransactionId.isDefined) {
       muteTransaction(optTaskTransactionId.get)
     }
     new FileCommitProtocol.TaskCommitMessage(TaskMessage(writtenTables.get(), optTaskTransactionId))
@@ -185,25 +174,17 @@ class YtOutputCommitProtocol(jobId: String,
     f"part-$split%05d-$jobId$ext"
   }
 
-  private def hivePartitioningNotSupportedError(description: String): Unit = {
-    throw new IllegalStateException(s"Hive partitioning is not supported for $description")
-  }
-
   override def newTaskTempFile(taskContext: TaskAttemptContext, dir: Option[String], ext: String): String = {
     val conf = taskContext.getConfiguration
-    implicit val ytClient: CompoundClient = yt(conf)
     val fullPath = dir.map(rootPath.child).getOrElse(rootPath)
     val path = if (isTable(conf)) {
-      if (isDynamicTable(conf)) {
-        if (dir.isDefined) hivePartitioningNotSupportedError("dynamic tables")
-        rootPath
-      } else if (isTableSorted(conf)) {
+      if (isTableSorted(conf)) {
         if (dir.isDefined) hivePartitioningNotSupportedError("sorted static tables")
         setupSortedTablePart(taskContext)
       } else {
         // In case of dynamic partition we will write to another table and then rename with overwrite
         val p = if (dynamicPartitionOverwrite) fullPath.withName(tmpPartitionPrefix + fullPath.name) else fullPath
-        setupTable(p, conf, YtOutputCommitProtocol.getGlobalWriteTransaction(conf))
+        setupTable(p, conf, Some(YtOutputCommitProtocol.getGlobalWriteTransaction(conf)))
         p
       }
     } else {
@@ -211,10 +192,6 @@ class YtOutputCommitProtocol(jobId: String,
     }
     writtenTables.set(path +: writtenTables.get())
     path.toStringPath
-  }
-
-  override def newTaskTempFileAbsPath(taskContext: TaskAttemptContext, absoluteDir: String, ext: String): String = {
-    rootPath.toStringPath
   }
 
   override def onTaskCommit(taskCommit: FileCommitProtocol.TaskCommitMessage): Unit = {
@@ -225,8 +202,155 @@ class YtOutputCommitProtocol(jobId: String,
     val transactionGuid = taskMessage.transactionId.get
     log.debug(s"Commit write transaction: $transactionGuid")
     log.debug(s"Send commit transaction request: $transactionGuid")
-    YtWrapper.commitTransaction(transactionGuid)(cachedClient)
+    YtWrapper.commitTransaction(transactionGuid)
     log.debug(s"Success commit transaction: $transactionGuid")
+  }
+}
+
+class DynamicTableOutputCommitProtocol(
+  jobId: String,
+  outputPath: String,
+  dynamicPartitionOverwrite: Boolean
+) extends AbstractYtOutputCommitProtocol(jobId, outputPath, dynamicPartitionOverwrite) {
+
+  override def setupJob(jobContext: JobContext): Unit = {
+    val conf = jobContext.getConfiguration
+    validateDynamicTable(rootPath, conf)
+  }
+
+  private def validateDynamicTable(path: YPathEnriched, conf: Configuration): Unit = {
+    if (!YtWrapper.isMounted(path.toStringYPath)) {
+      throw TableNotMountedException("Dynamic table should be mounted before writing to it")
+    }
+
+    val inconsistentDynamicWrite = conf.ytConf(InconsistentDynamicWrite)
+    if (!inconsistentDynamicWrite) {
+      throw InconsistentDynamicWriteException("For dynamic tables you should explicitly specify an additional " +
+        "option inconsistent_dynamic_write with true value so that you do agree that there is no support (yet) for " +
+        "transactional writes to dynamic tables")
+    }
+
+    val maxDynBatchSize = DynBatchSize.default.get
+    val dynBatchSize = conf.get(s"spark.yt.${DynBatchSize.name}", maxDynBatchSize.toString).toInt
+    if (dynBatchSize > maxDynBatchSize) {
+      throw TooLargeBatchException(s"spark.yt.${DynBatchSize.name} must be set to no more than $maxDynBatchSize for dynamic tables")
+    }
+  }
+
+  override def commitJob(jobContext: JobContext, taskCommits: Seq[FileCommitProtocol.TaskCommitMessage]): Unit = ()
+
+  override def abortJob(jobContext: JobContext): Unit = ()
+
+  override def setupTask(taskContext: TaskAttemptContext): Unit = ()
+
+  override def newTaskTempFile(taskContext: TaskAttemptContext, dir: Option[String], ext: String): String = {
+    if (dir.isDefined) {
+      hivePartitioningNotSupportedError("dynamic tables")
+    }
+    rootPath.toStringPath
+  }
+
+  override def commitTask(taskContext: TaskAttemptContext): FileCommitProtocol.TaskCommitMessage = {
+    FileCommitProtocol.EmptyTaskCommitMessage
+  }
+
+  override def abortTask(taskContext: TaskAttemptContext): Unit = ()
+}
+
+class DistributedWriteOutputCommitProtocol(
+  jobId: String,
+  outputPath: String,
+  dynamicPartitionOverwrite: Boolean
+) extends AbstractYtOutputCommitProtocol(jobId, outputPath, dynamicPartitionOverwrite) {
+
+  @transient private val dwHandlePromise: Promise[DistributedWriteHandle] = Promise()
+
+  @volatile private var cookiesBroadcast: Broadcast[java.util.List[DistributedWriteCookie]] = _
+  @transient private val cookiesSemaphore = new Semaphore(0)
+
+  @throws(classOf[IOException])
+  private def writeObject(out: ObjectOutputStream): Unit = {
+    // We need to override the default serialization behaviour here because cookiesBroadcast is set in a separate thread
+    // and we need to wait for it
+    if (Thread.currentThread().getName == "dag-scheduler-event-loop") {
+      // We only need to wait for a cookiesBroadcast to be set when an event occurs in dag-scheduler-event-loop, but
+      // not inside other threads
+      cookiesSemaphore.acquire()
+    }
+    out.defaultWriteObject()
+  }
+
+  override def setupJob(jobContext: JobContext): Unit = {
+    val conf = jobContext.getConfiguration
+    setupTable(rootPath, conf)
+
+    val sc = SparkSession.active.sparkContext
+    sc.setLocalProperty(distributedWritePropKey, jobId)
+
+    // We need to use SparkListener here to defer the start of distributed write process because at this moment we
+    // don't know the number of spark tasks on the resulting stage
+    val sparkJobListener: SparkListener = new SparkListener() {
+      override def onJobStart(jobStart: SparkListenerJobStart): Unit = {
+        // There might be more than one job that can be submitted at the same time from different threads, so it is
+        // needed to check every jobStart event to match to correct jobId
+        if (jobStart.properties.get(distributedWritePropKey) == jobId) {
+          val numOutputTasksOpt = DAGSchedulerUtils.getNumOutputTasks(sc, jobStart.stageIds)
+          if (numOutputTasksOpt.isDefined) {
+            sc.removeSparkListener(this)
+            val cookieCount = numOutputTasksOpt.get
+            val distributedWriteRequest = StartDistributedWriteSession.builder()
+              .setPath(rootPath.toYPath)
+              .setCookieCount(cookieCount)
+              .build()
+            val dwHandle = client.startDistributedWriteSession(distributedWriteRequest).join()
+            cookiesBroadcast = sc.broadcast(dwHandle.getCookies)
+            dwHandlePromise.success(dwHandle)
+            cookiesSemaphore.release()
+          }
+        }
+      }
+    }
+    sc.addSparkListener(sparkJobListener)
+  }
+
+  override def commitJob(jobContext: JobContext, taskCommits: Seq[FileCommitProtocol.TaskCommitMessage]): Unit = {
+    stopCookiesBroadcast()
+    val results = taskCommits.map(_.obj.asInstanceOf[WriteFragmentResult])
+    dwHandlePromise.future.value.get.foreach(_.finish(results.asJava).join())
+  }
+
+  override def abortJob(jobContext: JobContext): Unit = {
+    stopCookiesBroadcast()
+    dwHandlePromise.future.value.get.foreach(_.stopPing())
+  }
+
+  private def stopCookiesBroadcast(): Unit = {
+    if (cookiesBroadcast != null) {
+      cookiesBroadcast.destroy()
+    }
+  }
+
+  override def setupTask(taskContext: TaskAttemptContext): Unit = {
+    val partitionId = TaskContext.get().partitionId()
+    val cookie = cookiesBroadcast.value.get(partitionId)
+    setCookieForTask(taskContext, cookie)
+  }
+
+  override def newTaskTempFile(taskContext: TaskAttemptContext, dir: Option[String], ext: String): String = {
+    if (dir.isDefined) {
+      hivePartitioningNotSupportedError("distributed write")
+    }
+    rootPath.toStringPath
+  }
+
+  override def commitTask(taskContext: TaskAttemptContext): FileCommitProtocol.TaskCommitMessage = {
+    deleteCookieForTask(taskContext)
+    val result = getAndRemoveWriteFragmentResult()
+    new FileCommitProtocol.TaskCommitMessage(result)
+  }
+
+  override def abortTask(taskContext: TaskAttemptContext): Unit = {
+    deleteCookieForTask(taskContext)
   }
 }
 
@@ -234,6 +358,7 @@ object YtOutputCommitProtocol {
   import tech.ytsaurus.spyt.format.conf.SparkYtInternalConfiguration._
 
   // These messages will be sent from successful tasks to a driver
+  // TODO add wtfResult here???
   private case class TaskMessage(tables: Seq[YPathEnriched], transactionId: Option[String])
 
   private val log = LoggerFactory.getLogger(getClass)
@@ -242,9 +367,38 @@ object YtOutputCommitProtocol {
 
   private val pingFutures = scala.collection.concurrent.TrieMap.empty[String, ApiServiceTransaction]
 
-  private var cachedClient: CompoundClient = _
+  val distributedWritePropKey = "distributedWriteJobId"
 
-  private def yt(conf: Configuration): CompoundClient = YtClientProvider.ytClient(ytClientConfiguration(conf))
+  private val taskCookies: ConcurrentMap[TaskAttemptID, DistributedWriteCookie] = new ConcurrentHashMap()
+
+  def setCookieForTask(taskContext: TaskAttemptContext, cookie: DistributedWriteCookie): Unit = {
+    taskCookies.put(taskContext.getTaskAttemptID, cookie)
+  }
+
+  def getCookieForTask(taskContext: TaskAttemptContext): DistributedWriteCookie = {
+    taskCookies.get(taskContext.getTaskAttemptID)
+  }
+
+  def deleteCookieForTask(taskContext: TaskAttemptContext): Unit = {
+    taskCookies.remove(taskContext.getTaskAttemptID)
+  }
+
+  private val writeFragmentResults: ThreadLocal[WriteFragmentResult] = new ThreadLocal[WriteFragmentResult]()
+
+  def setWriteFragmentResult(result: WriteFragmentResult): Unit = {
+    writeFragmentResults.set(result)
+  }
+
+  def getAndRemoveWriteFragmentResult(): WriteFragmentResult = {
+    val result = writeFragmentResults.get()
+    writeFragmentResults.remove()
+    result
+  }
+
+  lazy val cachedClient: CompoundClient = {
+    val conf = SparkEnv.get.conf
+    YtClientProvider.ytClient(ytClientConfiguration(conf))
+  }
 
   def withTransaction(transaction: String)(f: String => Unit): Unit = {
     try {
@@ -315,7 +469,7 @@ object YtOutputCommitProtocol {
     conf.ytConf(GlobalTransaction)
   }
 
-  def isDynamicTable(conf: Configuration)(implicit yt: CompoundClient): Boolean = {
-    conf.getYtConf(YtTableSparkSettings.Path).exists(YtWrapper.isDynamicTable)
+  def hivePartitioningNotSupportedError(description: String): Unit = {
+    throw new IllegalStateException(s"Hive partitioning is not supported for $description")
   }
 }

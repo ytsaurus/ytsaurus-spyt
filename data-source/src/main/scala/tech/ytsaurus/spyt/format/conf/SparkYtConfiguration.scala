@@ -11,9 +11,8 @@ object SparkYtConfiguration {
   object Write {
     private val prefix = "write"
 
-    case object BatchSize extends ConfigEntry[Int](s"$prefix.batchSize", Some(500000))
-
-    case object MiniBatchSize extends ConfigEntry[Int](s"$prefix.miniBatchSize", Some(1000))
+    case object BufferSize extends ConfigEntry[Int](s"$prefix.bufferSize", Some(1000),
+      List(s"$prefix.miniBatchSize"))
 
     case object DynBatchSize extends ConfigEntry[Int](s"$prefix.dynBatchSize", Some(50000))
 
@@ -22,6 +21,12 @@ object SparkYtConfiguration {
     case object TypeV3 extends ConfigEntry[Boolean](s"$prefix.typeV3.enabled", Some(false), List(
       s"$prefix.writingTypeV3.enabled", s"$prefix.typeV3Format.enabled"
     ))
+
+    object Distributed {
+      private val prefix = s"${Write.prefix}.distributed"
+
+      case object Enabled extends ConfigEntry[Boolean](s"$prefix.enabled", Some(false))
+    }
   }
 
   object Read {

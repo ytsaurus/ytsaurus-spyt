@@ -16,10 +16,6 @@ class YtMetricsSource extends Source {
 
   val writeTimeSum: Counter = metricRegistry.counter(MetricRegistry.name("write.sum"))
 
-  val writeReadyEventTime: Timer = metricRegistry.timer(MetricRegistry.name("write.readyEvent"))
-
-  val writeReadyEventTimeSum: Counter = metricRegistry.counter(MetricRegistry.name("write.readyEvent.sum"))
-
   val writeCloseTime: Timer = metricRegistry.timer(MetricRegistry.name("write.close"))
 
   val writeCloseTimeSum: Counter = metricRegistry.counter(MetricRegistry.name("write.close.sum"))

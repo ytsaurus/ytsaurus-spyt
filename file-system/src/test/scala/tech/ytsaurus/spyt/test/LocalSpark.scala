@@ -25,7 +25,7 @@ trait LocalSpark extends LocalYtClient with BeforeAndAfterEach {
 
   def sparkMaster: String = s"local[$numExecutors, $numFailures]"
 
-  def sparkConf: SparkConf = defaultSparkConf
+  def sparkConf: SparkConf = defaultSparkConf.clone()
 
   def reinstantiateSparkSession: Boolean = false
 
@@ -142,6 +142,12 @@ object LocalSpark {
   def stop(): Unit = {
     SparkSession.getDefaultSession.foreach(_.stop())
     SparkSession.clearDefaultSession()
+    // Clearing all cached and stopped spark sessions from SparkSession global object
+    val activeThreadSessionField =
+      SparkSession.getClass.getDeclaredField("org$apache$spark$sql$SparkSession$$activeThreadSession")
+    activeThreadSessionField.setAccessible(true)
+    activeThreadSessionField.set(SparkSession, new InheritableThreadLocal[SparkSession])
+    activeThreadSessionField.setAccessible(false)
     spark = null
   }
 
@@ -166,7 +172,6 @@ object LocalSpark {
     .set("spark.hadoop.yt.user", "root")
     .set("spark.hadoop.yt.token", "")
     .set("spark.hadoop.yt.timeout", "300")
-    .set("spark.yt.write.batchSize", "10")
     .set(FILE_COMMIT_PROTOCOL_CLASS.key, "tech.ytsaurus.spyt.format.DelegatingOutputCommitProtocol")
     .set("spark.ui.enabled", "false")
     .set("spark.hadoop.yt.read.arrow.enabled", "true")

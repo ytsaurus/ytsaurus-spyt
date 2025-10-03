@@ -161,6 +161,7 @@ class YtFileFormat extends FileFormat with DataSourceRegister with StreamSourceP
       StreamingUtils.getStreamingSourceSchema(
         sqlContext.sparkSession, YPath.simple(queuePath), None, None, caseInsensitiveParameters)
     }
+    implicit val yt: CompoundClient = YtClientProvider.ytClient(ytClientConfiguration(sqlContext.sparkSession))
     new YtStreamingSource(sqlContext, consumerPath, queuePath, requiredSchema, caseInsensitiveParameters)
   }
 

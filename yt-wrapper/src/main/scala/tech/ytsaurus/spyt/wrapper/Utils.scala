@@ -3,7 +3,6 @@ package tech.ytsaurus.spyt.wrapper
 import java.io.{FileInputStream, InputStream}
 import java.net.InetAddress
 import java.util.Properties
-import java.util.concurrent.{CompletableFuture, TimeUnit}
 import scala.annotation.tailrec
 import scala.concurrent.duration._
 import scala.util.{Failure, Success, Try}
@@ -77,27 +76,28 @@ object Utils {
   def tryWithResources[R <: AutoCloseable, A](resource: R)(body: R => A): A = TryWithResourcesJava.apply(resource, body)
 
   def runWithRetry[T](
-                       operation: => CompletableFuture[T],
-                       maxRetries: Int = 3,
-                       initialDelay: FiniteDuration = 5.second,
-                       maxDelay: FiniteDuration = 60.seconds,
-                       timeout: FiniteDuration = 30.seconds
+                       operation: () => T,
+                       maxRetries: Int = 5,
+                       initialDelay: FiniteDuration = 5.seconds,
+                       maxDelay: FiniteDuration = 60.seconds
                      ): T = {
     require(maxRetries >= 0, "maxRetries must be non-negative")
+    require(initialDelay >= Duration.Zero, "initialDelay must be non-negative")
+    require(maxDelay >= initialDelay, "maxDelay must be >= initialDelay")
 
     @tailrec
     def attempt(retry: Int, currentDelay: FiniteDuration): T = {
-      val result = Try(operation.get(timeout.toMillis, TimeUnit.MILLISECONDS))
-      result match {
+      Try(operation()) match {
         case Success(value) => value
         case Failure(_) if retry > 0 =>
           Thread.sleep(currentDelay.toMillis)
           val nextDelay = (currentDelay * 2).min(maxDelay)
           attempt(retry - 1, nextDelay)
-        case Failure(ex) =>
-          throw new RuntimeException(s"Operation failed after ${maxRetries + 1} attempts", ex)
+        case Failure(finalEx) =>
+          throw new RuntimeException(s"Operation failed after ${maxRetries + 1} attempts", finalEx)
       }
     }
+
     attempt(maxRetries, initialDelay)
   }
 }

@@ -226,11 +226,10 @@ class YTsaurusStreamingTest extends AnyFlatSpec with Matchers with LocalSpark wi
   }
 
   it should "one streaming launch" in {
-    val maxRowsPerPartition = 6
     val launchesParams: Seq[(Int, Int, Boolean)] = Seq((0, 3, true))
 
     val paths: StreamingObjectsPaths = prepareStreamingObjects(tmpPath = tmpPath)
-    doStreamLaunches(paths, launchesParams, maxRowsPerPartition)
+    doStreamLaunches(paths, launchesParams)
 
     val expectedData: Seq[TestRow] = getTestData(0, 29)
     val expectedDF: DataFrame = spark.createDataFrame(expectedData)
@@ -292,7 +291,7 @@ class YTsaurusStreamingTest extends AnyFlatSpec with Matchers with LocalSpark wi
     }
 
     val queueWritingDuration = 10.seconds
-    val endTime = System.currentTimeMillis() + queueWritingDuration.toMillis
+    var endTime = System.currentTimeMillis() + queueWritingDuration.toMillis
     var lowerIndex = 0
     while (System.currentTimeMillis() < endTime) {
       queues.foreach { queue =>
@@ -302,7 +301,12 @@ class YTsaurusStreamingTest extends AnyFlatSpec with Matchers with LocalSpark wi
       lowerIndex += 10
       Thread.sleep(1000)
     }
+
+    endTime = System.currentTimeMillis() + 30.seconds.toMillis
     queries.foreach(_.stop())
+    while (queries.exists(_.isActive) && System.currentTimeMillis() < endTime) {
+      Thread.sleep(1000)
+    }
 
     val resultDF = spark.read
       .option(InconsistentReadEnabled.name, "true")
@@ -462,14 +466,83 @@ class YTsaurusStreamingTest extends AnyFlatSpec with Matchers with LocalSpark wi
     }
   }
 
+  it should "streaming after offsets desynchronization: checkpoints are behind on consumer" in {
+    val paths: StreamingObjectsPaths = prepareStreamingObjects(tmpPath = tmpPath, includeServiceColumns = true,
+      queueTabletCount = 1)
+    val consumerPath = paths.consumerPath
+    val queuePath = paths.queuePath
+    val resultPath = paths.resultPath
+    val checkpointLocation = paths.checkpointLocation
+
+    doStreamLaunches(paths, launchesParams = Seq((0, 3, true)), includeServiceColumns = true)
+
+    val cluster = YtWrapper.clusterName()
+    val currentOffset = YtQueueOffset.getCurrentOffset(cluster, consumerPath, queuePath)
+    // Advance consumer to simulate the desynchronization of the consumer and cached offsets by spark / checkpoint files
+    val shiftedPartitions = currentOffset.partitions.map { case (partitionId, _) => partitionId -> 34L }
+    val shiftedOffset = YtQueueOffset(cluster, queuePath, shiftedPartitions)
+    YtQueueOffset.advance(consumerPath, shiftedOffset, currentOffset)
+
+    val df: DataFrame = spark
+      .readStream
+      .format("yt")
+      .option("consumer_path", consumerPath)
+      .option("include_service_columns", value = true)
+      .load(queuePath)
+
+    val queryForResultTableCheck = df
+      .writeStream
+      .option("checkpointLocation", checkpointLocation)
+      .format("yt")
+      .option("path", resultPath)
+      .start()
+
+    val recordFuture = Future[Unit] {
+      var lowerIndex = 30
+      for (_ <- 0 until 3) {
+        val data = getTestData(lowerIndex, lowerIndex + 9)
+        appendChunksToTestTable(queuePath, Seq(data), sorted = false, remount = false)
+        lowerIndex += 10
+      }
+
+      val recordCountLimit = 55 // expect spark to skip 5 lines, because we have shifted the offset in consumer
+      var currentCount = 0L
+      while (currentCount < recordCountLimit) {
+        Thread.sleep(2000)
+        currentCount = spark.read.option(InconsistentReadEnabled.name, "true").yt(resultPath).count()
+      }
+
+    }(scala.concurrent.ExecutionContext.Implicits.global)
+
+    Await.result(recordFuture, 120 seconds)
+    queryForResultTableCheck.stop()
+  }
+
+  it should "streaming after offsets desynchronization: consumer is behind on checkpoints" in {
+    val paths: StreamingObjectsPaths = prepareStreamingObjects(tmpPath = tmpPath, includeServiceColumns = true,
+      queueTabletCount = 1)
+
+    doStreamLaunches(paths, launchesParams = Seq((0, 3, true)), includeServiceColumns = true)
+
+    YtWrapper.removeIfExists(paths.consumerPath)
+    YtWrapper.removeIfExists(paths.queuePath)
+    YtWrapper.removeIfExists(paths.resultPath)
+
+    prepareOrderedTestTable(paths.queuePath, enableDynamicStoreRead = true, tabletCount = 1)
+    prepareConsumer(paths.consumerPath, paths.queuePath)
+    prepareOrderedTestTable(paths.resultPath, schemaWithServiceColumns, enableDynamicStoreRead = true)
+    waitQueueRegistration(paths.queuePath)
+
+    doStreamLaunches(paths, launchesParams = Seq((0, 3, true)), includeServiceColumns = true)
+  }
+
   def testContinueStreamingAfterRemovingCheckpoints(includeServiceColumns: Boolean = false): Unit = {
-    val maxRowsPerPartition = 6
     val paths: StreamingObjectsPaths = prepareStreamingObjects(tmpPath = tmpPath, includeServiceColumns)
-    doStreamLaunches(paths, launchesParams = Seq((0, 3, true)), maxRowsPerPartition, includeServiceColumns)
+    doStreamLaunches(paths, launchesParams = Seq((0, 3, true)), includeServiceColumns)
 
     YtWrapper.removeDirIfExists(paths.checkpointLocation.stripPrefix("yt:/"), recursive = true)
 
-    doStreamLaunches(paths, launchesParams = Seq((30, 3, true)), maxRowsPerPartition, includeServiceColumns)
+    doStreamLaunches(paths, launchesParams = Seq((30, 3, true)), includeServiceColumns)
 
     val expectedData: Seq[TestRow] = getTestData(0, 59)
     val expectedDF: DataFrame = spark.createDataFrame(expectedData)
@@ -494,7 +567,7 @@ class YTsaurusStreamingTest extends AnyFlatSpec with Matchers with LocalSpark wi
       (30, 3, false),
       (60, 3, true)
     )
-    doStreamLaunches(paths, launchesParams, maxRowsPerPartition = 8, includeServiceColumns)
+    doStreamLaunches(paths, launchesParams, includeServiceColumns)
 
     val resultDF = spark.read
       .option(InconsistentReadEnabled.name, "true")
@@ -512,27 +585,25 @@ class YTsaurusStreamingTest extends AnyFlatSpec with Matchers with LocalSpark wi
     }
   }
 
-  def prepareStreamingObjects(tmpPath: String, includeServiceColumns: Boolean = false): StreamingObjectsPaths = {
+  def prepareStreamingObjects(tmpPath: String, includeServiceColumns: Boolean = false, queueTabletCount: Int = 3): StreamingObjectsPaths = {
     val paths: StreamingObjectsPaths = new StreamingObjectsPaths(tmpPath)
     val consumerPath = paths.consumerPath
     val queuePath = paths.queuePath
     val resultPath = paths.resultPath
 
     YtWrapper.createDir(tmpPath)
-    prepareOrderedTestTable(queuePath, enableDynamicStoreRead = true)
+    prepareOrderedTestTable(queuePath, enableDynamicStoreRead = true, tabletCount = queueTabletCount)
     prepareConsumer(consumerPath, queuePath)
-    waitQueueRegistration(queuePath)
 
-    val resultTableSchema = if (includeServiceColumns)
-      schemaWithServiceColumns else orderedTestSchema
-
+    val resultTableSchema = if (includeServiceColumns) schemaWithServiceColumns else orderedTestSchema
     prepareOrderedTestTable(resultPath, resultTableSchema, enableDynamicStoreRead = true)
+
+    waitQueueRegistration(queuePath)
 
     paths
   }
 
-  def doStreamLaunches(paths: StreamingObjectsPaths, launchesParams: Seq[(Int, Int, Boolean)],
-                       maxRowsPerPartition: Long, includeServiceColumns: Boolean = false): Unit = {
+  def doStreamLaunches(paths: StreamingObjectsPaths, launchesParams: Seq[(Int, Int, Boolean)], includeServiceColumns: Boolean = false): Unit = {
     val consumerPath = paths.consumerPath
     val queuePath = paths.queuePath
     val resultPath = paths.resultPath
@@ -542,7 +613,6 @@ class YTsaurusStreamingTest extends AnyFlatSpec with Matchers with LocalSpark wi
       .readStream
       .format("yt")
       .option("consumer_path", consumerPath)
-      .option("max_rows_per_partition", maxRowsPerPartition)
       .option("include_service_columns", includeServiceColumns)
       .load(queuePath)
 

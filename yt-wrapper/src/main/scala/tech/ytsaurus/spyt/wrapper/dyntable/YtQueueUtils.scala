@@ -1,15 +1,17 @@
 package tech.ytsaurus.spyt.wrapper.dyntable
 
-import tech.ytsaurus.client.{ApiServiceTransaction, CompoundClient}
 import tech.ytsaurus.client.request.{AdvanceConsumer, PullConsumer, RegisterQueueConsumer, RowBatchReadOptions}
 import tech.ytsaurus.client.rows.QueueRowset
-import tech.ytsaurus.core.{DataSize, GUID}
+import tech.ytsaurus.client.{ApiServiceTransaction, CompoundClient}
+import tech.ytsaurus.core.DataSize
 import tech.ytsaurus.core.cypress.YPath
 import tech.ytsaurus.spyt.wrapper.Utils.runWithRetry
 import tech.ytsaurus.spyt.wrapper.cypress.YtCypressUtils
 import tech.ytsaurus.spyt.wrapper.transaction.YtTransactionUtils
 
+import java.util.concurrent.TimeUnit
 import scala.annotation.tailrec
+import scala.concurrent.duration.DurationInt
 
 trait YtQueueUtils {
   self: YtCypressUtils with YtTransactionUtils =>
@@ -26,11 +28,11 @@ trait YtQueueUtils {
       .setOffset(offset)
       .setRowBatchReadOptions(options)
       .build()
-    runWithRetry(yt.pullConsumer(request), maxRetries = 5)
+    runWithRetry(() => yt.pullConsumer(request).get(30.seconds.toMillis, TimeUnit.MILLISECONDS))
   }
 
   def pullConsumerStrict(consumerPath: String, queuePath: String, partitionIndex: Int, offset: Long, rowCount: Long)
-                  (implicit yt: CompoundClient): Seq[QueueRowset] = {
+                        (implicit yt: CompoundClient): Seq[QueueRowset] = {
     @tailrec
     def inner(lowerIndex: Long, size: Long, result: List[QueueRowset]): Seq[QueueRowset] = {
       val queueRowset = pullConsumer(consumerPath, queuePath, partitionIndex, lowerIndex, size)
@@ -45,6 +47,7 @@ trait YtQueueUtils {
         inner(lowerIndex + receivedRows, size - receivedRows, newResult)
       }
     }
+
     inner(offset, rowCount, Nil)
   }
 

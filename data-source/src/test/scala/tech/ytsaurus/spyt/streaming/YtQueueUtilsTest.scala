@@ -1,12 +1,21 @@
 package tech.ytsaurus.spyt.streaming
 
 import org.apache.spark.sql.execution.streaming.SerializedOffset
+import org.mockito.MockitoSugar
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
+import tech.ytsaurus.spyt.test.LocalYtClient
+import tech.ytsaurus.spyt.wrapper.YtWrapper
 
+import java.util.concurrent.CompletionException
 import scala.collection.SortedMap
+import scala.concurrent.duration.DurationInt
 
-class YtQueueUtilsTest extends AnyFlatSpec with Matchers {
+class YtQueueUtilsTest extends AnyFlatSpec with Matchers with MockitoSugar with LocalYtClient {
+  val consumerPath = "//tmp/path/to/consumer"
+  val queuePath = "//tmp/path/to/queue"
+  val cluster: String = YtWrapper.clusterName()
+
   it should "throw exception when partition list is sparse" in {
     YtQueueOffset("", "", SortedMap(0 -> 0L, 1 -> 1L, 2 -> 2L, 3 -> 3L))
     a[IllegalArgumentException] should be thrownBy {
@@ -61,5 +70,26 @@ class YtQueueUtilsTest extends AnyFlatSpec with Matchers {
     YtQueueOffset.getSafeMax(Seq(1, 2, 0)) shouldBe Some(2)
     YtQueueOffset.getSafeMax(Seq.empty[String]) shouldBe None
     YtQueueOffset.getSafeMax(Seq("a", "bacaba")) shouldBe Some("bacaba")
+  }
+
+  it should "not advance consumer on commit if new offset is less than last committed" in {
+    val lastCommitted = YtQueueOffset(cluster, queuePath, SortedMap(0 -> 50L))
+    val newOffset = YtQueueOffset(cluster, queuePath, SortedMap(0 -> 40L))
+    YtQueueOffset.advance(consumerPath, newOffset, lastCommitted) shouldBe None
+  }
+
+  it should "not advance consumer on commit if new offset is more than max offset" in {
+    val lastCommitted = YtQueueOffset(cluster, queuePath, SortedMap(0 -> 0L))
+    val newOffset = YtQueueOffset(cluster, queuePath, SortedMap(0 -> 10L))
+    val maxOffset = YtQueueOffset(cluster, queuePath, SortedMap(0 -> 5L))
+    YtQueueOffset.advance(consumerPath, newOffset, lastCommitted, Some(maxOffset)) shouldBe None
+  }
+
+  it should "throw an error when the transaction has expired" in {
+    val lastCommitted = YtQueueOffset(cluster, queuePath, SortedMap(0 -> 50L))
+    val newOffset = YtQueueOffset(cluster, queuePath, SortedMap(0 -> 60L))
+    intercept[CompletionException] {
+      YtQueueOffset.advance(consumerPath, newOffset, lastCommitted, timeout=1.nanosecond)
+    }
   }
 }

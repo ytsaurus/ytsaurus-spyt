@@ -1,12 +1,14 @@
 from spyt.connect import start_connect_server
 
 from common.helpers import assert_items_equal
+from hashlib import sha256
 import time
 from functools import reduce
 from pyspark.sql import SparkSession
 import pyspark.sql.functions as f
 from pyspark.sql.types import Row
 from utils import wait_for_operation
+from yt.wrapper.http_helpers import get_token
 
 
 def _wait_for_spark_connect_endpoint(yt_client, operation_id):
@@ -73,3 +75,17 @@ def test_base_request(yt_client):
         if spark:
             spark.stop()
         yt_client.complete_operation(operation.id)
+
+
+def test_refresh_token(yt_client):
+    token_hash = sha256(get_token(client=yt_client).encode()).hexdigest()
+    token_path = f"//sys/cypress_tokens/{token_hash}"
+    counter_before = yt_client.get(f"{token_path}/@access_counter")
+    spark_conf = {
+        "spark.ytsaurus.connect.idle.timeout": f"30s",
+        "spark.ytsaurus.connect.token.refresh.period": f"10s",
+    }
+    operation = start_connect_server(yt_client, spark_conf=spark_conf)
+    wait_for_operation(yt_client, operation.id)
+    counter_after = yt_client.get(f"{token_path}/@access_counter")
+    assert counter_after - counter_before >= 3, "Should be at least 3 pings to token"

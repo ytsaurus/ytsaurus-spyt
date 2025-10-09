@@ -1,18 +1,21 @@
 package org.apache.spark.sql.connect.ytsaurus
 
+import org.apache.commons.codec.binary.Hex
 import org.apache.spark.SparkEnv
-import org.apache.spark.deploy.ytsaurus.YTsaurusUtils
 import org.apache.spark.sql.connect.config.Connect.CONNECT_GRPC_BINDING_PORT
 import org.apache.spark.sql.connect.service.{SparkConnectServer, SparkConnectService}
 import org.slf4j.LoggerFactory
-import tech.ytsaurus.client.YTsaurusClient
+import tech.ytsaurus.client.CompoundClient
 import tech.ytsaurus.client.request.UpdateOperationParameters
-import tech.ytsaurus.client.rpc.YTsaurusClientAuth
 import tech.ytsaurus.core.GUID
 import tech.ytsaurus.spyt.wrapper.Utils
+import tech.ytsaurus.spyt.wrapper.client.YtClientConfigurationConverter.ytClientConfiguration
+import tech.ytsaurus.spyt.wrapper.client.YtClientProvider
 import tech.ytsaurus.ysontree.YTree
 
 import java.net.ServerSocket
+import java.security.MessageDigest
+import java.util.concurrent.{Executors, ScheduledExecutorService, TimeUnit}
 import scala.annotation.tailrec
 import scala.util.control.NonFatal
 
@@ -28,17 +31,31 @@ object SpytConnectServer {
     serverThread.start()
 
     waitForGrpcServerStart()
-    addGrpcEndpointToAnnotation()
 
-    val idleTimeout = SparkEnv.get.conf.get(Config.YTSAURUS_CONNECT_IDLE_TIMEOUT)
-    while(keepListening(idleTimeout)) {
-      Thread.sleep(10000)
+    val sparkConf = SparkEnv.get.conf
+    val client = YtClientProvider.ytClient(ytClientConfiguration(sparkConf))
+    var tokenRefreshExecutor: Option[ScheduledExecutorService] = None
+
+    try {
+      sparkConf.get(Config.YTSAURUS_CONNECT_TOKEN_REFRESH_PERIOD).foreach { period =>
+        tokenRefreshExecutor = Some(scheduleTokenRefresh(period, client))
+      }
+
+      addGrpcEndpointToAnnotation(client)
+
+      val idleTimeout = sparkConf.get(Config.YTSAURUS_CONNECT_IDLE_TIMEOUT)
+
+      while (keepListening(idleTimeout)) {
+        Thread.sleep(10000)
+      }
+
+      log.info(s"Idle timeout of ${idleTimeout}ms has passed, shutting down SPYT connect server")
+      SparkConnectService.stop()
+
+      serverThread.join()
+    } finally {
+      tokenRefreshExecutor.foreach(_.shutdownNow())
     }
-
-    log.info(s"Idle timeout of ${idleTimeout}ms has passed, shutting down SPYT connect server")
-    SparkConnectService.stop()
-
-    serverThread.join()
   }
 
   private val MAX_PORT_RETRIES = 32
@@ -85,32 +102,40 @@ object SpytConnectServer {
     case _ => true
   }
 
-  private def addGrpcEndpointToAnnotation(): Unit = {
+  private def addGrpcEndpointToAnnotation(client: CompoundClient): Unit = {
     val operationId = System.getenv("YT_OPERATION_ID")
     if (operationId != null) {
       val host = Utils.ytHostnameOrIpAddress
       val port = SparkConnectService.localPort
       val endpoint = s"$host:$port"
 
-      val conf = SparkEnv.get.conf
-      val ytProxy = YTsaurusUtils.parseMasterUrl(conf.get("spark.master"))
-      val token = YTsaurusUtils.getToken(conf)
-      val clientBuilder: YTsaurusClient.ClientBuilder[_ <: YTsaurusClient, _] = YTsaurusClient.builder()
-      clientBuilder.setCluster(ytProxy)
-      clientBuilder.setAuth(YTsaurusClientAuth.builder().setToken(token).build())
-      val client: YTsaurusClient = clientBuilder.build()
-      try {
-        val annotations = YTree.mapBuilder().key("spark_connect_endpoint").value(endpoint).buildMap()
-        val req = UpdateOperationParameters
-          .builder()
-          .setOperationId(GUID.valueOf(operationId))
-          .setAnnotations(annotations)
-          .build()
+      val annotations = YTree.mapBuilder().key("spark_connect_endpoint").value(endpoint).buildMap()
+      val req = UpdateOperationParameters
+        .builder()
+        .setOperationId(GUID.valueOf(operationId))
+        .setAnnotations(annotations)
+        .build()
 
-        client.updateOperationParameters(req).join()
-      } finally {
-        client.close()
+      client.updateOperationParameters(req).join()
+    }
+  }
+
+  private def scheduleTokenRefresh(period: Long, client: CompoundClient): ScheduledExecutorService = {
+    val tokenRefreshExecutor = Executors.newSingleThreadScheduledExecutor()
+    val token = sys.env("YT_SECURE_VAULT_YT_TOKEN")
+    val digest = MessageDigest.getInstance("SHA-256")
+    val tokenHash = digest.digest(token.getBytes)
+    val tokenPath = s"//sys/cypress_tokens/${Hex.encodeHexString(tokenHash)}"
+    val refreshCommand: Runnable = { () =>
+      try {
+        client.getNode(tokenPath).join()
+        log.info("Temporary token has been refreshed")
+      } catch {
+        case t: Throwable =>
+          log.warn("An exception has occurred during temporary token refresh", t)
       }
     }
+    tokenRefreshExecutor.scheduleAtFixedRate(refreshCommand, 0, period, TimeUnit.MILLISECONDS)
+    tokenRefreshExecutor
   }
 }

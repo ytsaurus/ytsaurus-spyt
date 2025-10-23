@@ -14,7 +14,9 @@ import org.apache.spark.sql.execution.streaming.FileStreamSink
 import org.apache.spark.sql.types.StructType
 import org.apache.spark.sql.v2.YtInMemoryFileIndex.bulkListLeafFiles
 import org.apache.spark.util.SerializableConfiguration
+import tech.ytsaurus.spyt.format.conf.SparkYtConfiguration.Read.ListParentDirectories
 import tech.ytsaurus.spyt.fs.YtTableFileSystem.DEFAULT_FILTER
+import tech.ytsaurus.spyt.wrapper.config._
 
 import java.io.FileNotFoundException
 import scala.annotation.tailrec
@@ -232,12 +234,14 @@ object YtInMemoryFileIndex extends Logging {
 
     // Short-circuits parallel listing when serial listing is likely to be faster.
     if (paths.size <= sparkSession.sessionState.conf.parallelPartitionDiscoveryThreshold) {
+      val listParentDirectories = sparkSession.ytConf(ListParentDirectories)
       if (paths.isEmpty) {
         return Nil
-      } else if (paths.size > 1 && areRootPaths) {
+      } else if (paths.size > 1 && areRootPaths && listParentDirectories) {
         // Here we suppose that almost all paths belong to the same parent directory so we can list and filter it
         // in a single request to YTsaurus.
-        return paths.groupBy(p => p.getParent).flatMap { case (dir, children) =>
+        val groupedPaths = paths.groupBy(p => p.getParent)
+        return groupedPaths.flatMap { case (dir, children) =>
           val names = children.map(p => p.getName).toSet
           val leafFiles = listLeafFiles(
             dir,

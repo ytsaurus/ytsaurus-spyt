@@ -4,7 +4,7 @@ import org.apache.hadoop.fs._
 import org.apache.spark.sql.SparkSession
 import org.slf4j.LoggerFactory
 import tech.ytsaurus.client.CompoundClient
-import tech.ytsaurus.spyt.fs.YtTableFileSystem.DEFAULT_FILTER
+import tech.ytsaurus.spyt.fs.YtTableFileSystem.{DEFAULT_FILTER, PathName}
 import tech.ytsaurus.spyt.fs.path._
 import tech.ytsaurus.spyt.wrapper.YtWrapper
 import tech.ytsaurus.spyt.wrapper.cypress.{PathType, YtAttributes}
@@ -49,7 +49,7 @@ class YtTableFileSystem extends YtFileSystemBase {
   private def listYtDirectory(path: YPathEnriched, filter: PathFilter)(implicit yt: CompoundClient): Array[FileStatus] = {
     YtWrapper.listDir(path.toYPath, path.transaction, YtAttributes.tableAttributes).flatMap { nameWithAttrs =>
       val name = nameWithAttrs.stringValue()
-      if (filter.accept(new Path(name))) {
+      if (filter.accept(new PathName(name))) {
         val attributes: Map[String, YTreeNode] = nameWithAttrs.getAttributes.asScala.toMap
         listStatus(path.child(name), expandDirectory = false, attributes, filter)
       } else {
@@ -122,4 +122,8 @@ class YtTableFileSystem extends YtFileSystemBase {
 
 object YtTableFileSystem {
   val DEFAULT_FILTER: PathFilter = _ => true
+
+  private class PathName(name: String) extends Path("unused") {
+    override def getName: String = name
+  }
 }

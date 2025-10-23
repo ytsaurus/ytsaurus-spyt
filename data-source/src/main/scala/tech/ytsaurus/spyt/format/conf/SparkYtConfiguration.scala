@@ -70,6 +70,8 @@ object SparkYtConfiguration {
     }
 
     case object Transactional extends ConfigEntry[Boolean](s"$prefix.transactional", Some(true))
+
+    case object ListParentDirectories extends ConfigEntry[Boolean](s"$prefix.listParentDirectories", Some(true))
   }
 
   object Transaction {

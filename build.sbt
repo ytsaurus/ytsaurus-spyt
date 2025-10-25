@@ -115,7 +115,10 @@ lazy val `spark-submit` = (project in file("spark-submit"))
   )
 
 lazy val `spyt-connect` = (project in file("spyt-connect"))
-  .dependsOn(`resource-manager` % "compile->compile;test->test;provided->provided;compileprovided->compileprovided;testprovided->testprovided")
+  .dependsOn(
+    `resource-manager` % "compile->compile;test->test;provided->provided;compileprovided->compileprovided;testprovided->testprovided",
+    `spark-patch` % Provided
+  )
   .settings(
     libraryDependencies ++= sparkConnect
   )

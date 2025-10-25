@@ -57,7 +57,10 @@ public class SparkPatchAgent {
         String[] classpathElements = classpath.split(File.pathSeparator);
 
         Stream<String> adapterImplPaths = Arrays.stream(classpathElements)
-                .filter(path -> path.contains("spark-adapter-impl-") || path.contains("spark-adapter/impl"))
+                .filter(path -> path.contains("spark-adapter-impl-") ||
+                        path.contains("spark-adapter/impl") ||
+                        path.contains("spyt-connect")
+                )
                 .filter(path -> path.endsWith(".jar") || path.endsWith("/classes"));
 
         String patchJarPath = ManagementFactory.getRuntimeMXBean().getInputArguments().stream()

@@ -214,27 +214,21 @@ class ArrowColumnVector(dataType: IndexedDataType,
   }
 
   private case class UInt1Accessor(keys: Option[BaseIntVector], values: UInt1Vector) extends BaseLongAccessor {
-    override final def getLong(rowId: Int): Long = values.get(id(rowId))
-
-    override final def getInt(rowId: Int): Int = values.get(id(rowId))
-
-    override def getShort(rowId: Int): Short = values.get(id(rowId))
-
-    override def getByte(rowId: Int): Byte = values.get(id(rowId))
+    override final def getLong(rowId: Int): Long = values.get(id(rowId)) & 0xFFL
+    override final def getInt(rowId: Int): Int = values.get(id(rowId)) & 0xFF
+    override def getShort(rowId: Int): Short = (values.get(id(rowId)) & 0xFF).toShort
+    override def getByte(rowId: Int): Byte = values.get(id(rowId) & 0xFF)
   }
 
   private case class UInt2Accessor(keys: Option[BaseIntVector], values: UInt2Vector) extends BaseLongAccessor {
-    override final def getLong(rowId: Int): Long = values.get(id(rowId)).toLong
-
-    override final def getInt(rowId: Int): Int = values.get(id(rowId)).toInt
-
-    override def getShort(rowId: Int): Short = values.get(id(rowId)).toShort
+    override final def getLong(rowId: Int): Long = values.get(id(rowId)) & 0xFFFFL
+    override final def getInt(rowId: Int): Int = values.get(id(rowId)) & 0xFFFF
+    override def getShort(rowId: Int): Short = (values.get(id(rowId)) & 0xFFFF).toShort
   }
 
   private case class UInt4Accessor(keys: Option[BaseIntVector], values: UInt4Vector) extends BaseLongAccessor {
-    override final def getLong(rowId: Int): Long = values.get(id(rowId))
-
-    override final def getInt(rowId: Int): Int = values.get(id(rowId))
+    override final def getLong(rowId: Int): Long = values.get(id(rowId)) & 0xFFFFFFFFL
+    override final def getInt(rowId: Int): Int = values.get(id(rowId)) & 0xFFFFFFFF
   }
 
   private case class UInt8Accessor(keys: Option[BaseIntVector], values: UInt8Vector) extends BaseLongAccessor {

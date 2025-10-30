@@ -386,6 +386,54 @@ class SchemaConverterTest extends AnyFlatSpec with Matchers
       df_1.collect() should contain theSameElementsAs rightSparkDataForByteAndShortTests
     }
   }
+
+  it should "correctly read unsigned byte, short and int" in {
+    withConf(SparkYtConfiguration.Schema.ForcingNullableIfNoMetadata, false) {
+      val rightYtDataForUnsignedTests: ListBuffer[(Long, Long, Long)] = ListBuffer[(Long, Long, Long)](
+        (4294967295L, 65535L, 255L),
+        (0L, 0, 0.toShort),
+        (2147483648L, 32768L, 128L)
+      )
+
+      val data = ListBuffer[UnversionedRow]()
+      for (row <- rightYtDataForUnsignedTests) {
+        data += new UnversionedRow(java.util.List.of(
+          new UnversionedValue(0, ColumnValueType.UINT64, false, row._1),
+          new UnversionedValue(1, ColumnValueType.UINT64, false, row._2),
+          new UnversionedValue(2, ColumnValueType.UINT64, false, row._3)
+        ))
+      }
+
+      val simpleSchema = TableSchema.builder().setUniqueKeys(false)
+        .addValue("uint32", TiType.uint32())
+        .addValue("uint16", TiType.uint16())
+        .addValue("uint8", TiType.uint8())
+        .build()
+
+      writeTableFromURow(data, tmpPath, simpleSchema)
+
+      val df = spark.read
+        .option(YtTableSparkSettings.NullTypeAllowed.name, value = false)
+        .option(YtUtils.Options.PARSING_TYPE_V3, value = true)
+        .yt(tmpPath)
+
+      val expectedSchema = StructType(Seq(
+        StructField("uint32", LongType, nullable = false),
+        StructField("uint16", IntegerType, nullable = false),
+        StructField("uint8", ShortType, nullable = false)
+      ))
+
+      df.schema.fields.map(_.copy(metadata = Metadata.empty)) shouldBe expectedSchema
+
+      val expectedData = Seq(
+        Row(4294967295L, 65535, 255),
+        Row(0L, 0, 0),
+        Row(2147483648L, 32768, 128)
+      )
+
+      df.collect() should contain theSameElementsAs expectedData
+    }
+  }
 }
 
 object SchemaConverterTest extends SchemaTestUtils {

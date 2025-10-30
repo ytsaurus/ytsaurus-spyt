@@ -108,13 +108,13 @@ object YtLogicalType {
   }
 
   case object Int8 extends AtomicYtLogicalType("int8", 0x1000, ColumnValueType.INT64, TiType.int8(), ByteType)
-  case object Uint8 extends AtomicYtLogicalType("uint8", 0x1001, ColumnValueType.INT64, TiType.uint8(), ShortType)
+  case object Uint8 extends AtomicYtLogicalType("uint8", 0x1001, ColumnValueType.UINT64, TiType.uint8(), ShortType)
 
   case object Int16 extends AtomicYtLogicalType("int16", 0x1003, ColumnValueType.INT64, TiType.int16(), ShortType)
-  case object Uint16 extends AtomicYtLogicalType("uint16", 0x1004, ColumnValueType.INT64, TiType.uint16(), IntegerType)
+  case object Uint16 extends AtomicYtLogicalType("uint16", 0x1004, ColumnValueType.UINT64, TiType.uint16(), IntegerType)
 
   case object Int32 extends AtomicYtLogicalType("int32", 0x1005, ColumnValueType.INT64, TiType.int32(), IntegerType)
-  case object Uint32 extends AtomicYtLogicalType("uint32", 0x1006, ColumnValueType.INT64, TiType.uint32(), LongType)
+  case object Uint32 extends AtomicYtLogicalType("uint32", 0x1006, ColumnValueType.UINT64, TiType.uint32(), LongType)
 
   case object Utf8 extends AtomicYtLogicalType("utf8", 0x1007, ColumnValueType.STRING, TiType.utf8(), StringType)
 

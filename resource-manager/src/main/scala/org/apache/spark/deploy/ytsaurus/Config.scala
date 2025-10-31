@@ -58,6 +58,12 @@ object Config {
     .longConf
     .createWithDefault(10000)
 
+  val EXECUTOR_STATE_POLL_INTERVAL = ConfigBuilder("spark.ytsaurus.executor.state.poll.interval")
+    .doc("Interval between executor operation state checks in milliseconds")
+    .version("2.8.0")
+    .timeConf(TimeUnit.MILLISECONDS)
+    .createWithDefault(20000L)
+
   val YTSAURUS_POOL = ConfigBuilder("spark.ytsaurus.pool")
     .doc("YTsaurus scheduler pool to execute this job")
     .version("1.78.0")

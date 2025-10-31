@@ -1,3 +1,5 @@
+import time
+
 import spyt
 
 from common.helpers import assert_items_equal
@@ -5,7 +7,8 @@ from pyspark.conf import SparkConf
 from pyspark.sql.types import IntegerType, StringType, StructType, StructField, Row
 from pyspark.sql.functions import col, udf
 import requests
-from utils import SPARK_CONF, YT_PROXY, upload_file
+from yt.wrapper import YtClient
+from utils import SPARK_CONF, YT_PROXY, upload_file, get_executors_operation_id
 from utils import wait_for_operation
 
 
@@ -177,6 +180,33 @@ def test_cluster_mode_with_secret_parameters(yt_client, tmp_dir, direct_submitte
         "token_env": "t0k3n",
     }]
     assert_items_equal(yt_client.read_table(table_out), result_rows)
+
+
+def test_driver_auto_shutdown(yt_client: YtClient, tmp_dir, direct_submitter):
+    file_name = 'spark_endless_job.py'
+    upload_file(yt_client, f'jobs/{file_name}', f'{tmp_dir}/{file_name}')
+    small_executors_spark_conf = {"spark.executor.instances": "1",
+                                  "spark.executor.cores": "1",
+                                  "spark.executor.memory": "450m",
+                                  "spark.dynamicAllocation.enabled": "false",
+                                  "spark.sql.adaptive.enabled": "false",
+                                  "spark.task.maxFailures": "1",
+                                  "spark.yt.max_failed_job_count": "1",
+                                  "spark.ytsaurus.executor.maxFailures": "1",
+                                  "spark.ytsaurus.driver.maxFailures": "1",
+                                  "spark.ytsaurus.executor.state.poll.interval": "1s"
+                                  }
+    submit_result = direct_submitter.submit(f'yt:/{tmp_dir}/{file_name}', conf=small_executors_spark_conf)
+    driver_operation_id = submit_result["operation_id"] if isinstance(submit_result, dict) else submit_result
+    assert driver_operation_id is not None
+
+    executors_operation_id = get_executors_operation_id(yt_client, driver_operation_id, retries=80)
+    assert executors_operation_id is not None
+
+    time.sleep(5)
+
+    yt_client.abort_operation(executors_operation_id)
+    assert wait_for_operation(yt_client, driver_operation_id) == "failed"
 
 
 def test_archives(yt_client, tmp_dir, direct_submitter):

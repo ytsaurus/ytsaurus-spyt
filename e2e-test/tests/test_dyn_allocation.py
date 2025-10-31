@@ -2,8 +2,7 @@ import spyt
 import pytest
 import requests
 from time import sleep
-from utils import upload_file
-
+from utils import upload_file, get_executors_operation_id
 
 spark_conf_dynamic_allocation = {
     "spark.ytsaurus.rpc.job.proxy.enabled": "true",
@@ -30,21 +29,6 @@ def get_running_jobs_count(yt_client, executors_operation_id):
         return 0
     running = operation['brief_progress']['jobs'].get('running')
     return int(running) if running else 0
-
-
-def get_executors_operation_id(yt_client, driver_operation_id, retries=30):
-    for _ in range(retries):
-        val = (
-            yt_client.get_operation(driver_operation_id)
-            .get("runtime_parameters", {})
-            .get("annotations", {})
-            .get("description", {})
-            .get("Executors operation ID")
-        )
-        if val:
-            return val
-        sleep(1)
-    raise TimeoutError("Executors operation ID not found")
 
 
 def check_min_max_jobs(yt_client, executors_operation_id, spark_conf, poll_iterations=10, poll_delay=2):

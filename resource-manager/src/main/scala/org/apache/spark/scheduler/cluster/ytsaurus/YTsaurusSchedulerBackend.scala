@@ -5,14 +5,16 @@ import org.apache.spark.SparkContext
 import org.apache.spark.deploy.ytsaurus.Config._
 import org.apache.spark.internal.config.SUBMIT_DEPLOY_MODE
 import org.apache.spark.resource.ResourceProfile
-import org.apache.spark.scheduler.{ExecutorDecommissionInfo, TaskSchedulerImpl}
 import org.apache.spark.scheduler.cluster.{CoarseGrainedSchedulerBackend, SchedulerBackendUtils}
+import org.apache.spark.scheduler.{ExecutorDecommissionInfo, TaskSchedulerImpl}
 import org.apache.spark.util.Utils
 import tech.ytsaurus.client.CompoundClient
 import tech.ytsaurus.core.GUID
 import tech.ytsaurus.spyt.wrapper.TcpProxyService
 
+import java.util.concurrent.{Executors, ScheduledExecutorService, TimeUnit}
 import scala.concurrent.Future
+import scala.util.Try
 
 private[spark] class YTsaurusSchedulerBackend (
   scheduler: TaskSchedulerImpl,
@@ -24,6 +26,8 @@ private[spark] class YTsaurusSchedulerBackend (
   private val initialExecutors = SchedulerBackendUtils.getInitialTargetExecutorNumber(conf)
 
   private val executorsJobsAllocator = new YTJobsExecutorAllocator(conf, operationManager.ytClient)
+  private var executorMonitor: ScheduledExecutorService = _
+  @volatile private var isShuttingDown = false
 
   def initialize(): Unit = {
     if (sc.conf.get(SUBMIT_DEPLOY_MODE) == "cluster" && sc.uiWebUrl.isDefined) {
@@ -65,10 +69,71 @@ private[spark] class YTsaurusSchedulerBackend (
         Map(YTsaurusOperationManager.EXECUTORS_OPERATION_ID_KEY -> executorOperation.id.toString)
       )
     }
+
+    startExecutorOperationMonitor()
+  }
+
+  private def startExecutorOperationMonitor(): Unit = {
+    val pingInterval = sc.conf.get(EXECUTOR_STATE_POLL_INTERVAL)
+    executorMonitor = Executors.newSingleThreadScheduledExecutor((r: Runnable) => {
+      val t = new Thread(r, "Executor-monitoring-thread")
+      t.setDaemon(true)
+      t
+    })
+
+    val checkStateTask = new Runnable {
+      override def run(): Unit = {
+        checkAndHandleExecutorOperationState()
+      }
+    }
+
+    executorMonitor.scheduleAtFixedRate(checkStateTask, 0, pingInterval, TimeUnit.MILLISECONDS)
+  }
+
+  private def checkAndHandleExecutorOperationState(): Unit = {
+    Try {
+      val executorOperationId = sc.conf.getOption(EXECUTOR_OPERATION_ID)
+      operationManager.getOperationStatus(executorOperationId).foreach { state =>
+        if (YTsaurusOperationManager.isFinalState(state)) {
+          handleFinalState(executorOperationId.get, state)
+        }
+      }
+    }.recover {
+      case _: InterruptedException =>
+        Thread.currentThread().interrupt()
+      case e: Error =>
+        logError(s"Error while checking executor operation state: ${e.getMessage}")
+    }
+  }
+
+  private def handleFinalState(executorOperationId: String, state: String): Unit = {
+    logWarning(s"Executor operation $executorOperationId has reached final state: $state. Terminating SparkContext")
+    val exitCode = if (YTsaurusOperationManager.isCompletedState(state)) 0 else 1
+    isShuttingDown = true
+    Utils.tryLogNonFatalError {
+      shutdownExecutorMonitor()
+    }
+    Utils.tryLogNonFatalError {
+      operationManager.close()
+    }
+    logError("Exiting the driver due to executors being stopped")
+    System.exit(exitCode)
+  }
+
+  private def shutdownExecutorMonitor(): Unit = {
+    if (executorMonitor != null && !executorMonitor.isShutdown) {
+      executorMonitor.shutdownNow()
+    }
   }
 
   override def stop(): Unit = {
     logInfo("Stopping YTsaurusSchedulerBackend")
+    if (isShuttingDown) return
+    isShuttingDown = true
+    Utils.tryLogNonFatalError {
+      shutdownExecutorMonitor()
+    }
+
     Utils.tryLogNonFatalError {
       super.stop()
     }

@@ -71,6 +71,17 @@ private[spark] class YTsaurusOperationManager(val ytClient: YTsaurusClient,
     operation
   }
 
+  def getOperationStatus(operationId: Option[String]): Option[String] = {
+    if (operationId.isEmpty) {
+      return None
+    }
+    val op = YTsaurusOperation(GUID.valueOf(operationId.get))
+    val opState = YTsaurusOperationManager.getOperationState(
+      YTsaurusOperationManager.getOperation(op, ytClient)
+    )
+    Some(opState)
+  }
+
   def setOperationDescription(operation: YTsaurusOperation, description: Map[String, String]): Unit = {
     val yTreeDescription = description.foldLeft(YTree.mapBuilder()) { case (builder, (k, v)) =>
       builder.key(k).value(v)

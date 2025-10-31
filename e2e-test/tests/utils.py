@@ -41,3 +41,18 @@ def wait_for_operation(yt_client, operation_id):
             if current_state.is_finished():
                 return current_state
             time.sleep(1)
+
+
+def get_executors_operation_id(yt_client, driver_operation_id, retries=30):
+    for _ in range(retries):
+        val = (
+            yt_client.get_operation(driver_operation_id)
+            .get("runtime_parameters", {})
+            .get("annotations", {})
+            .get("description", {})
+            .get("Executors operation ID")
+        )
+        if val:
+            return val
+        time.sleep(1)
+    raise TimeoutError("Executors operation ID not found")

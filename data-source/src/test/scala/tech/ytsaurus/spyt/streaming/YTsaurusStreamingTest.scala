@@ -4,6 +4,7 @@ import org.apache.spark.sql.execution.StreamingUtils.{ROW_INDEX_WITH_PREFIX, TAB
 import org.apache.spark.sql.functions._
 import org.apache.spark.sql.streaming.Trigger
 import org.apache.spark.sql.streaming.Trigger.ProcessingTime
+import org.apache.spark.sql.types._
 import org.apache.spark.sql.{DataFrame, Dataset, Row, SaveMode}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -13,6 +14,7 @@ import tech.ytsaurus.spyt.serializers.WriteSchemaConverter
 import tech.ytsaurus.spyt.streaming.YTsaurusStreamingTest.{schemaWithServiceColumns, schemaWithServiceColumnsAndQueuePath}
 import tech.ytsaurus.spyt.test._
 import tech.ytsaurus.spyt.wrapper.YtWrapper
+import tech.ytsaurus.typeinfo.TiType
 
 import java.util.UUID
 import scala.concurrent.duration.DurationInt
@@ -534,6 +536,72 @@ class YTsaurusStreamingTest extends AnyFlatSpec with Matchers with LocalSpark wi
     waitQueueRegistration(paths.queuePath)
 
     doStreamLaunches(paths, launchesParams = Seq((0, 3, true)), includeServiceColumns = true)
+  }
+
+  it should "correctly stream unsigned byte, short and int types" in {
+    case class UnsignedTestRow(uint8: Short, uint16: Int, uint32: Long)
+
+    val unsignedSchema: TableSchema = TableSchema.builder()
+      .setUniqueKeys(false)
+      .addValue("uint8", TiType.optional(TiType.uint8()))
+      .addValue("uint16", TiType.uint16())
+      .addValue("uint32", TiType.uint32())
+      .build()
+
+    val testData = Seq(
+      UnsignedTestRow(0, 0, 0L),
+      UnsignedTestRow(255, 65535, 4294967295L),
+      UnsignedTestRow(128, 32768, 2147483648L),
+      UnsignedTestRow(1, 1, 1L)
+    )
+
+    val paths = new StreamingObjectsPaths(tmpPath)
+    YtWrapper.createDir(tmpPath)
+    prepareOrderedTestTable(paths.queuePath, unsignedSchema, tabletCount = 1, enableDynamicStoreRead = true)
+    prepareConsumer(paths.consumerPath, paths.queuePath)
+    prepareOrderedTestTable(paths.resultPath, unsignedSchema, tabletCount = 1, enableDynamicStoreRead = true)
+    waitQueueRegistration(paths.queuePath)
+
+    appendChunksToTestTable(path = paths.queuePath, schema = unsignedSchema, data = Seq(testData), sorted = false,
+      remount = false)
+
+    val query = spark.readStream
+      .format("yt")
+      .option("consumer_path", paths.consumerPath)
+      .option("parsing_type_v3", "true")
+      .load(paths.queuePath)
+      .writeStream
+      .option("checkpointLocation", paths.checkpointLocation)
+      .format("yt")
+      .option("path", paths.resultPath)
+      .start()
+
+    var resultCount = 0L
+    val startTime = System.currentTimeMillis()
+    while (resultCount < testData.size && (System.currentTimeMillis() - startTime) < 20 * 1000) {
+      Thread.sleep(1000)
+      resultCount = spark.read.option(InconsistentReadEnabled.name, "true").yt(paths.resultPath).count()
+    }
+    query.stop()
+
+    val resultDF = spark.read
+      .option(InconsistentReadEnabled.name, "true")
+      .yt(paths.resultPath)
+      .select("uint8", "uint16", "uint32")
+
+    resultDF.schema.fields.map(_.copy(metadata = Metadata.empty)) shouldBe StructType(Seq(
+      StructField("uint8", ShortType, nullable = true),
+      StructField("uint16", IntegerType, nullable = true),
+      StructField("uint32", LongType, nullable = true)
+    ))
+
+    val actualData = resultDF.collect().map(row =>
+      Seq(row.getAs[Short]("uint8"), row.getAs[Int]("uint16"), row.getAs[Long]("uint32"))
+    )
+
+    val expectedData = testData.map(row => Seq(row.uint8, row.uint16, row.uint32))
+
+    actualData should contain theSameElementsAs expectedData
   }
 
   def testContinueStreamingAfterRemovingCheckpoints(includeServiceColumns: Boolean = false): Unit = {

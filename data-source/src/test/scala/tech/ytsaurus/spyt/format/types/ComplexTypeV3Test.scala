@@ -683,7 +683,7 @@ object ComplexTypeV3Test {
     codeList(Seq[Any](struct.d, struct.s))
   }
 
-  private def getMetadataBuilder(name: String, keyId: Int = -1): MetadataBuilder = {
+  private def getMetadataBuilder(name: String, keyId: Int = -1, ytTypeName: String = null): MetadataBuilder = {
     new MetadataBuilder()
       .putString(MetadataFields.ORIGINAL_NAME, name)
       .putLong(MetadataFields.KEY_ID, keyId)

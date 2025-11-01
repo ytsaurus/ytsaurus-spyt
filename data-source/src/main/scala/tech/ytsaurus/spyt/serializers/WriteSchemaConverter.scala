@@ -1,22 +1,22 @@
 package tech.ytsaurus.spyt.serializers
 
 import org.apache.hadoop.conf.Configuration
-import org.apache.spark.sql.spyt.types.{Date32Type, Datetime64Type, DatetimeType, Interval64Type, Timestamp64Type}
+import org.apache.spark.sql.spyt.types.{DatetimeType, _}
 import org.apache.spark.sql.types._
 import tech.ytsaurus.core.tables.{ColumnSortOrder, TableSchema}
 import tech.ytsaurus.spyt.common.utils.TypeUtils.{isTuple, isVariant, isVariantOverTuple}
 import tech.ytsaurus.spyt.format.conf.YtTableSparkSettings.{StringToUtf8, WriteSchemaHint, WriteTypeV3}
-import tech.ytsaurus.spyt.wrapper.config.{OptionsConf, SparkYtHadoopConfiguration}
-import tech.ytsaurus.spyt.serializers.SchemaConverter.{MetadataFields, SortOption, Unordered, applyYtLimitToSparkDecimal, wrapSparkAttributes}
+import tech.ytsaurus.spyt.serializers.SchemaConverter._
 import tech.ytsaurus.spyt.serializers.YtLogicalTypeSerializer.{serializeType, serializeTypeV3}
 import tech.ytsaurus.spyt.types.YTsaurusTypes
+import tech.ytsaurus.spyt.wrapper.config.{OptionsConf, SparkYtHadoopConfiguration}
 import tech.ytsaurus.ysontree.{YTree, YTreeNode}
 
 class WriteSchemaConverter(
-  val hint: Map[String, YtLogicalType] = Map.empty,
-  val typeV3Format: Boolean = false,
-  val stringToUtf8: Boolean = false,
-) {
+                            val hint: Map[String, YtLogicalType] = Map.empty,
+                            val typeV3Format: Boolean = false,
+                            val stringToUtf8: Boolean = false,
+                          ) {
   private def ytLogicalTypeV3Variant(struct: StructType): YtLogicalType = {
     if (isVariantOverTuple(struct)) {
       YtLogicalType.VariantOverTuple {
@@ -47,9 +47,21 @@ class WriteSchemaConverter(
   def ytLogicalTypeV3(sparkType: DataType, hint: YtLogicalType = null): YtLogicalType = sparkType match {
     case NullType => YtLogicalType.Null
     case ByteType => YtLogicalType.Int8
-    case ShortType => YtLogicalType.Int16
-    case IntegerType => YtLogicalType.Int32
-    case LongType => YtLogicalType.Int64
+    case ShortType => if (hint == YtLogicalType.Uint8) {
+      YtLogicalType.Uint8
+    } else {
+      YtLogicalType.Int16
+    }
+    case IntegerType => if (hint == YtLogicalType.Uint16) {
+      YtLogicalType.Uint16
+    } else {
+      YtLogicalType.Int32
+    }
+    case LongType => if (hint == YtLogicalType.Uint32) {
+      YtLogicalType.Uint32
+    } else {
+      YtLogicalType.Int64
+    }
     case StringType =>
       if (hint != null) {
         hint match {
@@ -59,8 +71,7 @@ class WriteSchemaConverter(
           case YtLogicalType.Uuid => YtLogicalType.Uuid
           case _ => throw new IllegalArgumentException(s"casting from $sparkType to $hint is not supported")
         }
-      } else
-        if (stringToUtf8) YtLogicalType.Utf8 else YtLogicalType.String
+      } else if (stringToUtf8) YtLogicalType.Utf8 else YtLogicalType.String
     case FloatType => YtLogicalType.Float
     case DoubleType => YtLogicalType.Double
     case BooleanType => YtLogicalType.Boolean

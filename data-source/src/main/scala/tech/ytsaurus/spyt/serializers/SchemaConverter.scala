@@ -14,6 +14,8 @@ import tech.ytsaurus.spyt.serializers.YtLogicalTypeSerializer.deserializeTypeV3
 import tech.ytsaurus.typeinfo.TiType
 import tech.ytsaurus.ysontree.YTreeNode
 
+import scala.annotation.tailrec
+
 object SchemaConverter {
   object MetadataFields {
     val ORIGINAL_NAME = "original_name"
@@ -72,9 +74,21 @@ object SchemaConverter {
       metadata.putString(MetadataFields.ORIGINAL_NAME, originalName)
       metadata.putLong(MetadataFields.KEY_ID, if (fieldMap.containsKey("sort_order")) index else -1)
       val ytType = getAvailableType(fieldMap, parsingTypeV3)
+      setYtLogicalTypeIfUnsignedType(ytType, metadata)
       metadata.putBoolean(MetadataFields.ARROW_SUPPORTED, ytType.arrowSupported)
       structField(fieldName, ytType, schemaHint, metadata.build())
     })
+  }
+
+  @tailrec
+  private def setYtLogicalTypeIfUnsignedType(ytType: YtLogicalType, metadata: MetadataBuilder): Unit = {
+    ytType match {
+      case YtLogicalType.Optional(innerType) => setYtLogicalTypeIfUnsignedType(innerType, metadata)
+      case YtLogicalType.Uint8 => metadata.putString(MetadataFields.YT_LOGICAL_TYPE, "uint8")
+      case YtLogicalType.Uint16 => metadata.putString(MetadataFields.YT_LOGICAL_TYPE, "uint16")
+      case YtLogicalType.Uint32 => metadata.putString(MetadataFields.YT_LOGICAL_TYPE, "uint32")
+      case _ => ()
+    }
   }
 
   def enrichUserProvidedSchema(schema: StructType): StructType = {

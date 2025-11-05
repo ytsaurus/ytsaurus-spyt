@@ -16,7 +16,8 @@ import tech.ytsaurus.spyt.serialization.YsonEncoder
 import tech.ytsaurus.spyt.test.{DynTableTestUtils, LocalSpark, LocalYt, TestRow, TestUtils, TmpDir}
 import tech.ytsaurus.spyt.wrapper.YtWrapper
 import tech.ytsaurus.spyt.wrapper.table.OptimizeMode
-import tech.ytsaurus.ysontree.{YTree, YTreeNode}
+import tech.ytsaurus.ysontree.YTree
+import tech.ytsaurus.spyt.format.conf.{SparkYtConfiguration => SparkSettings}
 
 import scala.collection.mutable
 import scala.language.postfixOps
@@ -113,8 +114,8 @@ class YtSparkSQLTest extends AnyFlatSpec with Matchers with LocalSpark with TmpD
   testWithDistributedReading("select rows in complex table") { _ =>
     val data = Seq("""{array = [1; 2; 3]; map = {k1 = "a"; k2 = "b"}}""")
     val correctResult = Array(Seq(
-      YsonEncoder.encode(List(1L, 2L, 3L), ArrayType(LongType), false).toList,
-      YsonEncoder.encode(Map("k1" -> "a", "k2" -> "b"), MapType(StringType, StringType), false).toList
+      YsonEncoder.encode(List(1L, 2L, 3L), ArrayType(LongType), skipNulls = false).toList,
+      YsonEncoder.encode(Map("k1" -> "a", "k2" -> "b"), MapType(StringType, StringType), skipNulls = false).toList
     ))
 
     YtWrapper.createDir(tmpPath)
@@ -156,6 +157,32 @@ class YtSparkSQLTest extends AnyFlatSpec with Matchers with LocalSpark with TmpD
         Row(2, "b", 0.5),
         Row(3, "c", 1.0)
       )
+    }
+  }
+
+  testWithDistributedReading("pushdown filters") { _ =>
+
+    YtWrapper.createDir(tmpPath)
+    withConfs(Map(s"spark.yt.${SparkSettings.Read.KeyColumnsFilterPushdown.Enabled.name}" -> "true",
+      s"spark.yt.${SparkSettings.Read.YtPartitioningEnabled.name}" -> "true")
+    ) {
+      forAll(testModes) { optimizeFor =>
+        val path = s"$tmpPath/${optimizeFor.name}"
+
+        val data = (1L to 1000L).map(x => (x, x % 2))
+        val df = data.toDF("a", "b").repartition(2)
+        df.sort("a", "b").write.sortedBy("a", "b").yt(path)
+
+        val table = spark.read.yt(path)
+        table.createOrReplaceTempView("table")
+
+        val resDf = spark.sql(s"SELECT * FROM table WHERE a >= 49 AND a <= 50 AND b == 1")
+        val res = resDf.collect()
+        val expectedData = data.filter { case (a, b) => a >= 49 && a <= 50 && b == 1 }
+
+        scanOutputRows(resDf) should equal(2) // number of rows read from YT with pushdown filters
+        res should contain theSameElementsAs expectedData.map(Row.fromTuple)
+      }
     }
   }
 

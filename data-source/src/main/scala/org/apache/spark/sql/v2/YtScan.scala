@@ -147,6 +147,7 @@ case class YtScan(sparkSession: SparkSession,
           filePath = filePath,
           maxSplitBytes = maxSplitBytes,
           partitionValues = partitionValues,
+          pushedFilterSegments = pushedFilterSegments,
           readDataSchema = Some(readDataSchema)
         )
       }.toArray.sorted(YtFilePartition.partitionedFilesOrdering)

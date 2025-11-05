@@ -84,6 +84,13 @@ trait LocalSpark extends LocalYtClient with BeforeAndAfterEach {
     plan.executedPlan
   }
 
+  def scanOutputRows(df: DataFrame): Long = df.queryExecution.executedPlan
+    .collectFirst {
+      case scan if scan.nodeName.contains("Scan") =>
+        scan.metrics("numOutputRows").value
+    }
+    .getOrElse(fail("Scan node not found in execution plan"))
+
   def nodes(plan: SparkPlan): Seq[SparkPlan] = {
     @tailrec
     def inner(res: Seq[SparkPlan], queue: Seq[SparkPlan]): Seq[SparkPlan] = {
@@ -134,6 +141,8 @@ trait LocalSpark extends LocalYtClient with BeforeAndAfterEach {
   }
 
   def defaultParallelism: Int = Utils.defaultParallelism(spark)
+
+
 }
 
 object LocalSpark {

@@ -8,11 +8,11 @@ import org.apache.spark.sql.execution.datasources.{FilePartition, PartitionDirec
 import org.apache.spark.sql.types.StructType
 import org.slf4j.LoggerFactory
 import tech.ytsaurus.client.CompoundClient
-import tech.ytsaurus.core.cypress.RangeLimit
+import tech.ytsaurus.core.cypress.{RangeLimit, YPath}
 import tech.ytsaurus.spyt.SparkAdapter
-import tech.ytsaurus.spyt.common.utils.{ExpressionTransformer, MInfinity, PInfinity, TuplePoint}
+import tech.ytsaurus.spyt.common.utils.{ExpressionTransformer, MInfinity, PInfinity, SegmentSet, TuplePoint}
 import tech.ytsaurus.spyt.format.YtPartitionedFileDelegate.{YtPartitionedFile, YtPartitionedFileExt}
-import tech.ytsaurus.spyt.format.conf.{KeyPartitioningConfig, SparkYtConfiguration}
+import tech.ytsaurus.spyt.format.conf.{FilterPushdownConfig, KeyPartitioningConfig, SparkYtConfiguration}
 import tech.ytsaurus.spyt.format.{YtInputSplit, YtPartitionedFileDelegate}
 import tech.ytsaurus.spyt.fs.YtHadoopPath
 import tech.ytsaurus.spyt.fs.path.YPathEnriched
@@ -61,18 +61,19 @@ object YtFilePartition {
     maxSplitBytes
   }
 
-  private def splitTableYtPartitioning(path: YtHadoopPath,
+  private def splitTableYtPartitioning(sparkSession: SparkSession,
+                                       path: YtHadoopPath,
                                        maxSplitBytes: Long,
                                        partitionValues: InternalRow,
                                        readDataSchema: Option[StructType] = None,
+                                       pushedFilterSegments: SegmentSet = SegmentSet(),
                                        distributedReadingEnabled: Boolean = false)
                                       (implicit yt: CompoundClient): Seq[PartitionedFile] = {
     import scala.collection.JavaConverters._
-    val richYPath = readDataSchema match {
-      case Some(st) if st.nonEmpty && path.meta.optimizeMode == OptimizeMode.Scan =>
-        YtInputSplit.addColumnsList(path.toYPath, st)
-      case _ => path.toYPath
-    }
+    val richYPath = buildOptimizedYPath(sparkSession, path, maxSplitBytes, partitionValues,
+      readDataSchema, pushedFilterSegments)
+
+    log.info(s"richYPath passed to partitionTables: ${richYPath.toStableString}")
 
     if (distributedReadingEnabled) {
       require(!YtWrapper.isOrdered(path.toStringPath), s"Distributed reading is not yet supported for an ordered " +
@@ -105,6 +106,31 @@ object YtFilePartition {
           }
         }
       }
+    }
+  }
+
+  private def buildOptimizedYPath(sparkSession: SparkSession, path: YtHadoopPath,
+                                  maxSplitBytes: Long, partitionValues: InternalRow,
+                                  schema: Option[StructType], filterSegments: SegmentSet
+                                  ): YPath = {
+    schema match {
+      case Some(s) if s.nonEmpty =>
+        val prunedPath = path.meta.optimizeMode match {
+          case OptimizeMode.Scan => YtInputSplit.addColumnsList(path.toYPath, s)
+          case _ => path.toYPath
+        }
+
+        val filterConfig = FilterPushdownConfig(sparkSession)
+        // TODO avoid creating YtPartitionedFileDelegate(?), YtInputSplit(?) SPYT-948 (keepling)
+        // TBD: what range should be provided here
+        val pathWithRange = prunedPath.withRange(RangeLimit.key(), RangeLimit.key())
+        val fileDelegate = YtPartitionedFileDelegate(pathWithRange, maxSplitBytes, partitionValues, path)
+
+        YtInputSplit(fileDelegate, s, filterSegments, filterConfig, ytLoggerConfig = None
+        ).ytPathWithFilters
+
+      case _ =>
+        path.toYPath
     }
   }
 
@@ -151,6 +177,7 @@ object YtFilePartition {
                  filePath: Path,
                  maxSplitBytes: Long,
                  partitionValues: InternalRow,
+                 pushedFilterSegments: SegmentSet = SegmentSet(),
                  readDataSchema: Option[StructType] = None): Seq[PartitionedFile] = {
     YtHadoopPath.fromPath(file.getPath) match {
       case yp: YtHadoopPath =>
@@ -159,12 +186,12 @@ object YtFilePartition {
 
         val distributedReadingEnabled = sparkSession.ytConf(SparkYtConfiguration.Read.YtDistributedReadingEnabled)
         if (distributedReadingEnabled) {
-          splitTableYtPartitioning(yp, maxSplitBytes, partitionValues, readDataSchema, distributedReadingEnabled = true)
+          splitTableYtPartitioning(sparkSession, yp, maxSplitBytes, partitionValues, readDataSchema, pushedFilterSegments, distributedReadingEnabled = true)
         } else {
           val keyColumns = YtWrapper.keyColumns(yp.toYPath, yp.ypath.transaction)
           // TODO(alex-shishkin): Ordered dynamic tables could not be partitioned by YT partitioning.
           if (sparkSession.ytConf(SparkYtConfiguration.Read.YtPartitioningEnabled) && !(yp.meta.isDynamic && keyColumns.isEmpty)) {
-            splitTableYtPartitioning(yp, maxSplitBytes, partitionValues, readDataSchema)
+            splitTableYtPartitioning(sparkSession, yp, maxSplitBytes, partitionValues, readDataSchema, pushedFilterSegments)
           } else {
             if (yp.meta.isDynamic) {
               splitDynamicTableManual(yp, keyColumns, partitionValues)

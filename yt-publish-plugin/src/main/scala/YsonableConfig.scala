@@ -86,7 +86,7 @@ object SparkLaunchConfig {
   val defaultLayers = Seq(
     s"$sparkYtDeltaLayerPath/layer_with_unify_agent.tar.gz",
     s"$ytPortoDeltaLayersPath/jdk/layer_with_jdk_lastest.tar.gz",
-    s"$sparkYtDeltaLayerPath/python/layer_with_python312_focal_v002.tar.gz",
+    s"$sparkYtDeltaLayerPath/python/layer_with_python312_jammy_v001.tar.gz",
     s"$sparkYtDeltaLayerPath/python/layer_with_python311_focal_v002.tar.gz",
     s"$sparkYtDeltaLayerPath/python/layer_with_python39_focal_v002.tar.gz",
     s"$sparkYtDeltaLayerPath/python/layer_with_python38_focal_v002.tar.gz",

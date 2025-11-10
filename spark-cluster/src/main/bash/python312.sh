@@ -1,6 +1,13 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 set -ex
+
+KEYS='B8E34ED180EF6310 FF5F4D0E27393420'
+for key in $KEYS; do
+  curl -sL "http://keyserver.ubuntu.com/pks/lookup?op=get&search=0x${key}" | \
+    gpg --dearmor -o "/etc/apt/trusted.gpg.d/${key}.gpg"
+done
+
 apt-get update
 
 PYTHON_VERSION="python3.12"
@@ -18,6 +25,7 @@ $PYTHON_VERSION -m pip install -i https://pypi.yandex-team.ru/simple pyarrow==15
 $PYTHON_VERSION -m pip install -i https://pypi.yandex-team.ru/simple pandas==2.2.2
 $PYTHON_VERSION -m pip install -i https://pypi.yandex-team.ru/simple scipy==1.13.0
 $PYTHON_VERSION -m pip install -i https://pypi.yandex-team.ru/simple packaging==24.1
+$PYTHON_VERSION -m pip install -i https://pypi.yandex-team.ru/simple six==1.16.0
 
 mkdir -p /opt/$PYTHON_VERSION/bin
 ln -s /usr/bin/$PYTHON_VERSION /opt/$PYTHON_VERSION/bin/python

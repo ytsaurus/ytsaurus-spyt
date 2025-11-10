@@ -1,12 +1,14 @@
 package tech.ytsaurus.spyt.format
 
 import org.apache.spark.SparkConf
-import org.apache.spark.sql.{Dataset, SparkSession}
+import org.apache.spark.sql.{Dataset, SaveMode, SparkSession}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
+import tech.ytsaurus.core.tables.{ColumnValueType, TableSchema}
 import tech.ytsaurus.spyt.YtWriter
 import tech.ytsaurus.spyt.format.YtDistributedWriterTest.{SampleRow, extractId}
 import tech.ytsaurus.spyt.test.{LocalSpark, TestUtils, TmpDir}
+import tech.ytsaurus.spyt.wrapper.YtWrapper
 import tech.ytsaurus.ysontree.YTreeNode
 
 import scala.util.Random
@@ -68,14 +70,17 @@ class YtDistributedWriterTest extends AnyFlatSpec with TmpDir with LocalSpark wi
   }
 
   it should "deal with two simultaneous writes" in withSparkSession() { _spark =>
+    YtWrapper.createDir(s"$tmpPath/parent1")
+    YtWrapper.createDir(s"$tmpPath/parent2")
+
     val t1 = new Thread() {
       override def run(): Unit = {
-        _spark.range(1, 10).write.yt(s"$tmpPath/table1")
+        _spark.range(1, 10).write.yt(s"$tmpPath/parent1/table1")
       }
     }
     val t2 = new Thread() {
       override def run(): Unit = {
-        _spark.range(1, 20).write.yt(s"$tmpPath/table2")
+        _spark.range(1, 20).write.yt(s"$tmpPath/parent2/table2")
       }
     }
     t1.start()
@@ -84,8 +89,8 @@ class YtDistributedWriterTest extends AnyFlatSpec with TmpDir with LocalSpark wi
     t1.join()
     t2.join()
 
-    readTableAsYson(s"$tmpPath/table1").map(extractId) should contain theSameElementsAs (1 until 10)
-    readTableAsYson(s"$tmpPath/table2").map(extractId) should contain theSameElementsAs (1 until 20)
+    readTableAsYson(s"$tmpPath/parent1/table1").map(extractId) should contain theSameElementsAs (1 until 10)
+    readTableAsYson(s"$tmpPath/parent2/table2").map(extractId) should contain theSameElementsAs (1 until 20)
   }
 
   it should "write sorted data to sorted table" in withSparkSession() { _spark =>
@@ -95,6 +100,16 @@ class YtDistributedWriterTest extends AnyFlatSpec with TmpDir with LocalSpark wi
       ds => ds.orderBy("id"),
       testSorting = true
     )
+  }
+
+  it should "overwrite existing table" in withSparkSession() { _spark =>
+    writeTableFromYson(Seq("{a = 1}", "{a = 2}"), tmpPath, TableSchema.builder()
+        .addValue("a", ColumnValueType.INT64).build(),
+    )
+
+    _spark.range(100).write.mode(SaveMode.Overwrite).yt(tmpPath)
+
+    readTableAsYson(tmpPath) should have size 100
   }
 }
 

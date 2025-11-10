@@ -65,8 +65,10 @@ class DelegatingOutputCommitProtocol(jobId: String,
   override def abortTask(taskContext: TaskAttemptContext): Unit =
     delegate.abortTask(taskContext)
 
-  override def deleteWithJob(fs: FileSystem, path: Path, recursive: Boolean): Boolean =
+  override def deleteWithJob(fs: FileSystem, path: Path, recursive: Boolean): Boolean = {
+    isTable = "ytTable" == fs.getUri.getScheme
     delegate.deleteWithJob(fs, path, recursive)
+  }
 
   override def onTaskCommit(taskCommit: FileCommitProtocol.TaskCommitMessage): Unit =
     delegate.onTaskCommit(taskCommit)

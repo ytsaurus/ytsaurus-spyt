@@ -9,12 +9,14 @@ import org.apache.spark.scheduler.{DAGSchedulerUtils, SparkListener, SparkListen
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.{SparkEnv, TaskContext}
 import org.slf4j.LoggerFactory
-import tech.ytsaurus.client.request.{DistributedWriteCookie, StartDistributedWriteSession, WriteFragmentResult}
+import tech.ytsaurus.client.request.{DistributedWriteCookie, StartDistributedWriteSession, TransactionalOptions, WriteFragmentResult}
 import tech.ytsaurus.client.{ApiServiceTransaction, CompoundClient, DistributedWriteHandle}
+import tech.ytsaurus.core.GUID
 import tech.ytsaurus.spyt.exceptions._
 import tech.ytsaurus.spyt.format.YtOutputCommitProtocol._
 import tech.ytsaurus.spyt.format.conf.SparkYtConfiguration.Write.DynBatchSize
-import tech.ytsaurus.spyt.format.conf.YtTableSparkSettings._
+import tech.ytsaurus.spyt.format.conf.SparkYtInternalConfiguration.{GlobalTransaction, Transaction}
+import tech.ytsaurus.spyt.format.conf.YtTableSparkSettings.{InconsistentDynamicWrite, WriteTransaction, isTable, isTableSorted}
 import tech.ytsaurus.spyt.format.conf.{SparkYtConfiguration, YtTableSparkSettings}
 import tech.ytsaurus.spyt.fs.path.YPathEnriched
 import tech.ytsaurus.spyt.wrapper.YtWrapper
@@ -37,13 +39,46 @@ abstract class AbstractYtOutputCommitProtocol(
 
   @transient protected lazy implicit val client: CompoundClient = cachedClient
 
-  protected def setupTable(path: YPathEnriched, conf: Configuration, transaction: Option[String] = None): Unit = {
+  @transient private val deletedDirectories = ThreadLocal.withInitial[Seq[Path]](() => Nil)
+
+  protected def prepareWrite(conf: Configuration)(transactionActions: String => Unit): Unit = {
+    val externalTransaction = conf.getYtConf(WriteTransaction)
+
+    log.debug(s"Setting up job for path $rootPath")
+    withTransaction(createTransaction(conf, GlobalTransaction, externalTransaction)) { transaction =>
+      deletedDirectories.get()
+        .map(YPathEnriched.fromPath(_).toStringYPath)
+        .foreach(YtWrapper.remove(_, Some(transaction)))
+      deletedDirectories.set(Nil)
+      transactionActions(transaction)
+    }
+  }
+
+  protected def setupTable(path: YPathEnriched, conf: Configuration, transaction: String): Unit = {
     val options = YtTableSparkSettings.deserialize(conf)
-    YtWrapper.createTable(path.toStringYPath, options, transaction, ignoreExisting = true)
+    YtWrapper.createTable(path.toStringYPath, options, Some(transaction), ignoreExisting = true)
   }
 
   override def newTaskTempFileAbsPath(taskContext: TaskAttemptContext, absoluteDir: String, ext: String): String = {
     rootPath.toStringPath
+  }
+
+  override def commitJob(jobContext: JobContext, taskCommits: Seq[FileCommitProtocol.TaskCommitMessage]): Unit = {
+    val conf = jobContext.getConfiguration
+    doCommitJob(conf, taskCommits)
+    commitTransaction(conf, GlobalTransaction)
+  }
+
+  protected def doCommitJob(conf: Configuration, taskCommits: Seq[FileCommitProtocol.TaskCommitMessage]): Unit
+
+  override def abortJob(jobContext: JobContext): Unit = {
+    deletedDirectories.set(Nil)
+    abortTransactionIfExists(jobContext.getConfiguration, GlobalTransaction)
+  }
+
+  override def deleteWithJob(fs: FileSystem, path: Path, recursive: Boolean): Boolean = {
+    deletedDirectories.set(path +: deletedDirectories.get())
+    true
   }
 }
 
@@ -55,12 +90,9 @@ class YtOutputCommitProtocol(
 
   private val tmpRichPath = rootPath.withName(rootPath.name + "_tmp")
 
-  @transient private val deletedDirectories = ThreadLocal.withInitial[Seq[Path]](() => Nil)
   @transient private var writtenTables: ThreadLocal[Seq[YPathEnriched]] = _
 
   initWrittenTables()
-
-  import tech.ytsaurus.spyt.format.conf.SparkYtInternalConfiguration._
 
   private def initWrittenTables(): Unit = this.synchronized {
     if (writtenTables == null) writtenTables = ThreadLocal.withInitial(() => Nil)
@@ -69,16 +101,11 @@ class YtOutputCommitProtocol(
   override def setupJob(jobContext: JobContext): Unit = {
     val conf = jobContext.getConfiguration
 
-    val externalTransaction = conf.getYtConf(WriteTransaction)
-
-    log.debug(s"Setting up job for path $rootPath")
-    withTransaction(createTransaction(conf, GlobalTransaction, externalTransaction)) { transaction =>
-      deletedDirectories.get().map(YPathEnriched.fromPath(_).toStringYPath).foreach(YtWrapper.remove(_, Some(transaction)))
-      deletedDirectories.set(Nil)
+    prepareWrite(conf) { transaction =>
       if (isTable(conf)) {
         if (isTableSorted(conf)) {
           setupTmpTablesDirectory(transaction)
-          setupTable(rootPath, conf, Some(transaction))
+          setupTable(rootPath, conf, transaction)
         }
       } else {
         setupFiles(transaction)
@@ -97,7 +124,7 @@ class YtOutputCommitProtocol(
   private def setupSortedTablePart(taskContext: TaskAttemptContext): YPathEnriched = {
     val tmpPath = tmpRichPath.child(s"part-${taskContext.getTaskAttemptID.getTaskID.getId}")
     withTransaction(getWriteTransaction(taskContext.getConfiguration)) { transaction =>
-      setupTable(tmpPath, taskContext.getConfiguration, Some(transaction))
+      setupTable(tmpPath, taskContext.getConfiguration, transaction)
     }
     tmpPath
   }
@@ -110,11 +137,6 @@ class YtOutputCommitProtocol(
       conf, Transaction, Some(parent),
       title = Some(s"YT Operation ID ${System.getenv("YT_OPERATION_ID")}, YT Job ID ${System.getenv("YT_JOB_ID")}, Spark ${taskContext.getTaskAttemptID}"),
     )
-  }
-
-  override def abortJob(jobContext: JobContext): Unit = {
-    deletedDirectories.set(Nil)
-    abortTransactionIfExists(jobContext.getConfiguration, GlobalTransaction)
   }
 
   override def abortTask(taskContext: TaskAttemptContext): Unit = {
@@ -144,14 +166,12 @@ class YtOutputCommitProtocol(
     }
   }
 
-  override def commitJob(jobContext: JobContext, taskCommits: Seq[FileCommitProtocol.TaskCommitMessage]): Unit = {
-    val conf = jobContext.getConfiguration
+  override def doCommitJob(conf: Configuration, taskCommits: Seq[FileCommitProtocol.TaskCommitMessage]): Unit = {
     withTransaction(YtOutputCommitProtocol.getGlobalWriteTransaction(conf)) { transaction =>
       renameTmpPartitionTables(taskCommits.map(_.obj.asInstanceOf[TaskMessage]), Some(transaction))
       if (isTableSorted(conf)) {
         concatenateSortedTables(conf, transaction)
       }
-      commitTransaction(conf, GlobalTransaction)
     }
   }
 
@@ -162,11 +182,6 @@ class YtOutputCommitProtocol(
       muteTransaction(optTaskTransactionId.get)
     }
     new FileCommitProtocol.TaskCommitMessage(TaskMessage(writtenTables.get(), optTaskTransactionId))
-  }
-
-  override def deleteWithJob(fs: FileSystem, path: Path, recursive: Boolean): Boolean = {
-    deletedDirectories.set(path +: deletedDirectories.get())
-    true
   }
 
   private def partFilename(taskContext: TaskAttemptContext, ext: String): String = {
@@ -184,7 +199,7 @@ class YtOutputCommitProtocol(
       } else {
         // In case of dynamic partition we will write to another table and then rename with overwrite
         val p = if (dynamicPartitionOverwrite) fullPath.withName(tmpPartitionPrefix + fullPath.name) else fullPath
-        setupTable(p, conf, Some(YtOutputCommitProtocol.getGlobalWriteTransaction(conf)))
+        setupTable(p, conf, YtOutputCommitProtocol.getGlobalWriteTransaction(conf))
         p
       }
     } else {
@@ -239,6 +254,8 @@ class DynamicTableOutputCommitProtocol(
 
   override def commitJob(jobContext: JobContext, taskCommits: Seq[FileCommitProtocol.TaskCommitMessage]): Unit = ()
 
+  override def doCommitJob(conf: Configuration, taskCommits: Seq[FileCommitProtocol.TaskCommitMessage]): Unit = ()
+
   override def abortJob(jobContext: JobContext): Unit = ()
 
   override def setupTask(taskContext: TaskAttemptContext): Unit = ()
@@ -282,7 +299,11 @@ class DistributedWriteOutputCommitProtocol(
 
   override def setupJob(jobContext: JobContext): Unit = {
     val conf = jobContext.getConfiguration
-    setupTable(rootPath, conf)
+    prepareWrite(conf) { transaction =>
+      setupTable(rootPath, conf, transaction)
+    }
+
+    val transactionId = getGlobalWriteTransaction(conf)
 
     val sc = SparkSession.active.sparkContext
     sc.setLocalProperty(distributedWritePropKey, jobId)
@@ -301,6 +322,7 @@ class DistributedWriteOutputCommitProtocol(
             val distributedWriteRequest = StartDistributedWriteSession.builder()
               .setPath(rootPath.toYPath)
               .setCookieCount(cookieCount)
+              .setTransactionalOptions(new TransactionalOptions(GUID.valueOf(transactionId)))
               .build()
             val dwHandle = client.startDistributedWriteSession(distributedWriteRequest).join()
             cookiesBroadcast = sc.broadcast(dwHandle.getCookies)
@@ -313,7 +335,7 @@ class DistributedWriteOutputCommitProtocol(
     sc.addSparkListener(sparkJobListener)
   }
 
-  override def commitJob(jobContext: JobContext, taskCommits: Seq[FileCommitProtocol.TaskCommitMessage]): Unit = {
+  override def doCommitJob(conf: Configuration, taskCommits: Seq[FileCommitProtocol.TaskCommitMessage]): Unit = {
     stopCookiesBroadcast()
     val results = taskCommits.map(_.obj.asInstanceOf[WriteFragmentResult])
     dwHandlePromise.future.value.get.foreach(_.finish(results.asJava).join())
@@ -322,6 +344,7 @@ class DistributedWriteOutputCommitProtocol(
   override def abortJob(jobContext: JobContext): Unit = {
     stopCookiesBroadcast()
     dwHandlePromise.future.value.get.foreach(_.stopPing())
+    super.abortJob(jobContext)
   }
 
   private def stopCookiesBroadcast(): Unit = {
@@ -358,7 +381,6 @@ object YtOutputCommitProtocol {
   import tech.ytsaurus.spyt.format.conf.SparkYtInternalConfiguration._
 
   // These messages will be sent from successful tasks to a driver
-  // TODO add wtfResult here???
   private case class TaskMessage(tables: Seq[YPathEnriched], transactionId: Option[String])
 
   private val log = LoggerFactory.getLogger(getClass)
@@ -432,7 +454,7 @@ object YtOutputCommitProtocol {
     }
   }
 
-  private def abortTransactionIfExists(conf: Configuration, confEntry: ConfigEntry[String]): Unit = {
+  def abortTransactionIfExists(conf: Configuration, confEntry: ConfigEntry[String]): Unit = {
     val transaction = conf.getYtConf(confEntry)
     transaction.foreach(abortTransaction)
   }
@@ -465,7 +487,7 @@ object YtOutputCommitProtocol {
     conf.ytConf(Transaction)
   }
 
-  private def getGlobalWriteTransaction(conf: Configuration): String = {
+  def getGlobalWriteTransaction(conf: Configuration): String = {
     conf.ytConf(GlobalTransaction)
   }
 

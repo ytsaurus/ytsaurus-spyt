@@ -11,6 +11,7 @@ class SpecificInternalRowDecorators {
   @DecoratedMethod
   private[this] def dataTypeToMutableValue(dataType: DataType): MutableValue = dataType match {
     case ts.uInt64DataType => new MutableLong
+    case dt if ts.isDateTimeDataType(dt) => new MutableLong
     case _ => __dataTypeToMutableValue(dataType)
   }
 

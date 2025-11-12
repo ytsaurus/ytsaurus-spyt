@@ -14,6 +14,7 @@ Usage: $script_name [-h|--help]
                     [--build-output build_output]
                     [--publish-scripts publish_scripts]
                     [--spyt-version spyt_version]
+                    [--spark-version spark_version]
                     [--image-cr image_cr]
 
   --build-output: Path to built spyt components (default: $build_output)
@@ -72,6 +73,8 @@ else
     echo "Spark archive download: SKIPPED"
 fi
 
+docker_image_tag="${image_cr}ytsaurus/spyt:${spyt_version}${spark_version:+-pyspark-$spark_version}"
+
 mkdir data
 cp -rL $build_output/* data/
 mkdir scripts
@@ -79,7 +82,7 @@ cp -rL $publish_scripts/* scripts/
 
 docker build \
     --network=host \
-    -t ${image_cr}ytsaurus/spyt:"$spyt_version" \
+    -t "$docker_image_tag" \
     --build-arg BUILD_OUTPUT_PATH=data \
     --build-arg PUBLISH_SCRIPTS_PATH=scripts \
     --build-arg SPARK_VERSION="$spark_version" \

@@ -33,16 +33,6 @@ def upload_file(yt_client, source_path, remote_path):
         yt_client.write_file(remote_path, file)
 
 
-def wait_for_operation(yt_client, operation_id):
-    if operation_id is not None:
-        while True:
-            current_state = yt_client.get_operation_state(operation_id)
-            logging.info(f"Operation: {operation_id}, State: {current_state}")
-            if current_state.is_finished():
-                return current_state
-            time.sleep(1)
-
-
 def get_executors_operation_id(yt_client, driver_operation_id, retries=30):
     for _ in range(retries):
         val = (

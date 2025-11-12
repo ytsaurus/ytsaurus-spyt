@@ -8,6 +8,7 @@ from pyspark.conf import SparkConf
 import requests
 import shutil
 from yt.wrapper.operation_commands import get_jobs_with_error_or_stderr, get_operation_error
+import yt.yson as yson
 
 
 logger = logging.getLogger(__name__)
@@ -85,7 +86,13 @@ def dump_operation_logs(dump_dir, op_id, client):
         Path(dest_logs_path, 'operation_stderr').write_text(json.dumps(op_error, indent=2))
     job_infos = get_jobs_with_error_or_stderr(op_id, only_failed_jobs=False, client=client)
     for i, job_info in enumerate(job_infos):
-        Path(dest_logs_path, f'stderr_{i}').write_text(job_info['stderr'])
+        if 'stderr' in job_info:
+            Path(dest_logs_path, f'stderr_{i}').write_text(job_info['stderr'])
+        if 'error' in job_info:
+            Path(dest_logs_path, f'error_{i}').write_text(job_info['error'])
+    spec = client.get_operation(op_id).get("provided_spec")
+    if spec:
+        Path(dump_dir, "operation_spec").write_bytes(yson.dumps(spec))
 
 
 def dump_html_page(dump_dir, address, component):

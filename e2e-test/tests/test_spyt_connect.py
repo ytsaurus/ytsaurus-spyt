@@ -1,6 +1,6 @@
 from spyt.connect import start_connect_server
 
-from common.helpers import assert_items_equal
+from common.helpers import assert_items_equal, wait_for_operation
 from contextlib import contextmanager
 from hashlib import sha256
 from itertools import chain
@@ -9,7 +9,6 @@ from functools import reduce
 from pyspark.sql import SparkSession
 import pyspark.sql.functions as f
 from pyspark.sql.types import Row
-from utils import wait_for_operation
 from yt.wrapper.http_helpers import get_token
 import yt.yson as yt_yson
 

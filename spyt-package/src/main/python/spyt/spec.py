@@ -558,7 +558,7 @@ def build_spark_operation_spec(config: dict, client: YtClient,
 
 def build_spark_connect_server_spec(client: YtClient, config, spark_conf: dict, enablers: SpytEnablers, java_home: str,
                                     driver_memory: str, num_executors: int, executor_cores: int, executor_memory: str,
-                                    prefer_ipv6: bool, pool: str, grpc_port_start: int):
+                                    prefer_ipv6: bool, pool: str, grpc_port_start: int, alias: str):
     component_config = CommonComponentConfig(enable_tmpfs=False, rpc_job_proxy=True, enablers=enablers)
 
     spark_distributive, spark_distributive_path = get_spark_distributive(client, enablers.enable_squashfs)
@@ -617,6 +617,9 @@ def build_spark_connect_server_spec(client: YtClient, config, spark_conf: dict, 
         .memory_limit(parse_memory(driver_memory)) \
         .spec(task_spec) \
         .end_task()
+
+    if alias:
+        builder.alias(alias)
 
     return builder.secure_vault(secure_vault) \
         .spec(operation_spec)

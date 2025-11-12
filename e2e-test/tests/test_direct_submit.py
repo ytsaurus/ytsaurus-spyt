@@ -2,14 +2,13 @@ import time
 
 import spyt
 
-from common.helpers import assert_items_equal
+from common.helpers import assert_items_equal, wait_for_operation
 from pyspark.conf import SparkConf
 from pyspark.sql.types import IntegerType, StringType, StructType, StructField, Row
 from pyspark.sql.functions import col, udf
 import requests
 from yt.wrapper import YtClient
 from utils import SPARK_CONF, YT_PROXY, upload_file, get_executors_operation_id
-from utils import wait_for_operation
 
 
 def test_client_mode(yt_client, tmp_dir, direct_session):

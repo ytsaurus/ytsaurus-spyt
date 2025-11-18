@@ -11,7 +11,7 @@ RUN set -eux; \
   do \
     apt-get install -y python$VERSION; \
     rm -f /usr/lib/python$VERSION/EXTERNALLY-MANAGED; \
-    python$VERSION -m pip install --ignore-installed ytsaurus-client==0.13.35 packaging==24.1; \
+    python$VERSION -m pip install --ignore-installed ytsaurus-client==0.13.42 packaging==24.1; \
   done
 
 COPY ./start.sh /usr/bin/start-mod.sh

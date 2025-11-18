@@ -41,11 +41,14 @@ class YtDistributedReadingTest extends AnyFlatSpec with Matchers with LocalSpark
   it should "fail for ordered dynamic table" in {
     import tech.ytsaurus.spyt._
     prepareOrderedTestTable(tmpPath, enableDynamicStoreRead = true)
-    a[Exception] shouldBe thrownBy {
+    val exception = the[Exception] thrownBy {
       withConfs(distributedReadingEnabledConf(true)) {
         spark.read.option("enable_inconsistent_read", "true").yt(tmpPath).collect()
       }
     }
+
+    exception.getMessage should include("Distributed reading is not yet supported for an ordered " +
+      "dynamic table. Only for static and sorted dynamic tables")
   }
 
 }

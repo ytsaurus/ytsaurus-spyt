@@ -24,7 +24,7 @@ RUN apt-get update && DEBIAN_FRONTEND=noninteractive TZ=Etc/UTC apt-get install 
   python3-pip
 
 RUN rm /usr/lib/python3.12/EXTERNALLY-MANAGED
-RUN python3.12 -m pip install requests ytsaurus-client==0.13.35
+RUN python3.12 -m pip install requests ytsaurus-client==0.13.42
 
 FROM base AS spark-downloader
 

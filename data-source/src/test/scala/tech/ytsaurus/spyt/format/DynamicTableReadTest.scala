@@ -65,7 +65,7 @@ class DynamicTableReadTest extends AnyFlatSpec with Matchers with LocalSpark wit
     df.selectAs[TestRow].collect().isEmpty shouldBe true
   }
 
-  it should "read ordered table" in {
+  testWithDistributedReading("read ordered table") { _ =>
     prepareOrderedTestTable(tmpPath, enableDynamicStoreRead = true)
     val data = (1 to 15).map(i => getTestData(i / 2))
     appendChunksToTestTable(tmpPath, data, sorted = false)

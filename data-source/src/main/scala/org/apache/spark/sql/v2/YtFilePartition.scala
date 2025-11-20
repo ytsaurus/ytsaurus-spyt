@@ -76,9 +76,6 @@ object YtFilePartition {
     log.info(s"richYPath passed to partitionTables: ${richYPath.toStableString}")
 
     if (distributedReadingEnabled) {
-      require(!YtWrapper.isOrdered(richYPath.justPath.toStableString), s"Distributed reading is not yet supported for an ordered " +
-        s"dynamic table. Only for static and sorted dynamic tables")
-
       val multiTablePartitions = YtWrapper.partitionTables(richYPath, maxSplitBytes, enableCookies = true)
       multiTablePartitions.map { multiTablePartition =>
         val allRanges = multiTablePartition.getTableRanges.asScala

@@ -6,7 +6,7 @@ import java.util.concurrent.TimeUnit
 
 object Config {
   val YTSAURUS_CONNECT_IDLE_TIMEOUT = ConfigBuilder("spark.ytsaurus.connect.idle.timeout")
-    .doc("Timeout for parent YTsaurus shuffle transaction")
+    .doc("Idle timeout for SPYT connect server since the last request was completed")
     .version("2.8.0")
     .timeConf(TimeUnit.MILLISECONDS)
     .createWithDefaultString("10m")

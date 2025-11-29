@@ -240,7 +240,6 @@ def base_spark_conf(client, discovery):
         "spark.hadoop.yt.proxy": yt_proxy,
         "spark.hadoop.yt.user": yt_user,
         "spark.master.rest.enabled": "true",
-        "spark.shuffle.service.enabled": "true",
         "spark.eventLog.dir": "ytEventLog:/{}".format(discovery.event_log_table()),
         "spark.yt.cluster.version": spark_cluster_version,
         "spark.yt.version": spark_cluster_version,

@@ -1,6 +1,6 @@
 package tech.ytsaurus.spyt.format
 
-import org.apache.spark.SparkConf
+import org.apache.spark.{SparkConf, SparkException}
 import org.apache.spark.sql.{Dataset, SaveMode, SparkSession}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -62,6 +62,19 @@ class YtDistributedWriterTest extends AnyFlatSpec with TmpDir with LocalSpark wi
     "spark.sql.sources.commitProtocolClass" -> "tech.ytsaurus.spyt.format.BogusYtOutputCommitProtocol"
   )) { _spark =>
     baseTest(_spark)
+  }
+
+  it should "correctly stop broadcasting cookies in case of job fail after commit" in withSparkSession(Map(
+    "spark.sql.sources.commitProtocolClass" -> "tech.ytsaurus.spyt.format.BogusYtOutputJobCommitProtocol"
+  )) { _spark =>
+    var exception: Throwable = intercept[Exception](baseTest(_spark))
+    if (exception.isInstanceOf[SparkException]) {
+      exception.getCause shouldNot be (null)
+      exception.getCause shouldBe a[RuntimeException]
+      exception = exception.getCause
+    }
+    exception shouldBe a[RuntimeException]
+    exception.getMessage shouldEqual "BOOOOM!!!!"
   }
 
   it should "do a simple write" in withSparkSession() { _spark =>

@@ -350,6 +350,7 @@ class DistributedWriteOutputCommitProtocol(
   private def stopCookiesBroadcast(): Unit = {
     if (cookiesBroadcast != null) {
       cookiesBroadcast.destroy()
+      cookiesBroadcast = null
     }
   }
 

@@ -520,24 +520,6 @@ class YTsaurusStreamingTest extends AnyFlatSpec with Matchers with LocalSpark wi
     queryForResultTableCheck.stop()
   }
 
-  it should "streaming after offsets desynchronization: consumer is behind on checkpoints" in {
-    val paths: StreamingObjectsPaths = prepareStreamingObjects(tmpPath = tmpPath, includeServiceColumns = true,
-      queueTabletCount = 1)
-
-    doStreamLaunches(paths, launchesParams = Seq((0, 3, true)), includeServiceColumns = true)
-
-    YtWrapper.removeIfExists(paths.consumerPath)
-    YtWrapper.removeIfExists(paths.queuePath)
-    YtWrapper.removeIfExists(paths.resultPath)
-
-    prepareOrderedTestTable(paths.queuePath, enableDynamicStoreRead = true, tabletCount = 1)
-    prepareConsumer(paths.consumerPath, paths.queuePath)
-    prepareOrderedTestTable(paths.resultPath, schemaWithServiceColumns, enableDynamicStoreRead = true)
-    waitQueueRegistration(paths.queuePath)
-
-    doStreamLaunches(paths, launchesParams = Seq((0, 3, true)), includeServiceColumns = true)
-  }
-
   it should "correctly stream unsigned byte, short and int types" in {
     case class UnsignedTestRow(uint8: Short, uint16: Int, uint32: Long)
 

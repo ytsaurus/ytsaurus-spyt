@@ -5,7 +5,7 @@ import org.apache.spark.sql.spyt.types.Timestamp64.{MAX_TIMESTAMP64, MIN_TIMESTA
 import org.apache.spark.sql.types.{DataType, LongType, SQLUserDefinedType, UserDefinedType}
 import org.json4s.JsonAST.JValue
 import org.json4s.JsonDSL._
-import tech.ytsaurus.spyt.common.utils.DateTimeTypesConverter.{convertUTCtoLocal, localDateTimeToSeconds, longToZonedTimestamp, timestampToLong}
+import tech.ytsaurus.spyt.common.utils.DateTimeTypesConverter.{convertUTCtoLocal, localDateTimeToMicros, longToZonedTimestamp, timestampToLong}
 
 import java.sql.Timestamp
 import java.time.LocalDateTime
@@ -70,7 +70,8 @@ object Timestamp64 {
     message = "Use apply(localDatetime: LocalDateTime) instead",
     since = "2.6.0"
   )
-  def apply(timestamp: Timestamp): Timestamp64 = new Timestamp64(timestampToLong(timestamp))
+  def apply(timestamp: Timestamp): Timestamp64 = Timestamp64(timestampToLong(timestamp))
 
-  def apply(localDatetime: LocalDateTime): Timestamp64 = apply(localDateTimeToSeconds(localDatetime) * 1000000)
+  def apply(localDatetime: LocalDateTime): Timestamp64 = Timestamp64(localDateTimeToMicros(localDatetime))
+
 }

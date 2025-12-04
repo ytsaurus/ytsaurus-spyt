@@ -50,6 +50,11 @@ object DateTimeTypesConverter {
     dateTime.toInstant.toEpochMilli / 1000
   }
 
+  def localDateTimeToMicros(localDateTime: LocalDateTime): Long = {
+    val instant = localDateTime.toInstant(ZoneOffset.UTC)
+    instant.getEpochSecond * 1000000L + instant.getNano / 1000
+  }
+
   // "+148108-01-01T02:59:59Z" -> LocalDatetime("+148108-01-01T02:59:59")
   def toLocalDatetime(dateTimeString: String): LocalDateTime = {
     val zonedDateTime = ZonedDateTime.parse(dateTimeString, DateTimeFormatter.ISO_DATE_TIME)
@@ -65,7 +70,7 @@ object DateTimeTypesConverter {
   }
 
   def timestampToLong(timestamp: Timestamp): Long = {
-    timestamp.getTime * 1000 + timestamp.getNanos / 1000
+    timestamp.toInstant.toEpochMilli * 1000 + timestamp.getNanos / 1000
   }
 
   def longToZonedTimestamp(microseconds: Long): String = {

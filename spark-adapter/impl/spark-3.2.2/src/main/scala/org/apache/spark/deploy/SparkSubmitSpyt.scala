@@ -163,6 +163,10 @@ private[spark] class SparkSubmitSpyt {
           sparkConf.set(config.DECOMMISSION_ENABLED, true)
         }
       }
+
+      if (deployMode == CLIENT && isNetworkProjectEnabled) {
+        sparkConf.set(DRIVER_HOST_ADDRESS, ytsaurusJobIp)
+      }
     }
 
     (childArgsSeq ++ childArgs, childClasspath, sparkConf, childMainClass)

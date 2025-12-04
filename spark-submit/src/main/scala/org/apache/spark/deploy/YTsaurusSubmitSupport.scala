@@ -2,6 +2,7 @@ package org.apache.spark.deploy
 
 import org.apache.spark.deploy.ytsaurus.{Config, YTsaurusUtils}
 import org.apache.spark.internal.config.{ConfigEntry, OptionalConfigEntry}
+import tech.ytsaurus.spyt.wrapper.Utils
 
 class YTsaurusSubmitSupport extends SubmitSupport {
   override val YTSAURUS_IS_PYTHON: ConfigEntry[Boolean] = Config.YTSAURUS_IS_PYTHON
@@ -15,4 +16,7 @@ class YTsaurusSubmitSupport extends SubmitSupport {
   def pythonBinaryWrapperPath(spytHome: String): String = {
     YTsaurusUtils.pythonBinaryWrapperPath(sys.env("SPYT_ROOT"))
   }
+
+  override def isNetworkProjectEnabled: Boolean = Utils.ytNetworkProjectEnabled
+  override def ytsaurusJobIp: String = Utils.ytHostIp
 }

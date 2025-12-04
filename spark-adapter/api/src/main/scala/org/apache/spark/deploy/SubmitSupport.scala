@@ -11,6 +11,8 @@ trait SubmitSupport {
   val YTSAURUS_PYTHON_BINARY_ENTRY_POINT: OptionalConfigEntry[String]
   val YTSAURUS_PYTHON_EXECUTABLE: OptionalConfigEntry[String]
   def pythonBinaryWrapperPath(spytHome: String): String
+  def isNetworkProjectEnabled: Boolean
+  def ytsaurusJobIp: String
 }
 
 object SubmitSupport {

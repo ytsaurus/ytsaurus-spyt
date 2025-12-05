@@ -316,7 +316,7 @@ class DistributedWriteOutputCommitProtocol(
         // needed to check every jobStart event to match to correct jobId
         if (jobStart.properties.get(distributedWritePropKey) == jobId) {
           val numOutputTasksOpt = DAGSchedulerUtils.getNumOutputTasks(sc, jobStart.stageIds)
-          if (numOutputTasksOpt.isDefined) {
+          if (numOutputTasksOpt.isDefined && !jobStart.properties.containsKey("spark.rdd.scope")) {
             sc.removeSparkListener(this)
             val cookieCount = numOutputTasksOpt.get
             val distributedWriteRequest = StartDistributedWriteSession.builder()

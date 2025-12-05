@@ -124,6 +124,34 @@ class YtDistributedWriterTest extends AnyFlatSpec with TmpDir with LocalSpark wi
 
     readTableAsYson(tmpPath) should have size 100
   }
+
+  it should "correctly work when AQE is enabled and SQL has subqueries" in withSparkSession() { _spark =>
+    _spark.range(1, 2).createOrReplaceTempView("inner1")
+    _spark.range(3, 4).createOrReplaceTempView("inner2")
+    _spark.range(1, 10000).createOrReplaceTempView("main_table")
+
+    val query = """
+      select
+        m.id as m_id,
+        (select id from inner1) as id_1,
+        (select id from inner2) as id_2
+      from main_table m
+      """
+
+    val df = _spark.sql(query)
+    df.write.yt(tmpPath)
+
+    val writtenData = readTableAsYson(tmpPath).map { node =>
+      val nodeMap = node.asMap()
+      (
+        nodeMap.get("m_id").longValue(),
+        nodeMap.get("id_1").longValue(),
+        nodeMap.get("id_2").longValue()
+      )
+    }
+    val expectedData = (1 to 9999).map(id => (id.longValue(), 1L, 3L))
+    writtenData should contain theSameElementsAs expectedData
+  }
 }
 
 object YtDistributedWriterTest {

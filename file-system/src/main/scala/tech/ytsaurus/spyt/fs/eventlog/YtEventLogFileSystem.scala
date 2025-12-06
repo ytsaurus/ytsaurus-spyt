@@ -129,10 +129,8 @@ class YtEventLogFileSystem extends FileSystem with LogLazy {
 
   private def deleteAllRowsWithId(path: String, id: String, blocksCnt: Int, transaction: Option[ApiServiceTransaction]): Unit = {
     implicit val ytClient: CompoundClient = yt
-    for (i <- 1 to blocksCnt) {
-      YtWrapper.deleteRow(path, schema,
-        java.util.Map.of(ID, id, ORDER, i), transaction)
-    }
+    val rows: Seq[java.util.Map[String, Any]] = (1 to blocksCnt).map(i => java.util.Map.of(ID, id, ORDER, i))
+    YtWrapper.deleteRows(path, schema, rows, transaction)
   }
 
   override def delete(f: Path, recursive: Boolean): Boolean = {

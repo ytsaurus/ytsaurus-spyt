@@ -152,6 +152,25 @@ class YtDistributedWriterTest extends AnyFlatSpec with TmpDir with LocalSpark wi
     val expectedData = (1 to 9999).map(id => (id.longValue(), 1L, 3L))
     writtenData should contain theSameElementsAs expectedData
   }
+
+  it should "deal with empty output partitions" in withSparkSession(Map(
+    "spark.sql.adaptive.enabled" -> "false",
+    "spark.sql.shuffle.partitions" -> "30"
+  )) { _spark =>
+    val df = _spark.range(300)
+
+    import _spark.implicits._
+    df.groupBy(($"id" % 10).alias("id")).count().write.yt(tmpPath)
+
+    val writtenData = readTableAsYson(tmpPath).map { node =>
+      val nodeMap = node.asMap()
+      (
+        nodeMap.get("id").longValue(),
+        nodeMap.get("count").longValue()
+      )
+    }
+    writtenData should contain theSameElementsAs (0L to 9L).map(_ -> 30L)
+  }
 }
 
 object YtDistributedWriterTest {

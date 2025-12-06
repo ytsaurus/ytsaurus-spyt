@@ -337,7 +337,7 @@ class DistributedWriteOutputCommitProtocol(
 
   override def doCommitJob(conf: Configuration, taskCommits: Seq[FileCommitProtocol.TaskCommitMessage]): Unit = {
     stopCookiesBroadcast()
-    val results = taskCommits.map(_.obj.asInstanceOf[WriteFragmentResult])
+    val results = taskCommits.map(_.obj.asInstanceOf[WriteFragmentResult]).filter(_ != null)
     dwHandlePromise.future.value.get.foreach(_.finish(results.asJava).join())
   }
 

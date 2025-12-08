@@ -1,9 +1,9 @@
 
-# COMPAT(atokarew) setting default spark distrinb version to 3.5.6 if it not specified
+# COMPAT(atokarew) setting default spark distrinb version to 3.5.7 if it not specified
 # Remove after k8s operator will be updated to explicitly specify spark versions
 # TODO(epsilond1): Move version to k8s manifest
 if [ -z "$EXTRA_SPARK_VERSIONS" ]; then
-  EXTRA_SPARK_VERSIONS="3.5.6"
+  EXTRA_SPARK_VERSIONS="3.5.7"
 fi
 # COMPAT end
 

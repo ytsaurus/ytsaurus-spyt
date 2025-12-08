@@ -20,7 +20,7 @@ set_default_vars() {
     yt_local_runner_path="$root_dir/../../docker/local/run_local_cluster.sh"
     proxy_port=8000
     spark_cache_path=""
-    spark_versions="3.2.2 3.2.4 3.3.4 3.4.4 3.5.5 3.5.6"
+    spark_versions="3.2.2 3.2.4 3.3.4 3.4.4 3.5.7"
     versions_combinations=""
 }
 
@@ -91,7 +91,7 @@ main() {
                 spark_version="${env##*-spark}"
                 spark_versions+="${spark_version:0:1}.${spark_version:1:1}.${spark_version:2:1} "
             done
-            spark_versions=$(echo "$spark_versions" | xargs) # ex: '3.2.2 3.5.4 3.5.5'
+            spark_versions=$(echo "$spark_versions" | xargs) # ex: '3.2.2 3.4.4 3.5.7'
             shift 2
             ;;
             -h|--help)

@@ -1,5 +1,5 @@
 package spyt
 
 object SparkVersion {
-  val compileSparkVersion = "3.5.6"
+  val compileSparkVersion = "3.5.7"
 }

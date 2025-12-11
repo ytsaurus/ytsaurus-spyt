@@ -16,6 +16,7 @@ import org.apache.spark.sql.v2.YtInMemoryFileIndex.bulkListLeafFiles
 import org.apache.spark.util.SerializableConfiguration
 import tech.ytsaurus.spyt.format.conf.SparkYtConfiguration.Read.ListParentDirectories
 import tech.ytsaurus.spyt.fs.YtTableFileSystem.DEFAULT_FILTER
+import tech.ytsaurus.spyt.fs.path.YPathEnriched
 import tech.ytsaurus.spyt.wrapper.config._
 
 import java.io.FileNotFoundException
@@ -240,11 +241,14 @@ object YtInMemoryFileIndex extends Logging {
       } else if (paths.size > 1 && areRootPaths && listParentDirectories) {
         // Here we suppose that almost all paths belong to the same parent directory so we can list and filter it
         // in a single request to YTsaurus.
-        val groupedPaths = paths.groupBy(p => p.getParent)
+        val groupedPaths = paths.groupBy { hPath =>
+          val yPath = YPathEnriched.fromPath(hPath)
+          yPath.parent
+        }
         return groupedPaths.flatMap { case (dir, children) =>
-          val names = children.map(p => p.getName).toSet
+          val names = children.map(p => YPathEnriched.fromPath(p).name).toSet
           val leafFiles = listLeafFiles(
-            dir,
+            dir.toPath,
             hadoopConf,
             filter,
             Some(sparkSession),

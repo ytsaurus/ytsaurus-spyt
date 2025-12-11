@@ -8,4 +8,11 @@ object DAGSchedulerUtils {
       case resultStage: ResultStage => resultStage.numTasks
     }
   }
+
+  def isResultStageForJobId(sc: SparkContext, jobId: Int, stageId: Int): Boolean = {
+    sc.dagScheduler.stageIdToStage(stageId) match {
+      case rs: ResultStage => rs.jobIds.contains(jobId)
+      case _ => false
+    }
+  }
 }

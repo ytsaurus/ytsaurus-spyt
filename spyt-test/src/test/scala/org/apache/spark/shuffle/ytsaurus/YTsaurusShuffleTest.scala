@@ -1,8 +1,7 @@
 package org.apache.spark.shuffle.ytsaurus
 
+import org.apache.spark.sql.{DataFrame, Dataset, SparkSession}
 import org.apache.spark.{SparkConf, SparkEnv}
-import org.apache.spark.scheduler.{SparkListener, SparkListenerStageSubmitted}
-import org.apache.spark.sql.{DataFrame, Dataset, Row, SparkSession}
 import org.mockito.ArgumentMatchers.any
 import org.mockito.Mockito
 import org.scalatest.flatspec.AnyFlatSpec
@@ -12,12 +11,11 @@ import tech.ytsaurus.client.CompoundClient
 import tech.ytsaurus.core.tables.{ColumnValueType, TableSchema}
 import tech.ytsaurus.spyt._
 import tech.ytsaurus.spyt.shuffle.CommitShufflePartitionsListener
-import tech.ytsaurus.spyt.test.{LocalSpark, TestUtils, TmpDir}
+import tech.ytsaurus.spyt.test.{ExecutorKillerSparkListener, LocalSpark, TestUtils, TmpDir}
 import tech.ytsaurus.spyt.wrapper.YtWrapper
 import tech.ytsaurus.spyt.wrapper.client.{SpytRpcClientListener, YtClientConfiguration, YtClientProvider}
 
-import scala.sys.process._
-import scala.util.{Failure, Random, Success, Try}
+import scala.util.Random
 
 class YTsaurusShuffleTest extends AnyFlatSpec with Matchers with LocalSpark with TmpDir with TestUtils
   with TableDrivenPropertyChecks {
@@ -99,25 +97,9 @@ class YTsaurusShuffleTest extends AnyFlatSpec with Matchers with LocalSpark with
     createShuffledTable(inPathFirst, numRows, identity)
     createShuffledTable(inPathSecond, numRowsX2, x => x*x)
 
-    // Since we're using here local-cluster Spark master hence Executors are child processes of the test process.
-    // So here we are choosing one child executor process as a victim to kill it later.
-    val executorProcessToKillOpt = ProcessHandle.current().descendants().filter { child =>
-      Try(Seq("cat", s"/proc/${child.pid()}/cmdline").!!) match {
-        case Success(procCmd) => procCmd.contains("CoarseGrainedExecutorBackend")
-        case Failure(exception) =>
-          println("Got an exception during getting child processes command")
-          exception.printStackTrace(System.out)
-          false
-      }
-    }.findAny()
-
-    if (executorProcessToKillOpt.isEmpty) {
-      fail("No executor child processes is found, there must be at least one")
+    ExecutorKillerSparkListener.scheduleExecutorKill(_spark) { stageSubmitted =>
+      stageSubmitted.properties.getProperty("spark.rdd.scope", "").contains("\"name\":\"collect\"")
     }
-    val executorProcessToKill = executorProcessToKillOpt.get()
-    val executorKillerListener = new ExecutorKillerSparkListener(executorProcessToKill)
-
-    _spark.sparkContext.addSparkListener(executorKillerListener)
 
     val df1 = readSourceData(_spark, inPathFirst, failAtProcess)
     val df2 = readSourceData(_spark, inPathSecond, failAtProcess)
@@ -235,18 +217,6 @@ object YTsaurusShuffleTest {
   case class SourceRow(id: Long, value: Long)
 
   case class JoinResult(id: Long, value: Long, joined_id: Option[Long], joined_value: Option[Long])
-
-  class ExecutorKillerSparkListener(victimProcess: ProcessHandle) extends SparkListener {
-    private var alreadyShot = false
-    override def onStageSubmitted(stageSubmitted: SparkListenerStageSubmitted): Unit = {
-      val isLastStage = stageSubmitted.properties.getProperty("spark.rdd.scope", "").contains("\"name\":\"collect\"")
-
-      if (isLastStage && !alreadyShot) {
-        victimProcess.destroyForcibly()
-        alreadyShot = true
-      }
-    }
-  }
 
   class TestCommitShufflePartitionsListener extends CommitShufflePartitionsListener {
 

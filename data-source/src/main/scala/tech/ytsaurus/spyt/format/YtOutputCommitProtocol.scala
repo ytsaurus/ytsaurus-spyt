@@ -5,7 +5,7 @@ import org.apache.hadoop.fs.{FileSystem, Path}
 import org.apache.hadoop.mapreduce.{JobContext, TaskAttemptContext, TaskAttemptID}
 import org.apache.spark.broadcast.Broadcast
 import org.apache.spark.internal.io.FileCommitProtocol
-import org.apache.spark.scheduler.{DAGSchedulerUtils, SparkListener, SparkListenerJobStart}
+import org.apache.spark.scheduler.{DAGSchedulerUtils, SparkListener, SparkListenerJobEnd, SparkListenerJobStart, SparkListenerStageCompleted, SparkListenerStageSubmitted}
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.{SparkEnv, TaskContext}
 import org.slf4j.LoggerFactory
@@ -280,7 +280,7 @@ class DistributedWriteOutputCommitProtocol(
   dynamicPartitionOverwrite: Boolean
 ) extends AbstractYtOutputCommitProtocol(jobId, outputPath, dynamicPartitionOverwrite) {
 
-  @transient private val dwHandlePromise: Promise[DistributedWriteHandle] = Promise()
+  @transient @volatile private var dwHandleOpt: Option[DistributedWriteHandle] = None
 
   @volatile private var cookiesBroadcast: Broadcast[java.util.List[DistributedWriteCookie]] = _
   @transient private val cookiesSemaphore = new Semaphore(0)
@@ -299,36 +299,54 @@ class DistributedWriteOutputCommitProtocol(
 
   override def setupJob(jobContext: JobContext): Unit = {
     val conf = jobContext.getConfiguration
-    prepareWrite(conf) { transaction =>
-      setupTable(rootPath, conf, transaction)
-    }
-
-    val transactionId = getGlobalWriteTransaction(conf)
-
     val sc = SparkSession.active.sparkContext
     sc.setLocalProperty(distributedWritePropKey, jobId)
 
     // We need to use SparkListener here to defer the start of distributed write process because at this moment we
     // don't know the number of spark tasks on the resulting stage
     val sparkJobListener: SparkListener = new SparkListener() {
+      private var sparkJobId: Int = -1
+
       override def onJobStart(jobStart: SparkListenerJobStart): Unit = {
         // There might be more than one job that can be submitted at the same time from different threads, so it is
         // needed to check every jobStart event to match to correct jobId
         if (jobStart.properties.get(distributedWritePropKey) == jobId) {
           val numOutputTasksOpt = DAGSchedulerUtils.getNumOutputTasks(sc, jobStart.stageIds)
           if (numOutputTasksOpt.isDefined && !jobStart.properties.containsKey("spark.rdd.scope")) {
-            sc.removeSparkListener(this)
-            val cookieCount = numOutputTasksOpt.get
-            val distributedWriteRequest = StartDistributedWriteSession.builder()
-              .setPath(rootPath.toYPath)
-              .setCookieCount(cookieCount)
-              .setTransactionalOptions(new TransactionalOptions(GUID.valueOf(transactionId)))
-              .build()
-            val dwHandle = client.startDistributedWriteSession(distributedWriteRequest).join()
-            cookiesBroadcast = sc.broadcast(dwHandle.getCookies)
-            dwHandlePromise.success(dwHandle)
-            cookiesSemaphore.release()
+            sparkJobId = jobStart.jobId
           }
+        }
+      }
+
+      override def onStageSubmitted(stageSubmitted: SparkListenerStageSubmitted): Unit = {
+        if (DAGSchedulerUtils.isResultStageForJobId(sc, sparkJobId, stageSubmitted.stageInfo.stageId)) {
+          val cookieCount = stageSubmitted.stageInfo.numTasks
+          prepareWrite(conf) { transaction =>
+            setupTable(rootPath, conf, transaction)
+          }
+          val transactionId = getGlobalWriteTransaction(conf)
+          val distributedWriteRequest = StartDistributedWriteSession.builder()
+            .setPath(rootPath.toYPath)
+            .setCookieCount(cookieCount)
+            .setTransactionalOptions(new TransactionalOptions(GUID.valueOf(transactionId)))
+            .build()
+          val dwHandle = client.startDistributedWriteSession(distributedWriteRequest).join()
+          cookiesBroadcast = sc.broadcast(dwHandle.getCookies)
+          dwHandleOpt = Some(dwHandle)
+          cookiesSemaphore.release()
+        }
+      }
+
+      override def onStageCompleted(stageCompleted: SparkListenerStageCompleted): Unit = {
+        val si = stageCompleted.stageInfo
+        if (DAGSchedulerUtils.isResultStageForJobId(sc, sparkJobId, si.stageId) && si.failureReason.isDefined) {
+          abortTransactionIfExists(conf, GlobalTransaction)
+        }
+      }
+
+      override def onJobEnd(jobEnd: SparkListenerJobEnd): Unit = {
+        if (sparkJobId == jobEnd.jobId) {
+          sc.removeSparkListener(this)
         }
       }
     }
@@ -338,12 +356,12 @@ class DistributedWriteOutputCommitProtocol(
   override def doCommitJob(conf: Configuration, taskCommits: Seq[FileCommitProtocol.TaskCommitMessage]): Unit = {
     stopCookiesBroadcast()
     val results = taskCommits.map(_.obj.asInstanceOf[WriteFragmentResult]).filter(_ != null)
-    dwHandlePromise.future.value.get.foreach(_.finish(results.asJava).join())
+    dwHandleOpt.foreach(_.finish(results.asJava).join())
   }
 
   override def abortJob(jobContext: JobContext): Unit = {
     stopCookiesBroadcast()
-    dwHandlePromise.future.value.get.foreach(_.stopPing())
+    dwHandleOpt.foreach(_.stopPing())
     super.abortJob(jobContext)
   }
 

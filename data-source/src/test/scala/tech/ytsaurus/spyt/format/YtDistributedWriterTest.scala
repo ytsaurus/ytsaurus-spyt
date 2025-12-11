@@ -14,7 +14,7 @@ import tech.ytsaurus.ysontree.YTreeNode
 import scala.util.Random
 
 class YtDistributedWriterTest extends AnyFlatSpec with TmpDir with LocalSpark with Matchers with TestUtils {
-  behavior of "Spark"
+  behavior of "DistributedWriteOutputCommitProtocol"
 
   override def numFailures: Int = 4
 

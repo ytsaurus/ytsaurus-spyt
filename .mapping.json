@@ -686,6 +686,8 @@
   "spyt-test":"yt/spark/spark-over-yt/spyt-test",
   "spyt-test/src/test/resources/META-INF/services/tech.ytsaurus.spyt.shuffle.CommitShufflePartitionsListener":"yt/spark/spark-over-yt/spyt-test/src/test/resources/META-INF/services/tech.ytsaurus.spyt.shuffle.CommitShufflePartitionsListener",
   "spyt-test/src/test/scala/org/apache/spark/shuffle/ytsaurus/YTsaurusShuffleTest.scala":"yt/spark/spark-over-yt/spyt-test/src/test/scala/org/apache/spark/shuffle/ytsaurus/YTsaurusShuffleTest.scala",
+  "spyt-test/src/test/scala/tech/ytsaurus/spyt/format/YTsaurusDistributedWriteTest.scala":"yt/spark/spark-over-yt/spyt-test/src/test/scala/tech/ytsaurus/spyt/format/YTsaurusDistributedWriteTest.scala",
+  "spyt-test/src/test/scala/tech/ytsaurus/spyt/test/ExecutorKillerSparkListener.scala":"yt/spark/spark-over-yt/spyt-test/src/test/scala/tech/ytsaurus/spyt/test/ExecutorKillerSparkListener.scala",
   "tools/release":"yt/spark/spark-over-yt/tools/release",
   "tools/release/publisher/__init__.py":"yt/spark/spark-over-yt/tools/release/publisher/__init__.py",
   "tools/release/publisher/build_downloader.py":"yt/spark/spark-over-yt/tools/release/publisher/build_downloader.py",

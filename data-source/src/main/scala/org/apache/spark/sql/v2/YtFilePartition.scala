@@ -30,24 +30,29 @@ object YtFilePartition {
 
   def maxSplitBytes(sparkSession: SparkSession,
                     selectedPartitions: Seq[PartitionDirectory],
-                    maybeReadParallelism: Option[Int]): Long = {
-    val defaultMaxSplitBytes = sparkSession.sessionState.conf.filesMaxPartitionBytes
-    val minSplitBytes = org.apache.spark.network.util.JavaUtils.byteStringAs(
-      sparkSession.sessionState.conf.getConfString(YT_MIN_PARTITION_BYTES, "1G"),
-      ByteUnit.BYTE
-    )
+                    maybeReadParallelism: Option[Int]
+                   ): Long = {
+    val partitioningConfig = PartitioningConfig.fromSparkSession(sparkSession)
+    maxSplitBytes(selectedPartitions, maybeReadParallelism, partitioningConfig)
+  }
 
-    val openCostInBytes = sparkSession.sessionState.conf.filesOpenCostInBytes
-    val defaultParallelism = sparkSession.sparkContext.defaultParallelism
+  def maxSplitBytes(selectedPartitions: Seq[PartitionDirectory],
+                    maybeReadParallelism: Option[Int],
+                    partitioningConfig: PartitioningConfig
+                   ): Long = {
+    import partitioningConfig._
+
     val totalBytes = selectedPartitions.flatMap(pd =>
       SparkAdapter.instance.getPartitionFileStatuses(pd).map(_.getLen + openCostInBytes)
     ).sum
     val bytesPerCore = totalBytes / defaultParallelism
 
+    // maybeReadParallelism is defined by read option("readParallelism","N")
     val maxSplitBytes = maybeReadParallelism
       .map { readParallelism => totalBytes / readParallelism + 1 }
       .getOrElse {
-        Math.max(minSplitBytes, Math.min(defaultMaxSplitBytes, Math.max(openCostInBytes, bytesPerCore)))
+        // calculates optimum to avoid too small or too big partitions
+        Math.max(minSplitBytes, Math.min(defaultMaxSplitBytes, bytesPerCore))
       }
 
     val paths = selectedPartitions.flatMap(pd =>
@@ -428,5 +433,30 @@ object YtFilePartition {
         }
     }
     getFilePartitions(res)
+  }
+
+  /**
+   * Configuration for file partitioning.
+   */
+  case class PartitioningConfig(defaultMaxSplitBytes: Long,
+                                minSplitBytes: Long,
+                                openCostInBytes: Long,
+                                defaultParallelism: Int
+  )
+
+  object PartitioningConfig {
+    def fromSparkSession(sparkSession: SparkSession): PartitioningConfig = {
+      val minSplitBytes = org.apache.spark.network.util.JavaUtils.byteStringAs(
+        sparkSession.sessionState.conf.getConfString(YT_MIN_PARTITION_BYTES, "1G"),
+        ByteUnit.BYTE
+      )
+
+      PartitioningConfig(
+        defaultMaxSplitBytes = sparkSession.sessionState.conf.filesMaxPartitionBytes,
+        minSplitBytes = minSplitBytes,
+        openCostInBytes = sparkSession.sessionState.conf.filesOpenCostInBytes,
+        defaultParallelism = sparkSession.sparkContext.defaultParallelism
+      )
+    }
   }
 }

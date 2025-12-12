@@ -299,6 +299,12 @@ class DistributedWriteOutputCommitProtocol(
 
   override def setupJob(jobContext: JobContext): Unit = {
     val conf = jobContext.getConfiguration
+    prepareWrite(conf) { transaction =>
+      setupTable(rootPath, conf, transaction)
+    }
+
+    val transactionId = getGlobalWriteTransaction(conf)
+
     val sc = SparkSession.active.sparkContext
     sc.setLocalProperty(distributedWritePropKey, jobId)
 
@@ -314,33 +320,23 @@ class DistributedWriteOutputCommitProtocol(
           val numOutputTasksOpt = DAGSchedulerUtils.getNumOutputTasks(sc, jobStart.stageIds)
           if (numOutputTasksOpt.isDefined && !jobStart.properties.containsKey("spark.rdd.scope")) {
             sparkJobId = jobStart.jobId
+            val cookieCount = numOutputTasksOpt.get
+            val distributedWriteRequest = StartDistributedWriteSession.builder()
+              .setPath(rootPath.toYPath)
+              .setCookieCount(cookieCount)
+              .setTransactionalOptions(new TransactionalOptions(GUID.valueOf(transactionId)))
+              .build()
+            val dwHandle = client.startDistributedWriteSession(distributedWriteRequest).join()
+            dwHandleOpt = Some(dwHandle)
           }
         }
       }
 
       override def onStageSubmitted(stageSubmitted: SparkListenerStageSubmitted): Unit = {
         if (DAGSchedulerUtils.isResultStageForJobId(sc, sparkJobId, stageSubmitted.stageInfo.stageId)) {
-          val cookieCount = stageSubmitted.stageInfo.numTasks
-          prepareWrite(conf) { transaction =>
-            setupTable(rootPath, conf, transaction)
-          }
-          val transactionId = getGlobalWriteTransaction(conf)
-          val distributedWriteRequest = StartDistributedWriteSession.builder()
-            .setPath(rootPath.toYPath)
-            .setCookieCount(cookieCount)
-            .setTransactionalOptions(new TransactionalOptions(GUID.valueOf(transactionId)))
-            .build()
-          val dwHandle = client.startDistributedWriteSession(distributedWriteRequest).join()
-          cookiesBroadcast = sc.broadcast(dwHandle.getCookies)
-          dwHandleOpt = Some(dwHandle)
+          stopCookiesBroadcast()
+          cookiesBroadcast = sc.broadcast(dwHandleOpt.get.getCookies)
           cookiesSemaphore.release()
-        }
-      }
-
-      override def onStageCompleted(stageCompleted: SparkListenerStageCompleted): Unit = {
-        val si = stageCompleted.stageInfo
-        if (DAGSchedulerUtils.isResultStageForJobId(sc, sparkJobId, si.stageId) && si.failureReason.isDefined) {
-          abortTransactionIfExists(conf, GlobalTransaction)
         }
       }
 

@@ -97,7 +97,7 @@ class YTsaurusShuffleTest extends AnyFlatSpec with Matchers with LocalSpark with
     createShuffledTable(inPathFirst, numRows, identity)
     createShuffledTable(inPathSecond, numRowsX2, x => x*x)
 
-    ExecutorKillerSparkListener.scheduleExecutorKill(_spark) { stageSubmitted =>
+    ExecutorKillerSparkListener.scheduleExecutorKillByStage(_spark) { stageSubmitted =>
       stageSubmitted.properties.getProperty("spark.rdd.scope", "").contains("\"name\":\"collect\"")
     }
 

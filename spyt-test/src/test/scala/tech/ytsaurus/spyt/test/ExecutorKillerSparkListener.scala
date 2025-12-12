@@ -1,6 +1,6 @@
 package tech.ytsaurus.spyt.test
 
-import org.apache.spark.scheduler.{SparkListener, SparkListenerStageSubmitted}
+import org.apache.spark.scheduler.{SparkListener, SparkListenerStageSubmitted, SparkListenerTaskStart}
 import org.apache.spark.sql.SparkSession
 import org.scalatest.Assertions
 
@@ -8,13 +8,25 @@ import scala.sys.process._
 import scala.util.{Failure, Success, Try}
 
 class ExecutorKillerSparkListener(victimProcess: ProcessHandle,
-  condition: SparkListenerStageSubmitted => Boolean) extends SparkListener {
+  stageCondition: SparkListenerStageSubmitted => Boolean,
+  taskCondition: SparkListenerTaskStart => Boolean
+) extends SparkListener {
 
   private var alreadyShot = false
   override def onStageSubmitted(stageSubmitted: SparkListenerStageSubmitted): Unit = {
-    val isLastStage = condition(stageSubmitted)
+    if (stageCondition(stageSubmitted)) {
+      killExecutor()
+    }
+  }
 
-    if (isLastStage && !alreadyShot) {
+  override def onTaskStart(taskStart: SparkListenerTaskStart): Unit = {
+    if (taskCondition(taskStart)) {
+      killExecutor()
+    }
+  }
+
+  private def killExecutor(): Unit = {
+    if (!alreadyShot) {
       victimProcess.destroyForcibly()
       alreadyShot = true
     }
@@ -22,7 +34,18 @@ class ExecutorKillerSparkListener(victimProcess: ProcessHandle,
 }
 
 object ExecutorKillerSparkListener extends Assertions {
-  def scheduleExecutorKill(spark: SparkSession)(condition: SparkListenerStageSubmitted => Boolean): Unit = {
+  def scheduleExecutorKillByStage(spark: SparkSession)(stageCondition: SparkListenerStageSubmitted => Boolean): Unit = {
+    scheduleExecutorKill(spark, stageCondition = stageCondition)
+  }
+
+  def scheduleExecutorKillByTask(spark: SparkSession)(taskCondition: SparkListenerTaskStart => Boolean): Unit = {
+    scheduleExecutorKill(spark, taskCondition = taskCondition)
+  }
+
+  private def scheduleExecutorKill(
+    spark: SparkSession,
+    stageCondition: SparkListenerStageSubmitted => Boolean = _ => false,
+    taskCondition: SparkListenerTaskStart => Boolean = _ => false): Unit = {
     // Since we're using here local-cluster Spark master hence Executors are child processes of the test process.
     // So here we are choosing one child executor process as a victim to kill it later.
     val executorProcessToKillOpt = ProcessHandle.current().descendants().filter { child =>
@@ -39,7 +62,7 @@ object ExecutorKillerSparkListener extends Assertions {
       fail("No executor child processes is found, there must be at least one")
     }
     val executorProcessToKill = executorProcessToKillOpt.get()
-    val executorKillerListener = new ExecutorKillerSparkListener(executorProcessToKill, condition)
+    val executorKillerListener = new ExecutorKillerSparkListener(executorProcessToKill, stageCondition, taskCondition)
 
     spark.sparkContext.addSparkListener(executorKillerListener)
   }

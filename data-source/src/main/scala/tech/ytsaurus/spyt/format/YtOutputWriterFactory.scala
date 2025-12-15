@@ -30,7 +30,8 @@ class YtOutputWriterFactory(ytClientConf: YtClientConfiguration,
 
     if (writeConfiguration.distributedWrite) {
       val cookie = YtOutputCommitProtocol.getCookieForTask(context)
-      return new YtDistributedOutputWriter(f, cookie, dataSchema, writeConfiguration, options)
+      val sortOption = SchemaConverter.getSortOption(context.getConfiguration)
+      return new YtDistributedOutputWriter(f, cookie, dataSchema, sortOption, writeConfiguration, options)
     }
 
     val path = YPathEnriched.fromPath(new Path(f))

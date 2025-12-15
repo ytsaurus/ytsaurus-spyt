@@ -12,7 +12,7 @@ import tech.ytsaurus.spyt.wrapper.config._
 import tech.ytsaurus.spyt.fs.path.YPathEnriched
 import tech.ytsaurus.spyt.serializers.{InternalRowSerializer, WriteSchemaConverter}
 import tech.ytsaurus.spyt.wrapper.LogLazy
-import tech.ytsaurus.client.request.{SerializationContext, TransactionalOptions, WriteSerializationContext, WriteTable}
+import tech.ytsaurus.client.request.{TransactionalOptions, WriteSerializationContext, WriteTable}
 import tech.ytsaurus.client.{AsyncWriter, CompoundClient}
 import tech.ytsaurus.core.GUID
 import tech.ytsaurus.spyt.format.conf.SparkYtWriteConfiguration
@@ -86,10 +86,6 @@ abstract class AbstractYtOutputWriter[W <: AsyncWriter[InternalRow]](
 
   private def createBuffer() = new util.ArrayList[InternalRow](bufferSize)
 
-  protected def createSerializationContext(): SerializationContext[InternalRow] = {
-    new WriteSerializationContext(new InternalRowSerializer(schema, WriteSchemaConverter(options)))
-  }
-
   protected def initialize(): Unit = {
     YtMetricsRegister.register()
   }
@@ -108,10 +104,13 @@ class YtOutputWriter(richPath: YPathEnriched,
   protected override def initializeWriter(): AsyncWriter[InternalRow] = {
     val appendPath = richPath.withAttr("append", "true").toYPath
     log.debugLazy(s"Initialize new write: $appendPath, transaction: $transactionGuid")
+    val serializationContext = new WriteSerializationContext(
+      new InternalRowSerializer(schema, WriteSchemaConverter(options))
+    )
     val request = WriteTable.builder[InternalRow]()
       .setConfig(options.getYtConf(TableWriterConfig).orNull)
       .setPath(appendPath)
-      .setSerializationContext(createSerializationContext())
+      .setSerializationContext(serializationContext)
       .setTransactionalOptions(new TransactionalOptions(GUID.valueOf(transactionGuid)))
       .setNeedRetries(false)
       .setRequestId(requestId)

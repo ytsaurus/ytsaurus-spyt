@@ -1,16 +1,18 @@
 package tech.ytsaurus.spyt.serializers
 
+import org.apache.hadoop.conf.Configuration
 import org.apache.spark.sql.types._
 import org.apache.spark.sql.v2.YtTable
 import org.apache.spark.unsafe.types.UTF8String
 import tech.ytsaurus.core.common.Decimal.textToBinary
 import tech.ytsaurus.spyt.common.utils.TypeUtils.{isTuple, isVariant}
 import tech.ytsaurus.spyt.common.utils.UuidUtils
-import tech.ytsaurus.spyt.format.conf.YtTableSparkSettings.isNullTypeAllowed
+import tech.ytsaurus.spyt.format.conf.YtTableSparkSettings.{SortColumns, UniqueKeys, isNullTypeAllowed}
 import tech.ytsaurus.spyt.serialization.IndexedDataType
 import tech.ytsaurus.spyt.serialization.IndexedDataType.StructFieldMeta
 import tech.ytsaurus.spyt.serializers.YtLogicalType.getStructField
 import tech.ytsaurus.spyt.serializers.YtLogicalTypeSerializer.deserializeTypeV3
+import tech.ytsaurus.spyt.wrapper.config._
 import tech.ytsaurus.typeinfo.TiType
 import tech.ytsaurus.ysontree.YTreeNode
 
@@ -48,6 +50,15 @@ object SchemaConverter {
     override def keys: Seq[String] = Nil
 
     override def uniqueKeys: Boolean = false
+  }
+
+  def getSortOption(configuration: Configuration): SortOption = {
+    val keys = configuration.ytConf(SortColumns)
+    val uniqueKeys = configuration.ytConf(UniqueKeys)
+    if (keys.isEmpty && uniqueKeys) {
+      throw new IllegalArgumentException("Unique keys attribute can't be true for unordered table")
+    }
+    if (keys.nonEmpty) Sorted(keys, uniqueKeys) else Unordered
   }
 
   private def getAvailableType(fieldMap: java.util.Map[String, YTreeNode], parsingTypeV3: Boolean): YtLogicalType = {

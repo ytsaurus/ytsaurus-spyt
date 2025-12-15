@@ -52,13 +52,17 @@ trait TestUtils {
     yt.createNode(path, CypressNodeType.TABLE, Map("schema" -> schema.toYTree).asJava).join()
   }
 
-  def readTableAsYson(path: String, transaction: Option[String] = None)
-                     (implicit yt: CompoundClient): Seq[YTreeNode] = {
-    readTableAsYson(YPath.simple(YtWrapper.formatPath(path)), transaction)
+  def readTableAsYson(
+    path: String,
+    transaction: Option[String] = None,
+    readSettings: YtReadSettings = YtReadSettings.default)(implicit yt: CompoundClient): Seq[YTreeNode] = {
+    readTableAsYson(YPath.simple(YtWrapper.formatPath(path)), transaction, readSettings)
   }
 
-  def readTableAsYson(path: YPath, transaction: Option[String])
-                     (implicit yt: CompoundClient): Seq[YTreeNode] = {
+  def readTableAsYson(
+    path: YPath,
+    transaction: Option[String],
+    readSettings: YtReadSettings)(implicit yt: CompoundClient): Seq[YTreeNode] = {
     val schema = TableSchema.fromYTree(YtWrapper.attribute(path, "schema", transaction))
     val deser = new WireRowDeserializer[YTreeNode] with WireValueDeserializer[Unit] {
       private var builder = new YTreeBuilder().beginMap()
@@ -93,7 +97,7 @@ trait TestUtils {
       override def onBytes(bytes: Array[Byte]): Unit = builder.value(bytes)
     }
 
-    implicit val ytReadContext: YtReadContext = YtReadContext(yt, YtReadSettings.default)
+    implicit val ytReadContext: YtReadContext = YtReadContext(yt, readSettings)
     YtWrapper.readTable(path, deser, 1 minute, transaction, () => _).toList
   }
 

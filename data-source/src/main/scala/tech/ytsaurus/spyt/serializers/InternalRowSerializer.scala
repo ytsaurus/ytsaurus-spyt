@@ -12,7 +12,7 @@ import tech.ytsaurus.client.rows.{WireProtocolWriteable, WireRowSerializer}
 import tech.ytsaurus.core.tables.{ColumnValueType, TableSchema}
 import tech.ytsaurus.spyt.serialization.YsonEncoder
 import tech.ytsaurus.spyt.serializers.InternalRowSerializer._
-import tech.ytsaurus.spyt.serializers.SchemaConverter.{Unordered, decimalToBinary, stringToBinary}
+import tech.ytsaurus.spyt.serializers.SchemaConverter.{SortOption, Unordered, decimalToBinary, stringToBinary}
 import tech.ytsaurus.spyt.types.YTsaurusTypes
 import tech.ytsaurus.spyt.wrapper.LogLazy
 import tech.ytsaurus.typeinfo.TiType
@@ -23,11 +23,19 @@ import scala.collection.mutable
 import scala.concurrent.duration.Duration
 import scala.concurrent.{ExecutionContext, Future}
 
-class InternalRowSerializer(schema: StructType, writeSchemaConverter: WriteSchemaConverter) extends WireRowSerializer[InternalRow] with LogLazy {
+class InternalRowSerializer(sparkSchema: StructType,
+  writeSchemaConverter: WriteSchemaConverter,
+  sortOption: SortOption = Unordered) extends WireRowSerializer[InternalRow] with LogLazy {
 
   private val log = LoggerFactory.getLogger(getClass)
 
-  private val tableSchema = writeSchemaConverter.tableSchema(schema, Unordered)
+  private val tableSchema = writeSchemaConverter.tableSchema(sparkSchema, sortOption)
+  private val sparkAndTableIndices = {
+    val keyIndices = sortOption.keys.map(key => sparkSchema.fieldIndex(key))
+    val keyIndicesSet = keyIndices.toSet
+    val dataIndices = (0 until sparkSchema.length).filter(i => !keyIndicesSet.contains(i))
+    (keyIndices ++ dataIndices).zipWithIndex
+  }
 
   override def getSchema: TableSchema = tableSchema
 
@@ -60,30 +68,32 @@ class InternalRowSerializer(schema: StructType, writeSchemaConverter: WriteSchem
                             aggregate: Boolean,
                             idMapping: Array[Int]): Unit = {
     writeable.writeValueCount(row.numFields)
-    for {
-      i <- 0 until row.numFields
-    } {
-      if (row.isNullAt(i)) {
-        writeable.writeValueHeader(valueId(i, idMapping), ColumnValueType.NULL, aggregate, 0)
+    sparkAndTableIndices.foreach { case (sparkIndex, tableIndex) =>
+      if (row.isNullAt(sparkIndex)) {
+        writeable.writeValueHeader(valueId(tableIndex, idMapping), ColumnValueType.NULL, aggregate, 0)
       } else {
-        val sparkField = schema(i)
-        val ytFieldHint = if (writeSchemaConverter.typeV3Format) Some(tableSchema.getColumnSchema(i).getTypeV3) else None
+        val sparkField = sparkSchema(sparkIndex)
+        val ytFieldHint = if (writeSchemaConverter.typeV3Format) {
+          Some(tableSchema.getColumnSchema(tableIndex).getTypeV3)
+        } else {
+          None
+        }
         sparkField.dataType match {
           case BinaryType =>
-            writeBytes(writeable, idMapping, aggregate, i, row.getBinary(i), getColumnType)
+            writeBytes(writeable, idMapping, aggregate, tableIndex, row.getBinary(sparkIndex), getColumnType)
           case StringType =>
-            val binary = stringToBinary(ytFieldHint, row.getUTF8String(i))
-            writeBytes(writeable, idMapping, aggregate, i, binary, getColumnType)
+            val binary = stringToBinary(ytFieldHint, row.getUTF8String(sparkIndex))
+            writeBytes(writeable, idMapping, aggregate, tableIndex, binary, getColumnType)
           case d: DecimalType =>
-            val value = row.getDecimal(i, d.precision, d.scale)
+            val value = row.getDecimal(sparkIndex, d.precision, d.scale)
             if (writeSchemaConverter.typeV3Format) {
               val binary = decimalToBinary(ytFieldHint, d, value)
-              writeBytes(writeable, idMapping, aggregate, i, binary, getColumnType)
+              writeBytes(writeable, idMapping, aggregate, tableIndex, binary, getColumnType)
             } else {
-              val targetColumnType = getColumnType(i)
+              val targetColumnType = getColumnType(tableIndex)
               targetColumnType match {
                 case ColumnValueType.INT64 | ColumnValueType.UINT64 | ColumnValueType.DOUBLE | ColumnValueType.STRING =>
-                  writeHeader(writeable, idMapping, aggregate, i, 0, _ => targetColumnType)
+                  writeHeader(writeable, idMapping, aggregate, tableIndex, 0, _ => targetColumnType)
                   (targetColumnType: @unchecked) match {
                     case ColumnValueType.INT64 | ColumnValueType.UINT64 =>
                       writeable.onInteger(value.toLong)
@@ -98,30 +108,30 @@ class InternalRowSerializer(schema: StructType, writeSchemaConverter: WriteSchem
             }
           case t@(ArrayType(_, _) | StructType(_) | MapType(_, _, _)) =>
             val skipNulls = sparkField.metadata.contains("skipNulls") && sparkField.metadata.getBoolean("skipNulls")
-            writeBytes(writeable, idMapping, aggregate, i,
-              YsonEncoder.encode(row.get(i, sparkField.dataType), t, skipNulls, writeSchemaConverter.typeV3Format, ytFieldHint),
+            writeBytes(writeable, idMapping, aggregate, tableIndex,
+              YsonEncoder.encode(row.get(sparkIndex, sparkField.dataType), t, skipNulls, writeSchemaConverter.typeV3Format, ytFieldHint),
               getColumnType)
           case otherType =>
             val isExtendedType = YTsaurusTypes
               .instance
-              .wireWriteRow(otherType, row, writeable, aggregate, idMapping, i, getColumnType)
+              .wireWriteRow(otherType, row, writeable, aggregate, idMapping, tableIndex, sparkIndex, getColumnType)
             if (!isExtendedType) {
-              writeHeader(writeable, idMapping, aggregate, i, 0, getColumnType)
+              writeHeader(writeable, idMapping, aggregate, tableIndex, 0, getColumnType)
               otherType match {
-                case ByteType => writeable.onInteger(row.getByte(i))
-                case ShortType => writeable.onInteger(row.getShort(i))
-                case IntegerType => writeable.onInteger(row.getInt(i))
-                case LongType => writeable.onInteger(row.getLong(i))
-                case BooleanType => writeable.onBoolean(row.getBoolean(i))
-                case FloatType => writeable.onDouble(row.getFloat(i))
-                case DoubleType => writeable.onDouble(row.getDouble(i))
-                case DateType => writeable.onInteger(row.getLong(i))
-                case _: DatetimeType => writeable.onInteger(row.getLong(i))
-                case TimestampType => writeable.onInteger(row.getLong(i))
-                case _: Date32Type => writeable.onInteger(row.getInt(i))
-                case _: Datetime64Type => writeable.onInteger(row.getLong(i))
-                case _: Timestamp64Type => writeable.onInteger(row.getLong(i))
-                case _: Interval64Type => writeable.onInteger(row.getLong(i))
+                case ByteType => writeable.onInteger(row.getByte(sparkIndex))
+                case ShortType => writeable.onInteger(row.getShort(sparkIndex))
+                case IntegerType => writeable.onInteger(row.getInt(sparkIndex))
+                case LongType => writeable.onInteger(row.getLong(sparkIndex))
+                case BooleanType => writeable.onBoolean(row.getBoolean(sparkIndex))
+                case FloatType => writeable.onDouble(row.getFloat(sparkIndex))
+                case DoubleType => writeable.onDouble(row.getDouble(sparkIndex))
+                case DateType => writeable.onInteger(row.getLong(sparkIndex))
+                case _: DatetimeType => writeable.onInteger(row.getLong(sparkIndex))
+                case TimestampType => writeable.onInteger(row.getLong(sparkIndex))
+                case _: Date32Type => writeable.onInteger(row.getInt(sparkIndex))
+                case _: Datetime64Type => writeable.onInteger(row.getLong(sparkIndex))
+                case _: Timestamp64Type => writeable.onInteger(row.getLong(sparkIndex))
+                case _: Interval64Type => writeable.onInteger(row.getLong(sparkIndex))
               }
             }
         }
@@ -131,14 +141,6 @@ class InternalRowSerializer(schema: StructType, writeSchemaConverter: WriteSchem
 }
 
 object InternalRowSerializer {
-  private val deserializers: ThreadLocal[mutable.Map[StructType, InternalRowSerializer]] = ThreadLocal.withInitial(() => mutable.ListMap.empty)
-
-  def getOrCreate(schema: StructType,
-                  schemaHint: Map[String, YtLogicalType],
-                  filters: Array[Filter] = Array.empty,
-                  typeV3Format: Boolean = false): InternalRowSerializer = {
-    deserializers.get().getOrElseUpdate(schema, new InternalRowSerializer(schema, new WriteSchemaConverter(schemaHint, typeV3Format)))
-  }
 
   private def valueId(id: Int, idMapping: Array[Int]): Int = {
     if (idMapping != null) {
@@ -147,13 +149,13 @@ object InternalRowSerializer {
   }
 
   def writeHeader(writeable: WireProtocolWriteable, idMapping: Array[Int], aggregate: Boolean,
-                          i: Int, length: Int, getColumnType: Int => ColumnValueType): Unit = {
-    writeable.writeValueHeader(valueId(i, idMapping), getColumnType(i), aggregate, length)
+    tableIndex: Int, length: Int, getColumnType: Int => ColumnValueType): Unit = {
+    writeable.writeValueHeader(valueId(tableIndex, idMapping), getColumnType(tableIndex), aggregate, length)
   }
 
   def writeBytes(writeable: WireProtocolWriteable, idMapping: Array[Int], aggregate: Boolean,
-                         i: Int, bytes: Array[Byte], getColumnType: Int => ColumnValueType): Unit = {
-    writeHeader(writeable, idMapping, aggregate, i, bytes.length, getColumnType)
+    tableIndex: Int, bytes: Array[Byte], getColumnType: Int => ColumnValueType): Unit = {
+    writeHeader(writeable, idMapping, aggregate, tableIndex, bytes.length, getColumnType)
     writeable.onBytes(bytes)
   }
 }

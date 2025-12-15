@@ -113,7 +113,7 @@ object SparkYtConfiguration {
       val omitColumns = spark.ytConf(YtOmitInaccessibleColumnsEnabled)
       val omitRows = spark.ytConf(YtOmitInaccessibleRowsEnabled)
       val distributedReading = spark.ytConf(YtDistributedReadingEnabled)
-      YtReadSettings(omitColumns, omitRows, distributedReading)
+      YtReadSettings(omitColumns, omitRows, distributedReading, unordered = true)
     }
   }
 

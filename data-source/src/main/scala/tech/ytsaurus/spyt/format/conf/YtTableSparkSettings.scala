@@ -1,29 +1,19 @@
 package tech.ytsaurus.spyt.format.conf
 
 import org.apache.hadoop.conf.Configuration
-import org.apache.spark.SparkConf
-import org.apache.spark.sql.types.{DataType, StructType}
-import tech.ytsaurus.spyt.wrapper.config._
-import tech.ytsaurus.spyt.serializers.SchemaConverter.{SortOption, Sorted, Unordered}
-import tech.ytsaurus.spyt.serializers.{SchemaConverter, WriteSchemaConverter, YtLogicalType}
-import tech.ytsaurus.spyt.wrapper.table.YtTableSettings
-import tech.ytsaurus.spyt.wrapper.config.ConfigEntry
+import org.apache.spark.sql.types.StructType
+import tech.ytsaurus.spyt.serializers.SchemaConverter.SortOption
 import tech.ytsaurus.spyt.serializers.YtLogicalTypeSerializer.{deserializeTypeV3, serializeTypeV3}
-import tech.ytsaurus.ysontree.YTreeNode
-import tech.ytsaurus.ysontree.YTreeTextSerializer
+import tech.ytsaurus.spyt.serializers.{SchemaConverter, WriteSchemaConverter, YtLogicalType}
+import tech.ytsaurus.spyt.wrapper.config.{ConfigEntry, _}
+import tech.ytsaurus.spyt.wrapper.table.YtTableSettings
+import tech.ytsaurus.ysontree.{YTreeNode, YTreeTextSerializer}
 
 case class YtTableSparkSettings(configuration: Configuration) extends YtTableSettings {
 
   import YtTableSparkSettings._
 
-  private def sortOption: SortOption = {
-    val keys = configuration.ytConf(SortColumns)
-    val uniqueKeys = configuration.ytConf(UniqueKeys)
-    if (keys.isEmpty && uniqueKeys) {
-      throw new IllegalArgumentException("Unique keys attribute can't be true for unordered table")
-    }
-    if (keys.nonEmpty) Sorted(keys, uniqueKeys) else Unordered
-  }
+  private def sortOption: SortOption = SchemaConverter.getSortOption(configuration)
 
   private def writeSchemaConverter = WriteSchemaConverter(configuration)
 

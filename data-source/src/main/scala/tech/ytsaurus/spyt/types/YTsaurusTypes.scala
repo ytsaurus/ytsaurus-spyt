@@ -28,12 +28,13 @@ trait YTsaurusTypes {
   def wireDeserializeDouble(dataType: DataType, value: Double, addValue: AddValue): Boolean
   def wireDeserializeBytes(dataType: DataType, bytes: Array[Byte], isString: Boolean, addValue: AddValue): Boolean
   def wireWriteRow(dataType: DataType,
-                   row: InternalRow,
-                   writeable: WireProtocolWriteable,
-                   aggregate: Boolean,
-                   idMapping: Array[Int],
-                   i: Int,
-                   getColumnType: Int => ColumnValueType): Boolean
+    row: InternalRow,
+    writeable: WireProtocolWriteable,
+    aggregate: Boolean,
+    idMapping: Array[Int],
+    tableIndex: Int,
+    sparkIndex: Int,
+    getColumnType: Int => ColumnValueType): Boolean
 
   def ytLogicalTypeV3(dataType: DataType): YtLogicalType
 
@@ -86,8 +87,8 @@ class BaseYTsaurusTypes extends YTsaurusTypes {
       dataType: DataType, bytes: Array[Byte], isString: Boolean, addValue: AddValue): Boolean = false
 
   override def wireWriteRow(dataType: DataType, row: InternalRow, writeable: WireProtocolWriteable,
-                            aggregate: Boolean, idMapping: Array[Int], i: Int,
-                            getColumnType: Int => ColumnValueType): Boolean = false
+    aggregate: Boolean, idMapping: Array[Int], tableIndex: Int, sparkIndex: Int,
+    getColumnType: Int => ColumnValueType): Boolean = false
 
   override def ytLogicalTypeV3(dataType: DataType): YtLogicalType = typeNotSupported(dataType)
 

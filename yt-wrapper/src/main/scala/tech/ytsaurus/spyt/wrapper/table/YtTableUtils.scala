@@ -68,7 +68,7 @@ trait YtTableUtils {
       .setSerializationContext(new ReadSerializationContext(deserializer))
       .setOmitInaccessibleColumns(ytReadContext.settings.omitInaccessibleColumns)
       .setOmitInaccessibleRows(ytReadContext.settings.omitInaccessibleRows)
-      .setUnordered(true)
+      .setUnordered(ytReadContext.settings.unordered)
       .optionalTransaction(transaction)
     val reader = ytReadContext.yt.readTable(request).join()
     new SyncTableIterator(reader, timeout, reportBytesRead)

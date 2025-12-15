@@ -65,17 +65,18 @@ class ExtendedYtsaurusTypes extends YTsaurusTypes {
   }
 
   override def wireWriteRow(dataType: DataType,
-                            row: InternalRow,
-                            writeable: WireProtocolWriteable,
-                            aggregate: Boolean,
-                            idMapping: Array[Int],
-                            i: Int,
-                            getColumnType: Int => ColumnValueType): Boolean = {
+    row: InternalRow,
+    writeable: WireProtocolWriteable,
+    aggregate: Boolean,
+    idMapping: Array[Int],
+    tableIndex: Int,
+    sparkIndex: Int,
+    getColumnType: Int => ColumnValueType): Boolean = {
     dataType match {
-      case YsonType => writeBytes(writeable, idMapping, aggregate, i, row.getBinary(i), getColumnType)
+      case YsonType => writeBytes(writeable, idMapping, aggregate, tableIndex, row.getBinary(sparkIndex), getColumnType)
       case UInt64Type =>
-        writeHeader(writeable, idMapping, aggregate, i, 0, getColumnType)
-        writeable.onInteger(row.getLong(i))
+        writeHeader(writeable, idMapping, aggregate, tableIndex, 0, getColumnType)
+        writeable.onInteger(row.getLong(sparkIndex))
       case _ => return false
     }
     true

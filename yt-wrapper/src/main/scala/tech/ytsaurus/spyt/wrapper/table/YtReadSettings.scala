@@ -6,6 +6,7 @@ package tech.ytsaurus.spyt.wrapper.table
 case class YtReadSettings(omitInaccessibleColumns: Boolean,
   omitInaccessibleRows: Boolean,
   distributedReadingEnabled: Boolean,
+  unordered: Boolean
 )
 
 object YtReadSettings {
@@ -13,5 +14,6 @@ object YtReadSettings {
     omitInaccessibleColumns = true,
     omitInaccessibleRows = true,
     distributedReadingEnabled = false,
+    unordered = true
   )
 }

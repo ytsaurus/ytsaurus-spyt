@@ -6,9 +6,10 @@ import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import tech.ytsaurus.core.tables.{ColumnValueType, TableSchema}
 import tech.ytsaurus.spyt.YtWriter
-import tech.ytsaurus.spyt.format.YtDistributedWriterTest.{SampleRow, extractId}
+import tech.ytsaurus.spyt.format.YtDistributedWriterTest.{ExtendedSampleRow, SampleRow, extractId}
 import tech.ytsaurus.spyt.test.{LocalSpark, TestUtils, TmpDir}
 import tech.ytsaurus.spyt.wrapper.YtWrapper
+import tech.ytsaurus.spyt.wrapper.table.YtReadSettings
 import tech.ytsaurus.ysontree.YTreeNode
 
 import scala.util.Random
@@ -23,6 +24,8 @@ class YtDistributedWriterTest extends AnyFlatSpec with TmpDir with LocalSpark wi
   override def sparkConf: SparkConf = {
     super.sparkConf
       .set("spark.yt.write.distributed.enabled", "true")
+      .set("spark.sql.adaptive.coalescePartitions.enabled", "false")
+      .set("spark.sql.shuffle.partitions", "10")
   }
 
   private def baseTest(
@@ -40,7 +43,7 @@ class YtDistributedWriterTest extends AnyFlatSpec with TmpDir with LocalSpark wi
     }
     dfWriter.yt(tmpPath)
 
-    val writtenData = readTableAsYson(tmpPath)
+    val writtenData = readTableAsYson(tmpPath, readSettings = YtReadSettings.default.copy(unordered = false))
     val actual = writtenData.map(node => SampleRow(
       node.asMap().get("id").longValue(),
       node.asMap().get("value").stringValue()
@@ -106,13 +109,33 @@ class YtDistributedWriterTest extends AnyFlatSpec with TmpDir with LocalSpark wi
     readTableAsYson(s"$tmpPath/parent2/table2").map(extractId) should contain theSameElementsAs (1 until 20)
   }
 
-  it should "write sorted data to sorted table" in withSparkSession() { _spark =>
+  it should "write sorted data to sorted table with leading sort column" in withSparkSession() { _spark =>
     baseTest(
       _spark,
       data => Random.shuffle(data),
       ds => ds.orderBy("id"),
       testSorting = true
     )
+  }
+
+  it should "write sorted data to sorted table with random sort column specified" in withSparkSession() { _spark =>
+    import _spark.implicits._
+    val data = (1 to 1000).map(id => ExtendedSampleRow(s"key_$id", id, s"Value of $id"))
+    val df = _spark.createDataset(Random.shuffle(data)).repartition(10)
+
+    df.orderBy("id").write.sortedBy("id").yt(tmpPath)
+
+    val actualSchema = TableSchema.fromYTree(YtWrapper.attribute(tmpPath, "schema"))
+    actualSchema.getColumnNames should contain theSameElementsInOrderAs Seq("id", "key", "value")
+
+    val writtenData = readTableAsYson(tmpPath, readSettings = YtReadSettings.default.copy(unordered = false))
+      .map(node => ExtendedSampleRow(
+        node.asMap().get("key").stringValue(),
+        node.asMap().get("id").longValue(),
+        node.asMap().get("value").stringValue()
+      ))
+
+    writtenData should contain theSameElementsInOrderAs data
   }
 
   it should "overwrite existing table" in withSparkSession() { _spark =>
@@ -175,6 +198,7 @@ class YtDistributedWriterTest extends AnyFlatSpec with TmpDir with LocalSpark wi
 
 object YtDistributedWriterTest {
   case class SampleRow(id: Long, value: String)
+  case class ExtendedSampleRow(key: String, id: Long, value: String)
 
   def extractId(node: YTreeNode): Long = node.asMap().get("id").longValue()
 }

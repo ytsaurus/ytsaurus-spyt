@@ -1,9 +1,6 @@
 package org.apache.spark.sql.v2
 
 import org.apache.spark.sql.Row
-import org.apache.spark.sql.execution.SparkPlan
-import org.apache.spark.sql.execution.datasources.PartitionedFile
-import org.apache.spark.sql.execution.datasources.v2.BatchScanExec
 import org.apache.spark.sql.functions.col
 import org.apache.spark.sql.types.{LongType, StringType, StructField, StructType}
 import org.apache.spark.sql.v2.Utils.{extractRawKeys, extractYtScan, getParsedKeys}
@@ -12,25 +9,20 @@ import org.scalatest.{FlatSpec, Matchers}
 import tech.ytsaurus.client.rows.{UnversionedRow, UnversionedValue}
 import tech.ytsaurus.core.tables.{ColumnValueType, TableSchema}
 import tech.ytsaurus.spyt.common.utils.{TuplePoint, TupleSegment}
-import tech.ytsaurus.spyt.format.YtInputSplit
 import tech.ytsaurus.spyt.format.conf.SparkYtConfiguration
-import tech.ytsaurus.spyt.serializers.PivotKeysConverter
 import tech.ytsaurus.spyt.test.{DynTableTestUtils, LocalSpark, TestUtils, TmpDir}
 import tech.ytsaurus.spyt.{YtReader, YtWriter}
 import tech.ytsaurus.spyt.common.utils.{MInfinity, PInfinity, RealValue}
 import tech.ytsaurus.spyt.format.YtPartitionedFileDelegate
-import tech.ytsaurus.spyt.wrapper.YtWrapper
 import tech.ytsaurus.spyt.wrapper.table.OptimizeMode.Scan
-import tech.ytsaurus.ysontree.{YTree, YTreeNode}
-
-import java.sql.{Date, Timestamp}
-import java.time.LocalDate
+import tech.ytsaurus.spyt.wrapper.table.{YtReadContext, YtReadSettings}
 
 class SortedTablesKeyPartitioningTest extends FlatSpec with Matchers with LocalSpark
   with TmpDir with MockitoSugar with DynTableTestUtils with TestUtils {
   behavior of "YtScan"
 
   import spark.implicits._
+  implicit val ytReadContext: YtReadContext = YtReadContext(yt, YtReadSettings.default)
 
   override def beforeAll(): Unit = {
     super.beforeAll()

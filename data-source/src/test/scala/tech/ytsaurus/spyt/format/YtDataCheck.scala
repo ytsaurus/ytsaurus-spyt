@@ -1,18 +1,18 @@
 package tech.ytsaurus.spyt.format
 
 import org.scalatest.matchers.should.Matchers
-import tech.ytsaurus.client.CompoundClient
 import tech.ytsaurus.client.rows.{UnversionedRow, UnversionedRowDeserializer}
 import tech.ytsaurus.core.cypress.YPath
 import tech.ytsaurus.core.tables.ColumnValueType
 import tech.ytsaurus.spyt.wrapper.YtWrapper
+import tech.ytsaurus.spyt.wrapper.table.YtReadContext
 
 object YtDataCheck extends Matchers {
 
   def yPathShouldContainExpectedData[T <: Product : Ordering, U: Ordering]
   (yPath: YPath, expectedData: Seq[T], strictRowCheck: Boolean = true, columnShift: Int = 0)
   (rowKeyExtractor: UnversionedRow => U)
-  (implicit yt: CompoundClient): Unit = {
+  (implicit ctx: YtReadContext): Unit = {
     val resultRows = YtWrapper.readTable(
       yPath,
       new UnversionedRowDeserializer(),

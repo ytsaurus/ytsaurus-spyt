@@ -1,6 +1,8 @@
 package tech.ytsaurus.spyt.format.conf
 
-import tech.ytsaurus.spyt.wrapper.config.ConfigEntry
+import org.apache.spark.sql.SparkSession
+import tech.ytsaurus.spyt.wrapper.config.{ConfigEntry, SparkYtSparkSession}
+import tech.ytsaurus.spyt.wrapper.table.YtReadSettings
 
 import scala.concurrent.duration._
 import scala.language.postfixOps
@@ -37,6 +39,12 @@ object SparkYtConfiguration {
     case object ArrowEnabled extends ConfigEntry[Boolean](s"$prefix.arrow.enabled", Some(true))
 
     case object YtPartitioningEnabled extends ConfigEntry[Boolean](s"$prefix.ytPartitioning.enabled", Some(false))
+
+    case object YtOmitInaccessibleRowsEnabled
+      extends ConfigEntry[Boolean](s"$prefix.ytOmitInaccessibleRows.enabled", Some(true))
+
+    case object YtOmitInaccessibleColumnsEnabled
+      extends ConfigEntry[Boolean](s"$prefix.ytOmitInaccessibleColumns.enabled", Some(true))
 
     case object YtDistributedReadingEnabled
       extends ConfigEntry[Boolean](s"$prefix.ytDistributedReading.enabled", Some(false))
@@ -97,6 +105,16 @@ object SparkYtConfiguration {
     private val prefix = "schema"
 
     case object ForcingNullableIfNoMetadata extends ConfigEntry[Boolean](s"$prefix.forcingNullableIfNoMetadata.enabled", Some(true))
+  }
+
+  object YtReadSettingsFactory {
+    def fromSpark(spark: SparkSession): YtReadSettings = {
+      import SparkYtConfiguration.Read._
+      val omitColumns = spark.ytConf(YtOmitInaccessibleColumnsEnabled)
+      val omitRows = spark.ytConf(YtOmitInaccessibleRowsEnabled)
+      val distributedReading = spark.ytConf(YtDistributedReadingEnabled)
+      YtReadSettings(omitColumns, omitRows, distributedReading)
+    }
   }
 
 }

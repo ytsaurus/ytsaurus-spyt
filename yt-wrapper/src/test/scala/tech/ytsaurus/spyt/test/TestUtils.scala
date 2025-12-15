@@ -1,7 +1,7 @@
 package tech.ytsaurus.spyt.test
 
 import tech.ytsaurus.spyt.wrapper.YtWrapper
-import tech.ytsaurus.spyt.wrapper.table.OptimizeMode
+import tech.ytsaurus.spyt.wrapper.table.{OptimizeMode, YtReadContext, YtReadSettings}
 import tech.ytsaurus.client.CompoundClient
 import tech.ytsaurus.client.request.{SerializationContext, WriteSerializationContext, WriteTable}
 import tech.ytsaurus.client.rows.{UnversionedRow, UnversionedRowSerializer, WireRowDeserializer, WireValueDeserializer}
@@ -92,6 +92,8 @@ trait TestUtils {
 
       override def onBytes(bytes: Array[Byte]): Unit = builder.value(bytes)
     }
+
+    implicit val ytReadContext: YtReadContext = YtReadContext(yt, YtReadSettings.default)
     YtWrapper.readTable(path, deser, 1 minute, transaction, () => _).toList
   }
 

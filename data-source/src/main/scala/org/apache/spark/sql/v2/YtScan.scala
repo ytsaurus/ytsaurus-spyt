@@ -16,11 +16,10 @@ import org.apache.spark.sql.{AnalysisException, SparkSession}
 import org.apache.spark.util.SerializableConfiguration
 import tech.ytsaurus.spyt.SparkAdapter
 import tech.ytsaurus.spyt.common.utils.SegmentSet
-import tech.ytsaurus.spyt.format.conf.SparkYtConfiguration.Read.YtDistributedReadingEnabled
+import tech.ytsaurus.spyt.format.conf.SparkYtConfiguration.YtReadSettingsFactory
 import tech.ytsaurus.spyt.format.conf.{FilterPushdownConfig, KeyPartitioningConfig, YtTableSparkSettings}
 import tech.ytsaurus.spyt.fs.YtHadoopPath
 import tech.ytsaurus.spyt.logger.YtDynTableLoggerConfig
-import tech.ytsaurus.spyt.wrapper.config.SparkYtSparkSession
 
 import java.util.{Locale, OptionalLong}
 import scala.collection.JavaConverters._
@@ -51,11 +50,12 @@ case class YtScan(sparkSession: SparkSession,
     val broadcastedConf = sparkSession.sparkContext.broadcast(
       new SerializableConfiguration(hadoopConf))
     val keyPartitionedOptions = Map(YtTableSparkSettings.KeyPartitioned.name -> supportsKeyPartitioning.toString)
+
     val adapter = YtPartitionReaderFactoryAdapter(sparkSession.sessionState.conf, broadcastedConf,
       dataSchema, readDataSchema, readPartitionSchema,
       options.asScala.toMap ++ keyPartitionedOptions,
       pushedFilterSegments, filterPushdownConf, YtDynTableLoggerConfig.fromSpark(sparkSession),
-      sparkSession.ytConf(YtDistributedReadingEnabled)
+      YtReadSettingsFactory.fromSpark(sparkSession)
     )
     SparkAdapter.instance.createYtPartitionReaderFactory(adapter)
   }

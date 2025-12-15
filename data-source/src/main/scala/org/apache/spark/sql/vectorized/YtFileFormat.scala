@@ -25,13 +25,13 @@ import tech.ytsaurus.spyt.common.utils.YtReadingUtils
 import tech.ytsaurus.spyt.format.YtPartitionedFileDelegate.YtPartitionedFile
 import tech.ytsaurus.spyt.format._
 import tech.ytsaurus.spyt.format.conf.SparkYtConfiguration.Read._
+import tech.ytsaurus.spyt.format.conf.SparkYtConfiguration.YtReadSettingsFactory
 import tech.ytsaurus.spyt.format.conf.{FilterPushdownConfig, SparkYtWriteConfiguration}
 import tech.ytsaurus.spyt.logger.YtDynTableLoggerConfig
-import tech.ytsaurus.spyt.serializers.InternalRowDeserializer
 import tech.ytsaurus.spyt.streaming.{YtStreamingSink, YtStreamingSource}
-import tech.ytsaurus.spyt.wrapper.YtWrapper
 import tech.ytsaurus.spyt.wrapper.client.YtClientConfigurationConverter.ytClientConfiguration
 import tech.ytsaurus.spyt.wrapper.client.YtClientProvider
+import tech.ytsaurus.spyt.wrapper.table.YtReadContext
 
 
 class YtFileFormat extends FileFormat with DataSourceRegister with StreamSourceProvider with StreamSinkProvider
@@ -68,7 +68,7 @@ class YtFileFormat extends FileFormat with DataSourceRegister with StreamSourceP
 
     val batchMaxSize = hadoopConf.ytConf(VectorizedCapacity)
     val countOptimizationEnabled = hadoopConf.ytConf(CountOptimizationEnabled)
-    val distributedReadingEnabled = sparkSession.ytConf(YtDistributedReadingEnabled)
+    val readSettings = YtReadSettingsFactory.fromSpark(sparkSession)
 
     val log = LoggerFactory.getLogger(getClass)
     log.info(s"Batch read enabled: $readBatch")
@@ -81,41 +81,43 @@ class YtFileFormat extends FileFormat with DataSourceRegister with StreamSourceP
     {
       case ypf: YtPartitionedFile @unchecked =>
         val log = LoggerFactory.getLogger(getClass)
-        implicit val yt: CompoundClient =
+        val yt: CompoundClient =
           YtClientProvider.ytClientWithProxy(ytClientConf, ypf.delegate.cluster)
-        val split = YtInputSplit(ypf, requiredSchema, filterPushdownConfig = filterPushdownConfig,
-          ytLoggerConfig = ytLoggerConfig)
-        log.info(s"Reading ${split.ytPathWithFilters}")
-        if (readBatch) {
-          val ytVectorizedReader = new YtVectorizedReader(
-            split = split,
-            batchMaxSize = batchMaxSize,
-            returnBatch = returnBatch,
-            arrowEnabled = arrowEnabledValue,
-            optimizedForScan = optimizedForScanValue,
-            timeout = ytClientConf.timeout,
-            reportBytesRead = bytesReadReporter(broadcastedConf),
-            countOptimizationEnabled = countOptimizationEnabled,
-            hadoopPath = ypf.delegate.hadoopPath,
-            distributedReadingEnabled
-          )
-          val iter = new RecordReaderIterator(ytVectorizedReader)
-          Option(TaskContext.get()).foreach(_.addTaskCompletionListener[Unit](_ => iter.close()))
-          if (!returnBatch) {
-            val unsafeProjection = if (arrowEnabledValue) {
-              ColumnarBatchRowUtils.unsafeProjection(requiredSchema)
+        YtReadContext.withContext(yt, readSettings) { implicit ctx =>
+          val split = YtInputSplit(ypf, requiredSchema, filterPushdownConfig = filterPushdownConfig,
+            ytLoggerConfig = ytLoggerConfig)
+
+          log.info(s"Reading ${split.ytPathWithFilters}")
+          if (readBatch) {
+            val ytVectorizedReader = new YtVectorizedReader(
+              split = split,
+              batchMaxSize = batchMaxSize,
+              returnBatch = returnBatch,
+              arrowEnabled = arrowEnabledValue,
+              optimizedForScan = optimizedForScanValue,
+              timeout = ytClientConf.timeout,
+              reportBytesRead = bytesReadReporter(broadcastedConf),
+              countOptimizationEnabled = countOptimizationEnabled,
+              hadoopPath = ypf.delegate.hadoopPath
+            )
+            val iter = new RecordReaderIterator(ytVectorizedReader)
+            Option(TaskContext.get()).foreach(_.addTaskCompletionListener[Unit](_ => iter.close()))
+            if (!returnBatch) {
+              val unsafeProjection = if (arrowEnabledValue) {
+                ColumnarBatchRowUtils.unsafeProjection(requiredSchema)
+              } else {
+                UnsafeProjection.create(requiredSchema)
+              }
+              iter.asInstanceOf[Iterator[InternalRow]].map(unsafeProjection)
             } else {
-              UnsafeProjection.create(requiredSchema)
+              iter.asInstanceOf[Iterator[InternalRow]]
             }
-            iter.asInstanceOf[Iterator[InternalRow]].map(unsafeProjection)
           } else {
-            iter.asInstanceOf[Iterator[InternalRow]]
+            val tableIterator = YtReadingUtils.createRowBaseReader(split, None, requiredSchema,
+              ytClientConf, broadcastedConf)
+            val unsafeProjection = UnsafeProjection.create(requiredSchema)
+            tableIterator.map(unsafeProjection(_))
           }
-        } else {
-          val tableIterator = YtReadingUtils.createRowBaseReader(split, None, requiredSchema,
-            ytClientConf, broadcastedConf, distributedReadingEnabled)
-          val unsafeProjection = UnsafeProjection.create(requiredSchema)
-          tableIterator.map(unsafeProjection(_))
         }
     }
   }

@@ -59,33 +59,37 @@ trait YtTableUtils {
     yt.createNode(request).join()
   }
 
-  def readTable[T](path: YPath, deserializer: WireRowDeserializer[T], timeout: Duration = 1 minute,
-                   transaction: Option[String] = None, reportBytesRead: Long => Unit = _ => ())
-                  (implicit yt: CompoundClient): SyncTableIterator[T] = {
+  def readTable[T](path: YPath, deserializer: WireRowDeserializer[T],
+                   timeout: Duration = 1 minute, transaction: Option[String] = None,
+                   reportBytesRead: Long => Unit = _ => ())
+                  (implicit ytReadContext: YtReadContext): SyncTableIterator[T] = {
     val request = ReadTable.builder()
       .setPath(path)
       .setSerializationContext(new ReadSerializationContext(deserializer))
-      .setOmitInaccessibleColumns(true)
+      .setOmitInaccessibleColumns(ytReadContext.settings.omitInaccessibleColumns)
+      .setOmitInaccessibleRows(ytReadContext.settings.omitInaccessibleRows)
       .setUnordered(true)
       .optionalTransaction(transaction)
-    val reader = yt.readTable(request).join()
+    val reader = ytReadContext.yt.readTable(request).join()
     new SyncTableIterator(reader, timeout, reportBytesRead)
   }
 
   def readTableArrowStream(path: String, timeout: Duration, transaction: Option[String],
                            reportBytesRead: Long => Unit)
-                          (implicit yt: CompoundClient): TableCopyByteStream = {
+                          (implicit ytReadContext: YtReadContext): TableCopyByteStream = {
     val request = ReadTable.builder[ByteBuffer]().setPath(path)
       .setSerializationContext(ReadSerializationContext.binaryArrow())
+      .setOmitInaccessibleColumns(ytReadContext.settings.omitInaccessibleColumns)
+      .setOmitInaccessibleRows(ytReadContext.settings.omitInaccessibleRows)
       .optionalTransaction(transaction)
-    val reader = yt.readTable(request).join()
+    val reader = ytReadContext.yt.readTable(request).join()
     new TableCopyByteStream(reader, reportBytesRead)
   }
 
   def readTableArrowStream(path: YPath, timeout: Duration = 1 minute,
                            transaction: Option[String] = None,
                            reportBytesRead: Long => Unit = _ => {})
-                          (implicit yt: CompoundClient): TableCopyByteStream = {
+                          (implicit ytReadContext: YtReadContext): TableCopyByteStream = {
     readTableArrowStream(path.toString, timeout, transaction, reportBytesRead)
   }
 
@@ -165,42 +169,44 @@ trait YtTableUtils {
   }
 
   def partitionTables(path: YPath, splitBytes: Long, enableCookies: Boolean = false)
-                     (implicit yt: CompoundClient): Seq[MultiTablePartition] = {
+                     (implicit ytReadContext: YtReadContext): Seq[MultiTablePartition] = {
     import scala.collection.JavaConverters._
 
     val request = PartitionTables.builder()
       .setPaths(java.util.List.of[YPath](path))
       .setPartitionMode(PartitionTablesMode.Ordered)
       .setDataWeightPerPartition(DataSize.fromBytes(splitBytes))
+      .setOmitInaccessibleRows(ytReadContext.settings.omitInaccessibleRows)
       .setEnableCookies(enableCookies)
       .build()
 
-    val result = yt.partitionTables(request).join()
+    val result = ytReadContext.yt.partitionTables(request).join()
     result.asScala.toList
   }
 
   def createTablePartitionReader[T](cookie: TablePartitionCookie, deserializer: WireRowDeserializer[T],
                                     reportBytesRead: Long => Unit = _ => {})
-                                   (implicit yt: CompoundClient): AsyncTableIterator[T] = {
+                                   (implicit ytReadContext: YtReadContext): AsyncTableIterator[T] = {
     val context = new ReadSerializationContext(new TablePartitionRowsetReader[T](deserializer))
     val request = CreateTablePartitionReader.builder()
       .setCookie(cookie)
       .setSerializationContext(context)
       .setUnordered(false)
-      .setOmitInaccessibleColumns(true)
+      .setOmitInaccessibleColumns(ytReadContext.settings.omitInaccessibleColumns)
       .build()
-    val reader: AsyncReader[T] = yt.createTablePartitionReader(request).join()
+    val reader: AsyncReader[T] = ytReadContext.yt.createTablePartitionReader(request).join()
     new AsyncTableIterator(reader, reportBytesRead)
   }
 
-  def createTablePartitionArrowStream(cookie: TablePartitionCookie, reportBytesRead: Long => Unit = _ => {})
-                                        (implicit yt: CompoundClient): PartitionCopyByteStream = {
+  def createTablePartitionArrowStream(cookie: TablePartitionCookie,
+                                      reportBytesRead: Long => Unit = _ => {})
+                                     (implicit ytReadContext: YtReadContext): PartitionCopyByteStream = {
     val request = CreateTablePartitionReader.binaryArrowBuilder()
       .setCookie(cookie)
       .setUnordered(false)
-      .setOmitInaccessibleColumns(true)
+      .setOmitInaccessibleColumns(ytReadContext.settings.omitInaccessibleColumns)
       .build()
-    val reader: AsyncReader[ByteBuffer] = yt.createTablePartitionReader(request).join()
+    val reader: AsyncReader[ByteBuffer] = ytReadContext.yt.createTablePartitionReader(request).join()
     new PartitionCopyByteStream(reader, reportBytesRead)
   }
 }

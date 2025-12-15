@@ -36,7 +36,7 @@ class YtReadLockTest extends FlatSpec with Matchers with LocalSpark with TestUti
     val df = spark.read.yt(tmpPath)
     remove(tmpPath)
 
-    a[RuntimeException] shouldBe thrownBy {
+    a[SparkException] shouldBe thrownBy {
       df.as[Long].collect()
     }
   }

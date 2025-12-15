@@ -1,17 +1,18 @@
 package tech.ytsaurus.spyt.format
 
 import org.apache.spark.SparkException
-import org.apache.spark.sql.{AnalysisException, Row, SaveMode}
+import org.apache.spark.sql.{AnalysisException, SaveMode}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import tech.ytsaurus.core.cypress.YPath
 import tech.ytsaurus.core.tables.{ColumnValueType, TableSchema}
 import tech.ytsaurus.spyt.SparkVersionUtils
 import tech.ytsaurus.spyt.exceptions._
-import tech.ytsaurus.spyt.serializers.{InternalRowSerializer, SchemaConverter, WriteSchemaConverter}
-import tech.ytsaurus.spyt.serializers.SchemaConverter.{Sorted, Unordered}
+import tech.ytsaurus.spyt.serializers.SchemaConverter.Unordered
+import tech.ytsaurus.spyt.serializers.WriteSchemaConverter
 import tech.ytsaurus.spyt.test.{LocalSpark, TmpDir}
 import tech.ytsaurus.spyt.wrapper.YtWrapper
+import tech.ytsaurus.spyt.wrapper.table.{YtReadContext, YtReadSettings}
 
 import scala.concurrent.duration._
 import scala.language.postfixOps
@@ -156,6 +157,8 @@ class YtDynamicTableWriterTest extends AnyFlatSpec with TmpDir with LocalSpark w
     val outputPathAttributes = YtWrapper.attributes(yPath, None, Set.empty[String])
     outputPathAttributes("dynamic").boolValue() shouldBe createNewTable
 
+
+    implicit val ytReadContext: YtReadContext = YtReadContext(yt, YtReadSettings.default)
     YtDataCheck.yPathShouldContainExpectedData(yPath, sampleData, strictRowCheck, columnShift)(_.getValues.get(0 + columnShift).stringValue())
   }
 }

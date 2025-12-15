@@ -8,7 +8,7 @@ import tech.ytsaurus.core.cypress.YPath
 import tech.ytsaurus.spyt.serializers.WriteSchemaConverter
 import tech.ytsaurus.spyt.test.{LocalSpark, TmpDir}
 import tech.ytsaurus.spyt.wrapper.YtWrapper
-import tech.ytsaurus.spyt.wrapper.table.{OptimizeMode, YtArrowInputStream}
+import tech.ytsaurus.spyt.wrapper.table.{OptimizeMode, YtArrowInputStream, YtReadContext, YtReadSettings}
 import tech.ytsaurus.spyt.{SchemaTestUtils, YtDistributedReadingTestUtils, YtReader, YtWriter}
 
 import java.io.InputStream
@@ -55,6 +55,8 @@ class ArrowBatchReaderTest extends AnyFlatSpec with Matchers with TmpDir with Sc
       val delegates = getDelegatesForTable(spark, tmpPath)
       delegates.size shouldEqual 0
     } else {
+      implicit val ytReadContext: YtReadContext =
+        YtReadContext(yt, YtReadSettings.default.copy(distributedReadingEnabled = distributedReadingEnabled))
       val stream = YtWrapper.readTableArrowStream(YPath.simple(tmpPath))
       val reader = new ArrowBatchReader(stream, schema, new WriteSchemaConverter().tableSchema(schema))
       val rows = readFully(reader, schema, Int.MaxValue)
@@ -78,6 +80,9 @@ class ArrowBatchReaderTest extends AnyFlatSpec with Matchers with TmpDir with Sc
   testWithDistributedReading("read arrow stream from yt") { distributedReadingEnabled =>
     import spark.implicits._
     val schema = StructType(Seq(structField("a", IntegerType)))
+
+    val ytReadSettings =  YtReadSettings.default.copy(distributedReadingEnabled = distributedReadingEnabled)
+    implicit val ytReadContext: YtReadContext = YtReadContext(yt, ytReadSettings)
 
     def testSlice(data: Seq[Int], batchSize: Int, lowerRowIndex: Int, upperRowIndex: Int): Unit = {
       if (distributedReadingEnabled) {

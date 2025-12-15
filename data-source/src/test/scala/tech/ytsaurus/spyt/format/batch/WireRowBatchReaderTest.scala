@@ -9,7 +9,7 @@ import tech.ytsaurus.spyt.serializers.ArrayAnyDeserializer
 import tech.ytsaurus.spyt.test.{LocalSpark, TmpDir}
 import tech.ytsaurus.spyt.wrapper.YtWrapper
 import tech.ytsaurus.spyt.wrapper.YtWrapper.formatPath
-import tech.ytsaurus.spyt.wrapper.table.TableIterator
+import tech.ytsaurus.spyt.wrapper.table.{TableIterator, YtReadContext, YtReadSettings}
 
 import scala.concurrent.duration._
 import scala.language.postfixOps
@@ -29,6 +29,8 @@ class WireRowBatchReaderTest extends AnyFlatSpec with Matchers with ReadBatchRow
     val data = Seq.fill(rowCount)((r.nextInt, r.nextDouble))
     val df = data.toDF("a", "b")
     df.coalesce(1).write.yt(tmpPath)
+
+    implicit val ytReadContext: YtReadContext = YtReadContext(yt, YtReadSettings.default)
 
     val rowIterator: TableIterator[Array[Any]] = if (distributedReadingEnabled) {
       val delegates: Seq[YtPartitionedFileDelegate] = getDelegatesForTable(spark, tmpPath)

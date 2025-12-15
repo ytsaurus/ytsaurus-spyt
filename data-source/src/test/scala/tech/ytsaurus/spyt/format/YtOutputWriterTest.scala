@@ -16,6 +16,7 @@ import tech.ytsaurus.spyt.fs.path.YPathEnriched
 import tech.ytsaurus.spyt.serializers.SchemaConverter.{SortOption, Sorted, Unordered}
 import tech.ytsaurus.spyt.test.{LocalSpark, TmpDir}
 import tech.ytsaurus.spyt.wrapper.YtWrapper
+import tech.ytsaurus.spyt.wrapper.table.{YtReadContext, YtReadSettings}
 
 import java.time.temporal.ChronoUnit
 import java.time.{Instant, LocalDate}
@@ -25,6 +26,7 @@ import scala.language.postfixOps
 class YtOutputWriterTest extends FlatSpec with TmpDir with LocalSpark with Matchers {
   import YtOutputWriterTest._
   private val schema = StructType(Seq(StructField("a", IntegerType)))
+  implicit val ytReadContext: YtReadContext = YtReadContext(yt, YtReadSettings.default)
 
   it should "exception while writing several batches with relative in path" in {
     an[IllegalArgumentException] shouldBe thrownBy {

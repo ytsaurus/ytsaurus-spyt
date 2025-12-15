@@ -11,6 +11,7 @@ import tech.ytsaurus.spyt.serializers.{InternalRowDeserializer, SchemaConverter}
 import tech.ytsaurus.spyt.test.{LocalSpark, TmpDir}
 import tech.ytsaurus.spyt.wrapper.YtWrapper
 import tech.ytsaurus.spyt.wrapper.YtWrapper.formatPath
+import tech.ytsaurus.spyt.wrapper.table.{YtReadContext, YtReadSettings}
 import tech.ytsaurus.ysontree.YTree
 
 import scala.collection.JavaConverters._
@@ -58,13 +59,18 @@ class HorizontalAnyBatchReaderTest extends FlatSpec with Matchers with ReadBatch
 
     val sparkSchema = SchemaConverter.sparkSchema(ytSchema.toYTree)
 
+    implicit val ytReadContext: YtReadContext =
+      YtReadContext(yt, YtReadSettings.default.copy(distributedReadingEnabled = distributedReadingEnabled))
+
     val iter = if (distributedReadingEnabled) {
       val cookie = YtWrapper.partitionTables(YPath.simple(tmpPath), spark.sessionState.conf.filesMaxPartitionBytes,
-        enableCookies = true).map(mtp => mtp.getCookie).head
+        enableCookies = true,
+      ).map(mtp => mtp.getCookie).head
       YtWrapper.createTablePartitionReader(cookie, InternalRowDeserializer.getOrCreate(sparkSchema),
         reportBytesRead = _ => ())
     } else {
-      YtWrapper.readTable(path, InternalRowDeserializer.getOrCreate(sparkSchema), reportBytesRead = _ => ())
+      YtWrapper.readTable(path, InternalRowDeserializer.getOrCreate(sparkSchema),
+        reportBytesRead = _ => ())
     }
 
     val resultRows = iter.toArray

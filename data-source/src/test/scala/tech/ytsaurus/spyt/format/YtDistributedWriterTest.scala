@@ -35,7 +35,7 @@ class YtDistributedWriterTest extends AnyFlatSpec with TmpDir with LocalSpark wi
     testSorting: Boolean = false
   ): Unit = {
     import _spark.implicits._
-    val data = (1 to 100).map(id => SampleRow(id, s"Value of $id"))
+    val data = (1 to 100).map(SampleRow.fromId)
     val df = transformDs(_spark.createDataset(transformData(data)).repartition(10))
     var dfWriter = df.write
     if (testSorting) {
@@ -138,6 +138,28 @@ class YtDistributedWriterTest extends AnyFlatSpec with TmpDir with LocalSpark wi
     writtenData should contain theSameElementsInOrderAs data
   }
 
+  it should "write sorted data to sorted table when some partitions are empty" in withSparkSession() { _spark =>
+    import _spark.implicits._
+    val data = (1000 to 1 by -1).map(SampleRow.fromId)
+    val df = _spark.createDataset(data).orderBy("id")
+    val resultRdd = df.rdd.mapPartitionsWithIndex { case (index, iterator) =>
+      if (index == 0) Iterator.empty else iterator
+    }
+
+    _spark.createDataset(resultRdd).write.sortedBy("id").yt(tmpPath)
+
+    val writtenData = readTableAsYson(tmpPath, readSettings = YtReadSettings.default.copy(unordered = false))
+    val actual = writtenData.map(node => SampleRow(
+      node.asMap().get("id").longValue(),
+      node.asMap().get("value").stringValue()
+    ))
+
+    val expected = (101 to 1000).map(SampleRow.fromId)
+
+    actual should have size expected.size
+    actual should contain theSameElementsInOrderAs expected
+  }
+
   it should "overwrite existing table" in withSparkSession() { _spark =>
     writeTableFromYson(Seq("{a = 1}", "{a = 2}"), tmpPath, TableSchema.builder()
         .addValue("a", ColumnValueType.INT64).build(),
@@ -198,6 +220,9 @@ class YtDistributedWriterTest extends AnyFlatSpec with TmpDir with LocalSpark wi
 
 object YtDistributedWriterTest {
   case class SampleRow(id: Long, value: String)
+  object SampleRow {
+    def fromId(id: Int): SampleRow = SampleRow(id, s"Value of $id")
+  }
   case class ExtendedSampleRow(key: String, id: Long, value: String)
 
   def extractId(node: YTreeNode): Long = node.asMap().get("id").longValue()

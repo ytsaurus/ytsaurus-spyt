@@ -20,6 +20,8 @@ class YtDistributedOutputWriter(
   options: Map[String, String])(implicit client: CompoundClient)
   extends AbstractYtOutputWriter[AsyncFragmentWriter[InternalRow]](schema, writeConfiguration, options) {
 
+  private var hasWrittenRows = false
+
   override protected def initializeWriter(): AsyncFragmentWriter[InternalRow] = {
     val serializationContext = new WriteSerializationContext(
       new InternalRowSerializer(schema, WriteSchemaConverter(options), sortOption)
@@ -33,8 +35,15 @@ class YtDistributedOutputWriter(
     client.writeTableFragment(wtfRequest).join()
   }
 
+  override def write(record: InternalRow): Unit = {
+    hasWrittenRows = true
+    super.write(record)
+  }
+
   override protected def finishWriter(writer: AsyncFragmentWriter[InternalRow], timeoutMs: Long): Unit = {
     val result: WriteFragmentResult = writer.finish().get(timeoutMs, TimeUnit.MILLISECONDS)
-    YtOutputCommitProtocol.setWriteFragmentResult(result)
+    if (hasWrittenRows) {
+      YtOutputCommitProtocol.setWriteFragmentResult(result)
+    }
   }
 }

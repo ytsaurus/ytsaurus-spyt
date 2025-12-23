@@ -90,9 +90,10 @@ object YtFilePartition {
           }
         }
         val cookie = multiTablePartition.getCookie
+        val expectedBytes = multiTablePartition.getStatistics.getDataWeight
 
         YtPartitionedFileDelegate(combinedYPath, maxSplitBytes, partitionValues, path, distributedReading = true,
-          cookie = Some(cookie))
+          cookie = Some(cookie), expectedBytes = Some(expectedBytes))
       }
     } else {
       val multiTablePartitions = YtWrapper.partitionTables(richYPath, maxSplitBytes)

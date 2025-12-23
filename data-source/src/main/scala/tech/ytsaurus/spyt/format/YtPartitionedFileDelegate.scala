@@ -20,7 +20,8 @@ class YtPartitionedFileDelegate(val serializedYPath: Array[Byte],
                                 override val partitionValues: InternalRow,
                                 val hadoopPath: YtHadoopPath,
                                 val distributedReadingEnabled: Boolean = false,
-                                val cookie: Option[TablePartitionCookie] = None
+                                val cookie: Option[TablePartitionCookie] = None,
+                                val expectedBytes: Option[Long] = None
                                ) extends YtPartitioningDelegate {
 
   override val filePath: String = getPath(serializedYPath)
@@ -112,14 +113,14 @@ object YtPartitionedFileDelegate {
 
   def apply(yPath: YPath, byteLength: Long, partitionValues: InternalRow,
             hadoopPath: YtHadoopPath): YtPartitionedFile = {
-    apply(yPath, byteLength, partitionValues, hadoopPath, distributedReading = false, None)
+    apply(yPath, byteLength, partitionValues, hadoopPath, distributedReading = false, None, None)
   }
 
   def apply(yPath: YPath, byteLength: Long, partitionValues: InternalRow, hadoopPath: YtHadoopPath,
-            distributedReading: Boolean, cookie: Option[TablePartitionCookie]): YtPartitionedFile = {
+            distributedReading: Boolean, cookie: Option[TablePartitionCookie], expectedBytes: Option[Long]): YtPartitionedFile = {
     val serializedYPath: Array[Byte] = serializeYPath(yPath)
     val delegate = new YtPartitionedFileDelegate(serializedYPath, byteLength, partitionValues, hadoopPath,
-      distributedReading, cookie)
+      distributedReading, cookie, expectedBytes)
     SparkAdapter.instance.createYtPartitionedFile(delegate)
   }
 

@@ -59,7 +59,8 @@ class YtVectorizedReader(split: YtInputSplit,
     val deserializer = ArrayAnyDeserializer.getOrCreate(schema)
 
     val rowIterator: TableIterator[Array[Any]] = if (ytReadContext.settings.distributedReadingEnabled) {
-      YtWrapper.createTablePartitionReader(split.file.delegate.cookie.get, deserializer )
+      split.file.delegate.expectedBytes.foreach(reportBytesRead)
+      YtWrapper.createTablePartitionReader(split.file.delegate.cookie.get, deserializer)
     } else {
       YtWrapper.readTable(path, deserializer, timeout, hadoopPath.ypath.transaction, reportBytesRead)
     }

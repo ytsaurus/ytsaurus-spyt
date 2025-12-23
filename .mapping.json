@@ -210,6 +210,7 @@
   "data-source/src/test/scala/tech/ytsaurus/spyt/format/DynamicTableReadTest.scala":"yt/spark/spark-over-yt/data-source/src/test/scala/tech/ytsaurus/spyt/format/DynamicTableReadTest.scala",
   "data-source/src/test/scala/tech/ytsaurus/spyt/format/HivePartitioningTest.scala":"yt/spark/spark-over-yt/data-source/src/test/scala/tech/ytsaurus/spyt/format/HivePartitioningTest.scala",
   "data-source/src/test/scala/tech/ytsaurus/spyt/format/SparkSessionTransactionTest.scala":"yt/spark/spark-over-yt/data-source/src/test/scala/tech/ytsaurus/spyt/format/SparkSessionTransactionTest.scala",
+  "data-source/src/test/scala/tech/ytsaurus/spyt/format/SparkStatisticsTest.scala":"yt/spark/spark-over-yt/data-source/src/test/scala/tech/ytsaurus/spyt/format/SparkStatisticsTest.scala",
   "data-source/src/test/scala/tech/ytsaurus/spyt/format/TestModel.scala":"yt/spark/spark-over-yt/data-source/src/test/scala/tech/ytsaurus/spyt/format/TestModel.scala",
   "data-source/src/test/scala/tech/ytsaurus/spyt/format/TestTableSettings.scala":"yt/spark/spark-over-yt/data-source/src/test/scala/tech/ytsaurus/spyt/format/TestTableSettings.scala",
   "data-source/src/test/scala/tech/ytsaurus/spyt/format/YPathUtilsTest.scala":"yt/spark/spark-over-yt/data-source/src/test/scala/tech/ytsaurus/spyt/format/YPathUtilsTest.scala",

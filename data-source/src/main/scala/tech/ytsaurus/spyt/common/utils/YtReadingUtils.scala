@@ -17,6 +17,7 @@ object YtReadingUtils {
                           )(implicit ytReadContext: YtReadContext): TableIterator[InternalRow] = {
     val deserializer = InternalRowDeserializer.getOrCreate(resultSchema)
     if (ytReadContext.settings.distributedReadingEnabled) {
+      split.file.delegate.expectedBytes.foreach(bytesReadReporter(broadcastedConf))
       YtWrapper.createTablePartitionReader(
         split.file.delegate.cookie.get,
         deserializer

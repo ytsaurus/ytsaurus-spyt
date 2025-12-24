@@ -157,11 +157,12 @@ trait YtCypressUtils {
     ).join()
   }
 
-  def remove(path: String, transaction: Option[String] = None)(implicit yt: CompoundClient): Unit = {
+  def remove(path: String, transaction: Option[String] = None, force: Boolean = false)(implicit yt: CompoundClient): Unit = {
     log.debug(s"Remove: $path, transaction $transaction")
     val request = RemoveNode.builder()
       .setPath(YPath.simple(formatPath(path)))
       .setRecursive(true)
+      .setForce(force)
       .optionalTransaction(transaction)
       .build()
     yt.removeNode(request).join()
@@ -172,24 +173,11 @@ trait YtCypressUtils {
     log.debug(s"Remove directory: $path, transaction $transaction")
     val request = RemoveNode.builder()
       .setPath(YPath.simple(formatPath(path)))
-      .setRecursive(true)
+      .setRecursive(recursive)
       .setForce(force)
       .optionalTransaction(transaction)
       .build()
     yt.removeNode(request).join()
-  }
-
-  def removeIfExists(path: String, transaction: Option[String] = None)(implicit yt: CompoundClient): Unit = {
-    if (exists(path)) {
-      remove(path, transaction)
-    }
-  }
-
-  def removeDirIfExists(path: String, recursive: Boolean, force: Boolean = false, transaction: Option[String] = None)
-                       (implicit yt: CompoundClient): Unit = {
-    if (exists(path)) {
-      removeDir(path, recursive, force, transaction)
-    }
   }
 
   def pathType(path: YPath, transaction: Option[String] = None)(implicit yt: CompoundClient): PathType = {

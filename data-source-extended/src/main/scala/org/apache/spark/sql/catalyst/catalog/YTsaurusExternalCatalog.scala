@@ -83,7 +83,7 @@ class YTsaurusExternalCatalog(conf: SparkConf, hadoopConf: Configuration)
       val path = YPathEnriched.fromString(table)
       val yt = YtClientProvider.ytClientWithProxy(ytConf, path.cluster)
       if (ignoreIfNotExists) {
-        YtWrapper.removeIfExists(path.toStringYPath)(yt)
+        YtWrapper.remove(path.toStringYPath, force = true)(yt)
       } else {
         YtWrapper.remove(path.toStringYPath)(yt)
       }

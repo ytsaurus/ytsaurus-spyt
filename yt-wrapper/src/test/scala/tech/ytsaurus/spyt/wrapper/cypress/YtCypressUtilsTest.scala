@@ -76,7 +76,7 @@ class YtCypressUtilsTest extends FlatSpec with Matchers with LocalYtClient with 
       YtWrapper.createLink(tmpPath, tmpPath2)
       YtWrapper.isDir(tmpPath2) shouldBe true
     } finally {
-      YtWrapper.removeIfExists(tmpPath2)
+      YtWrapper.remove(tmpPath2, force = true)
     }
   }
 
@@ -91,7 +91,7 @@ class YtCypressUtilsTest extends FlatSpec with Matchers with LocalYtClient with 
       YtWrapper.readDocument(tmpPath2).asMap().getOrThrow("a").stringValue() shouldEqual "A"
     }
     finally {
-      YtWrapper.removeIfExists(tmpPath2)
+      YtWrapper.remove(tmpPath2, force = true)
     }
   }
 
@@ -103,7 +103,7 @@ class YtCypressUtilsTest extends FlatSpec with Matchers with LocalYtClient with 
       YtWrapper.isDir(tmpPath2) shouldBe true
       YtWrapper.createDir(tmpPath2, ignoreExisting = true)
     } finally {
-      YtWrapper.removeIfExists(tmpPath2)
+      YtWrapper.remove(tmpPath2, force = true)
     }
   }
 }

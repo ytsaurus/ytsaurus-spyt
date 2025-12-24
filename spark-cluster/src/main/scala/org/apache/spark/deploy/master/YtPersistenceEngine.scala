@@ -24,7 +24,7 @@ class YtPersistenceEngine(baseDir: String,
 
   override def unpersist(name: String): Unit = {
     log.info(s"Unpersist object $name")
-    YtWrapper.removeIfExists(s"$baseDir/$name")
+    YtWrapper.remove(s"$baseDir/$name", force = true)
   }
 
   override def read[T](prefix: String)(implicit evidence$1: ClassTag[T]): Seq[T] = {

@@ -116,7 +116,7 @@ class ArrowBatchReaderTest extends AnyFlatSpec with Matchers with TmpDir with Sc
 
     chunkRowCounts.foreach { chunkRowCount =>
         val data = (0 to chunkCount * chunkRowCount).toList
-        YtWrapper.removeIfExists(tmpPath)
+        YtWrapper.remove(tmpPath, force = true)
 
         (0 to chunkCount).foreach { chunkIndex =>
             val chunk = data.slice(chunkIndex * chunkRowCount, (chunkIndex + 1) * chunkRowCount).toDF("a")

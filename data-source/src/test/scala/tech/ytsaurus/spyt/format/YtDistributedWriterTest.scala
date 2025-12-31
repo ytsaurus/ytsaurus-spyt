@@ -7,6 +7,8 @@ import org.scalatest.matchers.should.Matchers
 import tech.ytsaurus.core.tables.{ColumnValueType, TableSchema}
 import tech.ytsaurus.spyt.YtWriter
 import tech.ytsaurus.spyt.format.YtDistributedWriterTest.{ExtendedSampleRow, SampleRow, extractId}
+import tech.ytsaurus.spyt.serializers.SchemaConverter.SortOrder
+import tech.ytsaurus.spyt.serializers.SchemaConverter.SortOrder.{Asc, Desc}
 import tech.ytsaurus.spyt.test.{LocalSpark, TestUtils, TmpDir}
 import tech.ytsaurus.spyt.wrapper.YtWrapper
 import tech.ytsaurus.spyt.wrapper.table.YtReadSettings
@@ -14,7 +16,8 @@ import tech.ytsaurus.ysontree.YTreeNode
 
 import scala.util.Random
 
-class YtDistributedWriterTest extends AnyFlatSpec with TmpDir with LocalSpark with Matchers with TestUtils {
+class YtDistributedWriterTest extends AnyFlatSpec with DescendingSortOrderSupport with TmpDir with LocalSpark
+  with Matchers with TestUtils {
   behavior of "DistributedWriteOutputCommitProtocol"
 
   override def numFailures: Int = 4
@@ -32,14 +35,14 @@ class YtDistributedWriterTest extends AnyFlatSpec with TmpDir with LocalSpark wi
     _spark: SparkSession,
     transformData: Seq[SampleRow] => Seq[SampleRow] = identity,
     transformDs: Dataset[SampleRow] => Dataset[SampleRow] = identity,
-    testSorting: Boolean = false
+    sortOrder: Option[SortOrder] = None
   ): Unit = {
     import _spark.implicits._
     val data = (1 to 100).map(SampleRow.fromId)
     val df = transformDs(_spark.createDataset(transformData(data)).repartition(10))
     var dfWriter = df.write
-    if (testSorting) {
-      dfWriter = dfWriter.sortedBy("id")
+    sortOrder.foreach { order =>
+      dfWriter = dfWriter.sortedBy("id").sortOrders(order)
     }
     dfWriter.yt(tmpPath)
 
@@ -50,10 +53,13 @@ class YtDistributedWriterTest extends AnyFlatSpec with TmpDir with LocalSpark wi
     ))
 
     actual should have size data.size
-    if (testSorting) {
-      actual should contain theSameElementsInOrderAs data
-    } else {
-      actual should contain theSameElementsAs data
+    sortOrder match {
+      case Some(SortOrder.Asc) =>
+        actual should contain theSameElementsInOrderAs data
+      case Some(SortOrder.Desc) =>
+        actual should contain theSameElementsInOrderAs data.reverse
+      case None =>
+        actual should contain theSameElementsAs data
     }
   }
 
@@ -114,8 +120,20 @@ class YtDistributedWriterTest extends AnyFlatSpec with TmpDir with LocalSpark wi
       _spark,
       data => Random.shuffle(data),
       ds => ds.orderBy("id"),
-      testSorting = true
+      sortOrder = Some(Asc)
     )
+  }
+
+  it should "write desc sorted data to desc sorted table with leading sort column" in withSparkSession() { _spark =>
+    import spark.implicits._
+    withDescendingSortOrder {
+      baseTest(
+        _spark,
+        data => Random.shuffle(data),
+        ds => ds.orderBy($"id".desc),
+        sortOrder = Some(Desc)
+      )
+    }
   }
 
   it should "write sorted data to sorted table with random sort column specified" in withSparkSession() { _spark =>

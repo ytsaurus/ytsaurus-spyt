@@ -11,7 +11,7 @@ import tech.ytsaurus.client.ApiServiceTransaction
 import tech.ytsaurus.core.cypress.YPath
 import tech.ytsaurus.spyt._
 import tech.ytsaurus.spyt.format.conf.SparkYtWriteConfiguration
-import tech.ytsaurus.spyt.format.conf.YtTableSparkSettings.{SortColumns, UniqueKeys}
+import tech.ytsaurus.spyt.format.conf.YtTableSparkSettings.{SortColumns, SortOrders, UniqueKeys}
 import tech.ytsaurus.spyt.fs.path.YPathEnriched
 import tech.ytsaurus.spyt.serializers.SchemaConverter.{SortOption, Sorted, Unordered}
 import tech.ytsaurus.spyt.test.{LocalSpark, TmpDir}
@@ -139,7 +139,9 @@ class YtOutputWriterTest extends FlatSpec with TmpDir with LocalSpark with Match
       path,
       schema,
       SparkYtWriteConfiguration(1, batchSize, 5 minutes, typeV3Format = false, distributedWrite = false),
-      Map("sort_columns" -> SortColumns.set(sortOption.keys), "unique_keys" -> UniqueKeys.set(sortOption.uniqueKeys))
+      Map("sort_columns" -> SortColumns.set(sortOption.keys),
+        "sort_orders" -> SortOrders.set(sortOption.orders.map(_.toString)),
+        "unique_keys" -> UniqueKeys.set(sortOption.uniqueKeys))
     ) {
     override protected def initialize(): Unit = {}
   }

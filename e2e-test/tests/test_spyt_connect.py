@@ -1,6 +1,6 @@
 from spyt.connect import start_connect_server
 
-from common.helpers import assert_items_equal, wait_for_operation
+from common.helpers import assert_items_equal, assert_sequences_equal, wait_for_operation
 from contextlib import contextmanager
 from hashlib import sha256
 from itertools import chain
@@ -135,3 +135,62 @@ def test_custom_types(yt_client, tmp_dir):
         df = spark.read.format("yt").load(f"yt:/{path}")
         result = df.collect()
         assert_items_equal(result, expected_rows)
+
+
+def test_sql_mixed_sort_orders(yt_client, tmp_dir):
+    path = f"{tmp_dir}/mixed_sort_orders"
+
+    with _spark_connect_session(yt_client) as spark:
+        test_data = [
+            (2023, "Electronics", 2.5, "Laptop X1"),
+            (2023, "Electronics", 1.2, "Tablet Pro"),
+            (2023, "Clothing", 0.8, "Jacket Winter"),
+            (2022, "Electronics", 3.1, "Desktop Gamer"),
+            (2022, "Clothing", 0.5, "T-Shirt Summer"),
+            (2022, "Books", 1.0, "Novel BestSeller"),
+            (2021, "Electronics", 2.8, "Laptop Old"),
+            (2021, "Books", 0.9, "Science Physics")
+        ]
+
+        expected = [
+            {'year': 2023, 'category': 'Clothing', 'weight_kg': 0.8, 'product_name': 'Jacket Winter'},
+            {'year': 2023, 'category': 'Electronics', 'weight_kg': 2.5, 'product_name': 'Laptop X1'},
+            {'year': 2023, 'category': 'Electronics', 'weight_kg': 1.2, 'product_name': 'Tablet Pro'},
+            {'year': 2022, 'category': 'Books', 'weight_kg': 1.0, 'product_name': 'Novel BestSeller'},
+            {'year': 2022, 'category': 'Clothing', 'weight_kg': 0.5, 'product_name': 'T-Shirt Summer'},
+            {'year': 2022, 'category': 'Electronics', 'weight_kg': 3.1, 'product_name': 'Desktop Gamer'},
+            {'year': 2021, 'category': 'Books', 'weight_kg': 0.9, 'product_name': 'Science Physics'},
+            {'year': 2021, 'category': 'Electronics', 'weight_kg': 2.8, 'product_name': 'Laptop Old'}
+        ]
+
+        df = spark.createDataFrame(
+            test_data,
+            ["year", "category", "weight_kg", "product_name"]
+        )
+
+        df.createOrReplaceTempView("products")
+
+        spark.sql(f"""
+            CREATE TABLE yt.`{path}`
+            USING yt
+            OPTIONS (
+                sort_columns '["year","category","weight_kg"]',
+                sort_orders '["desc","asc","desc"]'
+            )
+            AS SELECT * FROM products ORDER BY year DESC, category ASC, weight_kg DESC
+        """)
+
+    yt_schema = yt_client.get_table_schema(path)
+
+    for column_schema in yt_schema.to_yson_type():
+        if column_schema["name"] == "year":
+            assert column_schema["sort_order"] == "descending"
+        elif column_schema["name"] == "category":
+            assert column_schema["sort_order"] == "ascending"
+        elif column_schema["name"] == "weight_kg":
+            assert column_schema["sort_order"] == "descending"
+        elif column_schema["name"] == "product_name":
+            assert "sort_order" not in column_schema  # Not sorted column
+
+    result = list(yt_client.read_table(path))
+    assert_sequences_equal(result, expected)

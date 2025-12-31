@@ -5,9 +5,10 @@ import org.apache.spark.sql.types._
 import org.apache.spark.sql.v2.YtTable
 import org.apache.spark.unsafe.types.UTF8String
 import tech.ytsaurus.core.common.Decimal.textToBinary
+import tech.ytsaurus.core.tables.ColumnSortOrder
 import tech.ytsaurus.spyt.common.utils.TypeUtils.{isTuple, isVariant}
 import tech.ytsaurus.spyt.common.utils.UuidUtils
-import tech.ytsaurus.spyt.format.conf.YtTableSparkSettings.{SortColumns, UniqueKeys, isNullTypeAllowed}
+import tech.ytsaurus.spyt.format.conf.YtTableSparkSettings.{SortColumns, SortOrders, UniqueKeys, isNullTypeAllowed}
 import tech.ytsaurus.spyt.serialization.IndexedDataType
 import tech.ytsaurus.spyt.serialization.IndexedDataType.StructFieldMeta
 import tech.ytsaurus.spyt.serializers.YtLogicalType.getStructField
@@ -36,29 +37,68 @@ object SchemaConverter {
     }
   }
 
+  sealed trait SortOrder {
+    def toColumnSortOrder: ColumnSortOrder
+    def toString: String
+  }
+
+  object SortOrder {
+    case object Asc extends SortOrder {
+      override def toColumnSortOrder: ColumnSortOrder = ColumnSortOrder.ASCENDING
+      override def toString: String = "asc"
+    }
+
+    case object Desc extends SortOrder {
+      override def toColumnSortOrder: ColumnSortOrder = ColumnSortOrder.DESCENDING
+      override def toString: String = "desc"
+    }
+  }
+
   sealed trait SortOption {
     def keys: Seq[String]
-
+    def orders: Seq[SortOrder]
     def uniqueKeys: Boolean
   }
 
-  case class Sorted(keys: Seq[String], uniqueKeys: Boolean) extends SortOption {
-    if (keys.isEmpty) throw new IllegalArgumentException("Sort columns can't be empty in sorted table")
+  case class Sorted(keys: Seq[String], orders: Seq[SortOrder], uniqueKeys: Boolean) extends SortOption {
+    require(keys.nonEmpty, "Sort columns can't be empty")
+    require(keys.length == orders.length, s"Orders count (${orders.length}) must match keys count (${keys.length})")
+  }
+
+  object Sorted {
+    def apply(keys: Seq[String], uniqueKeys: Boolean): Sorted =
+      fromStringOrders(keys, Seq.empty, uniqueKeys)
+
+    def fromStringOrders(keys: Seq[String], orders: Seq[String], uniqueKeys: Boolean): Sorted = {
+      val parsedOrders = if (orders.isEmpty) {
+        Seq.fill(keys.length)(SortOrder.Asc)
+      } else {
+        orders.map {
+          case "asc" => SortOrder.Asc
+          case "desc" => SortOrder.Desc
+          case invalid => throw new IllegalArgumentException(s"Invalid sort order param: '$invalid'")
+        }
+      }
+      Sorted(keys, parsedOrders, uniqueKeys)
+    }
   }
 
   case object Unordered extends SortOption {
     override def keys: Seq[String] = Nil
-
+    override def orders: Seq[SortOrder] = Nil
     override def uniqueKeys: Boolean = false
   }
 
   def getSortOption(configuration: Configuration): SortOption = {
     val keys = configuration.ytConf(SortColumns)
     val uniqueKeys = configuration.ytConf(UniqueKeys)
+    val orders = configuration.ytConf(SortOrders)
+
     if (keys.isEmpty && uniqueKeys) {
       throw new IllegalArgumentException("Unique keys attribute can't be true for unordered table")
     }
-    if (keys.nonEmpty) Sorted(keys, uniqueKeys) else Unordered
+
+    if (keys.nonEmpty) Sorted.fromStringOrders(keys, orders, uniqueKeys) else Unordered
   }
 
   private def getAvailableType(fieldMap: java.util.Map[String, YTreeNode], parsingTypeV3: Boolean): YtLogicalType = {

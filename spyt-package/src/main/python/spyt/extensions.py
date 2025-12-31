@@ -46,7 +46,8 @@ def write_yt(self, path, mode=None):
 def sorted_by(self, *cols, **kwargs):
     unique_keys = kwargs.get("unique_keys") or False
     import json
-    return self.option("sort_columns", json.dumps(cols)).option("unique_keys", str(unique_keys))
+    result = self.option("sort_columns", json.dumps(cols)).option("unique_keys", str(unique_keys))
+    return result.option("sort_orders", json.dumps(kwargs["sort_orders"])) if "sort_orders" in kwargs else result
 
 
 def optimize_for(self, optimize_mode):

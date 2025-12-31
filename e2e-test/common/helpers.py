@@ -9,6 +9,12 @@ def assert_items_equal(result, expected):
     case.assertCountEqual(result, expected)
 
 
+def assert_sequences_equal(result, expected):
+    case = unittest.TestCase()
+    case.maxDiff = None
+    case.assertEqual(result, expected)
+
+
 def wait_for_operation(yt_client, operation_id):
     if operation_id is not None:
         while True:

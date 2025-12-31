@@ -8,6 +8,8 @@ import tech.ytsaurus.spyt.wrapper.config._
 import tech.ytsaurus.spyt.serializers.SchemaConverter
 import tech.ytsaurus.spyt.wrapper.table.OptimizeMode
 import tech.ytsaurus.client.CompoundClient
+import tech.ytsaurus.spyt.serializers.SchemaConverter.SortOrder
+import tech.ytsaurus.spyt.serializers.SchemaConverter.SortOrder.{Asc, Desc}
 import tech.ytsaurus.spyt.wrapper.config.ConfigEntry
 import tech.ytsaurus.spyt.serializers.{SchemaConverter, YtLogicalType}
 import tech.ytsaurus.spyt.wrapper.client.YtClientProvider
@@ -85,6 +87,10 @@ package object spyt {
 
     def sortedBy(cols: String*): DataFrameWriter[T] = {
       writer.option(SortColumns, cols)
+    }
+
+    def sortOrders(orders: SortOrder*): DataFrameWriter[T] = {
+      writer.option(SortOrders, orders.map(_.toString))
     }
 
     def sortedByUniqueKeys(cols: String*): DataFrameWriter[T] = {

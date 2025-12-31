@@ -2,10 +2,11 @@ from datetime import date, datetime, timezone
 
 import yt.type_info.typing as ti
 import yt.wrapper as yt_wrapper
-from common.helpers import assert_items_equal
+from common.helpers import assert_items_equal, assert_sequences_equal
 from pyspark.sql import SparkSession, Row, DataFrame
 from pyspark.sql.readwriter import DataFrameReader, DataFrameWriter
 from pyspark.sql.types import StructType, StructField, StringType, IntegerType, LongType
+from pyspark.sql.functions import col
 from spyt.types import Date32, Datetime64, Timestamp64, Interval64, Datetime, MIN_DATE32, MIN_DATETIME64, \
     MIN_TIMESTAMP64, MIN_INTERVAL64, MAX_DATE32, \
     MAX_DATETIME64, MAX_TIMESTAMP64, MAX_INTERVAL64, YsonType
@@ -200,3 +201,55 @@ def test_write_schema_hint(yt_client: YtClient, tmp_dir, local_session: SparkSes
 
     result: RowsIterator = yt_client.read_table(table_path)
     assert_items_equal(result, yt_rows)
+
+
+def test_write_mixed_sort_orders(yt_client, tmp_dir, local_session: SparkSession):
+    table_path = f"{tmp_dir}/mixed_sort_orders"
+
+    test_data = [
+        (2023, "Electronics", 2.5, "Laptop X1"),
+        (2023, "Electronics", 1.2, "Tablet Pro"),
+        (2023, "Clothing", 0.8, "Jacket Winter"),
+        (2022, "Electronics", 3.1, "Desktop Gamer"),
+        (2022, "Clothing", 0.5, "T-Shirt Summer"),
+        (2022, "Books", 1.0, "Novel BestSeller"),
+        (2021, "Electronics", 2.8, "Laptop Old"),
+        (2021, "Books", 0.9, "Science Physics")
+    ]
+
+    columns = ["year", "category", "weight_kg", "product_name"]
+    sort_columns = ["year", "category", "weight_kg"]
+    sort_orders = ["desc", "asc", "desc"]
+
+    expected = [
+        {'year': 2023, 'category': 'Clothing', 'weight_kg': 0.8, 'product_name': 'Jacket Winter'},
+        {'year': 2023, 'category': 'Electronics', 'weight_kg': 2.5, 'product_name': 'Laptop X1'},
+        {'year': 2023, 'category': 'Electronics', 'weight_kg': 1.2, 'product_name': 'Tablet Pro'},
+        {'year': 2022, 'category': 'Books', 'weight_kg': 1.0, 'product_name': 'Novel BestSeller'},
+        {'year': 2022, 'category': 'Clothing', 'weight_kg': 0.5, 'product_name': 'T-Shirt Summer'},
+        {'year': 2022, 'category': 'Electronics', 'weight_kg': 3.1, 'product_name': 'Desktop Gamer'},
+        {'year': 2021, 'category': 'Books', 'weight_kg': 0.9, 'product_name': 'Science Physics'},
+        {'year': 2021, 'category': 'Electronics', 'weight_kg': 2.8, 'product_name': 'Laptop Old'}
+    ]
+
+    df = local_session.createDataFrame(test_data, columns)
+
+    order_exprs = [col(col_name).desc() if order == "desc" else col(col_name).asc()
+                   for col_name, order in zip(sort_columns, sort_orders)]
+
+    df.orderBy(*order_exprs).write.sorted_by(*sort_columns, sort_orders=sort_orders).yt(table_path)
+
+    yt_schema: TableSchema = yt_client.get_table_schema(table_path)
+
+    for column_schema in yt_schema.to_yson_type():
+        if column_schema["name"] == "year":
+            assert column_schema["sort_order"] == "descending"
+        elif column_schema["name"] == "category":
+            assert column_schema["sort_order"] == "ascending"
+        elif column_schema["name"] == "weight_kg":
+            assert column_schema["sort_order"] == "descending"
+        elif column_schema["name"] == "product_name":
+            assert "sort_order" not in column_schema  # Not sorted column
+
+    result = list(yt_client.read_table(table_path))
+    assert_sequences_equal(result, expected)

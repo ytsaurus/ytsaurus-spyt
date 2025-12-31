@@ -107,7 +107,7 @@ class WriteSchemaConverter(
                                   isTableSchema: Boolean = false): YTreeNode = {
     import scala.collection.JavaConverters._
 
-    def serializeColumn(field: StructField, sort: Boolean): YTreeNode = {
+    def serializeColumn(field: StructField, sortOrder: Option[SortOrder]): YTreeNode = {
       val builder = YTree.builder
         .beginMap
         .key("name").value(field.name)
@@ -121,18 +121,21 @@ class WriteSchemaConverter(
           .key("type").value(serializeType(fieldType, isTableSchema))
           .key("required").value(false)
       }
-      if (sort) builder.key("sort_order").value(ColumnSortOrder.ASCENDING.getName)
+
+      sortOrder.foreach { order =>
+        builder.key("sort_order").value(order.toColumnSortOrder.getName)
+      }
       builder.buildMap
     }
 
     val sortColumnsSet = sortOption.keys.toSet
     val sortedFields =
-      sortOption.keys
-        .map(sparkSchema.apply)
-        .map(f => serializeColumn(f, sort = true)
-        ) ++ sparkSchema
-        .filter(f => !sortColumnsSet.contains(f.name))
-        .map(f => serializeColumn(f, sort = false))
+      sortOption.keys.zip(sortOption.orders)
+        .map { case (colName, order) =>
+          serializeColumn(sparkSchema(colName), Some(order))
+        } ++ sparkSchema
+        .filterNot(f => sortColumnsSet.contains(f.name))
+        .map(f => serializeColumn(f, None))
 
     YTree.builder
       .beginAttributes

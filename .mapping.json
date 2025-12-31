@@ -207,6 +207,7 @@
   "data-source/src/test/scala/tech/ytsaurus/spyt/format/AdaptiveTest.scala":"yt/spark/spark-over-yt/data-source/src/test/scala/tech/ytsaurus/spyt/format/AdaptiveTest.scala",
   "data-source/src/test/scala/tech/ytsaurus/spyt/format/AutoPartitioningTest.scala":"yt/spark/spark-over-yt/data-source/src/test/scala/tech/ytsaurus/spyt/format/AutoPartitioningTest.scala",
   "data-source/src/test/scala/tech/ytsaurus/spyt/format/BogusYtOutputCommitProtocol.scala":"yt/spark/spark-over-yt/data-source/src/test/scala/tech/ytsaurus/spyt/format/BogusYtOutputCommitProtocol.scala",
+  "data-source/src/test/scala/tech/ytsaurus/spyt/format/DescendingSortOrderSupport.scala":"yt/spark/spark-over-yt/data-source/src/test/scala/tech/ytsaurus/spyt/format/DescendingSortOrderSupport.scala",
   "data-source/src/test/scala/tech/ytsaurus/spyt/format/DynamicTableReadTest.scala":"yt/spark/spark-over-yt/data-source/src/test/scala/tech/ytsaurus/spyt/format/DynamicTableReadTest.scala",
   "data-source/src/test/scala/tech/ytsaurus/spyt/format/HivePartitioningTest.scala":"yt/spark/spark-over-yt/data-source/src/test/scala/tech/ytsaurus/spyt/format/HivePartitioningTest.scala",
   "data-source/src/test/scala/tech/ytsaurus/spyt/format/SparkSessionTransactionTest.scala":"yt/spark/spark-over-yt/data-source/src/test/scala/tech/ytsaurus/spyt/format/SparkSessionTransactionTest.scala",

@@ -49,13 +49,14 @@ class YTsaurusExternalCatalog(conf: SparkConf, hadoopConf: Configuration)
     }
   }
 
-  private val excludeKeys = Set("key_columns", "unique_keys")
+  private val excludeKeys = Set("key_columns", "sort_orders", "unique_keys")
 
   private def getSortOption(extraProperties: Map[String, YTreeNode]): SchemaConverter.SortOption = {
     import scala.collection.JavaConverters._
     val keyColumns = extraProperties.get("key_columns").map(_.asList().asScala.map(_.stringValue())).getOrElse(Seq())
+    val sortOrders = extraProperties.get("sort_orders").map(_.asList().asScala.map(_.stringValue())).getOrElse(Seq())
     if (keyColumns.nonEmpty) {
-      Sorted(keyColumns, extraProperties.get("unique_keys").exists(_.boolValue()))
+      Sorted.fromStringOrders(keyColumns, sortOrders, extraProperties.get("unique_keys").exists(_.boolValue()))
     } else {
       Unordered
     }

@@ -8,6 +8,9 @@ from yt.wrapper import YtClient
 def main(proxy, python_path, java_home):
     client = YtClient(proxy=proxy, config={"token": "token"})
     patch_conf(client, python_path, java_home)
+
+    client.set("//sys/@config/enable_descending_sort_order", True)
+
     # Patches for standalone cluster discovery
     client.set("//home/spark/conf/global/environment/YT_NETWORK_PROJECT_ID", "0")
     client.set("//home/spark/conf/global/environment/YT_IP_ADDRESS_DEFAULT", "localhost")

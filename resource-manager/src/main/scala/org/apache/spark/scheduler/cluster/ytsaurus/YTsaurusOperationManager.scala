@@ -373,7 +373,12 @@ private[spark] object YTsaurusOperationManager extends Logging {
       val releaseConfig: YTreeMapNode = getDocument(ytClient, releaseConfigPath)
       logDebug("Release SPYT config has been successfully retrieved")
 
-      val sv = org.apache.spark.SPARK_VERSION_SHORT
+      val sparkVersionOverride = conf.getOption(Config.YTSAURUS_SPARK_VERSION.key).filter(_.nonEmpty)
+      val deployMode = conf.get(SUBMIT_DEPLOY_MODE)
+
+      require(!(sparkVersionOverride.isDefined && deployMode == "client"), "spark.ytsaurus.spark.version is only supported in cluster mode")
+      
+      val sv = sparkVersionOverride.getOrElse(org.apache.spark.SPARK_VERSION_SHORT)
       val (svMajor, svMinor, svPatch) = VersionUtils.majorMinorPatchVersion(sv).get
       val distrRootPath = Seq(conf.get(SPARK_DISTRIBUTIVES_PATH), svMajor, svMinor, svPatch).mkString("/")
       val distrExtension = if (isSquashFs) ".squashfs" else ".tgz"

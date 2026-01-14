@@ -21,6 +21,7 @@ set_default_vars() {
     proxy_port=8000
     spark_cache_path=""
     spark_versions="3.2.2 3.2.4 3.3.4 3.4.4 3.5.7"
+    spark_versions_to_install=""
     versions_combinations=""
 }
 
@@ -52,6 +53,13 @@ EOF
 }
 
 main() {
+    spark_from_env() {
+        local env_name="$1"
+        local base_env="${env_name%%-extraspark*}"
+        local raw="${base_env##*-spark}"
+        echo "${raw:0:1}.${raw:1:1}.${raw:2:1}"
+    }
+
     while [[ $# -gt 0 ]]; do
         key="$1"
         case $key in
@@ -85,13 +93,17 @@ main() {
             ;;
             -e) # ex: -e py311-spark322,py312-spark354,py312-spark355
             versions_combinations="$2"
-            spark_versions=""
+            spark_versions_to_install=""
+            extraspark_digits=""
             IFS=',' read -ra envs <<< "$versions_combinations"
             for env in "${envs[@]}"; do
-                spark_version="${env##*-spark}"
-                spark_versions+="${spark_version:0:1}.${spark_version:1:1}.${spark_version:2:1} "
+                [[ "$env" == *"extraspark"* ]] && extraspark_digits="${env##*extraspark}"
+                spark_versions_to_install+="$(spark_from_env "$env") "
             done
-            spark_versions=$(echo "$spark_versions" | xargs) # ex: '3.2.2 3.4.4 3.5.7'
+            if [ -n "$extraspark_digits" ]; then
+                spark_versions_to_install+="${extraspark_digits:0:1}.${extraspark_digits:1:1}.${extraspark_digits:2:1} "
+            fi
+            spark_versions_to_install=$(echo "$spark_versions_to_install" | xargs)
             shift 2
             ;;
             -h|--help)
@@ -144,9 +156,10 @@ main() {
         fi
 
         # Build docker run command
+        versions_to_deploy="${spark_versions_to_install:-$spark_versions}"
         docker_cmd="docker run --network=host \
                    -e YT_PROXY=\"localhost:$proxy_port\" -e YT_USER=\"root\" -e YT_TOKEN=\"token\" \
-                   -e EXTRA_SPARK_VERSIONS=\"--use-cache $spark_cache_parameter $spark_versions\" \
+                   -e EXTRA_SPARK_VERSIONS=\"--use-cache $spark_cache_parameter $versions_to_deploy\" \
                    -v /tmp:/tmp \
                    $spark_cache_mount"
 
@@ -163,6 +176,17 @@ main() {
     fi
 
     if [ "$run_tox_tests" = "true" ]; then
+        spark_part="not two_spark"
+        [[ "$versions_combinations" == *"extraspark"* ]] && spark_part="two_spark"
+        if [ -z "${PYTHON_FILTER:-}" ]; then
+            PYTHON_FILTER='-m "'
+        else
+            PYTHON_FILTER="${PYTHON_FILTER} and "
+        fi
+        PYTHON_FILTER="${PYTHON_FILTER}${spark_part}\""
+        export PYTHON_FILTER="$PYTHON_FILTER"
+
+        export SPARK_VERSIONS="${spark_versions_to_install:-$spark_versions}"
         cd "$cur_dir"
         tox_command="tox"
 
@@ -171,7 +195,7 @@ main() {
         fi
 
         if [ ${#REMAINING_ARGS[@]} -eq 0 ]; then
-            tox_command="$tox_command -- tests -v $extra_tox_params"
+            tox_command="$tox_command -- tests -v"
         else
             tox_command="$tox_command ${REMAINING_ARGS[@]}"
         fi

@@ -204,4 +204,12 @@ object Config {
     .version("2.7.2")
     .booleanConf
     .createWithDefault(false)
+
+  val YTSAURUS_SPARK_VERSION = ConfigBuilder("spark.ytsaurus.spark.version")
+    .doc("Override Spark version to use for driver operation in cluster mode. " +
+      "If not specified, uses version from local Spark installation. " +
+      "Only supported in cluster mode (--deploy-mode cluster).")
+    .version("2.8.2")
+    .stringConf
+    .createOptional
 }

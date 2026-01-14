@@ -33,7 +33,7 @@ def spark_download_urls(version):
     return urls
 
 
-def validate_and_check_version(version):
+def validate_and_check_version(version, offline: bool = False):
     '''
     Checks format and existence of tgz Spark distributive with specified version
     :param version:
@@ -45,6 +45,9 @@ def validate_and_check_version(version):
         msg = "Spark versions other than 3.X.X are not supported (yet)"
         logger.error(msg)
         raise RuntimeError(msg)
+
+    if offline:
+        return
 
     artifact_urls = spark_download_urls(version)
 
@@ -70,7 +73,12 @@ def upload_distributive(version, client: Client, ignore_existing: bool, distrib_
     client.write_file(distrib_bytes, distrib_path)
 
 
-def upload_artifacts(version, client: Client, ignore_existing: bool, use_cache=False, cache_path: str = "/tmp"):
+def upload_artifacts(version: str,
+                     client: Client,
+                     ignore_existing: bool,
+                     use_cache: bool = False,
+                     cache_path: str = "/tmp",
+                     offline: bool = False):
     artifact_urls = spark_download_urls(version)
 
     for url in artifact_urls:
@@ -80,6 +88,9 @@ def upload_artifacts(version, client: Client, ignore_existing: bool, use_cache=F
             cached_file = f"{cache_path}/{filename}"
             logger.info(f"Cache is enabled. File {cached_file} will be used")
             if not os.path.exists(cached_file):
+                if offline:
+                    logger.warn(f"File {filename} does not exist in the cache and we can't download it, skipping it")
+                    continue
                 logger.info(f"No cached archive found, downloading it from {url}")
                 with open(cached_file, 'wb') as f:
                     f.write(requests.get(url).content)
@@ -91,15 +102,15 @@ def upload_artifacts(version, client: Client, ignore_existing: bool, use_cache=F
         upload_distributive(version, client, ignore_existing, distrib_bytes, filename)
 
 
-def main(versions, root, ignore_existing, use_cache, cache_path):
+def main(versions, root, ignore_existing, use_cache, cache_path, offline):
     logger.info(f"{versions} versions of Spark will be deployed")
     for version in versions:
-        validate_and_check_version(version)
+        validate_and_check_version(version, offline)
 
     client = Client(ClientBuilder(root_path=root))
 
     for version in versions:
-        upload_artifacts(version, client, ignore_existing, use_cache=use_cache, cache_path=cache_path)
+        upload_artifacts(version, client, ignore_existing, use_cache=use_cache, cache_path=cache_path, offline=offline)
 
 
 if __name__ == '__main__':
@@ -109,8 +120,10 @@ if __name__ == '__main__':
                         dest='ignore_existing', help='Overwrite cluster files')
     parser.set_defaults(ignore_existing=False)
     parser.add_argument("--use-cache", action='store_true', help='Cache downloaded Spark archives')
+    parser.add_argument("--offline", action='store_true', help='Use only local artifacts '
+                                                               '(without fetching it from the Internet)')
     parser.add_argument("--cache-path", default="/tmp", type=str, help="A directory with cached Spark archives")
     parser.add_argument("versions", metavar="version", type=str, nargs='*', help="Spark version formatted as X.X.X")
 
     args = parser.parse_args()
-    main(args.versions, args.root, args.ignore_existing, args.use_cache, args.cache_path)
+    main(args.versions, args.root, args.ignore_existing, args.use_cache, args.cache_path, args.offline)

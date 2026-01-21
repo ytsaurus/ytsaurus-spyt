@@ -65,7 +65,6 @@ private[spark] class YTsaurusOperationManager(val ytClient: YTsaurusClient,
     logDebug(s"[AppId: $appId] Executor parameters ")
     val operation = startVanillaOperation(sc.conf, EXECUTOR_TASK, opParams)
     logDebug(s"[AppId: $appId] Vanilla operation has been successfully started")
-    // TODO 2. autoscaling with multiple operations
     sc.conf.set(Config.EXECUTOR_OPERATION_ID, operation.id.toString)
     logInfo(s"[AppId: $appId] Executor operation ID: ${operation.id}")
     operation

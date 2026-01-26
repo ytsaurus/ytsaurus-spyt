@@ -1,11 +1,12 @@
 package org.apache.spark.sql.v2
 
 import org.apache.spark.sql.types.{ArrayType, BooleanType, DoubleType, IntegerType, MapType, Metadata, MetadataBuilder, NullType, StringType, StructField, StructType}
-import org.scalatest.{FlatSpec, Matchers}
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
 import org.scalatest.prop.TableDrivenPropertyChecks
 import tech.ytsaurus.spyt.SchemaTestUtils
 
-class YtScanBuilderTest extends FlatSpec with Matchers with SchemaTestUtils with TableDrivenPropertyChecks {
+class YtScanBuilderTest extends AnyFlatSpec with Matchers with SchemaTestUtils with TableDrivenPropertyChecks {
   behavior of "YtScanBuilder"
 
   it should "push metadata in struct type" in {

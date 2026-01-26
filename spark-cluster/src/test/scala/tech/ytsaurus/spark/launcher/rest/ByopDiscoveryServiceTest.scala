@@ -2,9 +2,10 @@ package tech.ytsaurus.spark.launcher.rest
 
 import io.circe._
 import io.circe.parser._
-import org.scalatest.{FlatSpec, Matchers}
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
 
-class ByopDiscoveryServiceTest extends FlatSpec with Matchers {
+class ByopDiscoveryServiceTest extends AnyFlatSpec with Matchers {
   behavior of "ByopDiscoveryTest"
 
   private val hosts = Seq(

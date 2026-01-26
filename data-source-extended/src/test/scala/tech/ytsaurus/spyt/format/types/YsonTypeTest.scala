@@ -7,13 +7,14 @@ import org.apache.spark.sql.internal.SQLConf.{CODEGEN_FACTORY_MODE, WHOLESTAGE_C
 import org.apache.spark.sql.types._
 import org.apache.spark.sql.spyt.types.YsonType
 import org.apache.spark.sql.{Encoders, Row}
-import org.scalatest.{FlatSpec, Matchers}
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
 import tech.ytsaurus.spyt._
 import tech.ytsaurus.spyt.format.Test
 import tech.ytsaurus.spyt.test.{LocalSpark, TestUtils, TmpDir}
 import tech.ytsaurus.spyt.wrapper.table.OptimizeMode
 
-class YsonTypeTest extends FlatSpec with Matchers with LocalSpark with TmpDir with TestUtils {
+class YsonTypeTest extends AnyFlatSpec with Matchers with LocalSpark with TmpDir with TestUtils {
 
   import spark.implicits._
 

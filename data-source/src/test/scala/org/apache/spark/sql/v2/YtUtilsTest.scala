@@ -5,7 +5,8 @@ import org.apache.spark.SparkException
 import org.apache.spark.sql.types._
 import org.apache.spark.sql.v2.YtUtils.{FileWithSchema, _}
 import org.scalatest.prop.TableDrivenPropertyChecks
-import org.scalatest.{FlatSpec, Matchers}
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
 import tech.ytsaurus.spyt.fs.{YtFileStatus, YtHadoopPath, YtTableMeta}
 import tech.ytsaurus.spyt.wrapper.table.OptimizeMode
 import tech.ytsaurus.spyt.SchemaTestUtils
@@ -13,7 +14,7 @@ import tech.ytsaurus.spyt.fs.path.YPathEnriched
 
 import scala.util.Try
 
-class YtUtilsTest extends FlatSpec with Matchers with SchemaTestUtils with TableDrivenPropertyChecks {
+class YtUtilsTest extends AnyFlatSpec with Matchers with SchemaTestUtils with TableDrivenPropertyChecks {
 
   behavior of "YtUtilsTest"
 

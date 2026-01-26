@@ -1,10 +1,11 @@
 package tech.ytsaurus.spyt.common.utils
 
 import org.apache.spark.sql.Row
-import org.scalatest.{FlatSpec, Matchers}
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
 import tech.ytsaurus.spyt.test.LocalSpark
 
-class TopUdafTest extends FlatSpec with Matchers with LocalSpark {
+class TopUdafTest extends AnyFlatSpec with Matchers with LocalSpark {
   import spark.implicits._
 
   "TopUdaf" should "work" in {

@@ -3,7 +3,8 @@ package tech.ytsaurus.spyt.serializers
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.spyt.types._
 import org.apache.spark.sql.types._
-import org.scalatest.{FlatSpec, Matchers}
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
 import tech.ytsaurus.core.tables.{ColumnValueType, TableSchema}
 import tech.ytsaurus.spyt._
 import tech.ytsaurus.spyt.test.{LocalSpark, TestUtils, TmpDir}
@@ -11,7 +12,7 @@ import tech.ytsaurus.spyt.test.{LocalSpark, TestUtils, TmpDir}
 import java.sql.{Date, Timestamp}
 import java.time.{LocalDate, LocalDateTime, ZoneOffset, ZonedDateTime}
 
-class DataFrameSerializerTest extends FlatSpec with Matchers with LocalSpark
+class DataFrameSerializerTest extends AnyFlatSpec with Matchers with LocalSpark
   with TmpDir with TestUtils {
   private val atomicSchema = TableSchema.builder()
     .setUniqueKeys(false)

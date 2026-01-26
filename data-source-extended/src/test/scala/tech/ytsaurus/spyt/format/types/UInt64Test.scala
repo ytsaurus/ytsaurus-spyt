@@ -6,14 +6,15 @@ import org.apache.spark.sql.types.{LongType, Metadata, StringType, StructField}
 import org.apache.spark.sql.spyt.types.UInt64Support.{fromStringUdf, toStringUdf}
 import org.apache.spark.sql.spyt.types.UInt64Type
 import org.apache.spark.storage.StorageLevel
-import org.scalatest.{FlatSpec, Matchers}
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
 import tech.ytsaurus.spyt._
 import tech.ytsaurus.spyt.test.{LocalSpark, TestUtils, TmpDir}
 import tech.ytsaurus.core.tables.{ColumnValueType, TableSchema}
 import tech.ytsaurus.spyt.types.UInt64Long
 import tech.ytsaurus.spyt.wrapper.YtWrapper
 
-class UInt64Test extends FlatSpec with Matchers with LocalSpark with TmpDir with TestUtils {
+class UInt64Test extends AnyFlatSpec with Matchers with LocalSpark with TmpDir with TestUtils {
   behavior of "YtDataSource"
 
   import spark.implicits._

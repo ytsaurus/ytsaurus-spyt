@@ -1,8 +1,9 @@
 package tech.ytsaurus.spyt.wrapper.client
 
-import org.scalatest.{FlatSpec, Matchers}
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
 
-class MasterWrapperClientTest extends FlatSpec with Matchers {
+class MasterWrapperClientTest extends AnyFlatSpec with Matchers {
 
   behavior of "ByopDiscoveryClientTest"
 

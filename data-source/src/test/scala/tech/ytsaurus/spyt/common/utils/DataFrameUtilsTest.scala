@@ -2,10 +2,11 @@ package tech.ytsaurus.spyt.common.utils
 
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.functions.col
-import org.scalatest.{FlatSpec, Matchers}
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
 import tech.ytsaurus.spyt.test.LocalSpark
 
-class DataFrameUtilsTest extends FlatSpec with Matchers with LocalSpark {
+class DataFrameUtilsTest extends AnyFlatSpec with Matchers with LocalSpark {
 
   behavior of "DataFrameUtilsTest"
 

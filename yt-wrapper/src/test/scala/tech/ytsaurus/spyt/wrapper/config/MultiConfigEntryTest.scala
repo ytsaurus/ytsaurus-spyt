@@ -5,9 +5,10 @@ import org.apache.log4j.Level
 import org.apache.spark.SparkConf
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.util.CaseInsensitiveStringMap
-import org.scalatest.{FlatSpec, Matchers}
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
 
-class MultiConfigEntryTest extends FlatSpec with Matchers {
+class MultiConfigEntryTest extends AnyFlatSpec with Matchers {
   import ConfigEntry.implicits._
 
   private val entry = new MultiConfigEntry("log", "level", Some(Level.INFO),

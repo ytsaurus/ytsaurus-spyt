@@ -6,13 +6,14 @@ import org.apache.spark.sql.execution.PartialReducerPartitionSpec
 import org.apache.spark.sql.execution.adaptive.AQEShuffleReadExec
 import org.apache.spark.sql.internal.SQLConf._
 import org.scalatest.prop.TableDrivenPropertyChecks
-import org.scalatest.{FlatSpec, Matchers}
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
 import tech.ytsaurus.spyt._
 import tech.ytsaurus.spyt.test.{LocalSpark, TmpDir}
 
 import scala.language.postfixOps
 
-class AdaptiveTest extends FlatSpec with Matchers with LocalSpark with TmpDir with TableDrivenPropertyChecks
+class AdaptiveTest extends AnyFlatSpec with Matchers with LocalSpark with TmpDir with TableDrivenPropertyChecks
   with YtDistributedReadingTestUtils {
 
   import spark.implicits._

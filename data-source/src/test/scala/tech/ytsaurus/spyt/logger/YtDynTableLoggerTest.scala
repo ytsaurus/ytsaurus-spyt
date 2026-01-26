@@ -1,7 +1,8 @@
 package tech.ytsaurus.spyt.logger
 
 import org.apache.log4j.Level
-import org.scalatest.{FlatSpec, Matchers}
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
 import tech.ytsaurus.spyt.format.conf.SparkYtConfiguration.Read.KeyColumnsFilterPushdown
 import tech.ytsaurus.spyt.test._
 import tech.ytsaurus.spyt.wrapper.YtWrapper
@@ -12,7 +13,7 @@ import java.util.UUID
 import scala.concurrent.duration._
 import scala.language.postfixOps
 
-class YtDynTableLoggerTest extends FlatSpec with Matchers with LocalSpark with TmpDir with DynTableTestUtils with TestUtils {
+class YtDynTableLoggerTest extends AnyFlatSpec with Matchers with LocalSpark with TmpDir with DynTableTestUtils with TestUtils {
 
   import SparkComponent._
   import tech.ytsaurus.spyt.wrapper.config._

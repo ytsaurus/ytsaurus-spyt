@@ -4,7 +4,8 @@ import net.logstash.log4j.JSONEventLayoutV1
 import org.apache.commons.io.FileUtils
 import org.apache.log4j.spi.{LoggingEvent, RootLogger}
 import org.apache.log4j.{FileAppender, Level}
-import org.scalatest.{FlatSpec, Matchers}
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
 import tech.ytsaurus.spark.launcher.WorkerLogLauncher.WorkerLogConfig
 import tech.ytsaurus.spyt.SparkAdapter
 import tech.ytsaurus.spyt.test.{LocalYtClient, TmpDir}
@@ -22,7 +23,7 @@ import scala.collection.mutable.ArrayBuffer
 import scala.concurrent.duration.DurationInt
 import scala.language.postfixOps
 
-class WorkerLogLauncherTest extends FlatSpec with LocalYtClient with Matchers with TmpDir {
+class WorkerLogLauncherTest extends AnyFlatSpec with LocalYtClient with Matchers with TmpDir {
   behavior of "WorkerLogLauncherTest"
 
   override def testDir: String = "/tmp/test" // should start with single slash

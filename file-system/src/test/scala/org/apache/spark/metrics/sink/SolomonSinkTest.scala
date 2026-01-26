@@ -4,15 +4,16 @@ import com.codahale.metrics.{Counter, Gauge, Histogram, Meter, MetricRegistry, T
 import io.circe.{Json, parser}
 import org.apache.spark.yt.test.TestHttpServer
 import org.apache.spark.yt.test.TestHttpServer.Request
-import org.scalatest.{Assertion, FunSuite}
-import org.scalatest.Matchers._
+import org.scalatest.Assertion
+import org.scalatest.funsuite.AnyFunSuite
+import org.scalatest.matchers.should.Matchers._
 import org.slf4j.{Logger, LoggerFactory}
 
 import java.nio.charset.Charset
 import java.util.Properties
 import java.util.concurrent.TimeUnit
 
-class SolomonSinkTest extends FunSuite {
+class SolomonSinkTest extends AnyFunSuite {
   val log: Logger = LoggerFactory.getLogger(this.getClass)
 
   def body(req: Request): String = new String(req.body, Charset.defaultCharset)

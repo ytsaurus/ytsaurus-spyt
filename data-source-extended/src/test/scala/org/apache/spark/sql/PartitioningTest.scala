@@ -5,11 +5,12 @@ import org.apache.spark.sql.catalyst.expressions.CodegenObjectFactoryMode
 import org.apache.spark.sql.execution.joins.BroadcastHashJoinExec
 import org.apache.spark.sql.internal.SQLConf.{CODEGEN_FACTORY_MODE, WHOLESTAGE_CODEGEN_ENABLED}
 import org.mockito.scalatest.MockitoSugar
-import org.scalatest.{FlatSpec, Matchers}
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
 import tech.ytsaurus.spyt.{YtDistributedReadingTestUtils, YtReader, YtWriter}
 import tech.ytsaurus.spyt.test.{DynTableTestUtils, LocalSpark, TmpDir}
 
-class PartitioningTest extends FlatSpec with Matchers with LocalSpark with TmpDir with MockitoSugar
+class PartitioningTest extends AnyFlatSpec with Matchers with LocalSpark with TmpDir with MockitoSugar
   with DynTableTestUtils with YtDistributedReadingTestUtils {
   import spark.implicits._
 

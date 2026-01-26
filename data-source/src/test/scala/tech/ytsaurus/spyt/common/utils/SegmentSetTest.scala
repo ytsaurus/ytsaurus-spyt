@@ -3,14 +3,15 @@ package tech.ytsaurus.spyt.common.utils
 import org.apache.spark.sql.sources._
 import org.mockito.scalatest.MockitoSugar
 import org.scalatest.prop.TableDrivenPropertyChecks
-import org.scalatest.{FlatSpec, Matchers}
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
 import AbstractSegment.SegmentSide
 import Segment._
 import tech.ytsaurus.spyt.test.TestUtils
 
 import scala.language.postfixOps
 
-class SegmentSetTest extends FlatSpec with Matchers
+class SegmentSetTest extends AnyFlatSpec with Matchers
   with TestUtils with MockitoSugar with TableDrivenPropertyChecks {
   behavior of "SegmentSet"
 

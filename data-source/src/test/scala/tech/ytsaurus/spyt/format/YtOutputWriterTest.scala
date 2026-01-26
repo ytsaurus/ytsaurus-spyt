@@ -6,7 +6,8 @@ import org.apache.spark.sql.catalyst.util.{ArrayData, MapData}
 import org.apache.spark.sql.types._
 import org.apache.spark.sql.v2.YtUtils
 import org.apache.spark.unsafe.types.{CalendarInterval, UTF8String}
-import org.scalatest.{FlatSpec, Matchers}
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
 import tech.ytsaurus.client.ApiServiceTransaction
 import tech.ytsaurus.core.cypress.YPath
 import tech.ytsaurus.spyt._
@@ -23,7 +24,7 @@ import java.time.{Instant, LocalDate}
 import scala.concurrent.duration._
 import scala.language.postfixOps
 
-class YtOutputWriterTest extends FlatSpec with TmpDir with LocalSpark with Matchers {
+class YtOutputWriterTest extends AnyFlatSpec with TmpDir with LocalSpark with Matchers {
   import YtOutputWriterTest._
   private val schema = StructType(Seq(StructField("a", IntegerType)))
   implicit val ytReadContext: YtReadContext = YtReadContext(yt, YtReadSettings.default)

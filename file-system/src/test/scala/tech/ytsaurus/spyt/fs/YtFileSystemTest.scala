@@ -2,7 +2,8 @@ package tech.ytsaurus.spyt.fs
 
 import org.apache.hadoop.fs.{Path, PathNotFoundException}
 import org.apache.hadoop.io.IOUtils
-import org.scalatest.{FlatSpec, Matchers}
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
 import tech.ytsaurus.spyt.test.{LocalYt, LocalYtClient, TmpDir}
 import tech.ytsaurus.spyt.wrapper.YtWrapper
 
@@ -11,7 +12,7 @@ import scala.concurrent.duration._
 import scala.io.Source
 import scala.language.postfixOps
 
-class YtFileSystemTest extends FlatSpec with Matchers with LocalYtClient with TmpDir {
+class YtFileSystemTest extends AnyFlatSpec with Matchers with LocalYtClient with TmpDir {
 
   behavior of "YtFileSystemTest"
 

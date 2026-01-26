@@ -4,7 +4,8 @@ import org.apache.commons.io.IOUtils
 import org.mockito.ArgumentMatchers.any
 import org.mockito.Mockito
 import org.mockito.Mockito.times
-import org.scalatest.{FlatSpec, Matchers}
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
 import tech.ytsaurus.client.CompoundClient
 import tech.ytsaurus.client.request.{GetFileFromCache, PutFileToCache, WriteFile}
 import tech.ytsaurus.core.cypress.CypressNodeType
@@ -15,7 +16,7 @@ import java.nio.charset.Charset
 import java.nio.file.{Files, Paths}
 import scala.concurrent.duration.DurationInt
 
-class YtFileUtilsTest extends FlatSpec with Matchers with LocalYtClient with TmpDir {
+class YtFileUtilsTest extends AnyFlatSpec with Matchers with LocalYtClient with TmpDir {
   behavior of "YtCypressUtils"
 
   private val timeout = 10 minutes

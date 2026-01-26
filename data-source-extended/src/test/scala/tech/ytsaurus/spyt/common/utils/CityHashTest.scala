@@ -2,12 +2,13 @@ package tech.ytsaurus.spyt.common.utils
 
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.functions.col
-import org.scalatest.{FlatSpec, Matchers}
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
 import tech.ytsaurus.spyt.common.utils.CityHash.{cityHashUdf, registerFunction}
 import tech.ytsaurus.spyt.test.{LocalSpark, TmpDir}
 import tech.ytsaurus.spyt.types.UInt64Long
 
-class CityHashTest extends FlatSpec with Matchers with LocalSpark with TmpDir {
+class CityHashTest extends AnyFlatSpec with Matchers with LocalSpark with TmpDir {
   behavior of "CityHashTest"
 
   import spark.implicits._

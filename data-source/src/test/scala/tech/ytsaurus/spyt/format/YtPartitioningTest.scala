@@ -2,7 +2,8 @@ package tech.ytsaurus.spyt.format
 
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.v2.Utils.getParsedKeys
-import org.scalatest.{FlatSpec, Matchers}
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
 import tech.ytsaurus.core.tables.{ColumnValueType, TableSchema}
 import tech.ytsaurus.spyt._
 import tech.ytsaurus.spyt.format.conf.SparkYtConfiguration
@@ -12,7 +13,7 @@ import tech.ytsaurus.spyt.wrapper.YtWrapper
 import scala.language.postfixOps
 import scala.util.Random
 
-class YtPartitioningTest extends FlatSpec with Matchers with LocalSpark with TmpDir with TestUtils with DynTableTestUtils {
+class YtPartitioningTest extends AnyFlatSpec with Matchers with LocalSpark with TmpDir with TestUtils with DynTableTestUtils {
   import spark.implicits._
 
   private val atomicSchema = new TableSchema.Builder()

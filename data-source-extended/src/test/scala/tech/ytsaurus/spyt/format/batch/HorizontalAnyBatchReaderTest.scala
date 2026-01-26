@@ -1,7 +1,8 @@
 package tech.ytsaurus.spyt.format.batch
 
 import org.apache.spark.sql.spyt.types.YsonType
-import org.scalatest.{FlatSpec, Matchers}
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
 import tech.ytsaurus.client.request.{CreateNode, WriteSerializationContext, WriteTable}
 import tech.ytsaurus.client.rows.{UnversionedRow, UnversionedRowSerializer, UnversionedValue}
 import tech.ytsaurus.core.cypress.{CypressNodeType, YPath}
@@ -17,7 +18,7 @@ import tech.ytsaurus.ysontree.YTree
 import scala.collection.JavaConverters._
 import scala.language.postfixOps
 
-class HorizontalAnyBatchReaderTest extends FlatSpec with Matchers with ReadBatchRows with LocalSpark with TmpDir
+class HorizontalAnyBatchReaderTest extends AnyFlatSpec with Matchers with ReadBatchRows with LocalSpark with TmpDir
   with YtDistributedReadingTestUtils {
 
   behavior of "HorizontalBatchReaderTest"

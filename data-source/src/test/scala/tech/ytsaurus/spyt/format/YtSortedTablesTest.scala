@@ -1,6 +1,7 @@
 package tech.ytsaurus.spyt.format
 
-import org.scalatest.{FlatSpec, Matchers}
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
 import tech.ytsaurus.core.tables.{ColumnSchema, ColumnSortOrder, ColumnValueType, TableSchema}
 import tech.ytsaurus.spyt._
 import tech.ytsaurus.spyt.serializers.SchemaConverter.SortOrder.{Asc, Desc}
@@ -11,7 +12,7 @@ import tech.ytsaurus.ysontree.YTree
 
 import scala.collection.JavaConverters._
 
-class YtSortedTablesTest extends FlatSpec with Matchers with LocalSpark with TestUtils with TmpDir {
+class YtSortedTablesTest extends AnyFlatSpec with Matchers with LocalSpark with TestUtils with TmpDir {
 
   import spark.implicits._
 

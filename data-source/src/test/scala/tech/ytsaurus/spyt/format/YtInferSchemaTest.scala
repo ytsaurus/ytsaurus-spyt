@@ -7,7 +7,8 @@ import org.apache.spark.sql.types.{ArrayType, BooleanType, DoubleType, IntegerTy
 import org.apache.spark.sql.v2.YtUtils
 import org.mockito.Mockito
 import org.mockito.scalatest.MockitoSugar
-import org.scalatest.{FlatSpec, Matchers}
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
 import tech.ytsaurus.spyt.test.{LocalSpark, TestUtils, TmpDir}
 import tech.ytsaurus.spyt._
 import tech.ytsaurus.spyt.wrapper.client.YtClientConfigurationConverter.ytClientConfiguration
@@ -20,7 +21,7 @@ import tech.ytsaurus.spyt.SchemaTestUtils
 import tech.ytsaurus.spyt.fs.YtTableFileSystem
 import tech.ytsaurus.spyt.wrapper.client.{YtClientProvider, YtRpcClient}
 
-class YtInferSchemaTest extends FlatSpec with Matchers with LocalSpark
+class YtInferSchemaTest extends AnyFlatSpec with Matchers with LocalSpark
   with TmpDir with SchemaTestUtils with MockitoSugar with TestUtils {
   behavior of "YtDataSource"
 

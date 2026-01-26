@@ -1,6 +1,7 @@
 package tech.ytsaurus.spyt.wrapper.cypress
 
-import org.scalatest.{FlatSpec, Matchers}
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
 import tech.ytsaurus.spyt.test.{LocalYtClient, TmpDir}
 import tech.ytsaurus.spyt.wrapper.YtWrapper
 import tech.ytsaurus.spyt.test.LocalYtClient
@@ -9,7 +10,7 @@ import tech.ytsaurus.ysontree.YTreeBuilder
 import java.util.UUID
 import scala.collection.JavaConverters._
 
-class YtCypressUtilsTest extends FlatSpec with Matchers with LocalYtClient with TmpDir {
+class YtCypressUtilsTest extends AnyFlatSpec with Matchers with LocalYtClient with TmpDir {
   behavior of "YtCypressUtils"
 
   import tech.ytsaurus.spyt.wrapper.YtJavaConverters._

@@ -1,11 +1,12 @@
 package tech.ytsaurus.spyt.serializers
 
-import org.scalatest.{FlatSpec, Matchers}
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
 import tech.ytsaurus.core.tables.{ColumnValueType, TableSchema}
 import tech.ytsaurus.spyt._
 import tech.ytsaurus.spyt.test.{LocalSpark, TestUtils, TmpDir}
 
-class ExtendedDataFrameSerializerTest  extends FlatSpec with Matchers with LocalSpark with TmpDir with TestUtils {
+class ExtendedDataFrameSerializerTest  extends AnyFlatSpec with Matchers with LocalSpark with TmpDir with TestUtils {
 
   private val schema = TableSchema.builder()
     .setUniqueKeys(false)

@@ -2,7 +2,8 @@ package tech.ytsaurus.spyt.format.batch
 
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.types.StructType
-import org.scalatest.{Matchers, TestSuite}
+import org.scalatest.TestSuite
+import org.scalatest.matchers.should.Matchers
 
 import scala.annotation.tailrec
 

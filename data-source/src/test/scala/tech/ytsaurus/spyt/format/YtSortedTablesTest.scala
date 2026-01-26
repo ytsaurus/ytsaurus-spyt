@@ -1,13 +1,16 @@
 package tech.ytsaurus.spyt.format
 
-import org.scalatest.{FlatSpec, Matchers}
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
+import tech.ytsaurus.core.tables.{ColumnSchema, ColumnSortOrder, ColumnValueType, TableSchema}
 import tech.ytsaurus.spyt._
 import tech.ytsaurus.spyt.test.{LocalSpark, TmpDir}
 import tech.ytsaurus.spyt.wrapper.YtWrapper
 
 import scala.collection.JavaConverters._
 
-class YtSortedTablesTest extends FlatSpec with Matchers with LocalSpark with TmpDir {
+class YtSortedTablesTest extends AnyFlatSpec with Matchers with LocalSpark with TestUtils with TmpDir {
+
   import spark.implicits._
 
   "YtFileFormat" should "write sorted table" in {

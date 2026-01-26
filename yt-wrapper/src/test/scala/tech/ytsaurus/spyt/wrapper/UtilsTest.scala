@@ -1,13 +1,14 @@
 package tech.ytsaurus.spyt.wrapper
 
 import org.scalatest.prop.TableDrivenPropertyChecks
-import org.scalatest.{FlatSpec, Matchers}
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
 import tech.ytsaurus.spyt.wrapper.Utils.flatten
 
 import scala.concurrent.duration._
 import scala.language.postfixOps
 
-class UtilsTest extends FlatSpec with Matchers with TableDrivenPropertyChecks {
+class UtilsTest extends AnyFlatSpec with Matchers with TableDrivenPropertyChecks {
   behavior of "UtilsTest"
 
   def l[A, B](a: A): Either[A, B] = Left(a)

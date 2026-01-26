@@ -5,7 +5,8 @@ import org.apache.spark.sql.functions.col
 import org.apache.spark.sql.types.{LongType, StringType, StructField, StructType}
 import org.apache.spark.sql.v2.Utils.{extractRawKeys, extractYtScan, getParsedKeys}
 import org.mockito.scalatest.MockitoSugar
-import org.scalatest.{FlatSpec, Matchers}
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
 import tech.ytsaurus.client.rows.{UnversionedRow, UnversionedValue}
 import tech.ytsaurus.core.tables.{ColumnValueType, TableSchema}
 import tech.ytsaurus.spyt.common.utils.{TuplePoint, TupleSegment}
@@ -17,7 +18,7 @@ import tech.ytsaurus.spyt.format.YtPartitionedFileDelegate
 import tech.ytsaurus.spyt.wrapper.table.OptimizeMode.Scan
 import tech.ytsaurus.spyt.wrapper.table.{YtReadContext, YtReadSettings}
 
-class SortedTablesKeyPartitioningTest extends FlatSpec with Matchers with LocalSpark
+class SortedTablesKeyPartitioningTest extends AnyFlatSpec with Matchers with LocalSpark
   with TmpDir with MockitoSugar with DynTableTestUtils with TestUtils {
   behavior of "YtScan"
 

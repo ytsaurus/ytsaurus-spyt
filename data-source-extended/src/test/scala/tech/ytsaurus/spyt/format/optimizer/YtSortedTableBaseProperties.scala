@@ -5,7 +5,9 @@ import org.apache.spark.sql.catalyst.optimizer.NormalizeNaNAndZero
 import org.apache.spark.sql.internal.SQLConf.{CODEGEN_FACTORY_MODE, WHOLESTAGE_CODEGEN_ENABLED}
 import org.apache.spark.sql.types.{BooleanType, DataType, DoubleType, LongType, StringType}
 import org.scalacheck.Gen
-import org.scalatest.{BeforeAndAfterAll, FlatSpec, Matchers}
+import org.scalatest.BeforeAndAfterAll
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
 import org.scalatestplus.scalacheck.ScalaCheckDrivenPropertyChecks
 import tech.ytsaurus.spyt.format.conf.SparkYtConfiguration
 import YtSortedTableBaseProperties.{Source, compareRows, getTableSchema, getUnversionedRow}
@@ -16,7 +18,7 @@ import tech.ytsaurus.typeinfo.TiType
 
 import scala.collection.JavaConverters.{collectionAsScalaIterableConverter, seqAsJavaListConverter}
 
-private class YtSortedTableBaseProperties extends FlatSpec with Matchers with BeforeAndAfterAll
+private class YtSortedTableBaseProperties extends AnyFlatSpec with Matchers with BeforeAndAfterAll
   with ScalaCheckDrivenPropertyChecks with TmpDir with LocalSpark with TestUtils {
 
   // 10Kb ~ 600 rows with 2 long numbers

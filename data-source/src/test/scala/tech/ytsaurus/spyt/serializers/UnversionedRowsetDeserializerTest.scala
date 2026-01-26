@@ -3,12 +3,13 @@ package tech.ytsaurus.spyt.serializers
 import org.apache.spark.sql.catalyst.util.{ArrayData, MapData}
 import org.apache.spark.sql.types._
 import org.apache.spark.unsafe.types.UTF8String
-import org.scalatest.{FlatSpec, Matchers}
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
 import tech.ytsaurus.client.rows.{UnversionedRow, UnversionedRowset, UnversionedValue}
 import tech.ytsaurus.core.tables.{ColumnValueType, TableSchema}
 import tech.ytsaurus.typeinfo.TiType
 
-class UnversionedRowsetDeserializerTest extends FlatSpec with Matchers {
+class UnversionedRowsetDeserializerTest extends AnyFlatSpec with Matchers {
   private def deserialize(sparkSchema: StructType, rowset: UnversionedRowset): Seq[Seq[Any]] = {
     val deserializer = new UnversionedRowsetDeserializer(sparkSchema)
     val internalRows = deserializer.deserializeRowset(rowset)

@@ -1,7 +1,8 @@
 package tech.ytsaurus.spyt.format
 
 import org.apache.spark.sql.{Row, SparkSession}
-import org.scalatest.{FlatSpec, Matchers}
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
 import tech.ytsaurus.core.tables.{ColumnValueType, TableSchema}
 import tech.ytsaurus.spyt.YtReader
 import tech.ytsaurus.spyt.test.{LocalSpark, TestUtils, TmpDir}
@@ -15,7 +16,7 @@ import scala.collection.JavaConverters._
 import scala.concurrent.duration._
 import scala.language.postfixOps
 
-class YtFilesTest extends FlatSpec with Matchers with LocalSpark with TmpDir with TestUtils {
+class YtFilesTest extends AnyFlatSpec with Matchers with LocalSpark with TmpDir with TestUtils {
   behavior of "YtDataSource"
 
   override def reinstantiateSparkSession: Boolean = true

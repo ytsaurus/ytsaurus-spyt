@@ -1,7 +1,8 @@
 package tech.ytsaurus.spyt.wrapper.client
 
 import io.netty.channel.nio.NioEventLoopGroup
-import org.scalatest.{FlatSpec, Matchers}
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
 import tech.ytsaurus.client.bus.DefaultBusConnector
 import tech.ytsaurus.client.rpc.{RpcOptions, YTsaurusClientAuth}
 import tech.ytsaurus.core.tables.{ColumnValueType, TableSchema}
@@ -14,7 +15,7 @@ import tech.ytsaurus.ysontree.YTreeTextSerializer
 import scala.concurrent.duration._
 import scala.language.postfixOps
 
-class SingleProxyYtClientTest extends FlatSpec with Matchers with LocalYt with TmpDir with TestUtils {
+class SingleProxyYtClientTest extends AnyFlatSpec with Matchers with LocalYt with TmpDir with TestUtils {
 
   override protected implicit val ytRpcClient: YtRpcClient = {
     createClient(

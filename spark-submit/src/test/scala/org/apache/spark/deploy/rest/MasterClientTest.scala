@@ -1,9 +1,10 @@
 package org.apache.spark.deploy.rest
 
 import org.apache.spark.deploy.rest.MasterClient.{parseDriversList, parseWorkersList}
-import org.scalatest.{FlatSpec, Matchers}
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
 
-class MasterClientTest extends FlatSpec with Matchers {
+class MasterClientTest extends AnyFlatSpec with Matchers {
   behavior of "MasterClient"
 
   it should "parse json with drivers list" in {

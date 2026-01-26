@@ -3,7 +3,7 @@ package tech.ytsaurus.spyt.format
 import org.apache.hadoop.mapreduce.TaskAttemptContext
 import org.apache.spark.SparkConf
 import org.apache.spark.internal.io.FileCommitProtocol
-import org.scalatest.FlatSpec
+import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import tech.ytsaurus.core.tables.{ColumnValueType, TableSchema}
 import tech.ytsaurus.spyt.test.{LocalSpark, TestUtils, TmpDir}
@@ -12,7 +12,7 @@ import tech.ytsaurus.spyt.wrapper.YtWrapper
 
 import scala.util.Random
 
-class YtOutputCommitProtocolTest extends FlatSpec with Matchers with LocalSpark with TmpDir with TestUtils {
+class YtOutputCommitProtocolTest extends AnyFlatSpec with Matchers with LocalSpark with TmpDir with TestUtils {
 
   override def numFailures: Int = 4
 

@@ -2,12 +2,13 @@ package tech.ytsaurus.spyt.common.utils
 
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.functions.col
-import org.scalatest.{FlatSpec, Matchers}
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
 import tech.ytsaurus.spyt.common.utils.XxHash64ZeroSeed.{registerFunction, xxHash64ZeroSeedUdf}
 import tech.ytsaurus.spyt.test.{LocalSpark, TmpDir}
 import tech.ytsaurus.spyt.types.UInt64Long
 
-class XxHash64Test extends FlatSpec with Matchers with LocalSpark with TmpDir {
+class XxHash64Test extends AnyFlatSpec with Matchers with LocalSpark with TmpDir {
   behavior of "XxHash64Test"
   import spark.implicits._
 

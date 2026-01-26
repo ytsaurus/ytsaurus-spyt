@@ -1,7 +1,8 @@
 package tech.ytsaurus.spyt.format
 
 import org.apache.spark.sql.SparkSession
-import org.scalatest.{FlatSpec, Matchers}
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
 import tech.ytsaurus.spyt._
 import tech.ytsaurus.spyt.format.conf.SparkYtConfiguration.GlobalTransaction
 import tech.ytsaurus.spyt.wrapper.config.{SparkYtSparkConf, SparkYtSparkSession}
@@ -11,7 +12,7 @@ import tech.ytsaurus.spyt.test.LocalYtClient
 
 import scala.language.postfixOps
 
-class SparkSessionTransactionTest extends FlatSpec with Matchers with LocalYtClient with TmpDir with TestUtils
+class SparkSessionTransactionTest extends AnyFlatSpec with Matchers with LocalYtClient with TmpDir with TestUtils
   with YtDistributedReadingTestUtils {
   behavior of "SparkSession"
 

@@ -1,10 +1,11 @@
 package tech.ytsaurus.spyt
 
 import org.apache.spark.sql.spyt.types.YsonBinary
-import org.scalatest.{FlatSpec, Matchers}
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
 import tech.ytsaurus.spyt.test.{LocalSpark, TmpDir}
 
-class PythonUtilsTest extends FlatSpec with Matchers with LocalSpark with TmpDir {
+class PythonUtilsTest extends AnyFlatSpec with Matchers with LocalSpark with TmpDir {
 
   behavior of "PythonUtils"
 

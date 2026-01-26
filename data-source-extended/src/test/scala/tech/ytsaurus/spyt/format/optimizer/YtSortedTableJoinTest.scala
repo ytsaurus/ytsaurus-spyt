@@ -8,7 +8,8 @@ import org.apache.spark.sql.execution.{DependentHashShuffleExchangeExec, FakeHas
 import org.apache.spark.sql.functions.{col, floor}
 import org.apache.spark.sql.internal.SQLConf.{CODEGEN_FACTORY_MODE, WHOLESTAGE_CODEGEN_ENABLED}
 import org.mockito.scalatest.MockitoSugar
-import org.scalatest.{FlatSpec, Matchers}
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
 import tech.ytsaurus.spyt._
 import tech.ytsaurus.spyt.format.conf.SparkYtConfiguration
 import tech.ytsaurus.spyt.test.{DynTableTestUtils, LocalSpark, TmpDir}
@@ -16,7 +17,7 @@ import tech.ytsaurus.spyt.test.{DynTableTestUtils, LocalSpark, TmpDir}
 import java.util.UUID
 import scala.language.postfixOps
 
-class YtSortedTableJoinTest extends FlatSpec with Matchers with LocalSpark with TmpDir
+class YtSortedTableJoinTest extends AnyFlatSpec with Matchers with LocalSpark with TmpDir
   with MockitoSugar with DynTableTestUtils {
   import spark.implicits._
 

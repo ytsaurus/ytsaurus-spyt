@@ -6,7 +6,8 @@ import org.apache.spark.sql.execution.datasources.v2.DataSourceRDDPartition
 import org.apache.spark.sql.internal.SQLConf.{FILES_MAX_PARTITION_BYTES, FILES_OPEN_COST_IN_BYTES}
 import org.apache.spark.sql.v2.TestPartitionedFile
 import org.apache.spark.{Partition, Partitioner}
-import org.scalatest.{FlatSpec, Matchers}
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
 import tech.ytsaurus.spyt._
 import tech.ytsaurus.spyt.wrapper.config.YT_MIN_PARTITION_BYTES
 import tech.ytsaurus.spyt.test.{LocalSpark, TmpDir}
@@ -15,7 +16,7 @@ import tech.ytsaurus.spyt.test.{DynTableTestUtils, TestRow}
 
 import scala.util.Random
 
-class AutoPartitioningTest extends FlatSpec with Matchers with LocalSpark with TmpDir with DynTableTestUtils {
+class AutoPartitioningTest extends AnyFlatSpec with Matchers with LocalSpark with TmpDir with DynTableTestUtils {
   behavior of "YtDataSource"
 
   import TestPartitionedFile._

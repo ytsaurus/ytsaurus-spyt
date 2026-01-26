@@ -1,10 +1,11 @@
 package tech.ytsaurus.spyt
 
 import org.apache.spark.SparkConf
-import org.scalatest.{FlatSpec, Matchers}
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
 import tech.ytsaurus.spyt.SessionUtils.mergeConfs
 
-class SessionUtilsTest extends FlatSpec with Matchers {
+class SessionUtilsTest extends AnyFlatSpec with Matchers {
 
   private val someConf = "spark.hadoop.yt.conf.enabled"
   private val someConf2 = "spark.hadoop.yt.conf2.enabled"

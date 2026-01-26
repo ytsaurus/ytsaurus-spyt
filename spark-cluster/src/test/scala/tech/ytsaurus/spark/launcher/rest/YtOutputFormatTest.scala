@@ -1,8 +1,9 @@
 package tech.ytsaurus.spark.launcher.rest
 
-import org.scalatest.{FlatSpec, Matchers}
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
 
-class YtOutputFormatTest extends FlatSpec with Matchers {
+class YtOutputFormatTest extends AnyFlatSpec with Matchers {
 
   behavior of "YtOutputFormatTest"
 

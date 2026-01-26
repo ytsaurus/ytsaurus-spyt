@@ -9,7 +9,7 @@ object Dependencies {
   lazy val circeVersion = "0.12.3"
   lazy val circeYamlVersion = "0.12.0"
   lazy val shapelessVersion = "2.3.7"
-  lazy val scalatestVersion = "3.1.0"
+  lazy val scalatestVersion = "3.2.19"
   lazy val livyVersion = "0.8.0-incubating"
   lazy val ytsaurusClientVersion = "1.2.12"
   lazy val scalatraVersion = "2.7.0"
@@ -34,10 +34,10 @@ object Dependencies {
   )
 
   lazy val testDeps = Seq(
-    "org.scalacheck" %% "scalacheck" % "1.14.3" % Test,
+    "org.scalacheck" %% "scalacheck" % "1.19.0" % Test,
     "org.scalactic" %% "scalactic" % scalatestVersion % Test,
     "org.scalatest" %% "scalatest" % scalatestVersion % Test,
-    "org.scalatestplus" %% "scalacheck-1-14" % "3.1.0.0" % Test
+    "org.scalatestplus" %% "scalacheck-1-19" % "3.2.19.0" % Test
   ) ++ mockito
 
   def spark(sparkVersion: String, scope: Configuration = Provided) = Seq("spark-core", "spark-sql").map { module =>

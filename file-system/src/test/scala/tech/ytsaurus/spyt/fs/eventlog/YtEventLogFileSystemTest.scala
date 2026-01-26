@@ -2,7 +2,8 @@ package tech.ytsaurus.spyt.fs.eventlog
 
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.{FSDataInputStream, FileStatus, Path}
-import org.scalatest.{FlatSpec, Matchers}
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
 import tech.ytsaurus.spyt.fs.PathUtils.{getMetaPath, hadoopPathToYt}
 import tech.ytsaurus.spyt.test.{LocalSpark, LocalYt, LocalYtClient, TestUtils, TmpDir}
 import tech.ytsaurus.spyt.wrapper.YtWrapper
@@ -15,7 +16,7 @@ import java.time.{Clock, LocalDateTime, ZoneOffset}
 import scala.io.Source
 import scala.language.postfixOps
 
-class YtEventLogFileSystemTest extends FlatSpec with Matchers with LocalSpark with LocalYtClient with TestUtils with TmpDir {
+class YtEventLogFileSystemTest extends AnyFlatSpec with Matchers with LocalSpark with LocalYtClient with TestUtils with TmpDir {
   behavior of "YtEventLogFileSystemTest"
 
   override def testDir: String = "/tmp/test" // should start with single slash

@@ -3,7 +3,8 @@ package tech.ytsaurus.spyt.format
 import org.apache.spark.SparkException
 import org.apache.spark.sql.internal.SQLConf.PARALLEL_PARTITION_DISCOVERY_THRESHOLD
 import org.apache.spark.sql.{DataFrame, DataFrameReader, Row, SaveMode}
-import org.scalatest.{FlatSpec, Matchers}
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
 import tech.ytsaurus.spyt._
 import tech.ytsaurus.spyt.test._
 import tech.ytsaurus.spyt.wrapper.YtWrapper
@@ -13,7 +14,7 @@ import tech.ytsaurus.spyt.test.{DynTableTestUtils, TestRow}
 import scala.concurrent.duration._
 import scala.language.postfixOps
 
-class YtReadLockTest extends FlatSpec with Matchers with LocalSpark with TestUtils with TmpDir with DynTableTestUtils {
+class YtReadLockTest extends AnyFlatSpec with Matchers with LocalSpark with TestUtils with TmpDir with DynTableTestUtils {
   behavior of "YtDataSource"
 
   import YtWrapper._

@@ -1,6 +1,7 @@
 package org.apache.spark.sql.connect.ytsaurus
 
 import org.apache.commons.codec.binary.Hex
+import org.apache.spark.rpc.RpcAddress
 import org.apache.spark.SparkEnv
 import org.apache.spark.sql.connect.config.Connect.CONNECT_GRPC_BINDING_PORT
 import org.apache.spark.sql.connect.service.{SparkConnectServer, SparkConnectService}
@@ -21,8 +22,19 @@ import scala.util.control.NonFatal
 
 object SpytConnectServer {
   private val log = LoggerFactory.getLogger(getClass)
+  val INNER_CLUSTER: String = "inner-cluster"
+
+  private case class InnerClusterParameters(masterEndpoint: String, requestToken: String)
 
   def main(args: Array[String]): Unit = {
+
+    val innerClusterOpt: Option[InnerClusterParameters] = args match {
+      case Array(INNER_CLUSTER, masterEndpoint: String, requestToken: String) =>
+        checkUserAndTokenExistence()
+        Some(InnerClusterParameters(masterEndpoint, requestToken))
+      case _ => None
+    }
+
     checkAndUpdateGrpcPort()
     val serverRunner: Runnable = () => {
       SparkConnectServer.main(args)
@@ -38,10 +50,18 @@ object SpytConnectServer {
 
     try {
       sparkConf.get(Config.YTSAURUS_CONNECT_TOKEN_REFRESH_PERIOD).foreach { period =>
-        tokenRefreshExecutor = Some(scheduleTokenRefresh(period, client))
+        val token = if (innerClusterOpt.isDefined) {
+          sparkConf.get("spark.hadoop.yt.token")
+        } else {
+          sys.env("YT_SECURE_VAULT_YT_TOKEN")
+        }
+        tokenRefreshExecutor = Some(scheduleTokenRefresh(period, client, token))
       }
 
-      addGrpcEndpointToAnnotation(client)
+      innerClusterOpt match {
+        case Some(innerClusterParams) => sendGrpcEndpointToMaster(innerClusterParams)
+        case None => addGrpcEndpointToAnnotation(client)
+      }
 
       val idleTimeout = sparkConf.get(Config.YTSAURUS_CONNECT_IDLE_TIMEOUT)
 
@@ -55,6 +75,16 @@ object SpytConnectServer {
       serverThread.join()
     } finally {
       tokenRefreshExecutor.foreach(_.shutdownNow())
+    }
+  }
+
+  private def checkUserAndTokenExistence(): Unit = {
+    List("user", "token").foreach { field =>
+      val key = s"spark.hadoop.yt.$field"
+      if (sys.props.get(key).isEmpty) {
+        log.error(s"$key property must be specified when submitting to an inner cluster")
+        System.exit(-1)
+      }
     }
   }
 
@@ -102,14 +132,16 @@ object SpytConnectServer {
     case _ => true
   }
 
+  private def getEndpoint: String = {
+    val host = Utils.ytHostnameOrIpAddress
+    val port = SparkConnectService.localPort
+    s"$host:$port"
+  }
+
   private def addGrpcEndpointToAnnotation(client: CompoundClient): Unit = {
     val operationId = System.getenv("YT_OPERATION_ID")
     if (operationId != null) {
-      val host = Utils.ytHostnameOrIpAddress
-      val port = SparkConnectService.localPort
-      val endpoint = s"$host:$port"
-
-      val annotations = YTree.mapBuilder().key("spark_connect_endpoint").value(endpoint).buildMap()
+      val annotations = YTree.mapBuilder().key("spark_connect_endpoint").value(getEndpoint).buildMap()
       val req = UpdateOperationParameters
         .builder()
         .setOperationId(GUID.valueOf(operationId))
@@ -120,9 +152,8 @@ object SpytConnectServer {
     }
   }
 
-  private def scheduleTokenRefresh(period: Long, client: CompoundClient): ScheduledExecutorService = {
+  private def scheduleTokenRefresh(period: Long, client: CompoundClient, token: String): ScheduledExecutorService = {
     val tokenRefreshExecutor = Executors.newSingleThreadScheduledExecutor()
-    val token = sys.env("YT_SECURE_VAULT_YT_TOKEN")
     val digest = MessageDigest.getInstance("SHA-256")
     val tokenHash = digest.digest(token.getBytes)
     val tokenPath = s"//sys/cypress_tokens/${Hex.encodeHexString(tokenHash)}"
@@ -138,4 +169,12 @@ object SpytConnectServer {
     tokenRefreshExecutor.scheduleAtFixedRate(refreshCommand, 0, period, TimeUnit.MILLISECONDS)
     tokenRefreshExecutor
   }
+
+  private def sendGrpcEndpointToMaster(innerClusterParams: InnerClusterParameters): Unit = {
+    val masterRpcAddress = RpcAddress.fromSparkURL(innerClusterParams.masterEndpoint)
+    val masterRef = SparkEnv.get.rpcEnv.setupEndpointRef(masterRpcAddress, "Master")
+    masterRef.send(SpytConnectEndpointMessage(getEndpoint, innerClusterParams.requestToken))
+  }
 }
+
+case class SpytConnectEndpointMessage(endpoint: String, requestToken: String)

@@ -45,6 +45,11 @@ if [ ! $use_squashfs ]; then
   mkdir -p $spark_home
   tar --warning=no-unknown-keyword -xf "$spark_distr" -C "$spark_home"
   mv "$spark_home/${spark_distr:0:-4}" "$spark_home/spark"
+  for spark_connect_jar in spark-connect_*.jar; do
+    if [ -f "$spark_connect_jar" ]; then
+      cp "$spark_connect_jar" "$spark_home/spark/jars"
+    fi
+  done
 
   unzip -o spyt-package.zip -d "$spark_home"
   javaagent_opt="-javaagent:$(ls $spyt_home/jars/*spark-yt-spark-patch*)"

@@ -1,4 +1,4 @@
-from spyt.connect import start_connect_server
+from spyt.connect import start_connect_server, start_connect_server_inner_cluster
 
 from common.helpers import assert_items_equal, assert_sequences_equal, wait_for_operation
 from contextlib import contextmanager
@@ -26,20 +26,24 @@ def _wait_for_spark_connect_endpoint(yt_client, operation_id):
 
 
 @contextmanager
-def _spark_connect_session(yt_client):
-    operation = start_connect_server(yt_client)
+def _spark_connect_session(spark_connect_endpoint):
     spark = None
-
     try:
-        spark_connect_endpoint = _wait_for_spark_connect_endpoint(yt_client, operation.id)
-        spark = (SparkSession
-                 .builder
-                 .remote(f"sc://{spark_connect_endpoint}")
-                 .getOrCreate())
+        spark = SparkSession.builder.remote(f"sc://{spark_connect_endpoint}").getOrCreate()
         yield spark
     finally:
         if spark:
             spark.stop()
+
+
+@contextmanager
+def _direct_spark_connect_session(yt_client):
+    operation = start_connect_server(yt_client)
+    try:
+        spark_connect_endpoint = _wait_for_spark_connect_endpoint(yt_client, operation.id)
+        with _spark_connect_session(spark_connect_endpoint) as spark:
+            yield spark
+    finally:
         yt_client.complete_operation(operation.id)
 
 
@@ -70,17 +74,27 @@ def test_two_servers(yt_client):
                 yt_client.complete_operation(op.id)
 
 
+def _test_base_request(spark):
+    df = spark.range(0, 93)
+    result = df.groupBy((f.col("id") % 4).alias("rem")).count().collect()
+    expected = [
+        Row(rem=0, count=24),
+        Row(rem=1, count=23),
+        Row(rem=2, count=23),
+        Row(rem=3, count=23),
+    ]
+    assert_items_equal(result, expected)
+
+
 def test_base_request(yt_client):
-    with _spark_connect_session(yt_client) as spark:
-        df = spark.range(0, 93)
-        result = df.groupBy((f.col("id") % 4).alias("rem")).count().collect()
-        expected = [
-            Row(rem=0, count=24),
-            Row(rem=1, count=23),
-            Row(rem=2, count=23),
-            Row(rem=3, count=23),
-        ]
-        assert_items_equal(result, expected)
+    with _direct_spark_connect_session(yt_client) as spark:
+        _test_base_request(spark)
+
+
+def test_base_request_inner_cluster(yt_client, spyt_cluster):
+    endpoint = start_connect_server_inner_cluster(yt_client, spyt_cluster.discovery_path)
+    with _spark_connect_session(endpoint) as spark:
+        _test_base_request(spark)
 
 
 def test_refresh_token(yt_client):
@@ -131,7 +145,7 @@ def test_custom_types(yt_client, tmp_dir):
         for row in rows
     ]
 
-    with _spark_connect_session(yt_client) as spark:
+    with _direct_spark_connect_session(yt_client) as spark:
         df = spark.read.format("yt").load(f"yt:/{path}")
         result = df.collect()
         assert_items_equal(result, expected_rows)
@@ -140,7 +154,7 @@ def test_custom_types(yt_client, tmp_dir):
 def test_sql_mixed_sort_orders(yt_client, tmp_dir):
     path = f"{tmp_dir}/mixed_sort_orders"
 
-    with _spark_connect_session(yt_client) as spark:
+    with _direct_spark_connect_session(yt_client) as spark:
         test_data = [
             (2023, "Electronics", 2.5, "Laptop X1"),
             (2023, "Electronics", 1.2, "Tablet Pro"),

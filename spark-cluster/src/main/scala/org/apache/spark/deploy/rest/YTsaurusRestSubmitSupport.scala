@@ -33,4 +33,11 @@ class YTsaurusRestSubmitSupport extends RestSubmitSupport {
   override def appStatusRequestServlet(masterEndpoint: RpcEndpointRef, masterConf: SparkConf): RestServlet = {
     new StandaloneAppStatusRequestServlet(masterEndpoint, masterConf)
   }
+
+  override def startConnectServerServlet(
+    masterEndpoint: RpcEndpointRef,
+    masterUrl: String,
+    masterConf: SparkConf): RestServlet = {
+    new StartConnectServerServlet(masterEndpoint, masterUrl, masterConf)
+  }
 }

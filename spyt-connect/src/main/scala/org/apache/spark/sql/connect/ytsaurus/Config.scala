@@ -16,4 +16,10 @@ object Config {
     .version("2.8.0")
     .timeConf(TimeUnit.MILLISECONDS)
     .createOptional
+
+  val YTSAURUS_CONNECT_STARTUP_TIMEOUT = ConfigBuilder("spark.ytsaurus.connect.startup.timeout")
+    .doc("Timeout for receiving GRPC endpoint from SPYT connect server")
+    .version("2.9.0")
+    .timeConf(TimeUnit.MILLISECONDS)
+    .createWithDefaultString("2m")
 }

@@ -1,6 +1,5 @@
 package org.apache.spark.launcher;
 
-import tech.ytsaurus.spyt.patch.annotations.Applicability;
 import tech.ytsaurus.spyt.patch.annotations.OriginClass;
 import tech.ytsaurus.spyt.patch.annotations.Subclass;
 
@@ -9,7 +8,6 @@ import java.io.IOException;
 import java.lang.management.ManagementFactory;
 import java.lang.management.RuntimeMXBean;
 import java.util.List;
-import java.util.Optional;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -40,10 +38,6 @@ abstract class AbstractCommandBuilderForSpyt extends AbstractCommandBuilder {
             sparkClasspathPos++;
         }
         classPath.add(sparkClasspathPos, getenv("SPYT_CLASSPATH"));
-        String sparkConnectClasspath = System.getenv("SPARK_CONNECT_CLASSPATH");
-        if (sparkConnectClasspath != null) {
-            classPath.add(sparkConnectClasspath);
-        }
 
         return classPath;
     }

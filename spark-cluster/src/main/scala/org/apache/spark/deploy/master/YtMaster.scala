@@ -5,6 +5,7 @@ import org.apache.spark.deploy.master.ui.MasterWebUI
 import org.apache.spark.internal.Logging
 import org.apache.spark.{SecurityManager, SparkConf}
 import org.apache.spark.rpc.{RpcAddress, RpcCallContext, RpcEnv}
+import org.apache.spark.sql.connect.ytsaurus.SpytConnectEndpointMessage
 import org.apache.spark.util.{SparkUncaughtExceptionHandler, Utils => SparkUtils}
 import tech.ytsaurus.spark.launcher.AddressUtils
 import tech.ytsaurus.spyt.launcher.DeployMessages._
@@ -13,6 +14,7 @@ import tech.ytsaurus.spyt.Utils
 import java.lang.reflect.Field
 import java.util.concurrent.ConcurrentHashMap
 import scala.collection.mutable
+import scala.concurrent.Promise
 
 class YtMaster(rpcEnv: RpcEnv,
                address: RpcAddress,
@@ -25,6 +27,7 @@ class YtMaster(rpcEnv: RpcEnv,
   private val driverIdToApp = new mutable.HashMap[String, String]
   private val baseClass = this.getClass.getSuperclass
   private val fieldsCache = new ConcurrentHashMap[String, Field]
+  private val connectEndpointPromises = new mutable.HashMap[String, Promise[String]]
 
   private def fieldOf(name: String): Field = {
     fieldsCache.computeIfAbsent(name, {fName =>
@@ -74,6 +77,14 @@ class YtMaster(rpcEnv: RpcEnv,
     case UnregisterDriverToAppId(driverId) if driverId != null =>
       logInfo("Unregistered driverId " + driverId + " to appId")
       driverIdToApp.remove(driverId)
+
+    case SpytConnectEndpointMessage(endpoint, requestToken) =>
+      connectEndpointPromises.get(requestToken).foreach { promise =>
+        promise.success(endpoint)
+      }
+
+    case RemoveWaitSpytConnectEndpointToken(token) =>
+      connectEndpointPromises -= token
   }
 
   override def receiveAndReply(context: RpcCallContext): PartialFunction[Any, Unit] =
@@ -127,6 +138,10 @@ class YtMaster(rpcEnv: RpcEnv,
       val appIdOption = driverIdToApp.get(driverId)
       context.reply(AppIdResponse(appIdOption))
 
+    case WaitSpytConnectEndpointRequest(token) =>
+      val endpointPromise = Promise[String]()
+      connectEndpointPromises(token) = endpointPromise
+      context.reply(WaitSpytConnectEndpointResponse(endpointPromise.future))
   }
 
 }

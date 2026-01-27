@@ -95,8 +95,20 @@ lazy val `resource-manager` = (project in file("resource-manager"))
 lazy val `shuffle-service`= (project in file("shuffle-service"))
   .dependsOn(`yt-wrapper` % "compile->compile;test->test;provided->provided;compileprovided->compileprovided;testprovided->testprovided")
 
+lazy val `spyt-connect` = (project in file("spyt-connect"))
+  .dependsOn(
+    `resource-manager` % "compile->compile;test->test;provided->provided;compileprovided->compileprovided;testprovided->testprovided",
+    `spark-patch` % Provided
+  )
+  .settings(
+    libraryDependencies ++= sparkConnect
+  )
+
 lazy val `cluster` = (project in file("spark-cluster"))
-  .dependsOn(`data-source-extended` % "compile->compile;test->test;provided->provided;compileprovided->compileprovided;testprovided->testprovided")
+  .dependsOn(
+    `data-source-extended` % "compile->compile;test->test;provided->provided;compileprovided->compileprovided;testprovided->testprovided",
+    `spyt-connect` % Provided
+  )
   .enablePlugins(JavaAgent)
   .settings(
     libraryDependencies ++= scaldingArgs,
@@ -112,15 +124,6 @@ lazy val `spark-submit` = (project in file("spark-submit"))
   .enablePlugins(JavaAgent)
   .settings(
     resolvedJavaAgents := javaAgents.value
-  )
-
-lazy val `spyt-connect` = (project in file("spyt-connect"))
-  .dependsOn(
-    `resource-manager` % "compile->compile;test->test;provided->provided;compileprovided->compileprovided;testprovided->testprovided",
-    `spark-patch` % Provided
-  )
-  .settings(
-    libraryDependencies ++= sparkConnect
   )
 
 lazy val `spyt-test` = (project in file("spyt-test"))

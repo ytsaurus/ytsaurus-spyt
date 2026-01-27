@@ -197,7 +197,10 @@ def get_spark_distributive(client, enable_squashfs):
     if len(spark_distributive) == 0:
         raise RuntimeError(f"Spark {spark_version} {extension} distributive doesn't exist "
                            f"at path {distrib_root} on cluster {client.config['proxy']['url']}")
-    return (spark_distributive[0], distrib_root.join(spark_distributive[0]))
+    spark_distributive_paths = [spark_distributive[0]]
+    if not enable_squashfs:
+        spark_distributive_paths += [x for x in distrib_root_contents if x.endswith('.jar')]
+    return spark_distributive[0], [distrib_root.join(path) for path in spark_distributive_paths]
 
 
 def _get_or_else(d, key, default):

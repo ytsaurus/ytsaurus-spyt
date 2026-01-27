@@ -1,28 +1,57 @@
+import requests
 from spyt.dependency_utils import require_yt_client
 from spyt.enabler import SpytEnablers
 
 require_yt_client()
 
+from yt.wrapper.http_helpers import get_token, get_user_name  # noqa: E402
 from yt.wrapper.run_operation_commands import run_operation  # noqa: E402
 from .conf import read_global_conf, read_remote_conf  # noqa: E402
-from .spec import build_spark_connect_server_spec  # noqa: E402
-from .utils import parse_bool  # noqa: E402
+from .spec import build_spark_connect_server_spec, CommonConnectParams  # noqa: E402
+from .utils import parse_bool, SparkDiscovery  # noqa: E402
 from .version import __scala_version__ as spyt_version  # noqa: E402
 
 
-def start_connect_server(client, spark_conf: dict = {}, enablers: SpytEnablers = None, prefer_ipv6: bool = False,
-                         driver_memory: str = "1G", num_executors: int = 1, executor_cores: int = 1,
-                         executor_memory: str = "2G", pool: str = None, grpc_port_start: int = 27080,
-                         java_home: str = None, operation_alias: str = None):
+def start_connect_server(client, enablers: SpytEnablers = None, prefer_ipv6: bool = False,
+                         pool: str = None, java_home: str = None, operation_alias: str = None, **kwargs):
+    params = CommonConnectParams(**kwargs)
     global_conf = read_global_conf(client=client)
     version_config = read_remote_conf(global_conf, spyt_version, client)
     java_home = java_home or version_config.get('default_cluster_java_home')
 
-    enable_squashfs = parse_bool(spark_conf.get("spark.ytsaurus.squashfs.enabled"))
+    enable_squashfs = parse_bool(params.spark_conf.get("spark.ytsaurus.squashfs.enabled"))
     enablers = enablers or SpytEnablers(enable_squashfs=enable_squashfs)
     enablers.apply_config(version_config)
 
-    spec = build_spark_connect_server_spec(client, version_config, spark_conf, enablers, java_home,
-                                           driver_memory, num_executors, executor_cores, executor_memory,
-                                           prefer_ipv6, pool, grpc_port_start, operation_alias)
+    spec = build_spark_connect_server_spec(client, version_config, enablers, java_home,
+                                           prefer_ipv6, pool, operation_alias, params)
     return run_operation(spec, sync=False, client=client)
+
+
+def start_connect_server_inner_cluster(client, discovery_path: str, **kwargs):
+    params = CommonConnectParams(**kwargs)
+    user = get_user_name(client=client)
+    token = get_token(client=client)
+    spark_conf = {}
+    spark_conf |= params.spark_conf
+    spark_conf |= {
+        "spark.hadoop.yt.user": user,
+        "spark.hadoop.yt.token": token,
+        "spark.app.name": f"Spyt connect server for {user}",
+    }
+
+    request_body = {
+        "action": "StartConnectServerRequest",
+        "driverMemory": params.driver_memory,
+        "numExecutors": params.num_executors,
+        "executorCores": params.executor_cores,
+        "executorMemory": params.executor_memory,
+        "grpcPortStart": params.grpc_port_start,
+        "sparkConf": spark_conf
+    }
+    discovery = SparkDiscovery(discovery_path=discovery_path)
+    master_rest_endpoint = SparkDiscovery.getOption(discovery.master_rest(), client=client)
+
+    result = requests.post(f"http://{master_rest_endpoint}/v1/submissions/startConnectServer", json=request_body)
+    result.raise_for_status()
+    return result.json()["endpoint"]

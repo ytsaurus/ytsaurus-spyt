@@ -1,6 +1,7 @@
 package tech.ytsaurus.spyt.launcher
 
 import java.util.Date
+import scala.concurrent.Future
 
 sealed trait DeployMessage extends Serializable
 
@@ -30,4 +31,10 @@ object DeployMessages {
   case class RequestAppId(driverId: String) extends DeployMessage
 
   case class AppIdResponse(appId: Option[String])
+
+  case class WaitSpytConnectEndpointRequest(requestToken: String)
+
+  case class WaitSpytConnectEndpointResponse(endpointFuture: Future[String])
+
+  case class RemoveWaitSpytConnectEndpointToken(requestToken: String)
 }

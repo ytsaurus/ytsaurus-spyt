@@ -9,13 +9,15 @@ print_usage() {
 Usage: $script_name [-h|--help]
                     [--proxy proxy address]
                     [--path distributive path]
+                    [--jar jar file]
                     [--kind spark|spyt]
                     [--enable-nbd]
                     [--replication-factor number]
 
   --proxy: YT proxy address
   --path: Path to distributive on Cypress
-  --kind: distributive type: spark or spyt
+  --jar: Extra jar to include, may be repeated, applicable only to spark kind
+  --kind: distributive type: spark, spyt or livy
   --enable-nbd: use squashfs layer as nbd image
   --replication-factor: replication factor for nbd layers (default 10)
 
@@ -47,6 +49,10 @@ while [[ $# -gt 0 ]]; do
         ;;
         --replication-factor)
         replication_factor="$2"
+        shift 2
+        ;;
+        --jar)
+        jars="$jars $2"
         shift 2
         ;;
         -h|--help)
@@ -92,6 +98,15 @@ case $kind in
     spark|livy)
       mkdir "$distroot/$kind"
       tar xzf $localfile --strip-components 1 -C "$distroot/$kind"
+      if [[ $kind = "spark" && -n "$jars" ]]; then
+        for jar in $jars
+        do
+          jar_filename=${jar##*/}
+          jar_localfile="$tmpdir/$jar_filename"
+          yt --proxy $proxy read-file $jar > $jar_localfile
+          mv $jar_localfile "$distroot/$kind/jars/"
+        done
+      fi
       sqfsfilename=${filename/.tgz/.squashfs}
       ;;
     spyt)

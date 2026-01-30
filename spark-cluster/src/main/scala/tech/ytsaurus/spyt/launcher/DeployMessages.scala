@@ -34,7 +34,18 @@ object DeployMessages {
 
   case class WaitSpytConnectEndpointRequest(requestToken: String)
 
-  case class WaitSpytConnectEndpointResponse(endpointFuture: Future[String])
+  case class WaitSpytConnectEndpointResponse(connectAppFuture: Future[SpytConnectApplication])
 
   case class RemoveWaitSpytConnectEndpointToken(requestToken: String)
+
+  case class SpytConnectApplication(
+    user: String,
+    driverId: String,
+    appId: String,
+    endpoint: String,
+    settingsHashOpt: Option[String])
+
+  case class FindSpytConnectAppsRequest(user: String)
+
+  case class FindSpytConnectAppsResponse(apps: Seq[SpytConnectApplication])
 }

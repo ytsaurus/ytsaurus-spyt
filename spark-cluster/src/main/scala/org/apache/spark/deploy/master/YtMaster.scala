@@ -5,7 +5,7 @@ import org.apache.spark.deploy.master.ui.MasterWebUI
 import org.apache.spark.internal.Logging
 import org.apache.spark.{SecurityManager, SparkConf}
 import org.apache.spark.rpc.{RpcAddress, RpcCallContext, RpcEnv}
-import org.apache.spark.sql.connect.ytsaurus.SpytConnectEndpointMessage
+import org.apache.spark.sql.connect.ytsaurus.SpytConnectAppStartedMessage
 import org.apache.spark.util.{SparkUncaughtExceptionHandler, Utils => SparkUtils}
 import tech.ytsaurus.spark.launcher.AddressUtils
 import tech.ytsaurus.spyt.launcher.DeployMessages._
@@ -27,7 +27,9 @@ class YtMaster(rpcEnv: RpcEnv,
   private val driverIdToApp = new mutable.HashMap[String, String]
   private val baseClass = this.getClass.getSuperclass
   private val fieldsCache = new ConcurrentHashMap[String, Field]
-  private val connectEndpointPromises = new mutable.HashMap[String, Promise[String]]
+  private val connectAppPromises = new mutable.HashMap[String, Promise[SpytConnectApplication]]
+  private val connectAppsByUser = new mutable.HashMap[String, mutable.HashMap[String, SpytConnectApplication]]
+  private val connectAppById = new mutable.HashMap[String, SpytConnectApplication]
 
   private def fieldOf(name: String): Field = {
     fieldsCache.computeIfAbsent(name, {fName =>
@@ -78,13 +80,18 @@ class YtMaster(rpcEnv: RpcEnv,
       logInfo("Unregistered driverId " + driverId + " to appId")
       driverIdToApp.remove(driverId)
 
-    case SpytConnectEndpointMessage(endpoint, requestToken) =>
-      connectEndpointPromises.get(requestToken).foreach { promise =>
-        promise.success(endpoint)
+    case SpytConnectAppStartedMessage(requestToken, user, driverId, appId, endpoint, settingsHashOpt) =>
+      val connectApp = SpytConnectApplication(user, driverId, appId, endpoint, settingsHashOpt)
+      connectAppPromises.get(requestToken).foreach { promise =>
+        promise.success(connectApp)
       }
+      connectAppById(appId) = connectApp
+      val userApps = connectAppsByUser.getOrElse(user, new mutable.HashMap[String, SpytConnectApplication])
+      userApps(appId) = connectApp
+      connectAppsByUser(user) = userApps
 
     case RemoveWaitSpytConnectEndpointToken(token) =>
-      connectEndpointPromises -= token
+      connectAppPromises -= token
   }
 
   override def receiveAndReply(context: RpcCallContext): PartialFunction[Any, Unit] =
@@ -139,11 +146,26 @@ class YtMaster(rpcEnv: RpcEnv,
       context.reply(AppIdResponse(appIdOption))
 
     case WaitSpytConnectEndpointRequest(token) =>
-      val endpointPromise = Promise[String]()
-      connectEndpointPromises(token) = endpointPromise
-      context.reply(WaitSpytConnectEndpointResponse(endpointPromise.future))
+      val appPromise = Promise[SpytConnectApplication]()
+      connectAppPromises(token) = appPromise
+      context.reply(WaitSpytConnectEndpointResponse(appPromise.future))
+
+    case FindSpytConnectAppsRequest(user) =>
+      context.reply(FindSpytConnectAppsResponse(connectAppsByUser.getOrElse(user, Map.empty).values.toSeq))
   }
 
+  override def removeApplication(app: ApplicationInfo, state: ApplicationState.Value): Unit = {
+    super.removeApplication(app, state)
+    connectAppById.get(app.id).foreach { connectApp =>
+      connectAppsByUser.get(connectApp.user).foreach { userConnectApps =>
+        userConnectApps -= connectApp.appId
+        if (userConnectApps.isEmpty) {
+          connectAppsByUser -= connectApp.user
+        }
+      }
+    }
+    connectAppById -= app.id
+  }
 }
 
 object YtMaster extends Logging {

@@ -554,7 +554,7 @@
   "spark-cluster/src/main/scala/org/apache/spark/deploy/rest/AppStatusRequestServlet.scala":"yt/spark/spark-over-yt/spark-cluster/src/main/scala/org/apache/spark/deploy/rest/AppStatusRequestServlet.scala",
   "spark-cluster/src/main/scala/org/apache/spark/deploy/rest/MasterStateRequestServlet.scala":"yt/spark/spark-over-yt/spark-cluster/src/main/scala/org/apache/spark/deploy/rest/MasterStateRequestServlet.scala",
   "spark-cluster/src/main/scala/org/apache/spark/deploy/rest/RestSubmissionClientSpyt.scala":"yt/spark/spark-over-yt/spark-cluster/src/main/scala/org/apache/spark/deploy/rest/RestSubmissionClientSpyt.scala",
-  "spark-cluster/src/main/scala/org/apache/spark/deploy/rest/StartConnectServerServlet.scala":"yt/spark/spark-over-yt/spark-cluster/src/main/scala/org/apache/spark/deploy/rest/StartConnectServerServlet.scala",
+  "spark-cluster/src/main/scala/org/apache/spark/deploy/rest/SpytConnectServerServlet.scala":"yt/spark/spark-over-yt/spark-cluster/src/main/scala/org/apache/spark/deploy/rest/SpytConnectServerServlet.scala",
   "spark-cluster/src/main/scala/org/apache/spark/deploy/rest/YTsaurusRestSubmitSupport.scala":"yt/spark/spark-over-yt/spark-cluster/src/main/scala/org/apache/spark/deploy/rest/YTsaurusRestSubmitSupport.scala",
   "spark-cluster/src/main/scala/org/apache/spark/deploy/rest/YtStatusRequestServlet.scala":"yt/spark/spark-over-yt/spark-cluster/src/main/scala/org/apache/spark/deploy/rest/YtStatusRequestServlet.scala",
   "spark-cluster/src/main/scala/org/apache/spark/deploy/worker/YtWorker.scala":"yt/spark/spark-over-yt/spark-cluster/src/main/scala/org/apache/spark/deploy/worker/YtWorker.scala",

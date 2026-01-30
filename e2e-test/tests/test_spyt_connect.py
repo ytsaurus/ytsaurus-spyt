@@ -1,4 +1,5 @@
-from spyt.connect import start_connect_server, start_connect_server_inner_cluster
+from spyt.connect import start_connect_server, start_connect_server_inner_cluster, \
+    list_active_connect_servers_inner_cluster
 
 from common.helpers import assert_items_equal, assert_sequences_equal, wait_for_operation
 from contextlib import contextmanager
@@ -208,3 +209,13 @@ def test_sql_mixed_sort_orders(yt_client, tmp_dir):
 
     result = list(yt_client.read_table(path))
     assert_sequences_equal(result, expected)
+
+
+def test_list_active_connect_servers_inner_clusters(yt_client, spyt_cluster):
+    spark_conf = {"spark.ytsaurus.connect.settings.hash": "some hash"}
+    endpoint = start_connect_server_inner_cluster(yt_client, spyt_cluster.discovery_path, spark_conf=spark_conf)
+    active_servers = list_active_connect_servers_inner_cluster(yt_client, spyt_cluster.discovery_path)
+    assert len(active_servers) == 1
+    assert active_servers[0]["endpoint"] == endpoint
+    assert active_servers[0]["settingsHash"] == "some hash"
+    assert active_servers[0]["driverId"] is not None

@@ -22,4 +22,10 @@ object Config {
     .version("2.9.0")
     .timeConf(TimeUnit.MILLISECONDS)
     .createWithDefaultString("2m")
+
+  val YTSAURUS_CONNECT_SETTINGS_HASH = ConfigBuilder("spark.ytsaurus.connect.settings.hash")
+    .doc("Configuration settings hash that serves as a key for looking up an existing instance on Spark Master")
+    .version("2.9.0")
+    .stringConf
+    .createOptional
 }

@@ -28,6 +28,12 @@ def start_connect_server(client, enablers: SpytEnablers = None, prefer_ipv6: boo
     return run_operation(spec, sync=False, client=client)
 
 
+def _spyt_connect_server_inner_cluster_endpoint(client, discovery_path: str):
+    discovery = SparkDiscovery(discovery_path=discovery_path)
+    master_rest_endpoint = SparkDiscovery.getOption(discovery.master_rest(), client=client)
+    return f"http://{master_rest_endpoint}/v1/submissions/spytConnectServer"
+
+
 def start_connect_server_inner_cluster(client, discovery_path: str, **kwargs):
     params = CommonConnectParams(**kwargs)
     user = get_user_name(client=client)
@@ -49,9 +55,14 @@ def start_connect_server_inner_cluster(client, discovery_path: str, **kwargs):
         "grpcPortStart": params.grpc_port_start,
         "sparkConf": spark_conf
     }
-    discovery = SparkDiscovery(discovery_path=discovery_path)
-    master_rest_endpoint = SparkDiscovery.getOption(discovery.master_rest(), client=client)
 
-    result = requests.post(f"http://{master_rest_endpoint}/v1/submissions/startConnectServer", json=request_body)
+    result = requests.post(_spyt_connect_server_inner_cluster_endpoint(client, discovery_path), json=request_body)
     result.raise_for_status()
     return result.json()["endpoint"]
+
+
+def list_active_connect_servers_inner_cluster(client, discovery_path: str):
+    user = get_user_name(client=client)
+    result = requests.get(_spyt_connect_server_inner_cluster_endpoint(client, discovery_path), params={"user": user})
+    result.raise_for_status()
+    return result.json()["apps"]

@@ -59,18 +59,26 @@ object SpytConnectServer {
       }
 
       innerClusterOpt match {
-        case Some(innerClusterParams) => sendGrpcEndpointToMaster(innerClusterParams)
+        case Some(innerClusterParams) => sendGrpcEndpointToMaster(
+          innerClusterParams,
+          sparkConf.get("spark.hadoop.yt.user"),
+          sparkConf.get("spark.driverId"),
+          sparkConf.getAppId,
+          sparkConf.get(Config.YTSAURUS_CONNECT_SETTINGS_HASH)
+        )
         case None => addGrpcEndpointToAnnotation(client)
       }
 
       val idleTimeout = sparkConf.get(Config.YTSAURUS_CONNECT_IDLE_TIMEOUT)
 
-      while (keepListening(idleTimeout)) {
+      while (keepListening(idleTimeout) && serverThread.isAlive) {
         Thread.sleep(10000)
       }
 
-      log.info(s"Idle timeout of ${idleTimeout}ms has passed, shutting down SPYT connect server")
-      SparkConnectService.stop()
+      if (serverThread.isAlive) {
+        log.info(s"Idle timeout of ${idleTimeout}ms has passed, shutting down SPYT connect server")
+        SparkConnectService.stop()
+      }
 
       serverThread.join()
     } finally {
@@ -170,11 +178,30 @@ object SpytConnectServer {
     tokenRefreshExecutor
   }
 
-  private def sendGrpcEndpointToMaster(innerClusterParams: InnerClusterParameters): Unit = {
+  private def sendGrpcEndpointToMaster(
+    innerClusterParams: InnerClusterParameters,
+    user: String,
+    driverId: String,
+    applicationId: String,
+    settingsHashOpt: Option[String]): Unit = {
     val masterRpcAddress = RpcAddress.fromSparkURL(innerClusterParams.masterEndpoint)
     val masterRef = SparkEnv.get.rpcEnv.setupEndpointRef(masterRpcAddress, "Master")
-    masterRef.send(SpytConnectEndpointMessage(getEndpoint, innerClusterParams.requestToken))
+    masterRef.send(SpytConnectAppStartedMessage(
+      innerClusterParams.requestToken,
+      user,
+      driverId,
+      applicationId,
+      getEndpoint,
+      settingsHashOpt
+    ))
   }
 }
 
-case class SpytConnectEndpointMessage(endpoint: String, requestToken: String)
+case class SpytConnectAppStartedMessage(
+  requestToken: String,
+  user: String,
+  driverId: String,
+  applicationId: String,
+  endpoint: String,
+  settingsHashOpt: Option[String]
+)

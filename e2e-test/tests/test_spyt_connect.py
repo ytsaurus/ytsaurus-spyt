@@ -38,8 +38,8 @@ def _spark_connect_session(spark_connect_endpoint):
 
 
 @contextmanager
-def _direct_spark_connect_session(yt_client):
-    operation = start_connect_server(yt_client)
+def _direct_spark_connect_session(yt_client, spark_conf={}):
+    operation = start_connect_server(yt_client, spark_conf=spark_conf)
     try:
         spark_connect_endpoint = _wait_for_spark_connect_endpoint(yt_client, operation.id)
         with _spark_connect_session(spark_connect_endpoint) as spark:
@@ -219,3 +219,18 @@ def test_list_active_connect_servers_inner_clusters(yt_client, spyt_cluster):
     assert active_servers[0]["endpoint"] == endpoint
     assert active_servers[0]["settingsHash"] == "some hash"
     assert active_servers[0]["driverId"] is not None
+
+
+def test_string_as_binary(yt_client, tmp_dir):
+    path = f"{tmp_dir}/table_with_strings"
+    yt_client.create("table", path, attributes={"schema": [
+        {"name": "id", "type": "int64"},
+        {"name": "value", "type": "string"}
+    ]})
+    rows = [{"id": id, "value": f"value {id}"} for id in range(1, 5)]
+    yt_client.write_table(path, rows)
+
+    spark_conf = {"spark.ytsaurus.arrow.stringToBinary": "true"}
+    with _direct_spark_connect_session(yt_client, spark_conf) as spark:
+        df = spark.read.format("yt").load(f"yt:/{path}")
+        assert type(df.collect()[0]["value"]) == bytes

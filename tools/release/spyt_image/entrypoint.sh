@@ -2,16 +2,16 @@
 # COMPAT(atokarew) setting default spark distrinb version to 3.5.7 if it not specified
 # Remove after k8s operator will be updated to explicitly specify spark versions
 # TODO(epsilond1): Move version to k8s manifest
-if [ -z "$EXTRA_SPARK_VERSIONS" ]; then
-  EXTRA_SPARK_VERSIONS="3.5.7"
+if [ -z "$EXTRA_SPARK_DISTRIB_PARAMS" ]; then
+  EXTRA_SPARK_DISTRIB_PARAMS="3.5.7"
 fi
 # COMPAT end
 
 
 echo "EXTRA_CONFIG_GENERATOR_OPTIONS = $EXTRA_CONFIG_GENERATOR_OPTIONS"
 echo "EXTRA_PUBLISH_CLUSTER_OPTIONS = $EXTRA_PUBLISH_CLUSTER_OPTIONS"
-echo "EXTRA_SPARK_VERSIONS = $EXTRA_SPARK_VERSIONS"
+echo "EXTRA_SPARK_DISTRIB_PARAMS = $EXTRA_SPARK_DISTRIB_PARAMS"
 
 python3.12 -m scripts.config_generator /data $EXTRA_CONFIG_GENERATOR_OPTIONS
 python3.12 -m scripts.publish_cluster /data $EXTRA_PUBLISH_CLUSTER_OPTIONS
-python3.12 -m scripts.spark_distrib $EXTRA_SPARK_VERSIONS
+python3.12 -m scripts.spark_distrib $EXTRA_SPARK_DISTRIB_PARAMS

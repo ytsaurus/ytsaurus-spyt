@@ -159,7 +159,7 @@ main() {
         versions_to_deploy="${spark_versions_to_install:-$spark_versions}"
         docker_cmd="docker run --network=host \
                    -e YT_PROXY=\"localhost:$proxy_port\" -e YT_USER=\"root\" -e YT_TOKEN=\"token\" \
-                   -e EXTRA_SPARK_VERSIONS=\"--use-cache $spark_cache_parameter $versions_to_deploy\" \
+                   -e EXTRA_SPARK_DISTRIB_PARAMS=\"--use-cache $spark_cache_parameter $versions_to_deploy\" \
                    -v /tmp:/tmp \
                    $spark_cache_mount"
 

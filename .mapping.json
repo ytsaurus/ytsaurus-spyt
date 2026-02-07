@@ -249,6 +249,7 @@
   "data-source/src/test/scala/tech/ytsaurus/spyt/serializers/DynTableRowConverterTest.scala":"yt/spark/spark-over-yt/data-source/src/test/scala/tech/ytsaurus/spyt/serializers/DynTableRowConverterTest.scala",
   "data-source/src/test/scala/tech/ytsaurus/spyt/serializers/SchemaConverterTest.scala":"yt/spark/spark-over-yt/data-source/src/test/scala/tech/ytsaurus/spyt/serializers/SchemaConverterTest.scala",
   "data-source/src/test/scala/tech/ytsaurus/spyt/serializers/UnversionedRowsetDeserializerTest.scala":"yt/spark/spark-over-yt/data-source/src/test/scala/tech/ytsaurus/spyt/serializers/UnversionedRowsetDeserializerTest.scala",
+  "data-source/src/test/scala/tech/ytsaurus/spyt/serializers/WireDeserializerTest.scala":"yt/spark/spark-over-yt/data-source/src/test/scala/tech/ytsaurus/spyt/serializers/WireDeserializerTest.scala",
   "data-source/src/test/scala/tech/ytsaurus/spyt/serializers/YsonRowConverterTest.scala":"yt/spark/spark-over-yt/data-source/src/test/scala/tech/ytsaurus/spyt/serializers/YsonRowConverterTest.scala",
   "data-source/src/test/scala/tech/ytsaurus/spyt/streaming/YTsaurusStreamingTest.scala":"yt/spark/spark-over-yt/data-source/src/test/scala/tech/ytsaurus/spyt/streaming/YTsaurusStreamingTest.scala",
   "data-source/src/test/scala/tech/ytsaurus/spyt/streaming/YtQueueUtilsTest.scala":"yt/spark/spark-over-yt/data-source/src/test/scala/tech/ytsaurus/spyt/streaming/YtQueueUtilsTest.scala",

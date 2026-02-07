@@ -63,7 +63,11 @@ abstract class WireDeserializer[T](schema: StructType) extends WireRowDeserializ
     _values(_index) = value
   }
 
-  override def onEntity(): Unit = addValue(null)
+  override def onEntity(): Unit = {
+    if (isIndexValid) {
+      addValue(null)
+    }
+  }
 
   override def onInteger(value: Long): Unit = {
     if (isIndexValid) {

@@ -20,7 +20,9 @@ class YTsaurusStorageSupport extends StorageSupport {
 
   override def splitFiles(sparkSession: SparkSession, file: FileStatus, filePath: Path,
                           maxSplitBytes: Long, partitionValues: InternalRow): Seq[PartitionedFile] = {
-    YtFilePartition.splitFiles(sparkSession, file, filePath, maxSplitBytes, partitionValues)
+    val ytSourceScanExec = YtSourceScanExec.currentThreadInstance.get()
+    val readDataSchema = Option(ytSourceScanExec).map(_.requiredSchema)
+    YtFilePartition.splitFiles(sparkSession, file, filePath, maxSplitBytes, partitionValues, readDataSchema = readDataSchema)
   }
 
   override def maxSplitBytes(sparkSession: SparkSession, selectedPartitions: Seq[PartitionDirectory]): Long = {

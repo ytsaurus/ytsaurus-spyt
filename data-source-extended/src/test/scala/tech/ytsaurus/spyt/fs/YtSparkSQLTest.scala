@@ -11,6 +11,7 @@ import org.scalatest.matchers.should.Matchers
 import org.scalatest.prop.TableDrivenPropertyChecks
 import tech.ytsaurus.core.cypress.YPath
 import tech.ytsaurus.core.tables.{ColumnValueType, TableSchema}
+import tech.ytsaurus.typeinfo.TiType
 import tech.ytsaurus.spyt._
 import tech.ytsaurus.spyt.serialization.YsonEncoder
 import tech.ytsaurus.spyt.test.{DynTableTestUtils, LocalSpark, LocalYt, TestRow, TestUtils, TmpDir}
@@ -502,5 +503,77 @@ class YtSparkSQLTest extends AnyFlatSpec with Matchers with LocalSpark with TmpD
   testWithDistributedReading("cast some expression to string without any errors") { _ =>
     val df = spark.sql(s"""SELECT cast((date('2025-01-17') - INTERVAL 2 WEEK) AS STRING) AS some_date""")
     df.collect() should contain theSameElementsAs Seq(Row("2025-01-03"))
+  }
+
+  testWithDistributedReading("handle self-join with nullable columns using SQL") { _ =>
+    YtWrapper.createDir(tmpPath)
+    val sourcePath = s"$tmpPath/source"
+    val cachePath = s"$tmpPath/cache"
+
+    val nullableSchema = TableSchema.builder()
+      .setUniqueKeys(false)
+      .addValue("a", TiType.optional(TiType.string()))
+      .addValue("b", TiType.optional(TiType.string()))
+      .addValue("c", TiType.optional(TiType.string()))
+      .addValue("d", TiType.optional(TiType.string()))
+      .build()
+
+    writeTableFromYson(Seq(
+      """{a = "val1"; b = "val2"; c = "val3"; d = "val4"}""",
+      """{a = "val1"; b = "val2"; c = #; d = #}""",
+      """{a = #; b = #; c = "val3"; d = "val4"}""",
+      """{a = #; b = #; c = #; d = #}"""
+    ), sourcePath, nullableSchema, OptimizeMode.Scan)
+
+    withConfs(Map("spark.hadoop.yt.read.arrow.enabled" -> "true")) {
+      spark.sql(
+        s"""CREATE TABLE yt.`ytTable:/$cachePath` USING yt
+           |AS (SELECT * FROM yt.`ytTable:/$sourcePath`)""".stripMargin)
+
+      spark.sql(s"CREATE OR REPLACE TEMPORARY VIEW test_view AS SELECT * FROM yt.`ytTable:/$cachePath`")
+
+      val res = spark.sql(
+        """SELECT v1.a, v1.b
+          |FROM test_view AS v1
+          |JOIN test_view AS v2 ON v1.a = v2.a AND v1.b = v2.b""".stripMargin)
+      res.collect().length should be >= 1
+    }
+  }
+
+
+  it should "SQL API column pruning reduces input bytes for scan-optimized table with distributed reading" in {
+    withConfs(distributedReadingEnabledConf(true)) {
+      YtWrapper.createDir(tmpPath)
+      val path = s"$tmpPath/wide_table"
+
+      val wideSchema = TableSchema.builder()
+        .setUniqueKeys(false)
+        .addValue("a", TiType.optional(TiType.string()))
+        .addValue("b", TiType.optional(TiType.string()))
+        .addValue("c", TiType.optional(TiType.string()))
+        .addValue("d", TiType.optional(TiType.string()))
+        .addValue("e", TiType.optional(TiType.string()))
+        .build()
+
+      val longStr = "x" * 200
+      val rows = (1 to 500).map(i =>
+        s"""{a = "$longStr$i"; b = "$longStr$i"; c = "$longStr$i"; d = "$longStr$i"; e = "$longStr$i"}"""
+      )
+      writeTableFromYson(rows, path, wideSchema, OptimizeMode.Scan)
+
+      val store = UtilsWrapper.appStatusStore(spark)
+
+      val inputBefore1 = store.stageList(null).map(_.inputBytes).sum
+      spark.sql(s"SELECT * FROM yt.`ytTable:/$path`").collect()
+      val bytesAll = store.stageList(null).map(_.inputBytes).sum - inputBefore1
+
+      val inputBefore2 = store.stageList(null).map(_.inputBytes).sum
+      spark.sql(s"SELECT a FROM yt.`ytTable:/$path`").collect()
+      val bytesPruned = store.stageList(null).map(_.inputBytes).sum - inputBefore2
+
+      bytesAll should be > 0L
+      bytesPruned should be > 0L
+      bytesPruned should be < bytesAll
+    }
   }
 }

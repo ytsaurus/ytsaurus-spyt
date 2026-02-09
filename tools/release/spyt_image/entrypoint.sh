@@ -1,17 +1,28 @@
+# Build spark_distrib arguments from individual env vars (new operator)
+SPARK_DISTRIB_ARGS=""
+if [ "$SPARK_DISTRIB_OFFLINE" = "true" ]; then
+  SPARK_DISTRIB_ARGS="--use-cache --offline"
+fi
+if [ -n "$SPARK_DISTRIB_VERSIONS" ]; then
+  SPARK_DISTRIB_ARGS="$SPARK_DISTRIB_ARGS $SPARK_DISTRIB_VERSIONS"
+fi
 
-# COMPAT(atokarew) setting default spark distrinb version to 3.5.7 if it not specified
-# Remove after k8s operator will be updated to explicitly specify spark versions
-# TODO(epsilond1): Move version to k8s manifest
-if [ -z "$EXTRA_SPARK_DISTRIB_PARAMS" ]; then
-  EXTRA_SPARK_DISTRIB_PARAMS="3.5.7"
+# COMPAT: support old operator that sends everything in EXTRA_SPARK_DISTRIB_PARAMS
+if [ -n "$EXTRA_SPARK_DISTRIB_PARAMS" ]; then
+  SPARK_DISTRIB_ARGS="$EXTRA_SPARK_DISTRIB_PARAMS"
 fi
 # COMPAT end
+
+# Default spark distrib version
+if [ -z "$SPARK_DISTRIB_ARGS" ]; then
+  SPARK_DISTRIB_ARGS="3.5.7"
+fi
 
 
 echo "EXTRA_CONFIG_GENERATOR_OPTIONS = $EXTRA_CONFIG_GENERATOR_OPTIONS"
 echo "EXTRA_PUBLISH_CLUSTER_OPTIONS = $EXTRA_PUBLISH_CLUSTER_OPTIONS"
-echo "EXTRA_SPARK_DISTRIB_PARAMS = $EXTRA_SPARK_DISTRIB_PARAMS"
+echo "SPARK_DISTRIB_ARGS = $SPARK_DISTRIB_ARGS"
 
 python3.12 -m scripts.config_generator /data $EXTRA_CONFIG_GENERATOR_OPTIONS
 python3.12 -m scripts.publish_cluster /data $EXTRA_PUBLISH_CLUSTER_OPTIONS
-python3.12 -m scripts.spark_distrib $EXTRA_SPARK_DISTRIB_PARAMS
+python3.12 -m scripts.spark_distrib $SPARK_DISTRIB_ARGS

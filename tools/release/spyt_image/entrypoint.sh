@@ -1,22 +1,8 @@
-# Build spark_distrib arguments from individual env vars (new operator)
 SPARK_DISTRIB_ARGS=""
-if [ "$SPARK_DISTRIB_OFFLINE" = "true" ]; then
-  SPARK_DISTRIB_ARGS="--use-cache --offline"
-fi
-if [ -n "$SPARK_DISTRIB_VERSIONS" ]; then
-  SPARK_DISTRIB_ARGS="$SPARK_DISTRIB_ARGS $SPARK_DISTRIB_VERSIONS"
-fi
-
-# COMPAT: support old operator that sends everything in EXTRA_SPARK_DISTRIB_PARAMS
-if [ -n "$EXTRA_SPARK_DISTRIB_PARAMS" ]; then
-  SPARK_DISTRIB_ARGS="$EXTRA_SPARK_DISTRIB_PARAMS"
-fi
-# COMPAT end
-
-# Default spark distrib version
-if [ -z "$SPARK_DISTRIB_ARGS" ]; then
-  SPARK_DISTRIB_ARGS="3.5.7"
-fi
+[ "$SPARK_DISTRIB_USE_CACHE" = "true" ] || [ "$SPARK_DISTRIB_OFFLINE" = "true" ] && SPARK_DISTRIB_ARGS+=" --use-cache"
+[ "$SPARK_DISTRIB_OFFLINE" = "true" ]   && SPARK_DISTRIB_ARGS+=" --offline"
+[ -n "$SPARK_DISTRIB_CACHE_PATH" ]      && SPARK_DISTRIB_ARGS+=" --cache-path $SPARK_DISTRIB_CACHE_PATH"
+[ -n "$SPARK_DISTRIB_VERSIONS" ]        && SPARK_DISTRIB_ARGS+=" $SPARK_DISTRIB_VERSIONS"
 
 
 echo "EXTRA_CONFIG_GENERATOR_OPTIONS = $EXTRA_CONFIG_GENERATOR_OPTIONS"

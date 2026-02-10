@@ -148,10 +148,8 @@ main() {
     fi
 
     if [ "$deploy" = "true" ]; then
-        spark_cache_parameter=""
         spark_cache_mount=""
         if [ "$spark_cache_path" ]; then
-          spark_cache_parameter="--cache-path ${spark_cache_path}"
           spark_cache_mount="-v $spark_cache_path:$spark_cache_path"
         fi
 
@@ -159,11 +157,15 @@ main() {
         versions_to_deploy="${spark_versions_to_install:-$spark_versions}"
         docker_cmd="docker run --network=host \
                    -e YT_PROXY=\"localhost:$proxy_port\" -e YT_USER=\"root\" -e YT_TOKEN=\"token\" \
-                   -e EXTRA_SPARK_DISTRIB_PARAMS=\"--use-cache $spark_cache_parameter $versions_to_deploy\" \
+                   -e SPARK_DISTRIB_USE_CACHE=\"true\" \
+                   -e SPARK_DISTRIB_VERSIONS=\"$versions_to_deploy\" \
                    -v /tmp:/tmp \
                    $spark_cache_mount"
 
         # Add extra config options if present
+        if [ -n "$spark_cache_path" ]; then
+            docker_cmd="$docker_cmd -e SPARK_DISTRIB_CACHE_PATH=\"$spark_cache_path\""
+        fi
         if [ -n "$extra_config_generator_options" ]; then
             docker_cmd="$docker_cmd -e EXTRA_CONFIG_GENERATOR_OPTIONS=\"$extra_config_generator_options\""
         fi

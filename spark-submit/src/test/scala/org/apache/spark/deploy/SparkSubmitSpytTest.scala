@@ -82,6 +82,14 @@ class SparkSubmitSpytTest extends AnyFlatSpec with Matchers {
     ex.getMessage should include ("Dynamic allocation requires YTsaurus shuffle service.")
   }
 
+  it should "fail dynamic allocation when executor instances are not specified" in {
+    val appArgs = new SparkSubmitArguments(dynamicAllocationArgs(true, 0))
+    val ex = intercept[SparkException] {
+      submit.prepareSubmitEnvironment(appArgs)
+    }
+    ex.getMessage should include ("Number of executors must be a positive number.")
+  }
+
   it should "set proper parameters when dynamic allocation is enabled" in {
     val appArgs = new SparkSubmitArguments(dynamicAllocationArgs(true))
 
@@ -113,14 +121,14 @@ class SparkSubmitSpytTest extends AnyFlatSpec with Matchers {
     "some", "--weird", "args"
   )
 
-  private def dynamicAllocationArgs(ytsaurusShuffleEnabled: Boolean): Seq[String] = Seq(
+  private def dynamicAllocationArgs(ytsaurusShuffleEnabled: Boolean, initialExecutors: Int = 2): Seq[String] = Seq(
     "--master", "ytsaurus://my.yt.cluster",
     "--deploy-mode", "cluster",
-    "--num-executors", "2",
     "--queue", "research",
     "--py-files", "yt:///path/to/my/super/lib.zip",
     "--conf", "spark.hadoop.fs.yt.impl=tech.ytsaurus.spyt.fs.MockYtFileSystem",
     "--conf", "spark.dynamicAllocation.enabled=true",
+    "--conf", f"spark.dynamicAllocation.initialExecutors=${initialExecutors.toString}",
     "--conf", f"spark.ytsaurus.shuffle.enabled=${ytsaurusShuffleEnabled.toString}",
     "yt:///path/to/my/super/app.py"
   )

@@ -8,6 +8,7 @@ import org.apache.spark.deploy.SubmitSupport.instance._
 import org.apache.spark.internal.config
 import org.apache.spark.internal.config._
 import org.apache.spark.launcher.SparkLauncher
+import org.apache.spark.scheduler.cluster.SchedulerBackendUtils
 import org.apache.spark.util.{DependencyUtils, Utils}
 import tech.ytsaurus.spyt.patch.MethodProcesor
 import tech.ytsaurus.spyt.patch.annotations.{Decorate, DecoratedMethod, OriginClass}
@@ -151,6 +152,10 @@ private[spark] class SparkSubmitSpyt {
       if(dynAllocationEnabled && !shuffleEnabled){
         error("Dynamic allocation requires YTsaurus shuffle service. " +
           "You may enable this through spark.ytsaurus.shuffle.enabled")
+      }
+
+      if (SchedulerBackendUtils.getInitialTargetExecutorNumber(sparkConf) <= 0) {
+        error("Number of executors must be a positive number.")
       }
 
       // adjust settings

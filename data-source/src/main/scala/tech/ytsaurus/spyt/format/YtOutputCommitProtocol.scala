@@ -6,7 +6,7 @@ import org.apache.hadoop.mapreduce.{JobContext, TaskAttemptContext, TaskAttemptI
 import org.apache.spark.broadcast.Broadcast
 import org.apache.spark.internal.io.FileCommitProtocol
 import org.apache.spark.scheduler.{DAGSchedulerUtils, SparkListener, SparkListenerJobEnd, SparkListenerJobStart, SparkListenerStageCompleted, SparkListenerStageSubmitted}
-import org.apache.spark.sql.SparkSession
+import org.apache.spark.sql.{SaveMode, SparkSession}
 import org.apache.spark.{SparkEnv, TaskContext}
 import org.slf4j.LoggerFactory
 import tech.ytsaurus.client.request.{DistributedWriteCookie, StartDistributedWriteSession, TransactionalOptions, WriteFragmentResult}
@@ -299,8 +299,16 @@ class DistributedWriteOutputCommitProtocol(
 
   override def setupJob(jobContext: JobContext): Unit = {
     val conf = jobContext.getConfiguration
+    val isAppend = saveModeTL.get() == SaveMode.Append
+    val outputPath = if (isAppend) {
+      rootPath.withAttr("append", "true")
+    } else {
+      rootPath
+    }
     prepareWrite(conf) { transaction =>
-      setupTable(rootPath, conf, transaction)
+      if (!isAppend) {
+        setupTable(rootPath, conf, transaction)
+      }
     }
 
     val transactionId = getGlobalWriteTransaction(conf)
@@ -322,7 +330,7 @@ class DistributedWriteOutputCommitProtocol(
             sparkJobId = jobStart.jobId
             val cookieCount = numOutputTasksOpt.get
             val distributedWriteRequest = StartDistributedWriteSession.builder()
-              .setPath(rootPath.toYPath)
+              .setPath(outputPath.toYPath)
               .setCookieCount(cookieCount)
               .setTransactionalOptions(new TransactionalOptions(GUID.valueOf(transactionId)))
               .build()
@@ -421,6 +429,8 @@ object YtOutputCommitProtocol {
   }
 
   private val writeFragmentResults: ThreadLocal[WriteFragmentResult] = new ThreadLocal[WriteFragmentResult]()
+
+  val saveModeTL: ThreadLocal[SaveMode] = new ThreadLocal[SaveMode]()
 
   def setWriteFragmentResult(result: WriteFragmentResult): Unit = {
     writeFragmentResults.set(result)

@@ -20,7 +20,7 @@ Usage: $script_name [-h|--help]
   --build-output: Path to built spyt components (default: $build_output)
   --publish-scripts: Path to spyt publish scripts (default: $publish_scripts)
   --spyt-version: Spyt version
-  --spark-version: Spark version (e.g., 3.5.7) to include as an archive. Requires Spark 3.4.0 or newer. (Optional)
+  --spark-version: Spark version (e.g., 3.5.8) to include as an archive. Requires Spark 3.4.0 or newer. (Optional)
   --image-cr: Image container registry (default: $image_cr)
 
 EOF

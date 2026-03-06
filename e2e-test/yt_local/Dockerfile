@@ -7,7 +7,7 @@ RUN apt-get update
 RUN apt-get install -y curl unzip netcat-traditional socat python3-pip python3.9-distutils
 
 RUN set -eux; \
-  for VERSION in 3.9 3.11 3.12; \
+  for VERSION in 3.9 3.11 3.12 3.13;\
   do \
     apt-get install -y python$VERSION; \
     rm -f /usr/lib/python$VERSION/EXTERNALLY-MANAGED; \

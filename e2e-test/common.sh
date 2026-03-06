@@ -20,7 +20,7 @@ set_default_vars() {
     yt_local_runner_path="$root_dir/../../docker/local/run_local_cluster.sh"
     proxy_port=8000
     spark_cache_path=""
-    spark_versions="3.2.2 3.2.4 3.3.4 3.4.4 3.5.7"
+    spark_versions="3.2.2 3.2.4 3.3.4 3.4.4 3.5.8"
     spark_versions_to_install=""
     versions_combinations=""
 }

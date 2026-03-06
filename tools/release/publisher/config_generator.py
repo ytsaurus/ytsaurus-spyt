@@ -119,22 +119,20 @@ def prepare_launch_config(conf_local_dir: str, client: Client, versions: Version
         launch_config['layer_paths'] = [
             client.resolve_from_root("delta/layer_with_unify_agent.tar.gz"),
             "//porto_layers/delta/jdk/layer_with_jdk_lastest.tar.gz",
-            client.resolve_from_root("delta/python/layer_with_python312_jammy_v001.tar.gz"),
-            client.resolve_from_root("delta/python/layer_with_python311_focal_v002.tar.gz"),
-            client.resolve_from_root("delta/python/layer_with_python39_focal_v002.tar.gz"),
-            client.resolve_from_root("delta/python/layer_with_python38_focal_v002.tar.gz"),
-            client.resolve_from_root("delta/python/layer_with_python37_focal_yandexyt0131.tar.gz"),
-            "//porto_layers/base/focal/porto_layer_search_ubuntu_focal_app_lastest.tar.gz"
+            client.resolve_from_root("delta/python/layer_with_python313_jammy_v001.tar.gz"),
+            client.resolve_from_root("delta/python/layer_with_python312_jammy_v002.tar.gz"),
+            client.resolve_from_root("delta/python/layer_with_python311_jammy_v001.tar.gz"),
+            client.resolve_from_root("delta/python/layer_with_python39_jammy_v001.tar.gz"),
+            "//porto_layers/base/jammy/porto_layer_search_ubuntu_jammy_app_lastest.tar.gz"
         ]
         launch_config['squashfs_layer_paths'] = [
             client.resolve_from_root("squashfs/layer_with_unify_agent.squashfs"),
             client.resolve_from_root("squashfs/jdk/layer_with_jdk_latest.squashfs"),
-            client.resolve_from_root("squashfs/python/layer_with_python312_focal_v002.squashfs"),
-            client.resolve_from_root("squashfs/python/layer_with_python311_focal_v002.squashfs"),
-            client.resolve_from_root("squashfs/python/layer_with_python39_focal_v002.squashfs"),
-            client.resolve_from_root("squashfs/python/layer_with_python38_focal_v002.squashfs"),
-            client.resolve_from_root("squashfs/python/layer_with_python37_focal_yandexyt0131.squashfs"),
-            "//porto_layers/base/focal/porto_layer_search_ubuntu_focal_app_lastest.tar.gz"
+            client.resolve_from_root("squashfs/python/layer_with_python313_jammy_v001.squashfs"),
+            client.resolve_from_root("squashfs/python/layer_with_python312_jammy_v002.squashfs"),
+            client.resolve_from_root("squashfs/python/layer_with_python311_jammy_v001.squashfs"),
+            client.resolve_from_root("squashfs/python/layer_with_python39_jammy_v001.squashfs"),
+            "//porto_layers/base/jammy/porto_layer_search_ubuntu_jammy_app_lastest.tar.gz"
         ]
         ytserver_proxy_path = client.yt_client.get(f"{YTSERVER_PROXY}&/@target_path")
         logger.info(f"Resolved proxy path: {ytserver_proxy_path}")

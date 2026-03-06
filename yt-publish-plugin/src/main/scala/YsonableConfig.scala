@@ -86,23 +86,21 @@ object SparkLaunchConfig {
   val defaultLayers = Seq(
     s"$sparkYtDeltaLayerPath/layer_with_unify_agent.tar.gz",
     s"$ytPortoDeltaLayersPath/jdk/layer_with_jdk_lastest.tar.gz",
-    s"$sparkYtDeltaLayerPath/python/layer_with_python312_jammy_v001.tar.gz",
-    s"$sparkYtDeltaLayerPath/python/layer_with_python311_focal_v002.tar.gz",
-    s"$sparkYtDeltaLayerPath/python/layer_with_python39_focal_v002.tar.gz",
-    s"$sparkYtDeltaLayerPath/python/layer_with_python38_focal_v002.tar.gz",
-    s"$sparkYtDeltaLayerPath/python/layer_with_python37_focal_yandexyt0131.tar.gz",
-    s"$ytPortoBaseLayersPath/focal/porto_layer_search_ubuntu_focal_app_lastest.tar.gz"
+    s"$sparkYtDeltaLayerPath/python/layer_with_python313_jammy_v001.tar.gz",
+    s"$sparkYtDeltaLayerPath/python/layer_with_python312_jammy_v002.tar.gz",
+    s"$sparkYtDeltaLayerPath/python/layer_with_python311_jammy_v001.tar.gz",
+    s"$sparkYtDeltaLayerPath/python/layer_with_python39_jammy_v001.tar.gz",
+    s"$ytPortoBaseLayersPath/jammy/porto_layer_search_ubuntu_jammy_app_lastest.tar.gz"
   )
 
   val squashFsLayers = Seq(
     s"$sparkYtSquashfsLayerPath/layer_with_unify_agent.squashfs",
     s"$sparkYtSquashfsLayerPath/jdk/layer_with_jdk_latest.squashfs",
-    s"$sparkYtSquashfsLayerPath/python/layer_with_python312_focal_v002.squashfs",
-    s"$sparkYtSquashfsLayerPath/python/layer_with_python311_focal_v002.squashfs",
-    s"$sparkYtSquashfsLayerPath/python/layer_with_python39_focal_v002.squashfs",
-    s"$sparkYtSquashfsLayerPath/python/layer_with_python38_focal_v002.squashfs",
-    s"$sparkYtSquashfsLayerPath/python/layer_with_python37_focal_yandexyt0131.squashfs",
-    s"$ytPortoBaseLayersPath/focal/porto_layer_search_ubuntu_focal_app_lastest.tar.gz"
+    s"$sparkYtSquashfsLayerPath/python/layer_with_python313_jammy_v001.squashfs",
+    s"$sparkYtSquashfsLayerPath/python/layer_with_python312_jammy_v002.squashfs",
+    s"$sparkYtSquashfsLayerPath/python/layer_with_python311_jammy_v001.squashfs",
+    s"$sparkYtSquashfsLayerPath/python/layer_with_python39_jammy_v001.squashfs",
+    s"$ytPortoBaseLayersPath/jammy/porto_layer_search_ubuntu_jammy_app_lastest.tar.gz"
   )
 
   def resolveSymlink(symlink: String)(implicit yt: YTsaurusClient): String = {

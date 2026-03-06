@@ -37,3 +37,6 @@ $PYTHON_VERSION -m pip install -i https://pypi.yandex-team.ru/simple packaging==
 mkdir -p /opt/$PYTHON_VERSION/bin
 ln -s /usr/bin/$PYTHON_VERSION /opt/$PYTHON_VERSION/bin/python
 ln -s /usr/bin/$PYTHON_VERSION /opt/$PYTHON_VERSION/bin/$PYTHON_VERSION
+
+apt-get clean
+rm -rf /var/lib/apt/lists/*

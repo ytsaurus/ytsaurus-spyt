@@ -592,7 +592,6 @@
   "spark-cluster/src/main/scala/tech/ytsaurus/spyt/adapter/YTsaurusClusterSupport.scala":"yt/spark/spark-over-yt/spark-cluster/src/main/scala/tech/ytsaurus/spyt/adapter/YTsaurusClusterSupport.scala",
   "spark-cluster/src/main/scala/tech/ytsaurus/spyt/launcher/DeployMessages.scala":"yt/spark/spark-over-yt/spark-cluster/src/main/scala/tech/ytsaurus/spyt/launcher/DeployMessages.scala",
   "spark-cluster/src/test/resources/log4j.properties":"yt/spark/spark-over-yt/spark-cluster/src/test/resources/log4j.properties",
-  "spark-cluster/src/test/resources/spark-status.html":"yt/spark/spark-over-yt/spark-cluster/src/test/resources/spark-status.html",
   "spark-cluster/src/test/scala/org/apache/spark/deploy/history/FsHistoryProviderTest.scala":"yt/spark/spark-over-yt/spark-cluster/src/test/scala/org/apache/spark/deploy/history/FsHistoryProviderTest.scala",
   "spark-cluster/src/test/scala/tech/ytsaurus/spark/launcher/AutoScalerTest.scala":"yt/spark/spark-over-yt/spark-cluster/src/test/scala/tech/ytsaurus/spark/launcher/AutoScalerTest.scala",
   "spark-cluster/src/test/scala/tech/ytsaurus/spark/launcher/ByopLauncherTest.scala":"yt/spark/spark-over-yt/spark-cluster/src/test/scala/tech/ytsaurus/spark/launcher/ByopLauncherTest.scala",

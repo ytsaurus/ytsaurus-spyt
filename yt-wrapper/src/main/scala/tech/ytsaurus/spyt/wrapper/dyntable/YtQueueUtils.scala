@@ -62,6 +62,18 @@ trait YtQueueUtils {
     transaction.advanceConsumer(request).join()
   }
 
+  def advanceConsumer(consumerPath: YPath, queuePath: YPath, partitionIndex: Int, newOffset: Long,
+                      parentTransactionId: String)(implicit yt: CompoundClient): Unit = {
+    val request = AdvanceConsumer.builder()
+      .setConsumerPath(consumerPath)
+      .setQueuePath(queuePath)
+      .setPartitionIndex(partitionIndex)
+      .setNewOffset(newOffset)
+      .setTransactionId(tech.ytsaurus.core.GUID.valueOf(parentTransactionId))
+      .build()
+    yt.advanceConsumer(request).join()
+  }
+
   def registerQueueConsumer(consumerPath: YPath, queuePath: YPath, vital: Boolean = true)
                            (implicit yt: CompoundClient): Unit = {
     val request = RegisterQueueConsumer.builder()

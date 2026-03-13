@@ -5,6 +5,7 @@ import tech.ytsaurus.client.request.{GetTablePivotKeys, ModifyRowsRequest, Resha
 import tech.ytsaurus.client.rows.UnversionedRowset
 import tech.ytsaurus.client.rpc.AlwaysSwitchRpcFailoverPolicy
 import tech.ytsaurus.client.{ApiServiceTransaction, CompoundClient, RetryPolicy}
+import tech.ytsaurus.core.GUID
 import tech.ytsaurus.core.cypress.YPath
 import tech.ytsaurus.core.tables.TableSchema
 import tech.ytsaurus.spyt.wrapper.YtJavaConverters._
@@ -96,13 +97,11 @@ trait YtDynTableUtils {
     yt.unmountTable(formatPath(path)).join()
   }
 
-  def waitState(path: String, state: TabletState, timeout: JDuration)
-               (implicit yt: CompoundClient): Unit = {
+  def waitState(path: String, state: TabletState, timeout: JDuration)(implicit yt: CompoundClient): Unit = {
     waitState(path, state, toScalaDuration(timeout)).get
   }
 
-  def waitState(path: String, state: TabletState, timeout: Duration)
-               (implicit yt: CompoundClient): Try[Unit] = {
+  def waitState(path: String, state: TabletState, timeout: Duration)(implicit yt: CompoundClient): Try[Unit] = {
     @tailrec
     def waitUnmount(timeoutMillis: Long): Try[Unit] = {
       tabletState(path) match {
@@ -133,11 +132,22 @@ trait YtDynTableUtils {
     isDynamicTable(path) && !attributes(path, None, Set.empty[String]).get("sorted").exists(_.boolValue())
   }
 
-  def createDynTableAndMount(path: String,
-                             schema: TableSchema,
-                             settings: Map[String, Any] = Map.empty,
-                             ignoreExisting: Boolean = true)
-                            (implicit yt: CompoundClient): Unit = {
+  def createDynTableAndMountCached(path: String, schema: TableSchema, settings: Map[String, Any] = Map.empty,
+    ignoreExisting: Boolean = true)(implicit yt: CompoundClient): Unit = {
+    if (!cachedCreatedTables.contains(path)) {
+      createDynTableAndMount(path, schema, settings, ignoreExisting)
+      cachedCreatedTables.enqueue(path)
+      if (cachedCreatedTables.size > cachedCreatedTablesMaxSize) {
+        cachedCreatedTables.dequeue()
+      }
+    }
+  }
+
+  private val cachedCreatedTables = mutable.Queue.empty[String]
+  private val cachedCreatedTablesMaxSize = 10
+
+  def createDynTableAndMount(path: String, schema: TableSchema, settings: Map[String, Any] = Map.empty,
+    ignoreExisting: Boolean = true)(implicit yt: CompoundClient): Unit = {
     val tableExists = exists(path)
     val tabletMounted = tableExists && isMounted(path)
 
@@ -149,23 +159,6 @@ trait YtDynTableUtils {
     if (!tabletMounted) mountTableSync(path)
   }
 
-  private val cachedCreatedTables = mutable.Queue.empty[String]
-  private val cachedCreatedTablesMaxSize = 10
-
-  def createDynTableAndMountCached(path: String,
-                                   schema: TableSchema,
-                                   settings: Map[String, Any] = Map.empty,
-                                   ignoreExisting: Boolean = true)
-                                  (implicit yt: CompoundClient): Unit = {
-    if (!cachedCreatedTables.contains(path)) {
-      createDynTableAndMount(path, schema, settings, ignoreExisting)
-      cachedCreatedTables.enqueue(path)
-      if (cachedCreatedTables.size > cachedCreatedTablesMaxSize) {
-        cachedCreatedTables.dequeue()
-      }
-    }
-  }
-
   def createDynTable(path: String, schema: TableSchema, settings: Map[String, Any] = Map.empty)(implicit yt: CompoundClient): Unit = {
     createTable(path, new YtTableSettings {
       override def ytSchema: YTreeNode = schema.toYTree
@@ -174,9 +167,15 @@ trait YtDynTableUtils {
     })
   }
 
-  private def selectRowsRequest(query: String, path: String,
-                                transaction: Option[ApiServiceTransaction] = None)
-                               (implicit yt: CompoundClient): Seq[YTreeMapNode] = {
+  def selectRows(path: String, condition: Option[String] = None, transaction: Option[ApiServiceTransaction] = None,
+    columns: Seq[String] = Nil)(implicit yt: CompoundClient): Seq[YTreeMapNode] = {
+    selectRowsRequest(
+      s"""${if (columns.nonEmpty) columns.mkString(", ") else "*"} from [${formatPath(path)}] ${condition.map("where " + _).mkString}""",
+      path, transaction)
+  }
+
+  private def selectRowsRequest(query: String, path: String, transaction: Option[ApiServiceTransaction] = None)
+    (implicit yt: CompoundClient): Seq[YTreeMapNode] = {
     import scala.collection.JavaConverters._
     val request = SelectRowsRequest.of(query)
 
@@ -186,23 +185,15 @@ trait YtDynTableUtils {
     selected.getYTreeRows.asScala.toList
   }
 
-  def selectRows(path: String, condition: Option[String] = None,
-                 transaction: Option[ApiServiceTransaction] = None,
-                 columns: Seq[String] = Nil)(implicit yt: CompoundClient): Seq[YTreeMapNode] = {
-    selectRowsRequest(
-      s"""${if (columns.nonEmpty) columns.mkString(", ") else "*"} from [${formatPath(path)}] ${condition.map("where " + _).mkString}""",
-      path, transaction)
-  }
-
-  def countRows(path: String, condition: Option[String] = None,
-                transaction: Option[ApiServiceTransaction] = None)(implicit yt: CompoundClient): Long = {
+  def countRows(path: String, condition: Option[String] = None, transaction: Option[ApiServiceTransaction] = None)
+    (implicit yt: CompoundClient): Long = {
     selectRowsRequest(
       s"""SUM(1) as count from [${formatPath(path)}] ${condition.map("where " + _).mkString} group by 1""",
       path, transaction).headOption.map(_.getLong("count")).getOrElse(0L)
   }
 
   def insertRows(path: String, schema: TableSchema, rows: java.util.List[java.util.List[Any]],
-                 parentTransaction: Option[ApiServiceTransaction])(implicit yt: CompoundClient): Unit = {
+    parentTransaction: Option[ApiServiceTransaction])(implicit yt: CompoundClient): Unit = {
     processModifyRowsRequest(
       ModifyRowsRequest.builder()
         .setPath(formatPath(path))
@@ -213,7 +204,7 @@ trait YtDynTableUtils {
   }
 
   def insertRows(path: String, schema: TableSchema, rows: Seq[Seq[Any]],
-                 parentTransaction: Option[ApiServiceTransaction] = None)(implicit yt: CompoundClient): Unit = {
+    parentTransaction: Option[ApiServiceTransaction] = None)(implicit yt: CompoundClient): Unit = {
     import scala.collection.JavaConverters._
     processModifyRowsRequest(
       ModifyRowsRequest.builder()
@@ -224,13 +215,30 @@ trait YtDynTableUtils {
       parentTransaction)
   }
 
+  private def processModifyRowsRequest(request: ModifyRowsRequest, transaction: Option[ApiServiceTransaction] = None)
+    (implicit yt: CompoundClient): Unit = {
+    val f: ApiServiceTransaction => Unit = _.modifyRows(request).get(1, MINUTES)
+    runWithDefinedTxOrRetry(f, transaction)
+  }
+
+  def runWithDefinedTxOrRetry[T](f: ApiServiceTransaction => T, tx: Option[ApiServiceTransaction] = None,
+    attemptLimit: Int = 3)(implicit yt: CompoundClient): T = tx match {
+    case Some(tx) => f(tx)
+    case None => runWithRetry(f, attemptLimit)
+  }
+
   def insertRows(modifyRowsRequest: ModifyRowsRequest, parentTransaction: Option[ApiServiceTransaction])
-                (implicit yt: CompoundClient): Unit = {
+    (implicit yt: CompoundClient): Unit = {
     processModifyRowsRequest(modifyRowsRequest, parentTransaction)
   }
 
+  def insertRows(modifyRowsRequest: ModifyRowsRequest, parentTransactionId: String)
+    (implicit yt: CompoundClient): Unit = {
+    yt.modifyRows(GUID.valueOf(parentTransactionId), modifyRowsRequest).join()
+  }
+
   def updateRow(path: String, schema: TableSchema, map: java.util.Map[String, Any],
-                parentTransaction: Option[ApiServiceTransaction] = None)(implicit yt: CompoundClient): Unit = {
+    parentTransaction: Option[ApiServiceTransaction] = None)(implicit yt: CompoundClient): Unit = {
     processModifyRowsRequest(
       ModifyRowsRequest.builder()
         .setPath(formatPath(path))
@@ -241,8 +249,16 @@ trait YtDynTableUtils {
     )
   }
 
+  def tabletState(path: String)(implicit yt: CompoundClient): TabletState = {
+    TabletState.fromString(attribute(formatPath(path), YtAttributes.tabletState).stringValue())
+  }
+
+  def remountTable(path: String)(implicit yt: CompoundClient): Unit = {
+    yt.remountTable(formatPath(path)).join()
+  }
+
   def deleteRow(path: String, schema: TableSchema, map: java.util.Map[String, Any],
-                parentTransaction: Option[ApiServiceTransaction] = None)(implicit yt: CompoundClient): Unit = {
+    parentTransaction: Option[ApiServiceTransaction] = None)(implicit yt: CompoundClient): Unit = {
     processModifyRowsRequest(
       ModifyRowsRequest.builder()
         .setPath(formatPath(path))
@@ -254,7 +270,7 @@ trait YtDynTableUtils {
   }
 
   def deleteRows(path: String, schema: TableSchema, rows: Seq[java.util.Map[String, Any]],
-                 parentTransaction: Option[ApiServiceTransaction] = None)(implicit yt: CompoundClient): Unit = {
+    parentTransaction: Option[ApiServiceTransaction] = None)(implicit yt: CompoundClient): Unit = {
     val request = rows.foldLeft(
       ModifyRowsRequest.builder()
         .setPath(formatPath(path))
@@ -265,16 +281,7 @@ trait YtDynTableUtils {
     processModifyRowsRequest(request.build(), parentTransaction)
   }
 
-  def tabletState(path: String)(implicit yt: CompoundClient): TabletState = {
-    TabletState.fromString(attribute(formatPath(path), YtAttributes.tabletState).stringValue())
-  }
-
-  def remountTable(path: String)(implicit yt: CompoundClient): Unit = {
-    yt.remountTable(formatPath(path)).join()
-  }
-
-  def maxAvailableTimestamp(path: YPath, transaction: Option[String] = None)
-                           (implicit yt: CompoundClient): Long = {
+  def maxAvailableTimestamp(path: YPath, transaction: Option[String] = None)(implicit yt: CompoundClient): Long = {
     if (isDynamicStoreReadEnabled(path, transaction)) {
       yt.generateTimestamps().join().getValue
     } else {
@@ -283,12 +290,11 @@ trait YtDynTableUtils {
   }
 
   def isDynamicStoreReadEnabled(path: YPath, transaction: Option[String] = None)
-                               (implicit yt: CompoundClient): Boolean = {
+    (implicit yt: CompoundClient): Boolean = {
     attribute(path, "enable_dynamic_store_read", transaction).boolValue()
   }
 
-  def reshardTable(path: String, schema: TableSchema, pivotKeys: Seq[Seq[Any]])
-                  (implicit yt: CompoundClient): Unit = {
+  def reshardTable(path: String, schema: TableSchema, pivotKeys: Seq[Seq[Any]])(implicit yt: CompoundClient): Unit = {
     import scala.collection.JavaConverters._
     val rawRequest = ReshardTable.builder()
       .setPath(YPath.simple(formatPath(path)))
@@ -297,19 +303,6 @@ trait YtDynTableUtils {
       rawRequest.addPivotKey(key.asJava)
     }
     yt.reshardTable(rawRequest.build()).join()
-  }
-
-  private def processModifyRowsRequest(request: ModifyRowsRequest,
-                                       transaction: Option[ApiServiceTransaction] = None)
-                                      (implicit yt: CompoundClient): Unit = {
-    val f: ApiServiceTransaction => Unit = _.modifyRows(request).get(1, MINUTES)
-    runWithDefinedTxOrRetry(f, transaction)
-  }
-
-  def runWithDefinedTxOrRetry[T](f: ApiServiceTransaction => T, tx: Option[ApiServiceTransaction] = None,
-                                 attemptLimit: Int = 3)(implicit yt: CompoundClient): T = tx match {
-    case Some(tx) => f(tx)
-    case None => runWithRetry(f, attemptLimit)
   }
 
   def runWithRetry[T](f: ApiServiceTransaction => T, attemptLimit: Int = 3)(implicit yt: CompoundClient): T =

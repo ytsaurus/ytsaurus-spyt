@@ -9,17 +9,15 @@ import org.apache.spark.sql.execution.streaming.{Offset, Source}
 import org.apache.spark.sql.types.StructType
 import org.apache.spark.sql.{DataFrame, SQLContext}
 import tech.ytsaurus.client.CompoundClient
+import tech.ytsaurus.spyt.format.conf.SparkYtConfiguration.Streaming
 import tech.ytsaurus.spyt.wrapper.YtWrapper
+import tech.ytsaurus.spyt.wrapper.config.SparkYtSparkSession
 
 import scala.util.{Failure, Success}
 
-class YtStreamingSource(sqlContext: SQLContext,
-                        consumerPath: String,
-                        queuePath: String,
-                        val schema: StructType,
-                        parameters: Map[String, String],
-                        offsetProvider: YtQueueOffsetProviderTrait = YtQueueOffsetProvider)
-                       (implicit val yt: CompoundClient) extends Source with Logging with SupportsAdmissionControl {
+class YtStreamingSource(sqlContext: SQLContext, consumerPath: String, queuePath: String, val schema: StructType,
+  parameters: Map[String, String], offsetProvider: YtQueueOffsetProvider = YtQueueOffsetProvider)
+  (implicit val yt: CompoundClient) extends Source with Logging with SupportsAdmissionControl {
 
   protected[streaming] lazy val cluster: String = YtWrapper.clusterName()
   private val includeServiceColumns = parameters.get("include_service_columns").exists(_.toBoolean)
@@ -122,12 +120,15 @@ class YtStreamingSource(sqlContext: SQLContext,
   }
 
   override def commit(end: Offset): Unit = {
-    try {
-      offsetProvider.advance(consumerPath, YtQueueOffset(end), lastCommittedOffset, maxOffset)
-    } catch {
-      case e: Throwable =>
-        logWarning("Error in committing new offset", e)
+    val transactionalEnabled = sqlContext.sparkSession.ytConf(Streaming.Transactional)
+    val parentTransactionId = YtStreamingTransactionContext.currentTransactionId.get()
+
+    if (transactionalEnabled && parentTransactionId.isEmpty) {
+      logDebug("Skipping commit: transactional mode enabled but no transaction ID in context (likely called from commitSources)")
+      return
     }
+
+    offsetProvider.advance(consumerPath, YtQueueOffset(end), lastCommittedOffset, maxOffset, parentTransactionId)
   }
 
   override def stop(): Unit = {

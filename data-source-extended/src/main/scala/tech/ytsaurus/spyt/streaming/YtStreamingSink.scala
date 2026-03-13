@@ -32,11 +32,16 @@ class YtStreamingSink(sqlContext: SQLContext,
       val bcPath = sparkContext.broadcast(path)
       val bcParameters = sparkContext.broadcast(parameters)
       val bcSchema = sparkContext.broadcast(data.schema)
+
+      val parentTransactionId = YtStreamingTransactionContext.currentTransactionId.get()
+      val bcParentTransactionId = parentTransactionId.map(sparkContext.broadcast)
+
       data.queryExecution.toRdd.foreachPartition { partitionIterator =>
-        if (partitionIterator.hasNext){
+        if (partitionIterator.hasNext) {
           val partitionYtClient = YtClientProvider.ytClient(bcYtClientConfiguration.value)
+          val txId = bcParentTransactionId.map(_.value)
           val dynamicTableWriter = new YtDynamicTableWriter(bcPath.value, bcSchema.value, bcWriterConfig.value,
-            bcParameters.value)(partitionYtClient)
+            bcParameters.value, txId)(partitionYtClient)
           try {
             partitionIterator.foreach { row => dynamicTableWriter.write(row) }
           } finally {

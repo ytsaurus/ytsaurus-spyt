@@ -6,8 +6,6 @@ import org.apache.hadoop.mapreduce.Job
 import org.apache.spark.TaskContext
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.UnsafeProjection
-import org.apache.spark.sql.catalyst.util.CaseInsensitiveMap
-import org.apache.spark.sql.execution.StreamingUtils
 import org.apache.spark.sql.execution.datasources._
 import org.apache.spark.sql.execution.streaming.{Sink, Source}
 import org.apache.spark.sql.internal.SQLConf
@@ -20,7 +18,6 @@ import org.apache.spark.sql.{SQLContext, SparkSession}
 import org.apache.spark.util.SerializableConfiguration
 import org.slf4j.LoggerFactory
 import tech.ytsaurus.client.CompoundClient
-import tech.ytsaurus.core.cypress.{RichYPath, YPath}
 import tech.ytsaurus.spyt.common.utils.YtReadingUtils
 import tech.ytsaurus.spyt.format.YtPartitionedFileDelegate.YtPartitionedFile
 import tech.ytsaurus.spyt.format._
@@ -28,34 +25,30 @@ import tech.ytsaurus.spyt.format.conf.SparkYtConfiguration.Read._
 import tech.ytsaurus.spyt.format.conf.SparkYtConfiguration.YtReadSettingsFactory
 import tech.ytsaurus.spyt.format.conf.{FilterPushdownConfig, SparkYtWriteConfiguration}
 import tech.ytsaurus.spyt.logger.YtDynTableLoggerConfig
-import tech.ytsaurus.spyt.streaming.{YtStreamingSink, YtStreamingSource}
+import tech.ytsaurus.spyt.streaming.YtStreamingProvider
 import tech.ytsaurus.spyt.wrapper.client.YtClientConfigurationConverter.ytClientConfiguration
 import tech.ytsaurus.spyt.wrapper.client.YtClientProvider
 import tech.ytsaurus.spyt.wrapper.table.YtReadContext
 
+import java.util.ServiceLoader
+import scala.collection.JavaConverters._
 
-class YtFileFormat extends FileFormat with DataSourceRegister with StreamSourceProvider with StreamSinkProvider
-  with Serializable {
-  override def inferSchema(sparkSession: SparkSession,
-                           options: Map[String, String],
-                           files: Seq[FileStatus]): Option[StructType] = {
+
+class YtFileFormat extends FileFormat with DataSourceRegister with StreamSourceProvider with StreamSinkProvider with Serializable {
+  override def inferSchema(sparkSession: SparkSession, options: Map[String, String],
+    files: Seq[FileStatus]): Option[StructType] = {
     YtUtils.inferSchema(sparkSession, options, files)
   }
 
 
-  override def vectorTypes(requiredSchema: StructType,
-                           partitionSchema: StructType,
-                           sqlConf: SQLConf): Option[Seq[String]] = {
+  override def vectorTypes(requiredSchema: StructType, partitionSchema: StructType,
+    sqlConf: SQLConf): Option[Seq[String]] = {
     Option(Seq.fill(requiredSchema.length)(classOf[ColumnVector].getName))
   }
 
-  override def buildReaderWithPartitionValues(sparkSession: SparkSession,
-                                              dataSchema: StructType,
-                                              partitionSchema: StructType,
-                                              requiredSchema: StructType,
-                                              filters: Seq[Filter],
-                                              options: Map[String, String],
-                                              hadoopConf: Configuration): PartitionedFile => Iterator[InternalRow] = {
+  override def buildReaderWithPartitionValues(sparkSession: SparkSession, dataSchema: StructType,
+    partitionSchema: StructType, requiredSchema: StructType, filters: Seq[Filter], options: Map[String, String],
+    hadoopConf: Configuration): PartitionedFile => Iterator[InternalRow] = {
     import tech.ytsaurus.spyt.wrapper.config._
     val ytClientConf = ytClientConfiguration(hadoopConf)
 
@@ -122,10 +115,8 @@ class YtFileFormat extends FileFormat with DataSourceRegister with StreamSourceP
     }
   }
 
-  override def prepareWrite(sparkSession: SparkSession,
-                            job: Job,
-                            options: Map[String, String],
-                            dataSchema: StructType): OutputWriterFactory = {
+  override def prepareWrite(sparkSession: SparkSession, job: Job, options: Map[String, String],
+    dataSchema: StructType): OutputWriterFactory = {
     YtOutputWriterFactory.create(
       SparkYtWriteConfiguration(sparkSession.sqlContext),
       ytClientConfiguration(sparkSession),
@@ -139,37 +130,29 @@ class YtFileFormat extends FileFormat with DataSourceRegister with StreamSourceP
 
   override def isSplitable(sparkSession: SparkSession, options: Map[String, String], path: Path): Boolean = true
 
+  private lazy val streamingProvider: YtStreamingProvider = {
+    ServiceLoader.load(classOf[YtStreamingProvider]).iterator().asScala.toSeq.headOption.getOrElse(
+      throw new UnsupportedOperationException(
+        s"Streaming is not supported. Should implement ${classOf[YtStreamingProvider].getName}")
+    )
+  }
+
   override def supportBatch(sparkSession: SparkSession, dataSchema: StructType): Boolean = {
     YtReaderOptions.supportBatch(dataSchema, sparkSession.sqlContext.conf)
   }
 
   override def sourceSchema(sqlContext: SQLContext, schema: Option[StructType], providerName: String,
-                            parameters: Map[String, String]): (String, StructType) = {
-    val caseInsensitiveParameters = CaseInsensitiveMap(parameters)
-    val ypath = RichYPath.fromString(caseInsensitiveParameters(YtUtils.Options.QUEUE_PATH))
-    val schema = StreamingUtils.getStreamingSourceSchema(
-      sqlContext.sparkSession, ypath, None, None, caseInsensitiveParameters)
-    (shortName(), schema)
+    parameters: Map[String, String]): (String, StructType) = {
+    streamingProvider.sourceSchema(sqlContext, schema, providerName, parameters)
   }
 
   override def createSource(sqlContext: SQLContext, metadataPath: String, schema: Option[StructType],
-                            providerName: String, parameters: Map[String, String]): Source = {
-    val caseInsensitiveParameters = CaseInsensitiveMap(parameters)
-    val consumerPath = caseInsensitiveParameters(YtUtils.Options.CONSUMER_PATH)
-    val queuePath = caseInsensitiveParameters(YtUtils.Options.QUEUE_PATH)
-    val requiredSchema = schema.getOrElse {
-      StreamingUtils.getStreamingSourceSchema(
-        sqlContext.sparkSession, YPath.simple(queuePath), None, None, caseInsensitiveParameters)
-    }
-    implicit val yt: CompoundClient = YtClientProvider.ytClient(ytClientConfiguration(sqlContext.sparkSession))
-    new YtStreamingSource(sqlContext, consumerPath, queuePath, requiredSchema, caseInsensitiveParameters)
+    providerName: String, parameters: Map[String, String]): Source = {
+    streamingProvider.createSource(sqlContext, metadataPath, schema, providerName, parameters)
   }
 
   override def createSink(sqlContext: SQLContext, parameters: Map[String, String], partitionColumns: Seq[String],
-                          outputMode: OutputMode): Sink = {
-    require(outputMode == OutputMode.Append(), "Only append mode is supported now")
-    val caseInsensitiveParameters = CaseInsensitiveMap(parameters)
-    val richQueuePath = RichYPath.fromString(caseInsensitiveParameters(YtUtils.Options.QUEUE_PATH))
-    new YtStreamingSink(sqlContext, richQueuePath.justPath().toStableString, caseInsensitiveParameters)
+    outputMode: OutputMode): Sink = {
+    streamingProvider.createSink(sqlContext, parameters, partitionColumns, outputMode)
   }
 }

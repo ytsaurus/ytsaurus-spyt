@@ -17,11 +17,9 @@ import tech.ytsaurus.spyt.wrapper.YtWrapper
 
 import scala.collection.JavaConverters._
 
-class YtDynamicTableWriter(richPath: YPathEnriched,
-                           schema: StructType,
-                           wConfig: SparkYtWriteConfiguration,
-                           options: Map[String, String])
-                          (implicit ytClient: CompoundClient) extends OutputWriter {
+class YtDynamicTableWriter(richPath: YPathEnriched, schema: StructType, wConfig: SparkYtWriteConfiguration,
+  options: Map[String, String], parentTransactionId: Option[String] = None)
+  (implicit ytClient: CompoundClient) extends OutputWriter {
 
   import YtDynamicTableWriter._
 
@@ -61,7 +59,11 @@ class YtDynamicTableWriter(richPath: YPathEnriched,
   private def commitBatch(): Unit = {
     log.debug(s"Batch size: ${wConfig.dynBatchSize}, actual batch size: $count")
     YtMetricsRegister.time(writeBatchTime, writeBatchTimeSum) {
-      YtWrapper.insertRows(modifyRowsRequestBuilder.build(), None)
+      val request = modifyRowsRequestBuilder.build()
+      parentTransactionId match {
+        case Some(txId) => YtWrapper.insertRows(request, txId)
+        case None => YtWrapper.insertRows(request, None)
+      }
     }
     initBatch()
   }

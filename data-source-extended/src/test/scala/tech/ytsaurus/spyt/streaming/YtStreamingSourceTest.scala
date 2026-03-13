@@ -8,30 +8,22 @@ import org.mockito.MockitoSugar
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import tech.ytsaurus.client.CompoundClient
-import tech.ytsaurus.spyt.test.LocalYtClient
+import tech.ytsaurus.spyt.test.{LocalSpark, LocalYtClient}
 import tech.ytsaurus.spyt.wrapper.YtWrapper
 
 import scala.collection.SortedMap
 import scala.util.{Failure, Success}
 
-class YtStreamingSourceTest extends AnyFlatSpec with Matchers with MockitoSugar with LocalYtClient {
+class YtStreamingSourceTest extends AnyFlatSpec with Matchers with MockitoSugar with LocalYtClient with LocalSpark {
   private val consumerPath = "//tmp/path/to/consumer"
   private val queuePath = "//tmp/path/to/queue"
   private val cluster = YtWrapper.clusterName()
-
-  private def createFixture(parameters: Map[String, String] = Map.empty): (YtStreamingSource, YtQueueOffsetProviderTrait, SQLContext) = {
-    val sqlContext = mock[SQLContext]
-    val mockOffsetProvider = mock[YtQueueOffsetProviderTrait]
-    val source = new YtStreamingSource(sqlContext, consumerPath, queuePath, new StructType(), parameters,
-      offsetProvider = mockOffsetProvider)
-    (source, mockOffsetProvider, sqlContext)
-  }
 
   behavior of "YtStreamingSource"
 
   it should "use provider for current offset in latestOffset if start is not defined" in {
     val sqlContext = mock[SQLContext]
-    val mockOffsetProvider = mock[YtQueueOffsetProviderTrait]
+    val mockOffsetProvider = mock[YtQueueOffsetProvider]
 
     val maxOffset = YtQueueOffset(cluster, queuePath, SortedMap(0 -> 100L))
     val currentOffset = YtQueueOffset(cluster, queuePath, SortedMap(0 -> 50L))
@@ -53,7 +45,7 @@ class YtStreamingSourceTest extends AnyFlatSpec with Matchers with MockitoSugar 
 
   it should "fail if start offset is less than committed offset" in {
     val sqlContext = mock[SQLContext]
-    val mockOffsetProvider = mock[YtQueueOffsetProviderTrait]
+    val mockOffsetProvider = mock[YtQueueOffsetProvider]
 
     val lastCommittedOffset = YtQueueOffset(cluster, queuePath, SortedMap(0 -> 50L))
     when(mockOffsetProvider.getCurrentOffset(any[String], any[String], any[String])(any[CompoundClient]))
@@ -82,7 +74,7 @@ class YtStreamingSourceTest extends AnyFlatSpec with Matchers with MockitoSugar 
 
   it should "return cached offset on provider failure" in {
     val sqlContext = mock[SQLContext]
-    val mockOffsetProvider = mock[YtQueueOffsetProviderTrait]
+    val mockOffsetProvider = mock[YtQueueOffsetProvider]
     val initialMaxOffset = YtQueueOffset(cluster, queuePath, SortedMap(0 -> 100L))
     val lastCommittedOffset = YtQueueOffset(cluster, queuePath, SortedMap(0 -> 50L))
 
@@ -107,7 +99,10 @@ class YtStreamingSourceTest extends AnyFlatSpec with Matchers with MockitoSugar 
   }
 
   it should "call provider's advance on commit with last fetched offset" in {
-    val (source, mockOffsetProvider, _) = createFixture()
+    val mockOffsetProvider = mock[YtQueueOffsetProvider]
+    val source = new YtStreamingSource(spark.sqlContext, consumerPath, queuePath, new StructType(), Map.empty,
+      offsetProvider = mockOffsetProvider)
+
     val lastCommitted = YtQueueOffset(cluster, queuePath, SortedMap(0 -> 50L))
     val newCommit = YtQueueOffset(cluster, queuePath, SortedMap(0 -> 60L))
 
@@ -120,6 +115,7 @@ class YtStreamingSourceTest extends AnyFlatSpec with Matchers with MockitoSugar 
       eqTo(consumerPath),
       eqTo(newCommit),
       eqTo(lastCommitted),
+      eqTo(None),
       eqTo(None)
     )(any[CompoundClient])
   }

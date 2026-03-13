@@ -1,27 +1,35 @@
 package tech.ytsaurus.spyt.streaming
 
+import org.apache.spark.sql._
 import org.apache.spark.sql.execution.StreamingUtils.{ROW_INDEX_WITH_PREFIX, TABLET_INDEX_WITH_PREFIX}
 import org.apache.spark.sql.functions._
+import org.apache.spark.sql.spyt.types._
 import org.apache.spark.sql.streaming.Trigger
 import org.apache.spark.sql.streaming.Trigger.ProcessingTime
 import org.apache.spark.sql.types._
-import org.apache.spark.sql.{DataFrame, Dataset, Row, SaveMode}
+import org.apache.spark.sql.v2.YtUtils.Options.PARSING_TYPE_V3
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
+import tech.ytsaurus.client.request.ModifyRowsRequest
 import tech.ytsaurus.core.tables.{ColumnValueType, TableSchema}
-import tech.ytsaurus.spyt.format.conf.YtTableSparkSettings.InconsistentReadEnabled
+import tech.ytsaurus.spyt.format.conf.SparkYtConfiguration
+import tech.ytsaurus.spyt.format.conf.YtTableSparkSettings.{InconsistentReadEnabled, WriteTypeV3}
 import tech.ytsaurus.spyt.serializers.WriteSchemaConverter
-import tech.ytsaurus.spyt.streaming.YTsaurusStreamingTest.{schemaWithServiceColumns, schemaWithServiceColumnsAndQueuePath}
+import tech.ytsaurus.spyt.streaming.YTsaurusStreamingTest.{normalizeRow, schemaWithServiceColumnsAndQueuePath}
 import tech.ytsaurus.spyt.test._
+import tech.ytsaurus.spyt.types.UInt64Long
 import tech.ytsaurus.spyt.wrapper.YtWrapper
+import tech.ytsaurus.typeinfo.StructType.Member
 import tech.ytsaurus.typeinfo.TiType
+import tech.ytsaurus.ysontree.YTree
 
 import java.util.UUID
+import scala.collection.JavaConverters._
 import scala.concurrent.duration.DurationInt
 import scala.concurrent.{Await, Future, Promise}
 import scala.language.postfixOps
 
-class YTsaurusStreamingTest extends AnyFlatSpec with Matchers with LocalSpark with LocalYtClient with TestUtils
+class YTsaurusStreamingTest extends AnyFlatSpec with Matchers with LocalSpark with LocalYtClient
   with TmpDir with DynTableTestUtils with QueueTestUtils {
 
   import spark.implicits._
@@ -221,28 +229,17 @@ class YTsaurusStreamingTest extends AnyFlatSpec with Matchers with LocalSpark wi
       }
     }(scala.concurrent.ExecutionContext.Implicits.global)
 
-
     val queryForOptionCheck = jobForOptionCheck.start()
     Await.result(recordFuture, 120 seconds)
     queryForOptionCheck.stop()
   }
 
   it should "one streaming launch" in {
-    val launchesParams: Seq[(Int, Int, Boolean)] = Seq((0, 3, true))
+    testOneStreamingLaunch()
+  }
 
-    val paths: StreamingObjectsPaths = prepareStreamingObjects(tmpPath = tmpPath)
-    doStreamLaunches(paths, launchesParams)
-
-    val expectedData: Seq[TestRow] = getTestData(0, 29)
-    val expectedDF: DataFrame = spark.createDataFrame(expectedData)
-
-    val resultDF = spark.read
-      .option(InconsistentReadEnabled.name, "true")
-      .yt(paths.resultPath)
-      .orderBy("a")
-
-    resultDF.dropDuplicates().collect() should contain theSameElementsAs expectedDF.collect()
-
+  it should "one streaming launch with transaction" in {
+    testOneStreamingLaunch(transactional = true)
   }
 
   it should "several streaming launches - at-least-once guarantee" in {
@@ -253,12 +250,20 @@ class YTsaurusStreamingTest extends AnyFlatSpec with Matchers with LocalSpark wi
     testSeveralStreamingLaunches(includeServiceColumns = true)
   }
 
+  it should "several streaming launches with transaction" in {
+    testSeveralStreamingLaunches(transactional = true)
+  }
+
   it should "fetch checkpoints location from consumer - at-least-once guarantee" in {
     testContinueStreamingAfterRemovingCheckpoints()
   }
 
   it should "fetch checkpoints location from consumer - exactly-once guarantee" in {
     testContinueStreamingAfterRemovingCheckpoints(includeServiceColumns = true)
+  }
+
+  it should "continue streaming after removing checkpoints with transaction" in {
+    testContinueStreamingAfterRemovingCheckpoints(transactional = true)
   }
 
   it should "streaming with several sources-queues: check consumer and result synchronization" in {
@@ -468,6 +473,10 @@ class YTsaurusStreamingTest extends AnyFlatSpec with Matchers with LocalSpark wi
     }
   }
 
+  it should "streaming with several sources-queues with transaction" in {
+    testStreamingWithSeveralSourcesQueues(transactional = true)
+  }
+
   it should "streaming after offsets desynchronization: checkpoints are behind on consumer" in {
     val paths: StreamingObjectsPaths = prepareStreamingObjects(tmpPath = tmpPath, includeServiceColumns = true,
       queueTabletCount = 1)
@@ -480,7 +489,6 @@ class YTsaurusStreamingTest extends AnyFlatSpec with Matchers with LocalSpark wi
 
     val cluster = YtWrapper.clusterName()
     val currentOffset = YtQueueOffset.getCurrentOffset(cluster, consumerPath, queuePath)
-    // Advance consumer to simulate the desynchronization of the consumer and cached offsets by spark / checkpoint files
     val shiftedPartitions = currentOffset.partitions.map { case (partitionId, _) => partitionId -> 34L }
     val shiftedOffset = YtQueueOffset(cluster, queuePath, shiftedPartitions)
     YtQueueOffset.advance(consumerPath, shiftedOffset, currentOffset)
@@ -507,7 +515,7 @@ class YTsaurusStreamingTest extends AnyFlatSpec with Matchers with LocalSpark wi
         lowerIndex += 10
       }
 
-      val recordCountLimit = 55 // expect spark to skip 5 lines, because we have shifted the offset in consumer
+      val recordCountLimit = 55
       var currentCount = 0L
       while (currentCount < recordCountLimit) {
         Thread.sleep(2000)
@@ -586,15 +594,149 @@ class YTsaurusStreamingTest extends AnyFlatSpec with Matchers with LocalSpark wi
     actualData should contain theSameElementsAs expectedData
   }
 
-  def testContinueStreamingAfterRemovingCheckpoints(includeServiceColumns: Boolean = false): Unit = {
-    val paths: StreamingObjectsPaths = prepareStreamingObjects(tmpPath = tmpPath, includeServiceColumns)
-    doStreamLaunches(paths, launchesParams = Seq((0, 3, true)), includeServiceColumns)
+  it should "correct streaming with custom YT types" in {
+    withConf(SparkYtConfiguration.Schema.ForcingNullableIfNoMetadata, false) {
+      val recordCountLimit = 10L
+      val consumerPath = s"$tmpPath/consumer-${UUID.randomUUID()}"
+      val queuePath = s"$tmpPath/inputQueue-${UUID.randomUUID()}"
+      val resultPath = s"$tmpPath/result-${UUID.randomUUID()}"
 
-    YtWrapper.removeDir(paths.checkpointLocation.stripPrefix("yt:/"), recursive = true, force = true)
+      val ytSchema: TableSchema = TableSchema.builder()
+        .setUniqueKeys(false)
+        .addValue("datetime", TiType.datetime())
+        .addValue("date32", TiType.date32())
+        .addValue("datetime64", TiType.datetime64())
+        .addValue("timestamp64", TiType.timestamp64())
+        .addValue("interval64", TiType.interval64())
+        .addValue("uint64", TiType.uint64())
+        .addValue("yson", TiType.optional(TiType.yson()))
+        .addValue("list", TiType.list(TiType.int64()))
+        .addValue("struct", TiType.struct(
+          new Member("a", TiType.int64()),
+          new Member("b", TiType.utf8())
+        ))
+        .build().toWrite
 
-    doStreamLaunches(paths, launchesParams = Seq((30, 3, true)), includeServiceColumns)
+      YtWrapper.createDir(tmpPath)
+      prepareOrderedTestTable(queuePath, ytSchema, enableDynamicStoreRead = true)
+      prepareConsumer(consumerPath, queuePath)
+      waitQueueRegistration(queuePath)
+      prepareOrderedTestTable(resultPath, ytSchema, enableDynamicStoreRead = true)
 
-    val expectedData: Seq[TestRow] = getTestData(0, 59)
+      (0 until recordCountLimit.toInt).foreach { i =>
+        val id = i.toLong
+
+        val listNode = YTree.listBuilder.value(i).value(i + 1).buildList
+
+        val structNode = YTree.listBuilder
+          .value(id)
+          .value(s"str_$i")
+          .buildList
+
+        val ysonVal = Array[Byte](1, 2, 3)
+
+        val req = ModifyRowsRequest.builder.setPath(queuePath).setSchema(ytSchema).addInsert(
+          java.util.List.of(
+            id: java.lang.Long,
+            id: java.lang.Long,
+            id: java.lang.Long,
+            id: java.lang.Long,
+            id: java.lang.Long,
+            id: java.lang.Long,
+            ysonVal,
+            listNode,
+            structNode)
+        ).build
+        YtWrapper.insertRows(req, None)
+      }
+
+      val df: DataFrame = spark
+        .readStream
+        .format("yt")
+        .option(PARSING_TYPE_V3, value = true)
+        .option("consumer_path", consumerPath)
+        .load(queuePath)
+      val query = df
+        .writeStream
+        .option(WriteTypeV3.name, value = true)
+        .option("checkpointLocation", f"yt:/$tmpPath/checkpoints_${UUID.randomUUID()}")
+        .trigger(ProcessingTime(2000))
+        .format("yt")
+        .option("path", resultPath)
+        .start()
+
+      var currentCount = 0L
+      val startTime = System.currentTimeMillis()
+      while (currentCount < recordCountLimit && (System.currentTimeMillis() - startTime) < 120 * 1000) {
+        Thread.sleep(2000)
+        currentCount = spark.read.option(PARSING_TYPE_V3, value = true).option("enable_inconsistent_read", "true").yt(resultPath).count()
+      }
+
+      query.stop()
+
+      val resultDF = spark.read
+        .option(PARSING_TYPE_V3, value = true)
+        .option("enable_inconsistent_read", "true")
+        .yt(resultPath)
+        .orderBy("uint64")
+
+      val expectedRows = (0 until recordCountLimit.toInt).map { i =>
+        val id = i.toLong
+        Row(
+          Datetime(id),
+          new Date32(i),
+          new Datetime64(id),
+          new Timestamp64(id),
+          new Interval64(id),
+          new UInt64Long(id),
+          Array[Byte](1, 2, 3),
+          Seq(id, id + 1),
+          Row(id, s"str_$i")
+        )
+      }
+
+      val intermediateSchema = StructType(Seq(
+        StructField("datetime", new DatetimeType(), nullable = false),
+        StructField("date32", new Date32Type(), nullable = false),
+        StructField("datetime64", new Datetime64Type(), nullable = false),
+        StructField("timestamp64", new Timestamp64Type(), nullable = false),
+        StructField("interval64", new Interval64Type(), nullable = false),
+        StructField("uint64", UInt64Type, nullable = false),
+        StructField("yson", BinaryType),
+        StructField("list", ArrayType(LongType, containsNull = false), nullable = false),
+        StructField("struct", StructType(Seq(
+          StructField("a", LongType, nullable = false),
+          StructField("b", StringType, nullable = false)
+        )), nullable = false)
+      ))
+
+      val tempDF = spark.createDataFrame(
+        spark.sparkContext.parallelize(expectedRows),
+        intermediateSchema
+      )
+
+      val expectedDF = tempDF.withColumn("yson", col("yson").cast(YsonType))
+
+      resultDF.schema.fields.map(_.copy(metadata = Metadata.empty)) shouldEqual
+        expectedDF.schema.fields.map(_.copy(metadata = Metadata.empty))
+
+      val resultData = resultDF.collect().map(normalizeRow)
+      val expectedData = expectedDF.collect().map(normalizeRow)
+
+      resultData should contain theSameElementsAs expectedData
+    }
+  }
+
+  def testOneStreamingLaunch(transactional: Boolean = false): Unit = {
+    val paths: StreamingObjectsPaths = prepareStreamingObjects(tmpPath = tmpPath)
+    val launchesParams: Seq[(Int, Int, Boolean)] = Seq((0, 3, true))
+
+    import tech.ytsaurus.spyt.format.conf.SparkYtConfiguration.Streaming
+    withConf(Streaming.Transactional, transactional) {
+      doStreamLaunches(paths, launchesParams)
+    }
+
+    val expectedData: Seq[TestRow] = getTestData(0, 29)
     val expectedDF: DataFrame = spark.createDataFrame(expectedData)
 
     val resultDF = spark.read
@@ -603,21 +745,30 @@ class YTsaurusStreamingTest extends AnyFlatSpec with Matchers with LocalSpark wi
       .select("a", "b", "c")
       .orderBy("a")
 
-    if (includeServiceColumns) {
+    if (transactional) {
       resultDF.collect() should contain theSameElementsAs expectedDF.collect()
+
+      val cluster = YtWrapper.clusterName()
+      val currentOffset = YtQueueOffset.getCurrentOffset(cluster, paths.consumerPath, paths.queuePath)
+      val totalOffsetSum = currentOffset.partitions.values.map(_ + 1).sum
+      totalOffsetSum shouldBe 30L
     } else {
       resultDF.dropDuplicates().collect() should contain theSameElementsAs expectedDF.collect()
     }
   }
 
-  def testSeveralStreamingLaunches(includeServiceColumns: Boolean = false): Unit = {
+  def testSeveralStreamingLaunches(includeServiceColumns: Boolean = false, transactional: Boolean = false): Unit = {
     val paths: StreamingObjectsPaths = prepareStreamingObjects(tmpPath = tmpPath, includeServiceColumns)
     val launchesParams: Seq[(Int, Int, Boolean)] = Seq(
       (0, 3, false),
       (30, 3, false),
       (60, 3, true)
     )
-    doStreamLaunches(paths, launchesParams, includeServiceColumns)
+
+    import tech.ytsaurus.spyt.format.conf.SparkYtConfiguration.Streaming
+    withConf(Streaming.Transactional, transactional) {
+      doStreamLaunches(paths, launchesParams, includeServiceColumns)
+    }
 
     val resultDF = spark.read
       .option(InconsistentReadEnabled.name, "true")
@@ -628,7 +779,7 @@ class YTsaurusStreamingTest extends AnyFlatSpec with Matchers with LocalSpark wi
     val expectedData: Seq[TestRow] = getTestData(0, 89)
     val expectedDF: DataFrame = spark.createDataFrame(expectedData)
 
-    if (includeServiceColumns) {
+    if (transactional || includeServiceColumns) {
       resultDF.collect() should contain theSameElementsAs expectedDF.collect()
     } else {
       resultDF.dropDuplicates().collect() should contain theSameElementsAs expectedDF.collect()
@@ -636,6 +787,8 @@ class YTsaurusStreamingTest extends AnyFlatSpec with Matchers with LocalSpark wi
   }
 
   def prepareStreamingObjects(tmpPath: String, includeServiceColumns: Boolean = false, queueTabletCount: Int = 3): StreamingObjectsPaths = {
+    import tech.ytsaurus.spyt.streaming.YTsaurusStreamingTest.schemaWithServiceColumns
+
     val paths: StreamingObjectsPaths = new StreamingObjectsPaths(tmpPath)
     val consumerPath = paths.consumerPath
     val queuePath = paths.queuePath
@@ -702,6 +855,113 @@ class YTsaurusStreamingTest extends AnyFlatSpec with Matchers with LocalSpark wi
       runStreamUntilAchieveRecordCountLimit(launchParams._1, launchParams._2, launchParams._3)
     }
   }
+
+  def testStreamingWithSeveralSourcesQueues(transactional: Boolean = false): Unit = {
+    val queues = (0 until 3).map(i => s"$tmpPath/inputQueue$i-${UUID.randomUUID()}")
+    val consumerPath = s"$tmpPath/consumer-${UUID.randomUUID()}"
+    val resultPath = s"$tmpPath/result-${UUID.randomUUID()}"
+    val checkpointLocation = f"yt:/$tmpPath/stateStore-${UUID.randomUUID()}"
+
+    YtWrapper.createDir(tmpPath)
+    for (queue <- queues) {
+      prepareOrderedTestTable(queue, enableDynamicStoreRead = true)
+      prepareConsumer(consumerPath, queue)
+      waitQueueRegistration(queue)
+    }
+    val resultTableSchema: TableSchema = YTsaurusStreamingTest.schemaWithServiceColumnsAndQueuePath
+    prepareOrderedTestTable(resultPath, resultTableSchema, enableDynamicStoreRead = true)
+
+    import tech.ytsaurus.spyt.format.conf.SparkYtConfiguration.Streaming
+    withConf(Streaming.Transactional, transactional) {
+      val queries = queues.map { queue =>
+        spark
+          .readStream
+          .format("yt")
+          .option("consumer_path", consumerPath)
+          .option("max_rows_per_partition", 6)
+          .option("include_service_columns", value = true)
+          .load(queue)
+          .withColumn("queue", lit(queue))
+          .writeStream
+          .option("checkpointLocation", checkpointLocation + "/" + queue)
+          .format("yt")
+          .option("path", resultPath)
+          .start()
+      }
+
+      val queueWritingDuration = 10.seconds
+      var endTime = System.currentTimeMillis() + queueWritingDuration.toMillis
+      var lowerIndex = 0
+      while (System.currentTimeMillis() < endTime) {
+        queues.foreach { queue =>
+          val data = getTestData(lowerIndex, lowerIndex + 9)
+          appendChunksToTestTable(queue, Seq(data), sorted = false, remount = false)
+        }
+        lowerIndex += 10
+        Thread.sleep(1000)
+      }
+
+      endTime = System.currentTimeMillis() + 30.seconds.toMillis
+      queries.foreach(_.stop())
+      while (queries.exists(_.isActive) && System.currentTimeMillis() < endTime) {
+        Thread.sleep(1000)
+      }
+
+      val resultDF = spark.read
+        .option(InconsistentReadEnabled.name, "true")
+        .yt(resultPath)
+        .orderBy("a")
+      val cluster = YtWrapper.clusterName()
+
+      for (queue <- queues) {
+        val currentOffsetPartitions = YtQueueOffset.getCurrentOffset(cluster, consumerPath, queue).partitions
+        var totalRowsFromQueue = 0
+        for (partitionIndex <- currentOffsetPartitions.keys) {
+          val partitionDataDf = resultDF
+            .filter(col("queue") === queue)
+            .filter(col("__spyt_streaming_src_tablet_index") === partitionIndex)
+
+          val totalRowsConsumed = currentOffsetPartitions(partitionIndex) + 1
+          val totalRowsFromPartition = partitionDataDf.count.toInt
+          totalRowsFromQueue += totalRowsFromPartition
+
+          assert(totalRowsFromPartition >= totalRowsConsumed)
+
+          val seq = (0 until totalRowsFromPartition).toArray
+          partitionDataDf.select(col("__spyt_streaming_src_row_index")).collect().map(_.getLong(0).toInt) should contain theSameElementsAs seq
+        }
+      }
+    }
+  }
+
+  def testContinueStreamingAfterRemovingCheckpoints(includeServiceColumns: Boolean = false,
+                                                    transactional: Boolean = false): Unit = {
+    val paths: StreamingObjectsPaths = prepareStreamingObjects(tmpPath = tmpPath, includeServiceColumns)
+    import tech.ytsaurus.spyt.format.conf.SparkYtConfiguration.Streaming
+    withConf(Streaming.Transactional, transactional) {
+      doStreamLaunches(paths, launchesParams = Seq((0, 3, true)), includeServiceColumns)
+    }
+
+    YtWrapper.removeDir(paths.checkpointLocation.stripPrefix("yt:/"), recursive = true, force = true)
+    withConf(Streaming.Transactional, transactional) {
+      doStreamLaunches(paths, launchesParams = Seq((30, 3, true)), includeServiceColumns)
+    }
+
+    val expectedData: Seq[TestRow] = getTestData(0, 59)
+    val expectedDF: DataFrame = spark.createDataFrame(expectedData)
+
+    val resultDF = spark.read
+      .option(InconsistentReadEnabled.name, "true")
+      .yt(paths.resultPath)
+      .select("a", "b", "c")
+      .orderBy("a")
+
+    if (includeServiceColumns || transactional) {
+      resultDF.collect() should contain theSameElementsAs expectedDF.collect()
+    } else {
+      resultDF.dropDuplicates().collect() should contain theSameElementsAs expectedDF.collect()
+    }
+  }
 }
 
 object YTsaurusStreamingTest {
@@ -736,6 +996,15 @@ object YTsaurusStreamingTest {
       .addKey(ROW_INDEX_WITH_PREFIX, ColumnValueType.INT64)
   }
 
+  def normalizeRow(value: Any): Any = value match {
+    case row: Row => row.toSeq.map(normalizeRow)
+    case bytes: Array[Byte] => bytes.toList
+    case yson: YsonBinary => yson.bytes.toList
+    case seq: Iterable[_] => seq.map(normalizeRow).toList
+    case javaList: java.util.List[_] => javaList.asScala.map(normalizeRow).toList
+    case javaMap: java.util.Map[_, _] => javaMap.asScala.mapValues(normalizeRow).toMap
+    case other => other
+  }
 }
 
 class StreamingObjectsPaths(tmpPath: String) {

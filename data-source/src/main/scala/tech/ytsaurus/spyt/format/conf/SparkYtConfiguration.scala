@@ -82,6 +82,10 @@ object SparkYtConfiguration {
     case object ListParentDirectories extends ConfigEntry[Boolean](s"$prefix.listParentDirectories", Some(true))
   }
 
+  object Streaming {
+    case object Transactional extends ConfigEntry[Boolean]("streaming.transactional", Some(false))
+  }
+
   object Transaction {
     private val prefix = "transaction"
 

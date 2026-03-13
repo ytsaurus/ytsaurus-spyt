@@ -16,6 +16,7 @@ import tech.ytsaurus.spyt.wrapper.dyntable.ConsumerUtils
 import scala.collection.SortedMap
 import scala.concurrent.duration.{Duration, DurationInt}
 import scala.util.Try
+import scala.util.control.NonFatal
 
 // Partitions are specified in Spark format, i.e. values is last read row index.
 case class YtQueueOffset(cluster: String, path: String, partitions: SortedMap[Int, Long]) extends Offset {
@@ -78,7 +79,7 @@ object YtQueueOffset extends Logging {
   }
 
   def getCurrentOffset(cluster: String, consumerPath: String, queuePath: String)
-                      (implicit client: CompoundClient): YtQueueOffset = {
+    (implicit client: CompoundClient): YtQueueOffset = {
     import tech.ytsaurus.spyt.wrapper.dyntable.ConsumerUtils.Columns._
     val rows = YtWrapper.selectRows(consumerPath,
       Some(s"""$QUEUE_CLUSTER = "$cluster" and $QUEUE_PATH = "$queuePath"""")).map(ConsumerUtils.fromYTree)
@@ -100,32 +101,55 @@ object YtQueueOffset extends Logging {
     }
   }
 
-  def advance(consumerPath: String, newOffset: YtQueueOffset, lastCommittedOffset: YtQueueOffset, maxOffset: Option[YtQueueOffset] = None,
-              timeout: Duration = 1.minute)(implicit client: CompoundClient): Option[YtQueueOffset] = {
+  def advance(consumerPath: String, newOffset: YtQueueOffset, lastCommittedOffset: YtQueueOffset,
+    maxOffset: Option[YtQueueOffset] = None, parentTransactionId: Option[String] = None, timeout: Duration = 1.minute)
+    (implicit client: CompoundClient): Option[YtQueueOffset] = {
     if (!(newOffset >= lastCommittedOffset)) {
-      logWarning(f"New offset is less than last committed offset. " +
-        f"$newOffset < $lastCommittedOffset")
+      logWarning(f"New offset is less than last committed offset. $newOffset < $lastCommittedOffset")
       return None
     }
     if (maxOffset.exists(offset => !(offset >= newOffset))) {
-      logWarning(f"New offset is more than max offset. " +
-        f"$newOffset > ${maxOffset.get}")
+      logWarning(f"New offset is more than max offset. $newOffset > ${maxOffset.get}")
       return None
     }
 
-    val transaction = YtWrapper.createTransaction(None, timeout = timeout, sticky = true)
+    parentTransactionId match {
+      case Some(txId) => advanceWithParentTransaction(txId, consumerPath, newOffset)
+      case None => advanceWithNewTransaction(consumerPath, newOffset, timeout)
+    }
+  }
+
+  private def advanceWithParentTransaction(txId: String, consumerPath: String, newOffset: YtQueueOffset)
+    (implicit client: CompoundClient): Option[YtQueueOffset] = {
+    logDebug(s"Using parent transaction $txId for offset advance")
     try {
       newOffset.partitions.foreach { case (index, offset) =>
         if (offset >= 0) {
-          YtWrapper.advanceConsumer(YPath.simple(consumerPath), YPath.simple(newOffset.path), index, offset + 1,
-            transaction)
+          YtWrapper.advanceConsumer(YPath.simple(consumerPath), YPath.simple(newOffset.path), index, offset + 1, txId)
         }
       }
-      transaction.commit().join()
       Some(newOffset)
     } catch {
-      case e: Throwable =>
-        transaction.abort().join()
+      case NonFatal(e) =>
+        logError(s"Failed to advance offset with parent transaction $txId", e)
+        throw e
+    }
+  }
+
+  private def advanceWithNewTransaction(consumerPath: String, newOffset: YtQueueOffset, timeout: Duration)
+    (implicit client: CompoundClient): Option[YtQueueOffset] = {
+    val tx = YtWrapper.createTransaction(None, timeout = timeout, sticky = true)
+    try {
+      newOffset.partitions.foreach { case (index, offset) =>
+        if (offset >= 0) {
+          YtWrapper.advanceConsumer(YPath.simple(consumerPath), YPath.simple(newOffset.path), index, offset + 1, tx)
+        }
+      }
+      tx.commit().join()
+      Some(newOffset)
+    } catch {
+      case NonFatal(e) =>
+        tx.abort().join()
         throw e
     }
   }

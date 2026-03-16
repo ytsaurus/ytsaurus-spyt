@@ -89,6 +89,19 @@ class UInt64Test extends AnyFlatSpec with Matchers with LocalSpark with TmpDir w
     result shouldEqual expected
   }
 
+  it should "filter values by uint64 column" in {
+    createSampleTable()
+
+    val result = spark.read.yt(tmpPath).where($"id" >= 3L).select("id").collect()
+
+    result should contain theSameElementsAs Seq(
+      Row(UInt64Long(3L)),
+      Row(UInt64Long("9223372036854775813")),
+      Row(UInt64Long("9223372036854775816")),
+      Row(UInt64Long("18446744073709551615"))
+    )
+  }
+
   it should "write to a table with uint64 column" in {
     val df = Seq(
       UInt64Long(1L), UInt64Long(2L), UInt64Long(3L), UInt64Long("9223372036854775813"),

@@ -15,7 +15,7 @@ class UInt64DecimalTest extends AnyFlatSpec with Matchers with LocalSpark with T
 
   import spark.implicits._
 
-  it should "read a table with uint64 column to Decimal" in {
+  private def createSampleTable(): Unit = {
     val tableSchema = TableSchema.builder()
       .addValue("id", ColumnValueType.UINT64)
       .addValue("value", ColumnValueType.STRING)
@@ -29,6 +29,10 @@ class UInt64DecimalTest extends AnyFlatSpec with Matchers with LocalSpark with T
       """{id = 9223372036854775813u; value = "value 5"}""",
       """{id = 18446744073709551615u; value = "value 6"}""" // 2^64 - 1
     ), tmpPath, tableSchema)
+  }
+
+  it should "read a table with uint64 column to Decimal" in {
+    createSampleTable()
 
     val df = spark.read.yt(tmpPath)
     df.schema.fields.map(_.copy(metadata = Metadata.empty)) should contain theSameElementsInOrderAs Seq(
@@ -58,5 +62,18 @@ class UInt64DecimalTest extends AnyFlatSpec with Matchers with LocalSpark with T
       java.lang.Long.parseUnsignedLong("9223372036854775816"), java.lang.Long.parseUnsignedLong("18446744073709551615"))
 
     data should contain theSameElementsAs expected
+  }
+
+  it should "filter uint64 table by decimal value" in {
+    createSampleTable()
+
+    val result = spark.read.yt(tmpPath).where($"id" >= 3).select($"id").as[BigDecimal].collect()
+
+    result should contain theSameElementsAs Seq(
+      BigDecimal(3L),
+      BigDecimal("9223372036854775813"),
+      BigDecimal("9223372036854775816"),
+      BigDecimal("18446744073709551615")
+    )
   }
 }

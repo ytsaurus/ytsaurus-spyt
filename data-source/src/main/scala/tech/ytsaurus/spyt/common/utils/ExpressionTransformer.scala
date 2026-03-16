@@ -9,6 +9,8 @@ import tech.ytsaurus.spyt.common.utils
 import tech.ytsaurus.spyt.types.UInt64Long
 import tech.ytsaurus.ysontree._
 
+import scala.util.Try
+
 object ExpressionTransformer {
 
   def filtersToSegmentSet(dataFilters: Seq[Filter])
@@ -34,7 +36,7 @@ object ExpressionTransformer {
       case x: Float => Some(RealValue(x.doubleValue()))
       case x: String => Some(RealValue(x))
       case x: UTF8String => Some(RealValue(x.toString))
-      case x: java.math.BigDecimal => Some(RealValue(UInt64Long(x)))
+      case x: java.math.BigDecimal => Try(RealValue(UInt64Long(x))).toOption
       case _ => None
     }
   }

@@ -3,7 +3,7 @@ package tech.ytsaurus.spyt.format.types
 import org.apache.spark.sql.functions.element_at
 import org.apache.spark.sql.types._
 import org.apache.spark.sql.v2.YtUtils
-import org.apache.spark.sql.{DataFrameReader, Row}
+import org.apache.spark.sql.{DataFrame, DataFrameReader, Row}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import tech.ytsaurus.spyt._
@@ -62,19 +62,31 @@ class ComplexTypeV3Test extends AnyFlatSpec with Matchers with LocalSpark with T
     res.collect() should contain theSameElementsAs data.map(x => Row(x.orNull))
   }
 
-  it should "read decimal from yt" in {
-    val precision = 3
-    val scale = 2
-    val data = Seq("1.23", "0.21")
-    val byteDecimal = data.map(x => textToBinary(x, precision, scale))
-    writeTableFromURow(byteDecimal.map(x => packToRow(x, ColumnValueType.STRING)), tmpPath,
+  private def decimalReadTest(values: Seq[String], precision: Int, scale: Int)(f: DataFrame => Unit): Unit = {
+    val data = values.map(x => textToBinary(x, precision, scale))
+    writeTableFromURow(data.map(x => packToRow(x, ColumnValueType.STRING)), tmpPath,
       TableSchema.builder().setUniqueKeys(false).addValue("a", TiType.decimal(precision, scale)).build())
 
     withConf(s"spark.yt.${TypeV3.name}", "true") {
       testEnabledAndDisabledArrow { reader =>
-        val res = reader.yt(tmpPath)
-        res.collect().map(x => x.getDecimal(0).toString) should contain theSameElementsAs data
+        f(reader.yt(tmpPath))
       }
+    }
+
+  }
+
+  it should "read decimal from yt" in {
+    val data = Seq("1.23", "0.21")
+    decimalReadTest(data, 3, 2) { res =>
+      res.collect().map(x => x.getDecimal(0).toString) should contain theSameElementsAs data
+    }
+  }
+
+  it should "filter by decimal value" in {
+    val data = (1 to 10).map(n => s"$n.00$n")
+    val expectedData = data.drop(4).map(v => new java.math.BigDecimal(v).setScale(4))
+    decimalReadTest(data, 6, 4) { df =>
+      df.where($"a" > 5).collect().map(_.getDecimal(0)) should contain theSameElementsAs expectedData
     }
   }
 

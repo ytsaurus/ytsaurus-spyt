@@ -2,16 +2,16 @@ package tech.ytsaurus.spark.launcher
 
 import com.twitter.scalding.Args
 import org.slf4j.LoggerFactory
-import WorkerLogLauncher.WorkerLogConfig
+import tech.ytsaurus.client.CompoundClient
+import tech.ytsaurus.spark.launcher.WorkerLogLauncher.WorkerLogConfig
 import tech.ytsaurus.spyt.wrapper.Utils.parseDuration
 import tech.ytsaurus.spyt.wrapper.model.WorkerLogBlock
 import tech.ytsaurus.spyt.wrapper.model.WorkerLogSchema.{getMetaPath, metaSchema}
 import tech.ytsaurus.spyt.wrapper.{LogLazy, YtWrapper}
-import tech.ytsaurus.client.CompoundClient
 
 import java.io.{File, RandomAccessFile}
 import java.nio.file.attribute.FileTime
-import java.nio.file.{Files, Path, StandardCopyOption}
+import java.nio.file.{Files, Path}
 import java.time.ZoneOffset
 import scala.collection.mutable
 import scala.concurrent.duration.{Duration, DurationInt}
@@ -108,7 +108,8 @@ class LogServiceRunnable(workerLogConfig: WorkerLogConfig)(implicit yt: Compound
 
   private[launcher] def init(): Unit = {
     YtWrapper.createDir(workerLogConfig.tablesPath, None, ignoreExisting = true)
-    YtWrapper.createDynTableAndMount(getMetaPath(workerLogConfig.tablesPath), metaSchema)
+    log.info(s"Creating meta table at ${getMetaPath(workerLogConfig.tablesPath)} with additionalTableOptions: ${workerLogConfig.additionalTableOptions}")
+    YtWrapper.createDynTableAndMount(getMetaPath(workerLogConfig.tablesPath), metaSchema, workerLogConfig.additionalTableOptions)
   }
 
   override def run(): Unit = {

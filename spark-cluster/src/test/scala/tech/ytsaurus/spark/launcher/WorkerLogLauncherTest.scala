@@ -6,13 +6,16 @@ import org.apache.log4j.spi.{LoggingEvent, RootLogger}
 import org.apache.log4j.{FileAppender, Level}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
+import tech.ytsaurus.client.CompoundClient
+import tech.ytsaurus.client.request.CreateObject
+import tech.ytsaurus.core.cypress.CypressNodeType
 import tech.ytsaurus.spark.launcher.WorkerLogLauncher.WorkerLogConfig
 import tech.ytsaurus.spyt.SparkAdapter
 import tech.ytsaurus.spyt.test.{LocalYtClient, TmpDir}
 import tech.ytsaurus.spyt.wrapper.YtWrapper
-import tech.ytsaurus.spyt.wrapper.model.{WorkerLogBlock, WorkerLogMeta}
 import tech.ytsaurus.spyt.wrapper.model.WorkerLogSchema.getMetaPath
-import tech.ytsaurus.ysontree.YTreeNode
+import tech.ytsaurus.spyt.wrapper.model.{WorkerLogBlock, WorkerLogMeta}
+import tech.ytsaurus.ysontree.{YTree, YTreeBuilder, YTreeNode}
 
 import java.io.{File, FileWriter}
 import java.nio.file.attribute.FileTime
@@ -96,21 +99,41 @@ class WorkerLogLauncherTest extends AnyFlatSpec with LocalYtClient with Matchers
   private def getExecutorFileLog(appId: String, exId: String, pipe: String): String =
     s"${getExecutorFolderPath(appId, exId)}/$pipe"
 
-  private case class TestEventHolder(timestamp: Long,
-                                     level: Option[String],
-                                     message: String,
-                                     throwable: Option[String] = None) {
-    def toEvent: LoggingEvent = {
-      SparkAdapter.instance.createLoggingEvent(
-        this.getClass.getName,
-        new RootLogger(Level.ALL),
-        timestamp,
-        level.map(Level.toLevel)
-          .getOrElse(throw new RuntimeException("Cannot write event with null level")),
-        message,
-        throwable.map(new Throwable(_)).orNull
-      )
-    }
+  def createTabletCellBundle(name: String,
+    changelogAccount: String = "sys",
+    snapshotAccount: String = "sys")
+    (implicit yt: CompoundClient): Unit = {
+
+    val options = new YTreeBuilder()
+      .beginMap()
+      .key("changelog_account").value(changelogAccount)
+      .key("snapshot_account").value(snapshotAccount)
+      .key("changelog_replication_factor").value(1)
+      .key("changelog_read_quorum").value(1)
+      .key("changelog_write_quorum").value(1)
+      .key("changelog_erasure_codec").value("none")
+      .key("changelog_primary_medium").value("default")
+      .endMap()
+      .build()
+
+    val acl = new YTreeBuilder()
+      .beginList()
+      .beginMap()
+      .key("permissions").value(java.util.Arrays.asList("use"))
+      .key("subjects").value(java.util.Arrays.asList("everyone"))
+      .key("action").value("allow")
+      .endMap()
+      .endList()
+      .build()
+
+    val request = CreateObject.builder()
+      .setType(CypressNodeType.TABLET_CELL_BUNDLE)
+      .addAttribute("options", options)
+      .addAttribute("name", YTree.stringNode(name))
+      .addAttribute("acl", acl)
+      .build()
+
+    yt.createObject(request).join()
   }
 
   private object TestEventHolder {
@@ -138,6 +161,7 @@ class WorkerLogLauncherTest extends AnyFlatSpec with LocalYtClient with Matchers
   )
 
   private type LogArray = Array[Seq[TestEventHolder]]
+
   private def getAllLogs: LogArray = {
     val logTables = YtWrapper.listDir(tablesDir).filter(_ != "meta")
     val allLogs = logTables.map { table =>
@@ -145,6 +169,7 @@ class WorkerLogLauncherTest extends AnyFlatSpec with LocalYtClient with Matchers
     }
     allLogs
   }
+
   private def getAllMeta: Seq[WorkerLogMeta] = {
     YtWrapper.selectRows(getMetaPath(tablesDir)).map(WorkerLogMeta(_))
   }
@@ -216,7 +241,33 @@ class WorkerLogLauncherTest extends AnyFlatSpec with LocalYtClient with Matchers
     val driver = "example"
     createDriver(driver)
 
-    val workerLogService = new LogServiceRunnable(config)
+    val bundleName = "bundle_for_test_meta"
+    if (!YtWrapper.exists(s"//sys/tablet_cell_bundles/$bundleName")) {
+      createTabletCellBundle(bundleName)
+
+      val request = CreateObject.builder()
+        .setType(CypressNodeType.TABLET_CELL)
+        .addAttribute("tablet_cell_bundle", YTree.stringNode(bundleName))
+        .build()
+
+      val id = yt.createObject(request).join()
+
+      var index = 0
+      val limit = 60
+      while (YtWrapper.attribute(s"//sys/tablet_cells/$id", "health").stringValue() != "good" && index < limit) {
+        Thread.sleep(1000)
+        index += 1
+      }
+    }
+
+    val configWithBundle = config.copy(
+      additionalTableOptions = Map[String, Any](
+        "enable_dynamic_store_read" -> true,
+        "tablet_cell_bundle" -> bundleName
+      )
+    )
+
+    val workerLogService = new LogServiceRunnable(configWithBundle)
     workerLogService.init()
 
     writeToLog(getDriverFileLog(driver, STDOUT), List(simpleInfoEvent, simpleInfoEvent2))
@@ -226,12 +277,38 @@ class WorkerLogLauncherTest extends AnyFlatSpec with LocalYtClient with Matchers
     finalizeDriverLog(driver, STDERR)
 
     workerLogService.uploadLogs()
+
+    val metaPath = getMetaPath(tablesDir)
+    val metaEnableDynamicStoreRead = yt.getNode(s"/$metaPath/@enable_dynamic_store_read").join().boolValue()
+    metaEnableDynamicStoreRead shouldBe true
+    val metaTabletCellBundle = yt.getNode(s"/$metaPath/@tablet_cell_bundle").join().stringValue()
+    metaTabletCellBundle shouldBe bundleName
+
     val tables = YtWrapper.listDir(tablesDir).filter(_ != "meta")
     tables.foreach { t =>
-      val enable_dynamic_store_read = yt.getNode(s"/${config.tablesPath}/$t/@enable_dynamic_store_read").join().boolValue()
+      val enable_dynamic_store_read = yt.getNode(s"/${configWithBundle.tablesPath}/$t/@enable_dynamic_store_read").join().boolValue()
       enable_dynamic_store_read shouldBe true
-      val expiration = yt.existsNode(s"/${config.tablesPath}/$t/@expiration_time").join()
+      val tabletCellBundle = yt.getNode(s"/${configWithBundle.tablesPath}/$t/@tablet_cell_bundle").join().stringValue()
+      tabletCellBundle shouldBe bundleName
+      val expiration = yt.existsNode(s"/${configWithBundle.tablesPath}/$t/@expiration_time").join()
       expiration shouldBe true
+    }
+  }
+
+  private case class TestEventHolder(timestamp: Long,
+    level: Option[String],
+    message: String,
+    throwable: Option[String] = None) {
+    def toEvent: LoggingEvent = {
+      SparkAdapter.instance.createLoggingEvent(
+        this.getClass.getName,
+        new RootLogger(Level.ALL),
+        timestamp,
+        level.map(Level.toLevel)
+          .getOrElse(throw new RuntimeException("Cannot write event with null level")),
+        message,
+        throwable.map(new Throwable(_)).orNull
+      )
     }
   }
 
@@ -369,7 +446,7 @@ class WorkerLogLauncherTest extends AnyFlatSpec with LocalYtClient with Matchers
 
     val creationTime = LocalDate.ofInstant(
       Files.getAttribute(Path.of(getExecutorFileLog(app, executor, STDERR)), "creationTime")
-      .asInstanceOf[FileTime].toInstant, ZoneId.systemDefault())
+        .asInstanceOf[FileTime].toInstant, ZoneId.systemDefault())
 
     getAllMeta should contain theSameElementsAs Seq(
       WorkerLogMeta(getAppFolderName(app), executor, STDERR, creationTime.toString, 1)
@@ -478,6 +555,7 @@ class WorkerLogLauncherTest extends AnyFlatSpec with LocalYtClient with Matchers
     logSnaps(groupCnt - 1) shouldBe List(events)
 
     def getLengthOfHead(a: LogArray): Int = a.headOption.map(_.length).getOrElse(0)
+
     (0 until groupCnt - 1).foreach {
       i =>
         getLengthOfHead(logSnaps(i)) should be <= getLengthOfHead(logSnaps(i + 1))

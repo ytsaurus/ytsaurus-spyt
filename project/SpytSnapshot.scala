@@ -15,6 +15,7 @@ object SpytSnapshot {
     setSpytSnapshotVersion,
     releaseStepTask(spytUpdatePythonVersion),
     releaseStepTask(spytDistributive),
+    dumpVersions,
     releaseStepTask(publishToYt)
   )
 

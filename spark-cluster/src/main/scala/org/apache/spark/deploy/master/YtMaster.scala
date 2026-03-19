@@ -3,6 +3,7 @@ package org.apache.spark.deploy.master
 import org.apache.spark.deploy.master.Master.{ENDPOINT_NAME, SYSTEM_NAME}
 import org.apache.spark.deploy.master.ui.MasterWebUI
 import org.apache.spark.internal.Logging
+import org.apache.spark.internal.config.{MASTER_REST_SERVER_PORT, MASTER_UI_PORT}
 import org.apache.spark.{SecurityManager, SparkConf}
 import org.apache.spark.rpc.{RpcAddress, RpcCallContext, RpcEnv}
 import org.apache.spark.sql.connect.ytsaurus.SpytConnectAppStartedMessage
@@ -203,6 +204,12 @@ object YtMaster extends Logging {
       exitOnUncaughtException = false))
     SparkUtils.initDaemon(log)
     val conf = new SparkConf
+    for (port <- sys.env.get("YT_PORT_1")) {
+      conf.set(MASTER_UI_PORT.key, port)
+    }
+    for (port <- sys.env.get("YT_PORT_2")) {
+      conf.set(MASTER_REST_SERVER_PORT.key, port)
+    }
     val args = new MasterArguments(argStrings, conf)
     val securityMgr = new SecurityManager(conf)
     val rpcEnv = RpcEnv.create(SYSTEM_NAME, args.host, args.port, conf, securityMgr)

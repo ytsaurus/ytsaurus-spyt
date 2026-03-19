@@ -272,7 +272,8 @@ def build_livy_spec(builder: VanillaSpecBuilder, common_params: CommonSpecParams
         .end_task()
 
 
-def build_hs_spec(builder: VanillaSpecBuilder, common_params: CommonSpecParams, config: HistoryServerConfig):
+def build_hs_spec(builder: VanillaSpecBuilder, common_params: CommonSpecParams, config: HistoryServerConfig,
+                  enable_task_proxy: bool):
     spark_conf_hs = common_params.spark_conf.copy()
     if "spark.workerLog.tablePath" not in spark_conf_hs:
         worker_log_location = "yt:/{}".format(common_params.config.spark_discovery.worker_log())
@@ -292,18 +293,21 @@ def build_hs_spec(builder: VanillaSpecBuilder, common_params: CommonSpecParams, 
 
     shs_file_paths = copy.copy(common_params.task_spec["file_paths"])
 
-    builder.begin_task("history") \
+    task = builder.begin_task("history") \
         .job_count(1) \
         .command(history_command) \
         .memory_limit(parse_memory(config.history_server_memory_limit) +
                       parse_memory(config.history_server_memory_overhead)) \
         .cpu_limit(config.history_server_cpu_limit) \
         .spec(common_params.task_spec) \
-        .file_paths(shs_file_paths) \
-        .end_task()
+        .file_paths(shs_file_paths)
+    if enable_task_proxy:
+        task.port_count(1)
+    task.end_task()
 
 
-def build_master_spec(builder: VanillaSpecBuilder, common_params: CommonSpecParams, config: MasterConfig):
+def build_master_spec(builder: VanillaSpecBuilder, common_params: CommonSpecParams, config: MasterConfig,
+                      enable_task_proxy: bool):
     extra_java_opts = common_params.extra_java_opts + spark_conf_to_opts(common_params.spark_conf)
     master_command = _launcher_command("Master", common_params, extra_java_opts=extra_java_opts)
     master_environment = {
@@ -320,6 +324,8 @@ def build_master_spec(builder: VanillaSpecBuilder, common_params: CommonSpecPara
         .spec(master_task_spec)
     if common_params.spark_conf.get("spark.ytsaurus.use_assigned_ports.master") == "true":
         task.port_count(2)
+    if enable_task_proxy:
+        task.port_count(3)
     task.end_task()
 
 
@@ -511,6 +517,20 @@ def build_spark_operation_spec(config: dict, client: YtClient,
         environment["YT_METRICS_PULL_PORT"] = metrics_pull_port
         operation_spec["annotations"]["solomon_resolver_tag"] = "spark"
         operation_spec["annotations"]["solomon_resolver_ports"] = [int(metrics_pull_port), int(agent_pull_port)]
+    if common_config.enablers.enable_task_proxy:
+        operation_spec["annotations"]["task_proxy"] = {
+            "enabled": True,
+            "tasks_info": {}
+        }
+        if "master" in job_types:
+            operation_spec["annotations"]["task_proxy"]["tasks_info"]["master"] = {
+                "rest": {"protocol": "http", "port_index": 2},
+                "ui": {"protocol": "http", "port_index": 1}
+            }
+        if "history" in job_types:
+            operation_spec["annotations"]["task_proxy"]["tasks_info"]["history"] = {
+                "ui": {"protocol": "http", "port_index": 0}
+            }
 
     if common_config.enablers.enable_tcp_proxy:
         environment["SPARK_YT_TCP_PROXY_RANGE_START"] = str(common_config.tcp_proxy_range_start)
@@ -550,9 +570,9 @@ def build_spark_operation_spec(config: dict, client: YtClient,
     )
     builder = VanillaSpecBuilder()
     if "master" in job_types:
-        build_master_spec(builder, common_params, master_config)
+        build_master_spec(builder, common_params, master_config, common_config.enablers.enable_task_proxy)
     if "history" in job_types:
-        build_hs_spec(builder, common_params, hs_config)
+        build_hs_spec(builder, common_params, hs_config, common_config.enablers.enable_task_proxy)
     if "worker" in job_types:
         build_worker_spec(builder, "workers", ytserver_proxy_path, tvm_enabled, common_params, worker_config)
     if "driver" in job_types:

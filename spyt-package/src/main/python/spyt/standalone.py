@@ -27,6 +27,7 @@ from .conf import read_remote_conf, validate_cluster_version, \
     update_config_inplace, validate_custom_params, validate_mtn_config, \
     latest_ytserver_proxy_path, read_global_conf, \
     worker_num_limit, validate_worker_num, read_cluster_conf, validate_ssd_config, cuda_toolkit_version  # noqa: E402
+from .task_proxy import TaskProxyInfo  # noqa: E402
 from .utils import get_spark_master, base_spark_conf, SparkDiscovery, SparkCluster, call_get_proxy_address_url, \
     parse_bool, _add_conf, check_spark_version  # noqa: E402
 from .enabler import SpytEnablers  # noqa: E402
@@ -38,11 +39,11 @@ from .submit import create_base_spark_env  # noqa: E402
 logger = logging.getLogger(__name__)
 
 
-def _add_master(discovery, spark_args, rest, client=None):
+def _add_master(discovery, task_proxy, spark_args, client=None):
     spark_args.append("--master")
     spark_args.append(get_spark_master(discovery, rest=False, yt_client=client))
     _add_conf({
-        "spark.rest.master": get_spark_master(discovery, rest=True, yt_client=client)
+        "spark.rest.master": get_spark_master(discovery, rest=True, yt_client=client, task_proxy=task_proxy)
     }, spark_args)
 
 
@@ -154,13 +155,14 @@ def raw_submit(discovery_path, spark_home, spark_args,
         raise RuntimeError(
             'No permission for reading cluster, actual permission status is ' + str(permission_status))
     discovery = SparkDiscovery(discovery_path=discovery_path)
+    task_proxy = TaskProxyInfo.maybe_task_proxy(discovery, client)
 
     cluster_conf = read_cluster_conf(str(discovery.conf()), client)
     spark_conf = cluster_conf['spark_conf']
     dedicated_driver_op = parse_bool(spark_conf.get('spark.dedicated_operation_mode'))
     ipv6_preference_enabled = parse_bool(spark_conf.get('spark.hadoop.yt.preferenceIpv6.enabled'))
 
-    _add_master(discovery, spark_base_args, rest=True, client=client)
+    _add_master(discovery, task_proxy, spark_base_args, client=client)
     _add_shs_option(discovery, spark_base_args, client=client)
     _add_base_spark_conf(client, discovery, spark_base_args)
     _add_python_version(python_version, spark_base_args)
@@ -236,11 +238,12 @@ def shell(discovery_path, spark_home, spark_args, spyt_version=None, client=None
     spark_shell_path = "{}/bin/spark-shell".format(spark_home)
     spark_base_args = [spark_shell_path]
     discovery = SparkDiscovery(discovery_path=discovery_path)
+    task_proxy = TaskProxyInfo.maybe_task_proxy(discovery, client)
 
     spark_conf = read_cluster_conf(str(discovery.conf()), client)['spark_conf']
     ipv6_preference_enabled = parse_bool(spark_conf.get('spark.hadoop.yt.preferenceIpv6.enabled'))
 
-    _add_master(discovery, spark_base_args, rest=False, client=client)
+    _add_master(discovery, task_proxy, spark_base_args, client=client)
     _add_shs_option(discovery, spark_base_args, client=client)
     _add_base_spark_conf(client, discovery, spark_base_args)
     _add_conf({"spark.ui.showConsoleProgress": "true"}, spark_base_args)
@@ -579,6 +582,7 @@ def start_spark_cluster(worker_cores, worker_memory, worker_num, worker_cores_ov
             dynamic_config['spark_conf']['spark.autoscaler.slots_increment_step'] = autoscaler_slot_increment_step
 
     enablers.apply_config(dynamic_config)
+    dynamic_config['spark_conf'][SpytEnablers.TASK_PROXY_KEY] = str(enablers.enable_task_proxy or False).lower()
 
     spark_discovery.create(client)
 

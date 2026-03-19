@@ -147,6 +147,7 @@ def main(raw_args=None):
                             enable_mtn=args.enable_mtn,
                             enable_yt_metrics=args.enable_yt_metrics,
                             enable_tcp_proxy=args.enable_tcp_proxy,
+                            enable_task_proxy=args.enable_task_proxy,
                             enable_squashfs=args.enable_squashfs
                         ),
                         enable_preference_ipv6=args.enable_preference_ipv6,

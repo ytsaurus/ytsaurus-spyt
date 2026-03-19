@@ -212,9 +212,11 @@ def format_memory(memory_bytes):
     return "{}B".format(memory_bytes)
 
 
-def get_spark_master(discovery, rest, yt_client=None):
+def get_spark_master(discovery, rest, yt_client=None, task_proxy=None):
     master_path = discovery.master_rest() if rest else discovery.master_spark()
     master = SparkDiscovery.get(master_path, client=yt_client)
+    if rest and task_proxy and task_proxy.master_rest:
+        master = task_proxy.master_rest
     return "spark://{0}".format(master)
 
 

@@ -676,6 +676,7 @@
   "spyt-package/src/main/python/spyt/spec.py":"yt/spark/spark-over-yt/spyt-package/src/main/python/spyt/spec.py",
   "spyt-package/src/main/python/spyt/standalone.py":"yt/spark/spark-over-yt/spyt-package/src/main/python/spyt/standalone.py",
   "spyt-package/src/main/python/spyt/submit.py":"yt/spark/spark-over-yt/spyt-package/src/main/python/spyt/submit.py",
+  "spyt-package/src/main/python/spyt/task_proxy.py":"yt/spark/spark-over-yt/spyt-package/src/main/python/spyt/task_proxy.py",
   "spyt-package/src/main/python/spyt/types.py":"yt/spark/spark-over-yt/spyt-package/src/main/python/spyt/types.py",
   "spyt-package/src/main/python/spyt/utils.py":"yt/spark/spark-over-yt/spyt-package/src/main/python/spyt/utils.py",
   "spyt-package/src/main/python/spyt/version.py":"yt/spark/spark-over-yt/spyt-package/src/main/python/spyt/version.py",

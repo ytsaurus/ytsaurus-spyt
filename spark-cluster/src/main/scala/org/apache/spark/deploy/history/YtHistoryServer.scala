@@ -55,7 +55,10 @@ object YtHistoryServer extends Logging {
       .getConstructor(classOf[SparkConf])
       .newInstance(conf)
 
-    val port = conf.get(History.HISTORY_SERVER_UI_PORT)
+    val port = sys.env.get("YT_PORT_0") match {
+      case Some(ytPort) => ytPort.toInt
+      case None => conf.get(History.HISTORY_SERVER_UI_PORT)
+    }
 
     val server = new YtHistoryServer(conf, provider, securityManager, port)
     server.bind()

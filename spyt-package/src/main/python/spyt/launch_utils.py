@@ -32,6 +32,7 @@ def add_default_launch_options(parser):
 
     add_parser_group(parser, '--enable-tcp-proxy', '--disable-tcp-proxy', 'enable_tcp_proxy',
                      default_enablers.enable_tcp_proxy)
+    add_parser_group(parser, '--enable-task-proxy', '--disable-task-proxy', 'enable_task_proxy', None)
     parser.add_argument('--tcp-proxy-range-start', required=False, default=30000, type=int)
     parser.add_argument('--tcp-proxy-range-size', required=False, default=100, type=int)
 

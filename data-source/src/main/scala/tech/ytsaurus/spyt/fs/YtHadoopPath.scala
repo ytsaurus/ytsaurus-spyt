@@ -8,10 +8,11 @@ import tech.ytsaurus.spyt.wrapper.table.OptimizeMode
 import scala.util.Try
 
 case class YtTableMeta(rowCount: Long = 0,
-                       size: Long = 1L,
-                       modificationTime: Long = 0L,
-                       optimizeMode: OptimizeMode = OptimizeMode.Scan,
-                       isDynamic: Boolean = false) extends Serializable {
+  size: Long = 1L,
+  modificationTime: Long = 0L,
+  optimizeMode: OptimizeMode = OptimizeMode.Scan,
+  isDynamic: Boolean = false,
+  fullReadAllowed: Boolean = true) extends Serializable {
   def approximateRowSize: Long = if (rowCount == 0) 0 else (size + rowCount - 1) / rowCount
 }
 
@@ -26,20 +27,21 @@ case class YtHadoopPath(ypath: YPathEnriched, meta: YtTableMeta)
 object YtHadoopPath {
   private def toFileName(meta: YtTableMeta): String = {
     import meta._
-    s"${rowCount}_${size}_${modificationTime}_${optimizeMode.name}_${isDynamic}"
+    s"${rowCount}_${size}_${modificationTime}_${optimizeMode.name}_${isDynamic}_${fullReadAllowed}"
   }
 
   private def tryDeserialize(path: Path): Option[YtHadoopPath] = {
     Try {
-      val rowCountStr :: sizeStr :: modificationTimeStr :: optimizeModeStr :: isDynamicStr :: Nil =
-        path.getName.trim.split("_", 5).toList
+      val rowCountStr :: sizeStr :: modificationTimeStr :: optimizeModeStr :: isDynamicStr :: fullReadAllowedStr :: Nil =
+        path.getName.trim.split("_", 6).toList
       val rowCount = rowCountStr.trim.toLong
       val size = sizeStr.trim.toLong
       val modificationTime = modificationTimeStr.trim.toLong
       val optimizeMode = OptimizeMode.fromName(optimizeModeStr.trim)
       val isDynamic = isDynamicStr.trim.toBoolean
+      val fullReadAllowed = fullReadAllowedStr.trim.toBoolean
       YtHadoopPath(YPathEnriched.fromPath(path.getParent),
-        YtTableMeta(rowCount, size, modificationTime, optimizeMode, isDynamic))
+        YtTableMeta(rowCount, size, modificationTime, optimizeMode, isDynamic, fullReadAllowed))
     }.toOption
   }
 

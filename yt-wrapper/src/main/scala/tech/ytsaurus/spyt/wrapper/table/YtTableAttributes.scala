@@ -7,12 +7,12 @@ import tech.ytsaurus.ysontree.YTreeNode
 trait YtTableAttributes {
   self: YtCypressUtils =>
 
-  def rowCount(path: String, transaction: Option[String] = None)(implicit yt: CompoundClient): Long = {
-    attribute(path, YtAttributes.rowCount, transaction).longValue()
-  }
-
-  def rowCount(attrs: Map[String, YTreeNode]): Long = {
-    attrs(YtAttributes.rowCount).longValue()
+  def rowCount(attrs: Map[String, YTreeNode]): Option[Long] = {
+    if (attrs.contains(YtAttributes.rowCount))
+        Some(attrs(YtAttributes.rowCount).longValue())
+    else {
+        None
+    }
   }
 
   def chunkRowCount(path: String, transaction: Option[String] = None)(implicit yt: CompoundClient): Long = {

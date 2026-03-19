@@ -12,7 +12,7 @@ import org.apache.spark.sql.v2.YtReaderOptions
 import org.apache.spark.sql.vectorized.{ColumnarBatch, YtFileFormat}
 import org.apache.spark.util.collection.BitSet
 import tech.ytsaurus.spyt.SparkAdapter
-import tech.ytsaurus.spyt.format.conf.YtTableSparkSettings
+import tech.ytsaurus.spyt.format.conf.{SparkYtInternalConfiguration, YtTableSparkSettings}
 import tech.ytsaurus.spyt.fs.YtHadoopPath
 import tech.ytsaurus.spyt.wrapper.table.OptimizeMode
 
@@ -26,7 +26,7 @@ case class YtSourceScanExec(@transient relation: HadoopFsRelation,
   extends DataSourceScanExec {
 
   private lazy val optimizedForScan: Boolean = relation.fileFormat match {
-    case yf: YtFileFormat =>
+    case _: YtFileFormat =>
       relation.location.asInstanceOf[InMemoryFileIndex]
         .allFiles().forall { fileStatus =>
         YtHadoopPath.fromPath(fileStatus.getPath) match {
@@ -37,9 +37,22 @@ case class YtSourceScanExec(@transient relation: HadoopFsRelation,
     case _ => false
   }
 
+  private lazy val fullReadAllowed: Boolean = relation.fileFormat match {
+    case _: YtFileFormat =>
+      relation.location.asInstanceOf[InMemoryFileIndex]
+        .allFiles().forall { fileStatus =>
+        YtHadoopPath.fromPath(fileStatus.getPath) match {
+          case yp: YtHadoopPath => yp.meta.fullReadAllowed
+          case _ => false
+        }
+      }
+    case _ => false
+  }
+
   @transient
   private val wrappedRelation: HadoopFsRelation = relation.copy(
-    options = relation.options + (YtTableSparkSettings.OptimizedForScan.name -> optimizedForScan.toString)
+    options = relation.options + (YtTableSparkSettings.OptimizedForScan.name -> optimizedForScan.toString) +
+      (SparkYtInternalConfiguration.FullReadAllowed.name -> fullReadAllowed.toString)
   )(relation.sparkSession)
 
   private val delegate = new FileSourceScanExecDelegate(
@@ -99,7 +112,7 @@ class FileSourceScanExecDelegate(relation: HadoopFsRelation,
 
   override lazy val supportsColumnar: Boolean = {
     relation.fileFormat match {
-      case yf: YtFileFormat => YtReaderOptions.supportBatch(
+      case _: YtFileFormat => YtReaderOptions.supportBatch(
         SparkAdapter.instance.fromAttributes(output), relation.options, relation.sparkSession.sqlContext.conf
       )
       case f => f.supportBatch(relation.sparkSession, SparkAdapter.instance.fromAttributes(output))

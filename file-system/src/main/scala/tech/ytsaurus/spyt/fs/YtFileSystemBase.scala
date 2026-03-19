@@ -29,6 +29,8 @@ abstract class YtFileSystemBase extends FileSystem with LogLazy {
 
   private var defaultYtConf: YtClientConfiguration = _
 
+  protected[fs] def ytUser: String = defaultYtConf.user
+
   protected[fs] def ytClient(f: YPathEnriched): CompoundClient = {
     YtClientProvider.ytClientWithProxy(defaultYtConf, f.cluster)
   }

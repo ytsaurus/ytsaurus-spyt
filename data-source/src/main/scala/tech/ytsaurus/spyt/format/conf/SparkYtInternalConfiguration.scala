@@ -10,4 +10,8 @@ object SparkYtInternalConfiguration {
 
   case object GlobalTransaction extends ConfigEntry[String](s"$prefix.globalTransaction")
 
+  // read options
+
+  case object FullReadAllowed extends ConfigEntry[Boolean]("full_read_allowed", Some(true))
+
 }

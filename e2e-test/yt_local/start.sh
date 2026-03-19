@@ -53,6 +53,10 @@ rpc_proxy_config="""
     };
     validation={cypress_key_reader={}}
   };
+  enable_authentication=%true;
+  cypress_token_authenticator={
+    secure=%true;
+  };
 }
 """
 

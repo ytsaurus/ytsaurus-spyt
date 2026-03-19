@@ -24,7 +24,7 @@ import tech.ytsaurus.spyt.format.conf.SparkYtConfiguration.Read.{CountOptimizati
 import tech.ytsaurus.spyt.fs.YtHadoopPath
 import tech.ytsaurus.spyt.logger.{TaskInfo, YtDynTableLoggerConfig}
 import tech.ytsaurus.spyt.wrapper.client.YtClientConfigurationConverter.ytClientConfiguration
-import tech.ytsaurus.spyt.wrapper.client.{ YtClientProvider}
+import tech.ytsaurus.spyt.wrapper.client.YtClientProvider
 import tech.ytsaurus.spyt.wrapper.config._
 import tech.ytsaurus.spyt.wrapper.table.{TableIterator, YtReadContext, YtReadSettings}
 
@@ -45,7 +45,8 @@ case class YtPartitionReaderFactoryAdapter(sqlConf: SQLConf,
   private val ytClientConf = ytClientConfiguration(sqlConf)
   private val arrowEnabled: Boolean = YtReaderOptions.arrowEnabled(options, sqlConf)
   private val optimizedForScan: Boolean = YtReaderOptions.optimizedForScan(options)
-  private val readBatch: Boolean = YtReaderOptions.canReadBatch(readDataSchema, optimizedForScan, arrowEnabled)
+  private val fullReadAllowed: Boolean = YtReaderOptions.fullReadAllowed(options)
+  private val readBatch: Boolean = YtReaderOptions.canReadBatch(readDataSchema, options, sqlConf)
   private val returnBatch: Boolean = readBatch && YtReaderOptions.supportBatch(resultSchema, sqlConf)
   private val batchMaxSize = sqlConf.ytConf(VectorizedCapacity)
   private val countOptimizationEnabled = sqlConf.ytConf(CountOptimizationEnabled)
@@ -182,6 +183,7 @@ case class YtPartitionReaderFactoryAdapter(sqlConf: SQLConf,
       returnBatch = returnBatch,
       arrowEnabled = arrowEnabled,
       optimizedForScan = optimizedForScan,
+      fullReadAllowed = fullReadAllowed,
       timeout = ytClientConf.timeout,
       reportBytesRead = bytesReadReporter(broadcastedConf),
       countOptimizationEnabled = countOptimizationEnabled,

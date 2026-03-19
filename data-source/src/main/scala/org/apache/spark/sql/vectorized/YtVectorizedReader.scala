@@ -17,15 +17,16 @@ import tech.ytsaurus.spyt.wrapper.table.{TableIterator, YtReadContext}
 import scala.concurrent.duration.Duration
 
 class YtVectorizedReader(split: YtInputSplit,
-                         batchMaxSize: Int,
-                         returnBatch: Boolean,
-                         arrowEnabled: Boolean,
-                         optimizedForScan: Boolean,
-                         timeout: Duration,
-                         reportBytesRead: Long => Unit,
-                         countOptimizationEnabled: Boolean,
-                         hadoopPath: YtHadoopPath)
-                        (implicit ytReadContext: YtReadContext) extends RecordReader[Void, Object] {
+  batchMaxSize: Int,
+  returnBatch: Boolean,
+  arrowEnabled: Boolean,
+  optimizedForScan: Boolean,
+  fullReadAllowed: Boolean,
+  timeout: Duration,
+  reportBytesRead: Long => Unit,
+  countOptimizationEnabled: Boolean,
+  hadoopPath: YtHadoopPath)
+  (implicit ytReadContext: YtReadContext) extends RecordReader[Void, Object] {
   private val log = LoggerFactory.getLogger(getClass)
   private var _batchIdx = 0
   private implicit val yt: CompoundClient = ytReadContext.yt
@@ -36,9 +37,9 @@ class YtVectorizedReader(split: YtInputSplit,
     log.info(s"Reading from $path")
     val schema = split.schema
     val totalRowCount = YPathUtils.rowCount(path)
-    if (countOptimizationEnabled && schema.isEmpty && totalRowCount.isDefined) {
+    if (countOptimizationEnabled && schema.isEmpty && totalRowCount.isDefined && fullReadAllowed) {
       new EmptyColumnsBatchReader(totalRowCount.get) // Empty schemas always batch readable
-    } else if (arrowEnabled && optimizedForScan) {
+    } else if (arrowEnabled && optimizedForScan && fullReadAllowed) {
       createArrowBatchReader(path, schema)
     } else {
       createWireRowBatchReader(path, schema)

@@ -55,7 +55,8 @@ class YtFileFormat extends FileFormat with DataSourceRegister with StreamSourceP
     val sqlConf = sparkSession.sqlContext.conf
     val arrowEnabledValue = YtReaderOptions.arrowEnabled(options, sqlConf)
     val optimizedForScanValue = YtReaderOptions.optimizedForScan(options)
-    val readBatch = YtReaderOptions.canReadBatch(requiredSchema, optimizedForScanValue, arrowEnabledValue)
+    val fullReadAllowedValue = YtReaderOptions.fullReadAllowed(options)
+    val readBatch = YtReaderOptions.canReadBatch(requiredSchema, options, sqlConf)
     val returnBatch = readBatch && YtReaderOptions.supportBatch(requiredSchema, sqlConf)
     val filterPushdownConfig = FilterPushdownConfig(sparkSession)
 
@@ -65,6 +66,7 @@ class YtFileFormat extends FileFormat with DataSourceRegister with StreamSourceP
 
     val log = LoggerFactory.getLogger(getClass)
     log.info(s"Batch read enabled: $readBatch")
+    log.info(s"Full read allowed: $fullReadAllowedValue")
     log.info(s"Batch return enabled: $returnBatch")
     log.info(s"Optimized for scan: $optimizedForScanValue")
     log.info(s"Arrow enabled: $arrowEnabledValue")
@@ -88,6 +90,7 @@ class YtFileFormat extends FileFormat with DataSourceRegister with StreamSourceP
               returnBatch = returnBatch,
               arrowEnabled = arrowEnabledValue,
               optimizedForScan = optimizedForScanValue,
+              fullReadAllowed = fullReadAllowedValue,
               timeout = ytClientConf.timeout,
               reportBytesRead = bytesReadReporter(broadcastedConf),
               countOptimizationEnabled = countOptimizationEnabled,

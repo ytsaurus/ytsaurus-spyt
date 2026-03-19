@@ -1,6 +1,8 @@
 import pytest
 from pyspark.sql import Row
 from py4j.protocol import Py4JJavaError
+from common.helpers import assert_items_equal
+
 
 spark_conf_distributed_enabled = {
     "spark.yt.read.ytDistributedReading.enabled": "true"
@@ -70,15 +72,22 @@ def create_cls_table(yt_client, table_path, user_name, optimize_for: str = "look
     create_table_with_acl(yt_client, table_path, acl_rules, optimize_for)
 
 
-def setup_table(tmp_dir, yt_client, local_session_with_user, table_creator, optimize_for: str):
-    user_name = local_session_with_user.conf.get("spark.hadoop.yt.user")
+def setup_table(tmp_dir, yt_client, user_name, table_creator, optimize_for: str):
     table_path = f"{tmp_dir}/test_table"
     table_creator(yt_client, table_path, user_name, optimize_for)
     return table_path
 
 
-# TODO: resolve rowCount meta issue for RLS tables  SPYT-988 (keepling)
-@pytest.mark.parametrize("optimize_for", ["lookup", ]) #"scan"])
+def check_rls_result(df):
+    expected = [
+        Row(key=3, value="3"),
+        Row(key=4, value="4")
+    ]
+    assert df.count() == 2
+    assert_items_equal(expected, df.collect())
+
+
+@pytest.mark.parametrize("optimize_for", ["lookup", "scan"])
 @pytest.mark.parametrize(
     "local_session_with_user",
     [
@@ -89,15 +98,25 @@ def setup_table(tmp_dir, yt_client, local_session_with_user, table_creator, opti
     indirect=True
 )
 def test_rls_success(tmp_dir, yt_client, local_session_with_user, optimize_for):
-    table_path = setup_table(tmp_dir, yt_client, local_session_with_user, create_rls_table, optimize_for)
+    user_name, session = local_session_with_user
+    table_path = setup_table(tmp_dir, yt_client, user_name, create_rls_table, optimize_for)
+    check_rls_result(session.read.yt(table_path))
 
-    available_rows = [
-        Row(key=3, value="3"),
-        Row(key=4, value="4")
-    ]
 
-    result = local_session_with_user.read.yt(table_path).collect()
-    assert list(result) == available_rows
+@pytest.mark.parametrize("optimize_for", ["lookup", "scan"])
+@pytest.mark.parametrize(
+    "local_session_with_user",
+    [
+        pytest.param(spark_conf_partitioning_disabled, id="partitioning_disabled"),
+        pytest.param(spark_conf_distributed_disabled, id="distributed_disabled"),
+        pytest.param(spark_conf_distributed_enabled, id="distributed_enabled"),
+    ],
+    indirect=True
+)
+def test_sql_rls_success(tmp_dir, yt_client, local_session_with_user, optimize_for):
+    user_name, session = local_session_with_user
+    table_path = setup_table(tmp_dir, yt_client, user_name, create_rls_table, optimize_for)
+    check_rls_result(session.sql(f"SELECT * FROM yt.`{table_path}`"))
 
 
 @pytest.mark.skip(reason="TODO: fix CLS SPYT-968/SPYT-969")
@@ -113,18 +132,18 @@ def test_rls_success(tmp_dir, yt_client, local_session_with_user, optimize_for):
     indirect=True
 )
 def test_cls_success(tmp_dir, yt_client, local_session_with_user, optimize_for):
-    table_path = setup_table(tmp_dir, yt_client, local_session_with_user, create_cls_table, optimize_for)
+    user_name, session = local_session_with_user
+    table_path = setup_table(tmp_dir, yt_client, user_name, create_cls_table, optimize_for)
 
     # TODO: fix schema resolution for CLS SPYT-969 (keepling)
     # now it returns restricted column with empty values
     expected_rows = [Row(key=i) for i in range(5)]
 
-    result = local_session_with_user.read.yt(table_path).collect()
+    result = session.read.yt(table_path).collect()
     assert list(result) == expected_rows
 
 
-# TODO: resolve rowCount meta issue for RLS tables  SPYT-988 (keepling)
-@pytest.mark.parametrize("optimize_for", ["lookup", ]) #"scan"])
+@pytest.mark.parametrize("optimize_for", ["lookup", "scan"])
 @pytest.mark.parametrize(
     "local_session_with_user, table_creator",
     [
@@ -134,9 +153,10 @@ def test_cls_success(tmp_dir, yt_client, local_session_with_user, optimize_for):
     indirect=["local_session_with_user"]
 )
 def test_omit_disabled_raises_exception(tmp_dir, yt_client, local_session_with_user, table_creator, optimize_for):
-    table_path = setup_table(tmp_dir, yt_client, local_session_with_user, table_creator, optimize_for)
+    user_name, session = local_session_with_user
+    table_path = setup_table(tmp_dir, yt_client, user_name, table_creator, optimize_for)
     with pytest.raises(Exception) as exc_info:
-        local_session_with_user.read.yt(table_path).collect()
+        session.read.yt(table_path).collect()
 
     error_message = str(exc_info.value).lower()
     assert "access denied for user" in error_message, \

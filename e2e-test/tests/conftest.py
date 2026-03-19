@@ -67,17 +67,18 @@ def tmp_dir(yt_client):
 @pytest.fixture
 def tmp_user(yt_client):
     user_name = "tmp_user"
+    token = "sometoken"
     yt_client.create("user", attributes={"name": user_name}, ignore_existing=True)
 
     while yt_client.get(f"//sys/users/{user_name}/@life_stage") != "creation_committed":
         time.sleep(1)
 
-    token_hash = sha256(b"sometoken").hexdigest()
+    token_hash = sha256(token.encode()).hexdigest()
     yt_client.set(f"//sys/tokens/{token_hash}", user_name)
     yt_client.create("map_node", f"//sys/cypress_tokens/{token_hash}", ignore_existing=True)
     yt_client.set(f"//sys/cypress_tokens/{token_hash}/@user", user_name)
 
-    yield user_name, token_hash
+    yield user_name, token
 
     yt_client.remove(f"//sys/users/{user_name}")
     yt_client.remove(f"//sys/tokens/{token_hash}")
@@ -110,12 +111,11 @@ def local_session(request):
 def local_session_with_user(request, tmp_user):
     user_name, token_hash = tmp_user
     user_conf = {
-        "spark.hadoop.yt.user": user_name,
         "spark.hadoop.yt.token": token_hash,
     }
     session = _create_spark_session(request, user_config=user_conf)
     try:
-        yield session
+        yield user_name, session
     finally:
         spyt.client.stop(session)
 

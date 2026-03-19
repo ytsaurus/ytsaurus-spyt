@@ -1,17 +1,17 @@
 package org.apache.spark.sql.v2
 
+import org.apache.hadoop.conf.Configuration
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.expressions.Expression
-import org.apache.spark.sql.connector.read.{Scan, SupportsPushDownFilters}
+import org.apache.spark.sql.connector.read.Scan
 import org.apache.spark.sql.execution.datasources.PartitioningAwareFileIndex
-import org.apache.spark.sql.execution.datasources.v2.FileScanBuilder
 import org.apache.spark.sql.sources.{Filter, IsNotNull}
-import org.apache.spark.sql.types.{ArrayType, DataType, MapType, StructType}
+import org.apache.spark.sql.types.StructType
 import org.apache.spark.sql.util.CaseInsensitiveStringMap
 import tech.ytsaurus.spyt.common.utils.ExpressionTransformer.filtersToSegmentSet
 import tech.ytsaurus.spyt.common.utils.SegmentSet
 import tech.ytsaurus.spyt.format.conf.SparkYtConfiguration.Read.KeyColumnsFilterPushdown
-import tech.ytsaurus.spyt.format.conf.YtTableSparkSettings
+import tech.ytsaurus.spyt.format.conf.{SparkYtInternalConfiguration, YtTableSparkSettings}
 import tech.ytsaurus.spyt.fs.YtHadoopPath
 import tech.ytsaurus.spyt.logger.{YtDynTableLogger, YtLogger}
 import tech.ytsaurus.spyt.serializers.SchemaConverter
@@ -24,7 +24,7 @@ case class YtScanBuilderAdapter(sparkSession: SparkSession,
                                 schema: StructType,
                                 dataSchema: StructType,
                                 options: CaseInsensitiveStringMap) extends ScanBuilderAdapter {
-  lazy val hadoopConf = {
+  lazy val hadoopConf: Configuration = {
     val caseSensitiveMap = options.asCaseSensitiveMap.asScala.toMap
     // Hadoop Configurations are case sensitive.
     sparkSession.sessionState.newHadoopConfWithOptions(caseSensitiveMap)
@@ -32,6 +32,13 @@ case class YtScanBuilderAdapter(sparkSession: SparkSession,
   lazy val optimizedForScan: Boolean = fileIndex.allFiles().forall { fileStatus =>
     YtHadoopPath.fromPath(fileStatus.getPath) match {
       case yp: YtHadoopPath => !yp.meta.isDynamic && yp.meta.optimizeMode == OptimizeMode.Scan
+      case _ => false
+    }
+  }
+
+  lazy val fullReadAllowed: Boolean = fileIndex.allFiles().forall { fileStatus =>
+    YtHadoopPath.fromPath(fileStatus.getPath) match {
+      case yp: YtHadoopPath => yp.meta.fullReadAllowed
       case _ => false
     }
   }
@@ -95,6 +102,7 @@ case class YtScanBuilderAdapter(sparkSession: SparkSession,
   override def build(dataSchema: StructType, partitionSchema: StructType): Scan = {
     var opts = options.asScala
     opts = opts + (YtTableSparkSettings.OptimizedForScan.name -> optimizedForScan.toString)
+    opts = opts + (SparkYtInternalConfiguration.FullReadAllowed.name -> fullReadAllowed.toString)
     YtScan(sparkSession, hadoopConf, fileIndex, dataSchema, dataSchema, partitionSchema,
       new CaseInsensitiveStringMap(opts.asJava), partitionFilters, dataFilters,
       pushedFilterSegments = pushedFilterSegments)

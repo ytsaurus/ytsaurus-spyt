@@ -6,8 +6,9 @@ import tech.ytsaurus.client.{AsyncFragmentWriter, CompoundClient}
 import tech.ytsaurus.client.request.{DistributedWriteCookie, WriteFragmentResult, WriteSerializationContext, WriteTableFragment}
 import tech.ytsaurus.spyt.format.conf.SparkYtWriteConfiguration
 import tech.ytsaurus.spyt.format.conf.YtTableSparkSettings.TableWriterConfig
-import tech.ytsaurus.spyt.serializers.{InternalRowSerializer, WriteSchemaConverter, SchemaConverter}
+import tech.ytsaurus.spyt.serializers.{InternalRowSerializer, SchemaConverter, WriteSchemaConverter}
 import tech.ytsaurus.spyt.wrapper.config._
+import tech.ytsaurus.ysontree.YTreeNode
 
 import java.util.concurrent.TimeUnit
 
@@ -17,14 +18,16 @@ class YtDistributedOutputWriter(
   schema: StructType,
   sortOption: SchemaConverter.SortOption,
   writeConfiguration: SparkYtWriteConfiguration,
-  options: Map[String, String])(implicit client: CompoundClient)
+  options: Map[String, String],
+  idMapping: Option[Array[Int]],
+  baseSchema: Option[YTreeNode])(implicit client: CompoundClient)
   extends AbstractYtOutputWriter[AsyncFragmentWriter[InternalRow]](schema, writeConfiguration, options) {
 
   private var hasWrittenRows = false
 
   override protected def initializeWriter(): AsyncFragmentWriter[InternalRow] = {
     val serializationContext = new WriteSerializationContext(
-      new InternalRowSerializer(schema, WriteSchemaConverter(options), sortOption)
+      new InternalRowSerializer(schema, WriteSchemaConverter(options), sortOption, idMapping, baseSchema)
     )
     val wtfRequest = WriteTableFragment.builder[InternalRow]()
       .setConfig(options.getYtConf(TableWriterConfig).orNull)

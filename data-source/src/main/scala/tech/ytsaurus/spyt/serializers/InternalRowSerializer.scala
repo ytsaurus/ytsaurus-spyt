@@ -16,6 +16,7 @@ import tech.ytsaurus.spyt.serializers.SchemaConverter.{SortOption, Unordered, de
 import tech.ytsaurus.spyt.types.YTsaurusTypes
 import tech.ytsaurus.spyt.wrapper.LogLazy
 import tech.ytsaurus.typeinfo.TiType
+import tech.ytsaurus.ysontree.YTreeNode
 
 import java.util.concurrent.{Executors, TimeUnit}
 import scala.annotation.tailrec
@@ -25,16 +26,24 @@ import scala.concurrent.{ExecutionContext, Future}
 
 class InternalRowSerializer(sparkSchema: StructType,
   writeSchemaConverter: WriteSchemaConverter,
-  sortOption: SortOption = Unordered) extends WireRowSerializer[InternalRow] with LogLazy {
+  sortOption: SortOption = Unordered,
+  idMapping: Option[Array[Int]] = None,
+  baseSchema: Option[YTreeNode] = None) extends WireRowSerializer[InternalRow] with LogLazy {
 
   private val log = LoggerFactory.getLogger(getClass)
 
-  private val tableSchema = writeSchemaConverter.tableSchema(sparkSchema, sortOption)
+  private val tableSchema = baseSchema.map(TableSchema.fromYTree)
+    .getOrElse(writeSchemaConverter.tableSchema(sparkSchema, sortOption))
   private val sparkAndTableIndices = {
-    val keyIndices = sortOption.keys.map(key => sparkSchema.fieldIndex(key))
-    val keyIndicesSet = keyIndices.toSet
-    val dataIndices = (0 until sparkSchema.length).filter(i => !keyIndicesSet.contains(i))
-    (keyIndices ++ dataIndices).zipWithIndex
+    if(idMapping.isEmpty) {
+      val keyIndices = sortOption.keys.map(key => sparkSchema.fieldIndex(key))
+      val keyIndicesSet = keyIndices.toSet
+      val dataIndices = (0 until sparkSchema.length).filter(i => !keyIndicesSet.contains(i))
+      (keyIndices ++ dataIndices).zipWithIndex
+    } else{
+      val idMappingArray = idMapping.get
+      idMappingArray.indices.filter(i => idMappingArray(i) != -1).map(i => (idMappingArray(i), i))
+    }
   }
 
   override def getSchema: TableSchema = tableSchema

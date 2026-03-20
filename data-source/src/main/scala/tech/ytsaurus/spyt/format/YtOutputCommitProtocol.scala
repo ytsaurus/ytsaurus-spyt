@@ -6,6 +6,7 @@ import org.apache.hadoop.mapreduce.{JobContext, TaskAttemptContext, TaskAttemptI
 import org.apache.spark.broadcast.Broadcast
 import org.apache.spark.internal.io.FileCommitProtocol
 import org.apache.spark.scheduler.{DAGSchedulerUtils, SparkListener, SparkListenerJobEnd, SparkListenerJobStart, SparkListenerStageCompleted, SparkListenerStageSubmitted}
+import org.apache.spark.sql.types.StructType
 import org.apache.spark.sql.{SaveMode, SparkSession}
 import org.apache.spark.{SparkEnv, TaskContext}
 import org.slf4j.LoggerFactory
@@ -15,18 +16,20 @@ import tech.ytsaurus.core.GUID
 import tech.ytsaurus.spyt.exceptions._
 import tech.ytsaurus.spyt.format.YtOutputCommitProtocol._
 import tech.ytsaurus.spyt.format.conf.SparkYtConfiguration.Write.DynBatchSize
-import tech.ytsaurus.spyt.format.conf.SparkYtInternalConfiguration.{GlobalTransaction, Transaction}
-import tech.ytsaurus.spyt.format.conf.YtTableSparkSettings.{InconsistentDynamicWrite, WriteTransaction, isTable, isTableSorted}
+import tech.ytsaurus.spyt.format.conf.SparkYtInternalConfiguration.{GlobalTransaction, Transaction, IdMapping, BaseSchema}
+import tech.ytsaurus.spyt.format.conf.YtTableSparkSettings.{InconsistentDynamicWrite, Schema, WriteTransaction, isTable, isTableSorted}
 import tech.ytsaurus.spyt.format.conf.{SparkYtConfiguration, YtTableSparkSettings}
 import tech.ytsaurus.spyt.fs.path.YPathEnriched
 import tech.ytsaurus.spyt.wrapper.YtWrapper
 import tech.ytsaurus.spyt.wrapper.client.YtClientConfigurationConverter.ytClientConfiguration
 import tech.ytsaurus.spyt.wrapper.client.YtClientProvider
+import tech.ytsaurus.spyt.wrapper.config.ConfigEntry.implicits.intArrayAdapter
 import tech.ytsaurus.spyt.wrapper.config.{ConfigEntry, _}
 
 import java.io.{IOException, ObjectOutputStream}
 import java.util.concurrent.{ConcurrentHashMap, ConcurrentMap, Semaphore}
 import scala.collection.JavaConverters._
+import scala.collection.mutable.ArrayBuffer
 import scala.concurrent.Promise
 
 abstract class AbstractYtOutputCommitProtocol(
@@ -306,7 +309,34 @@ class DistributedWriteOutputCommitProtocol(
       rootPath
     }
     prepareWrite(conf) { transaction =>
-      if (!isAppend) {
+      if (isAppend) {
+        val tableSchema = YtWrapper.attribute(rootPath.toString, "schema")
+        val sparkSchema = conf.ytConf(Schema).sparkType.topLevel.asInstanceOf[StructType]
+
+        val listTableSchema = tableSchema.asList()
+        val sparkSchemaColumns = sparkSchema.map(elem => elem.name).toList
+
+        if(listTableSchema.size() < sparkSchemaColumns.size) {
+          throw new IllegalArgumentException("Too many columns in the appendable dataset")
+        }
+
+        val mappingTable = Array.fill(listTableSchema.size())(-1)
+        for (tableIndex <- 0 until listTableSchema.size()) {
+          val ytField = listTableSchema.get(tableIndex).asMap().get("name").toString
+          val sparkIndex = sparkSchemaColumns.indexOf(ytField.stripPrefix("\"").stripSuffix("\""))
+
+          mappingTable(tableIndex) = sparkIndex
+        }
+
+        if((listTableSchema.size() == sparkSchemaColumns.size && mappingTable.contains(-1)) ||
+          (listTableSchema.size() > sparkSchemaColumns.size &&
+            sparkSchemaColumns.size > mappingTable.filter(i => i != -1).size)) {
+          throw new IllegalArgumentException("Appendable dataset doesn't match the base table schema")
+        }
+
+        conf.setYtConf(BaseSchema, tableSchema)
+        conf.setYtConf(IdMapping, mappingTable)
+      } else {
         setupTable(rootPath, conf, transaction)
       }
     }

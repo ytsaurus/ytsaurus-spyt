@@ -10,11 +10,13 @@ import org.apache.spark.sql.types.StructType
 import org.slf4j.LoggerFactory
 import tech.ytsaurus.client.CompoundClient
 import tech.ytsaurus.client.request.DistributedWriteCookie
+import tech.ytsaurus.spyt.format.conf.SparkYtInternalConfiguration.{BaseSchema, IdMapping}
 import tech.ytsaurus.spyt.format.conf.{SparkYtWriteConfiguration, YtTableSparkSettings}
 import tech.ytsaurus.spyt.fs.path.YPathEnriched
 import tech.ytsaurus.spyt.serializers.{SchemaConverter, WriteSchemaConverter}
 import tech.ytsaurus.spyt.wrapper.YtWrapper
 import tech.ytsaurus.spyt.wrapper.client.{YtClientConfiguration, YtClientProvider}
+import tech.ytsaurus.spyt.wrapper.config.{ConfigEntry, SparkYtHadoopConfiguration}
 
 class YtOutputWriterFactory(ytClientConf: YtClientConfiguration,
                             writeConfiguration: SparkYtWriteConfiguration,
@@ -31,7 +33,9 @@ class YtOutputWriterFactory(ytClientConf: YtClientConfiguration,
     if (writeConfiguration.distributedWrite) {
       val cookie = YtOutputCommitProtocol.getCookieForTask(context)
       val sortOption = SchemaConverter.getSortOption(context.getConfiguration)
-      return new YtDistributedOutputWriter(f, cookie, dataSchema, sortOption, writeConfiguration, options)
+      val idMapping = context.getConfiguration.getYtConf(IdMapping)
+      val baseSchema = context.getConfiguration.getYtConf(BaseSchema)
+      return new YtDistributedOutputWriter(f, cookie, dataSchema, sortOption, writeConfiguration, options, idMapping, baseSchema)
     }
 
     val path = YPathEnriched.fromPath(new Path(f))

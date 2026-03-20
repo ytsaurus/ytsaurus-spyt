@@ -49,6 +49,10 @@ object ConfigEntry {
       override def get(value: String): Seq[String] = fromJsonTyped[Seq[String]](value)
       override def set(value: Seq[String]): String = toJsonTyped(value)
     }
+    implicit val intArrayAdapter: ValueAdapter[Array[Int]] = new ValueAdapter[Array[Int]] {
+      override def get(value: String): Array[Int] = value.split(",").map(num => num.toInt)
+      override def set(value: Array[Int]): String = value.mkString(",")
+    }
 
     implicit val stringMapAdapter: ValueAdapter[Map[String, String]] = new ValueAdapter[Map[String, String]] {
       override def get(value: String): Map[String, String] = fromJsonTyped[Map[String, String]](value)

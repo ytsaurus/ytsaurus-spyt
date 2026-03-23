@@ -10,15 +10,16 @@ import org.apache.spark.sql.internal.SQLConf.{CODEGEN_FACTORY_MODE, WHOLESTAGE_C
 import org.mockito.scalatest.MockitoSugar
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
+import tech.ytsaurus.core.tables.{ColumnValueType, TableSchema}
 import tech.ytsaurus.spyt._
 import tech.ytsaurus.spyt.format.conf.SparkYtConfiguration
-import tech.ytsaurus.spyt.test.{DynTableTestUtils, LocalSpark, TmpDir}
+import tech.ytsaurus.spyt.test.{DynTableTestUtils, LocalSpark, TestUtils, TmpDir}
 
 import java.util.UUID
 import scala.language.postfixOps
 
 class YtSortedTableJoinTest extends AnyFlatSpec with Matchers with LocalSpark with TmpDir
-  with MockitoSugar with DynTableTestUtils {
+  with MockitoSugar with DynTableTestUtils with TestUtils {
   import spark.implicits._
 
   // 1Kb ~ 60 rows with 2 long numbers
@@ -133,11 +134,17 @@ class YtSortedTableJoinTest extends AnyFlatSpec with Matchers with LocalSpark wi
   it should "work with filter" in {
     withConfs(conf) {
       val tmpPath2 = s"$tmpPath-${UUID.randomUUID()}"
+      val tableSchema = TableSchema.builder()
+        .addValue("a", ColumnValueType.INT64)
+        .addValue("b", ColumnValueType.INT64)
+        .addValue("c", ColumnValueType.INT64)
+        .sortBy("a", "b")
+        .build()
 
-      val data = (0L to 99L).map(x => (x / 10, x / 10, x))
+      val ysonSeq: Seq[String] = (0L to 99L).map(x => s"{a = ${x / 10};b = ${x / 10};c = $x}")
 
-      data.toDF("a", "b", "c").write.sortedBy("a", "b").yt(tmpPath)
-      data.toDF("a", "b", "c").write.sortedBy("a", "b").yt(tmpPath2)
+      writeTableFromYson(ysonSeq, tmpPath, tableSchema)
+      writeTableFromYson(ysonSeq, tmpPath2, tableSchema)
 
       val left = spark.read.yt(tmpPath)
       val right = spark.read.yt(tmpPath2)

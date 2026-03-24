@@ -74,12 +74,6 @@ object Dependencies {
     "net.logstash.log4j" % "jsonevent-layout" % "1.7"
   )
 
-  lazy val scalatra = Seq(
-    "org.scalatra" %% "scalatra" % scalatraVersion,
-    "org.eclipse.jetty" % "jetty-webapp" % "9.2.19.v20160908" % Compile,
-    "javax.servlet" % "javax.servlet-api" % "3.1.0" % Provided
-  )
-
   lazy val sttp = Seq(
     "com.softwaremill.sttp.client" %% "core" % "2.1.4"
   )

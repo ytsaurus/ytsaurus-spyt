@@ -19,13 +19,11 @@ trait DiscoveryService {
   def registerMaster(operationId: String,
                      address: Address,
                      clusterVersion: String,
-                     masterWrapperEndpoint: HostAndPort,
                      clusterConf: SparkConfYsonable): Unit
 
   def updateMaster(operationId: String,
                    address: Address,
                    clusterVersion: String,
-                   masterWrapperEndpoint: HostAndPort,
                    clusterConf: SparkConfYsonable): Unit = {}
 
   def registerSHS(address: HostAndPort): Unit
@@ -39,8 +37,6 @@ trait DiscoveryService {
   def discoverAddress(): Try[Address]
 
   def operations(): Option[OperationSet]
-
-  def masterWrapperEndpoint(): Option[HostAndPort]
 
   def waitAddress(timeout: Duration): Option[Address] = {
     DiscoveryService.waitFor(

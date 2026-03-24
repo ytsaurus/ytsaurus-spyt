@@ -12,8 +12,6 @@ object SparkPaths {
   val ytPortoDeltaLayersPath = "//porto_layers/delta"
   val ytPortoBaseLayersPath = "//porto_layers/base"
 
-  val defaultYtServerProxyPath = "//sys/bin/ytserver-proxy/ytserver-proxy"
-
   def isSnapshotVersion(version: String): Boolean = version.contains("SNAPSHOT")
 
   def versionBasePath(basePath: String, version: String): String = {

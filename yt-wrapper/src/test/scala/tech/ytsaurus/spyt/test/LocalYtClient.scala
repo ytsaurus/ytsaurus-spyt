@@ -36,11 +36,6 @@ trait LocalYtClient extends LocalYt {
     token = "",
     timeout = 5 minutes,
     proxyRole = None,
-    byop = ByopConfiguration(
-      enabled = false,
-      ByopRemoteConfiguration(enabled = false, EmptyWorkersListStrategy.Default)
-    ),
-    masterWrapperUrl = None,
     extendedFileTimeout = true,
     proxyNetworkName = None
   )

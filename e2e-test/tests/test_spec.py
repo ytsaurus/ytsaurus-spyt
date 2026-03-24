@@ -41,7 +41,7 @@ def test_format_memory():
 
 
 def _build_configs(enable_tmpfs=False):
-    enablers = SpytEnablers(enable_byop=False, enable_profiling=False)
+    enablers = SpytEnablers(enable_profiling=False)
     discovery = SparkDiscovery("//home/cluster")
     common_config = CommonComponentConfig(container_home="./spark", enable_tmpfs=enable_tmpfs, enablers=enablers,
                                           rpc_job_proxy_thread_pool_size=6, spark_discovery=discovery,
@@ -62,7 +62,7 @@ def _build_configs(enable_tmpfs=False):
 def _build_worker_spec(enable_tmpfs=False):
     common_params, worker_config, _ = _build_configs(enable_tmpfs)
     builder = VanillaSpecBuilder()
-    build_worker_spec(builder, "workers", None, False, common_params, worker_config)
+    build_worker_spec(builder, "workers", common_params, worker_config)
     return builder.build()
 
 
@@ -107,7 +107,6 @@ def test_worker_spec_builder():
                 'file_paths': ['//home/job.jar'],
                 'environment': {
                     'TEST_ENV': 'True',
-                    'SPARK_YT_BYOP_ENABLED': 'False',
                     'SPARK_WORKER_PORT': '27072',
                     'SPARK_YT_CLUSTER_CONF_PATH': '//home/cluster/discovery/conf',
                     'SPARK_LOCAL_DIRS': '.'},
@@ -144,7 +143,6 @@ def test_worker_spec_builder_enable_tmpfs():
                 'file_paths': ['//home/job.jar'],
                 'environment': {
                     'TEST_ENV': 'True',
-                    'SPARK_YT_BYOP_ENABLED': 'False',
                     'SPARK_WORKER_PORT': '27072',
                     'SPARK_YT_CLUSTER_CONF_PATH': '//home/cluster/discovery/conf',
                     'SPARK_LOCAL_DIRS': './tmpfs'},

@@ -54,26 +54,16 @@ case class SparkLaunchConfig(spark_yt_base_path: String,
                              file_paths: Seq[String],
                              spark_conf: Map[String, String],
                              enablers: SpytEnablers = SpytEnablers(),
-                             ytserver_proxy_path: Option[String] = None,
                              layer_paths: Seq[String] = SparkLaunchConfig.defaultLayers,
                              squashfs_layer_paths: Seq[String] = SparkLaunchConfig.squashFsLayers,
-                             environment: Map[String, String] = Map.empty) extends YsonableConfig {
-  override def resolveSymlinks(implicit yt: YTsaurusClient): YsonableConfig = {
-    import SparkLaunchConfig._
-    if (ytserver_proxy_path.isEmpty) {
-      copy(ytserver_proxy_path = Some(resolveSymlink(defaultYtServerProxyPath)))
-    } else this
-  }
-}
+                             environment: Map[String, String] = Map.empty) extends YsonableConfig
 
-case class SpytEnablers(enable_byop: Boolean = true,
-                        enable_mtn: Boolean = true,
+case class SpytEnablers(enable_mtn: Boolean = true,
                         enable_yt_metrics: Boolean = true,
                         enable_tcp_proxy: Boolean = true,
                         enable_squashfs: Boolean = true) extends YsonableConfig {
   override def toYson(builder: YTreeBuilder): YTreeBuilder = {
     builder.beginMap()
-      .key("spark.hadoop.yt.byop.enabled").value(enable_byop)
       .key("spark.hadoop.yt.mtn.enabled").value(enable_mtn)
       .key("spark.ytsaurus.metrics.enabled").value(enable_yt_metrics)
       .key("spark.hadoop.yt.tcpProxy.enabled").value(enable_tcp_proxy)

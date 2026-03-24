@@ -80,7 +80,7 @@ def validate_versions_compatibility(spyt_version, spark_cluster_version):
                        "Please update your cluster with spark-launch-yt utility".format(spyt_version, spark_cluster_version))
 
 
-def validate_mtn_config(enablers, network_project, tvm_id, tvm_secret):
+def validate_mtn_config(enablers, network_project):
     if enablers.enable_mtn and not network_project:
         raise RuntimeError("When using MTN, network_project arg must be set.")
 
@@ -173,20 +173,6 @@ def validate_custom_params(params):
 
 def get_available_spyt_versions(client=None):
     return yt_list(SPYT_BASE_PATH.join(RELEASES_SUBDIR), client=client)
-
-
-def latest_ytserver_proxy_path(cluster_version, client=None):
-    if cluster_version:
-        return None
-    global_conf = read_global_conf(client=client)
-    symlink_path = global_conf.get("ytserver_proxy_path")
-    if symlink_path is None:
-        return None
-    return get("{}&/@target_path".format(symlink_path), client=client)
-
-
-def ytserver_proxy_attributes(path, client=None):
-    return get("{}/@user_attributes".format(path), client=client)
 
 
 def get_spark_distributive(client, enable_squashfs):

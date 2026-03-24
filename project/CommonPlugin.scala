@@ -72,6 +72,7 @@ object CommonPlugin extends AutoPlugin {
       },
       publishMavenStyle := true,
       libraryDependencies ++= testDeps,
+      Compile / doc / sources := Seq.empty,
       Test / fork := true,
       Test / javaOptions ++= (if (sys.env.get("SPYT_TEST_REMOTE_DEBUG").exists(_.toBoolean)) {
         Seq("-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5006")

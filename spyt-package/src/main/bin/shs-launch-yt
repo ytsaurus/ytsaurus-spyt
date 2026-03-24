@@ -9,7 +9,7 @@ from yt.wrapper.http_helpers import get_user_name  # noqa: E402
 from spyt.enabler import SpytEnablers  # noqa: E402
 from spyt.launch_utils import add_default_launch_options, add_hs_options  # noqa: E402
 from spyt.standalone import start_history_server  # noqa: E402
-from spyt.utils import default_token, default_tvm_id, default_tvm_secret, get_default_arg_parser  # noqa: E402
+from spyt.utils import default_token, get_default_arg_parser  # noqa: E402
 
 
 def main(raw_args=None):
@@ -28,8 +28,6 @@ def main(raw_args=None):
                          history_server_memory_overhead=args.history_server_memory_overhead,
                          history_server_cpu_limit=args.history_server_cpu_limit,
                          network_project=args.network_project,
-                         tvm_id=default_tvm_id(),
-                         tvm_secret=default_tvm_secret(),
                          advanced_event_log=args.advanced_event_log,
                          params=args.params,
                          shs_location=args.shs_location,

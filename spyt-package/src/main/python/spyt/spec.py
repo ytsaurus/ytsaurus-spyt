@@ -14,7 +14,7 @@ from yt.wrapper.common import update_inplace, update  # noqa: E402
 from yt.wrapper.http_helpers import get_token, get_user_name  # noqa: E402
 from yt.wrapper.spec_builders import VanillaSpecBuilder  # noqa: E402
 
-from .conf import ytserver_proxy_attributes, get_spark_distributive  # noqa: E402
+from .conf import get_spark_distributive  # noqa: E402
 from .conf import read_metrics_conf, read_spark_defaults_conf  # noqa: E402
 from .utils import SparkDiscovery, call_get_proxy_address_url, parse_memory  # noqa: E402
 from .enabler import SpytEnablers  # noqa: E402
@@ -37,7 +37,6 @@ class SparkDefaultArguments(object):
     SPARK_WORKER_LOG_UPDATE_INTERVAL = "10m"
     SPARK_WORKER_LOG_TABLE_TTL = "7d"
     SPARK_WORKER_CORES_OVERHEAD = 0
-    SPARK_WORKER_CORES_BYOP_OVERHEAD = 0
     SPARK_WORKER_GPU_LIMIT = 0
     LIVY_DRIVER_CORES = 1
     LIVY_DRIVER_MEMORY = "1024m"
@@ -65,8 +64,6 @@ class CommonComponentConfig():
     pool: str = None
     enable_tmpfs: bool = True
     network_project: str = None
-    tvm_id: str = None
-    tvm_secret: str = None
     enablers: SpytEnablers = None
     preemption_mode: str = "normal"
     cluster_log_level: str = "INFO"
@@ -329,7 +326,7 @@ def build_master_spec(builder: VanillaSpecBuilder, common_params: CommonSpecPara
     task.end_task()
 
 
-def build_worker_spec(builder: VanillaSpecBuilder, job_type: str, ytserver_proxy_path: str, tvm_enabled: bool,
+def build_worker_spec(builder: VanillaSpecBuilder, job_type: str,
                       common_params: CommonSpecParams, config: WorkerConfig):
     def _script_absolute_path(script):
         return os.path.join(common_params.config.spyt_home, script)
@@ -370,29 +367,14 @@ def build_worker_spec(builder: VanillaSpecBuilder, job_type: str, ytserver_proxy
                                        launcher_opts=worker_launcher_opts)
 
     worker_environment = {
-        "SPARK_YT_BYOP_ENABLED": str(common_params.config.enablers.enable_byop),
         "SPARK_WORKER_PORT": str(config.worker_port),
         "SPARK_YT_CLUSTER_CONF_PATH": str(common_params.config.spark_discovery.conf()),
     }
     worker_environment = update(common_params.environment, worker_environment)
-    if common_params.config.enablers.enable_byop:
-        ytserver_binary_name = ytserver_proxy_path.split("/")[-1] if ytserver_proxy_path else "ytserver-proxy"
-        byop_worker_environment = {
-            "SPARK_YT_BYOP_BINARY_PATH": "$HOME/{}".format(ytserver_binary_name),
-            "SPARK_YT_BYOP_CONFIG_PATH": "$HOME/ytserver-proxy.template.yson",
-            "SPARK_YT_BYOP_HOST": "localhost",
-            "SPARK_YT_BYOP_TVM_ENABLED": str(tvm_enabled)
-        }
-        worker_environment = update(worker_environment, byop_worker_environment)
 
-    if common_params.config.enablers.enable_byop:
-        worker_cores_overhead = config.res.cores_overhead or SparkDefaultArguments.SPARK_WORKER_CORES_BYOP_OVERHEAD
-    else:
-        worker_cores_overhead = config.res.cores_overhead or SparkDefaultArguments.SPARK_WORKER_CORES_OVERHEAD
+    worker_cores_overhead = config.res.cores_overhead or SparkDefaultArguments.SPARK_WORKER_CORES_OVERHEAD
 
     worker_file_paths = copy.copy(common_params.task_spec["file_paths"])
-    if ytserver_proxy_path and common_params.config.enablers.enable_byop:
-        worker_file_paths.append(ytserver_proxy_path)
 
     worker_task_spec = copy.deepcopy(common_params.task_spec)
     worker_task_spec["environment"] = worker_environment
@@ -477,9 +459,6 @@ def build_spark_operation_spec(config: dict, client: YtClient,
     operation_spec["description"] = {
         "Spark over YT": description
     }
-    ytserver_proxy_path = config.get("ytserver_proxy_path")
-    if ytserver_proxy_path and common_config.enablers.enable_byop:
-        operation_spec["description"]["BYOP"] = ytserver_proxy_attributes(ytserver_proxy_path, client=client)
 
     environment = copy.deepcopy(config["environment"])
     java_home = common_config.cluster_java_home or config.get('default_cluster_java_home')
@@ -503,8 +482,6 @@ def build_spark_operation_spec(config: dict, client: YtClient,
     environment["SPARK_YT_TCP_PROXY_ENABLED"] = str(common_config.enablers.enable_tcp_proxy)
     environment["SPARK_YT_PROFILING_ENABLED"] = str(common_config.enablers.enable_profiling)
     environment["SPARK_YT_RPC_JOB_PROXY_ENABLED"] = str(common_config.rpc_job_proxy)
-    if common_config.enablers.enable_byop:
-        environment["SPARK_YT_BYOP_PORT"] = "27002"
     if common_config.enablers.enable_yt_metrics:
         metrics_conf = read_metrics_conf()
         spark_defaults_conf = read_spark_defaults_conf()
@@ -555,11 +532,7 @@ def build_spark_operation_spec(config: dict, client: YtClient,
     if common_config.group_id:
         common_task_spec['extra_environment'] = ['discovery_server_addresses']
 
-    tvm_enabled = common_config.enablers.enable_mtn and bool(common_config.tvm_id) and bool(common_config.tvm_secret)
     secure_vault = {"YT_USER": user, "YT_TOKEN": get_token(client=client)}
-    if tvm_enabled:
-        secure_vault["SPARK_TVM_ID"] = common_config.tvm_id
-        secure_vault["SPARK_TVM_SECRET"] = common_config.tvm_secret
 
     entrypoint = config.get('entrypoint', '')
     if not isinstance(entrypoint, str):
@@ -574,9 +547,9 @@ def build_spark_operation_spec(config: dict, client: YtClient,
     if "history" in job_types:
         build_hs_spec(builder, common_params, hs_config, common_config.enablers.enable_task_proxy)
     if "worker" in job_types:
-        build_worker_spec(builder, "workers", ytserver_proxy_path, tvm_enabled, common_params, worker_config)
+        build_worker_spec(builder, "workers", common_params, worker_config)
     if "driver" in job_types:
-        build_worker_spec(builder, "drivers", ytserver_proxy_path, tvm_enabled, common_params, worker_config)
+        build_worker_spec(builder, "drivers", common_params, worker_config)
     if "livy" in job_types:
         build_livy_spec(builder, common_params, livy_config)
 

@@ -133,9 +133,6 @@ class SparkDiscovery(object):
     def conf(self):
         return self.discovery().join("conf")
 
-    def master_wrapper(self):
-        return self.discovery().join("master_wrapper")
-
 
 class ClusterInfo(object):
     def __init__(self, master, shs, livy, workers, operation, workers_operation, multiop_mode, max_workers_count, user_slots):
@@ -237,7 +234,6 @@ def base_spark_conf(client, discovery):
     yt_user = get_user_name(client=client)
     spark_cluster_version = SparkDiscovery.get(discovery.spark_cluster_version(), client=client)
     spark_cluster_conf = discovery.conf()
-    master_wrapper_url = SparkDiscovery.get(discovery.master_wrapper(), client=client)
     conf = {
         "spark.hadoop.yt.proxy": yt_proxy,
         "spark.hadoop.yt.user": yt_user,
@@ -250,8 +246,6 @@ def base_spark_conf(client, discovery):
 
     if exists(spark_cluster_conf, client=client):
         conf["spark.yt.cluster.confPath"] = str(spark_cluster_conf)
-    if master_wrapper_url:
-        conf["spark.hadoop.yt.masterWrapper.url"] = master_wrapper_url
     return conf
 
 
@@ -268,14 +262,6 @@ def default_discovery_dir(client=None):
 
 def default_proxy():
     return os.getenv("YT_PROXY")
-
-
-def default_tvm_secret():
-    return os.getenv("SPARK_TVM_SECRET")
-
-
-def default_tvm_id():
-    return os.getenv("SPARK_TVM_ID")
 
 
 def get_default_arg_parser(**kwargs):

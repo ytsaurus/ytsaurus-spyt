@@ -12,16 +12,14 @@ class CompoundDiscoveryService(services: Seq[DiscoveryService]) extends Discover
   override def registerMaster(operationId: String,
                               address: Address,
                               clusterVersion: String,
-                              masterWrapperEndpoint: HostAndPort,
                               clusterConf: SparkConfYsonable): Unit =
-    services.foreach(_.registerMaster(operationId, address, clusterVersion, masterWrapperEndpoint, clusterConf))
+    services.foreach(_.registerMaster(operationId, address, clusterVersion, clusterConf))
 
   override def updateMaster(operationId: String,
                             address: Address,
                             clusterVersion: String,
-                            masterWrapperEndpoint: HostAndPort,
                             clusterConf: SparkConfYsonable): Unit =
-    services.foreach(_.updateMaster(operationId, address, clusterVersion, masterWrapperEndpoint, clusterConf))
+    services.foreach(_.updateMaster(operationId, address, clusterVersion, clusterConf))
 
   override def registerSHS(address: HostAndPort): Unit = services.foreach(_.registerSHS(address))
 
@@ -36,8 +34,6 @@ class CompoundDiscoveryService(services: Seq[DiscoveryService]) extends Discover
   override def discoverAddress(): Try[Address] = services.head.discoverAddress()
 
   override def operations(): Option[OperationSet] = services.head.operations()
-
-  override def masterWrapperEndpoint(): Option[HostAndPort] = services.head.masterWrapperEndpoint()
 
   override def waitAddress(timeout: Duration): Option[Address] = services.head.waitAddress(timeout)
 

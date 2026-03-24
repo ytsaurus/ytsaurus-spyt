@@ -24,12 +24,8 @@ object ClusterConfig {
       clusterBasePath,
       spark_conf = Map(
         "spark.yt.version" -> version,
-        "spark.hadoop.yt.byop.enabled" -> "false",
         "spark.hadoop.yt.read.arrow.enabled" -> "true",
         "spark.hadoop.yt.preferenceIpv6.enabled" -> "true",
-      ),
-      ytserver_proxy_path = Option(System.getProperty("proxyVersion")).map(version =>
-        s"$defaultYtServerProxyPath-$version"
       ),
       file_paths = Seq(
         s"$clusterBasePath/spyt-package.zip",

@@ -27,8 +27,6 @@ class DiscoveryServerService(client: DiscoveryClient, groupId: String,
 
   private def confAttr: String = "conf"
 
-  private def masterWrapperAttr: String = "master_wrapper"
-
   private def masterGroupId: String = masterGroupIdO.getOrElse(groupId)
 
   private def sendHeartbeat(groupId: String, memberInfo: MemberInfo): Unit = {
@@ -42,7 +40,6 @@ class DiscoveryServerService(client: DiscoveryClient, groupId: String,
   override def registerMaster(operationId: String,
                               address: Address,
                               clusterVersion: String,
-                              masterWrapperEndpoint: HostAndPort,
                               clusterConf: SparkConfYsonable): Unit = {
     import scala.collection.JavaConverters._
 
@@ -56,7 +53,6 @@ class DiscoveryServerService(client: DiscoveryClient, groupId: String,
       restAttr -> YTree.stringNode(address.restHostAndPort.toString),
       operationAttr -> YTree.stringNode(operationId),
       versionAttr -> YTree.stringNode(clusterVersion),
-      masterWrapperAttr -> YTree.stringNode(masterWrapperEndpoint.toString),
       confAttr -> confYTree,
     )
     val memberInfo = new MemberInfo("master", 0L, 0L, attributes.asJava)
@@ -66,9 +62,8 @@ class DiscoveryServerService(client: DiscoveryClient, groupId: String,
   override def updateMaster(operationId: String,
                             address: Address,
                             clusterVersion: String,
-                            masterWrapperEndpoint: HostAndPort,
                             clusterConf: SparkConfYsonable): Unit =
-    registerMaster(operationId, address, clusterVersion, masterWrapperEndpoint, clusterConf)
+    registerMaster(operationId, address, clusterVersion, clusterConf)
 
   override def registerSHS(address: HostAndPort): Unit = ???
 
@@ -106,8 +101,6 @@ class DiscoveryServerService(client: DiscoveryClient, groupId: String,
   }
 
   override def operations(): Option[OperationSet] = ???
-
-  override def masterWrapperEndpoint(): Option[HostAndPort] = ???
 
   override def operationInfo: Option[OperationInfo] = ???
 

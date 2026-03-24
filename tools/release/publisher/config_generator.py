@@ -21,8 +21,6 @@ def write_config(config: Dict, conf_file: str):
         json.dump(config, file, indent=4)
 
 
-YTSERVER_PROXY = "//sys/bin/ytserver-proxy/ytserver-proxy"
-
 LAUNCH_CONFIG = {
     'spark_conf': {},
     'environment': {}
@@ -103,13 +101,11 @@ def prepare_launch_config(conf_local_dir: str, client: Client, versions: Version
     launch_config['spark_conf']['spark.yt.version'] = versions.spyt_version.scala
     launch_config['spark_conf']['spark.shuffle.service.port.interval.start'] = "27050"
     launch_config['spark_conf']['spark.shuffle.service.port.interval.size'] = "50"
-    launch_config['spark_conf']['spark.hadoop.yt.byop.enabled'] = "false"
     launch_config['spark_conf']['spark.hadoop.yt.read.arrow.enabled'] = "true"
     launch_config['spark_conf']['spark.hadoop.yt.preferenceIpv6.enabled'] = "false" if os_release else "true"
     launch_config['spark_yt_base_path'] = client.resolve_from_root(spyt_remote_dir(versions))
     launch_config['file_paths'] = get_file_paths(conf_local_dir, client.root_path, versions)
     launch_config['enablers'] = {
-        "spark.hadoop.yt.byop.enabled": not os_release,
         "spark.ytsaurus.metrics.enabled": not os_release if yandex_internal_tests is None else yandex_internal_tests,
         "spark.hadoop.yt.mtn.enabled": not os_release,
         "spark.hadoop.yt.tcpProxy.enabled": os_release,
@@ -135,9 +131,6 @@ def prepare_launch_config(conf_local_dir: str, client: Client, versions: Version
             client.resolve_from_root("squashfs/python/layer_with_python39_jammy_v001.squashfs"),
             "//porto_layers/base/jammy/porto_layer_search_ubuntu_jammy_app_lastest.tar.gz"
         ]
-        ytserver_proxy_path = client.yt_client.get(f"{YTSERVER_PROXY}&/@target_path")
-        logger.info(f"Resolved proxy path: {ytserver_proxy_path}")
-        launch_config['ytserver_proxy_path'] = ytserver_proxy_path
     else:
         launch_config['layer_paths'] = []
     return launch_config
@@ -162,7 +155,6 @@ def prepare_global_config(os_release: bool) -> Dict[str, Any]:
             "3.4": "/opt/python3.4/bin/python3.4",
             "2.7": "python2.7"
         }
-        global_config['ytserver_proxy_path'] = YTSERVER_PROXY
         global_config['default_cluster_java_home'] = '/opt/jdk11'
         global_config['environment']['SPARK_PREFER_IPV6'] = 'true'
     else:

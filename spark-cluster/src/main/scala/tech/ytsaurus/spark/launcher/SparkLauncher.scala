@@ -191,7 +191,6 @@ trait SparkLauncher {
 
   def startHistoryServer(path: String, memory: String, discoveryService: DiscoveryService): BasicService = {
     val javaOpts = Seq(
-      discoveryService.masterWrapperEndpoint().map(hp => s"-Dspark.hadoop.yt.masterWrapper.url=$hp"),
       Some(profilingJavaOpt(27111)).filter(_ => isProfilingEnabled),
       Some(s"-Dspark.history.fs.logDirectory=$path")
     )

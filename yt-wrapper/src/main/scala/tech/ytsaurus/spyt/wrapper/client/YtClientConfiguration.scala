@@ -11,14 +11,12 @@ import scala.concurrent.duration._
 import scala.language.postfixOps
 import scala.util.{Failure, Success, Try}
 
-@SerialVersionUID(-8206532076881043994L)
+@SerialVersionUID(-4800048291369493456L)
 case class YtClientConfiguration(proxy: String,
                                  user: String,
                                  token: String,
                                  timeout: Duration,
                                  proxyRole: Option[String],
-                                 byop: ByopConfiguration,
-                                 masterWrapperUrl: Option[String],
                                  extendedFileTimeout: Boolean,
                                  proxyNetworkName: Option[String],
                                  useCommonProxies: Boolean = false) extends Serializable {
@@ -58,17 +56,7 @@ case class YtClientConfiguration(proxy: String,
 object YtClientConfiguration {
   private val log = LoggerFactory.getLogger(getClass)
 
-  def parseEmptyWorkersListStrategy(getByName: String => Option[String]): EmptyWorkersListStrategy = {
-    val strategyFromConf = for {
-      name <- getByName("byop.remote.emptyWorkersList.strategy")
-      timeout <- getByName("byop.remote.emptyWorkersList.timeout").map(Utils.parseDuration)
-    } yield EmptyWorkersListStrategy.fromString(name, timeout)
-
-    strategyFromConf.getOrElse(EmptyWorkersListStrategy.Default)
-  }
-
   def apply(getByName: String => Option[String]): YtClientConfiguration = {
-    val byopEnabled = getByName("byop.enabled").orElse(sys.env.get("SPARK_YT_BYOP_ENABLED")).exists(_.toBoolean)
     val token = getByName("token").orElse(sys.env.get("YT_SECURE_VAULT_YT_TOKEN"))
       .getOrElse(DefaultRpcCredentials.token)
     val proxy = getByName("proxy").orElse(sys.env.get("YT_PROXY")).getOrElse(
@@ -77,20 +65,13 @@ object YtClientConfiguration {
     val user = getByName("user").orElse(sys.env.get("YT_SECURE_VAULT_YT_USER"))
       .getOrElse(DefaultRpcCredentials.tokenUser(token))
     val timeout = getByName("timeout").map(Utils.parseDuration).getOrElse(60 seconds)
-    val byopConf = ByopConfiguration(
-      enabled = byopEnabled,
-      ByopRemoteConfiguration(
-        enabled = getByName("byop.remote.enabled").map(_.toBoolean).getOrElse(byopEnabled),
-        emptyWorkersListStrategy = parseEmptyWorkersListStrategy(getByName)
-      )
-    )
     val extendedFileTimeout = getByName("extendedFileTimeout").forall(_.toBoolean)
     val proxyNetworkName = sys.env.get("YT_JOB_ID") match {
       case Some(_) => None
       case None => getByName("proxyNetworkName")
     }
 
-    YtClientConfiguration(proxy, user, token, timeout, getByName("proxyRole"), byopConf, getByName("masterWrapper.url"),
+    YtClientConfiguration(proxy, user, token, timeout, getByName("proxyRole"),
       extendedFileTimeout, proxyNetworkName)
   }
 
@@ -120,8 +101,6 @@ object YtClientConfiguration {
     token = token,
     timeout = 5 minutes,
     proxyRole = None,
-    byop = ByopConfiguration.DISABLED,
-    masterWrapperUrl = None,
     extendedFileTimeout = true,
     None
   )
@@ -131,12 +110,10 @@ object YtClientConfiguration {
              token: String,
              timeout: JDuration,
              proxyRole: String,
-             byop: ByopConfiguration,
-             masterWrapperUrl: String,
              extendedFileTimeout: Boolean,
              proxyNetworkName: Option[String] = None) = new YtClientConfiguration(
     proxy, user, token, toScalaDuration(timeout),
-    Option(proxyRole), byop, Option(masterWrapperUrl), extendedFileTimeout, proxyNetworkName
+    Option(proxyRole), extendedFileTimeout, proxyNetworkName
   )
 }
 

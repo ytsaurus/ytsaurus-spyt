@@ -9,7 +9,7 @@ from spyt.enabler import SpytEnablers  # noqa: E402
 from spyt.launch_utils import add_default_launch_options, add_hs_options, add_livy_options, add_parser_group  # noqa: E402
 from spyt.spec import SparkDefaultArguments  # noqa: E402
 from spyt.standalone import start_spark_cluster  # noqa: E402
-from spyt.utils import default_token, default_tvm_id, default_tvm_secret, get_default_arg_parser, parse_args, show_unspecified_args  # noqa: E402
+from spyt.utils import default_token, get_default_arg_parser, parse_args, show_unspecified_args  # noqa: E402
 
 
 def main(raw_args=None):
@@ -48,7 +48,6 @@ def main(raw_args=None):
     parser.set_defaults(enable_multi_operation_mode=False)
 
     default_enablers = SpytEnablers()
-    add_parser_group(parser, '--enable-byop', '--disable-byop', 'enable_byop', default_enablers.enable_byop)
     add_parser_group(parser, '--enable-yt-metrics', '--disable-yt-metrics', 'enable_yt_metrics',
                      default_enablers.enable_yt_metrics)
     add_parser_group(parser, '--enable-ytsaurus-shuffle', '--disable-ytsaurus-shuffle', 'enable_ytsaurus_shuffle', False)
@@ -131,8 +130,6 @@ def main(raw_args=None):
                         history_server_memory_overhead=args.history_server_memory_overhead,
                         history_server_cpu_limit=args.history_server_cpu_limit,
                         network_project=args.network_project,
-                        tvm_id=default_tvm_id(),
-                        tvm_secret=default_tvm_secret(),
                         abort_existing=args.abort_existing,
                         advanced_event_log=args.advanced_event_log,
                         worker_log_transfer=args.worker_log_transfer,
@@ -143,7 +140,6 @@ def main(raw_args=None):
                         shs_location=args.shs_location,
                         spark_cluster_version=args.spyt_version,
                         enablers=SpytEnablers(
-                            enable_byop=args.enable_byop,
                             enable_mtn=args.enable_mtn,
                             enable_yt_metrics=args.enable_yt_metrics,
                             enable_tcp_proxy=args.enable_tcp_proxy,

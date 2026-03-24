@@ -1,7 +1,6 @@
 package tech.ytsaurus.spark.launcher
 
 import java.io.{File, FileWriter}
-import java.nio.file.{Files, Path, StandardCopyOption}
 import scala.io.Source
 import scala.util.{Failure, Success, Try}
 

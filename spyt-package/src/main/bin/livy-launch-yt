@@ -8,7 +8,7 @@ from yt.wrapper.http_helpers import get_user_name  # noqa: E402
 from spyt.enabler import SpytEnablers  # noqa: E402
 from spyt.launch_utils import add_default_launch_options, add_livy_options  # noqa: E402
 from spyt.standalone import start_livy_server  # noqa: E402
-from spyt.utils import default_token, default_tvm_id, default_tvm_secret, get_default_arg_parser  # noqa: E402
+from spyt.utils import default_token, get_default_arg_parser  # noqa: E402
 
 
 def main(raw_args=None):
@@ -28,8 +28,6 @@ def main(raw_args=None):
                       pool=args.pool or get_user_name(client=yt_client),
                       enable_tmpfs=args.enable_tmpfs,
                       network_project=args.network_project,
-                      tvm_id=default_tvm_id(),
-                      tvm_secret=default_tvm_secret(),
                       params=args.params,
                       spark_cluster_version=args.spyt_version,
                       enablers=SpytEnablers(

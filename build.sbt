@@ -112,7 +112,6 @@ lazy val `cluster` = (project in file("spark-cluster"))
   .enablePlugins(JavaAgent)
   .settings(
     libraryDependencies ++= scaldingArgs,
-    libraryDependencies ++= scalatra,
     resolvedJavaAgents := javaAgents.value
   )
 

@@ -6,7 +6,6 @@ logger = logging.getLogger(__name__)
 
 
 class SpytEnablers(object):
-    BYOP_KEY = "spark.hadoop.yt.byop.enabled"
     PROFILING_KEY = "spark.hadoop.yt.profiling.enabled"
     ARROW_KEY = "spark.hadoop.yt.read.arrow.enabled"
     MTN_KEY = "spark.hadoop.yt.mtn.enabled"
@@ -16,12 +15,11 @@ class SpytEnablers(object):
     TASK_PROXY_KEY = "spark.ytsaurus.taskProxy.enabled"
     SQUASHFS_KEY = "spark.ytsaurus.squashfs.enabled"
 
-    def __init__(self, enable_byop=False, enable_profiling=False, enable_arrow=True,
+    def __init__(self, enable_profiling=False, enable_arrow=True,
                  enable_mtn=False, enable_yt_metrics=True, enable_preference_ipv6=True,
                  enable_tcp_proxy=False, enable_task_proxy=None, enable_squashfs=False):
-        self.enable_byop = enable_byop
         self.enable_profiling = enable_profiling
-        self.enable_arrow = enable_byop if enable_arrow is None else enable_arrow
+        self.enable_arrow = enable_arrow
         self.enable_mtn = enable_mtn
         self.enable_yt_metrics = enable_yt_metrics
         self.enable_preference_ipv6 = enable_preference_ipv6
@@ -45,7 +43,6 @@ class SpytEnablers(object):
     def apply_config(self, config):
         self.config_enablers = config.get("enablers") or {}
         spark_conf = config.get("spark_conf")
-        self.enable_byop = self._get_enabler(self.enable_byop, "enable_byop", self.BYOP_KEY)
         self.enable_mtn = self._get_enabler(self.enable_mtn, "enable_mtn", self.MTN_KEY)
         self.enable_yt_metrics = self._get_enabler(self.enable_yt_metrics, "enable_solomon_agent",
                                                    self.YT_METRICS_KEY)
@@ -60,7 +57,6 @@ class SpytEnablers(object):
 
     def get_conf(self):
         return {
-            self.BYOP_KEY: str(self.enable_byop),
             self.ARROW_KEY: str(self.enable_arrow),
             self.IPV6_KEY: str(self.enable_preference_ipv6),
         }

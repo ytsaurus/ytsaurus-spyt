@@ -43,8 +43,6 @@ class CypressDiscoveryService(baseDiscoveryPath: String)(implicit yt: CompoundCl
 
   private val confPath: String = s"$discoveryPath/conf"
 
-  private val masterWrapperPath: String = s"$discoveryPath/master_wrapper"
-
   override def operationInfo: Option[OperationInfo] = operation.flatMap(oid => {
     val id = GUID.valueOf(oid)
     val r = yt.getOperation(new GetOperation(id)).join()
@@ -58,7 +56,6 @@ class CypressDiscoveryService(baseDiscoveryPath: String)(implicit yt: CompoundCl
   override def registerMaster(operationId: String,
                               address: Address,
                               clusterVersion: String,
-                              masterWrapperEndpoint: HostAndPort,
                               clusterConf: SparkConfYsonable): Unit = {
     val clearDir = getPath(operationPath) match {
       case Success(_) if operation.exists(_ != operationId) && operationInfo.exists(!_.state.isFinished) =>
@@ -83,7 +80,6 @@ class CypressDiscoveryService(baseDiscoveryPath: String)(implicit yt: CompoundCl
         restPath -> YtWrapper.escape(address.restHostAndPort.toString),
         operationPath -> operationId,
         clusterVersionPath -> clusterVersion,
-        masterWrapperPath -> YtWrapper.escape(masterWrapperEndpoint.toString)
       ).foreach { case (path, value) =>
         YtWrapper.createDir(s"$path/$value", tr)
       }
@@ -152,8 +148,6 @@ class CypressDiscoveryService(baseDiscoveryPath: String)(implicit yt: CompoundCl
   private def getWebUiUrl(): Try[URI] = getPath(masterJobsPath).map(jobId =>
     URI.create(readDocument(s"$masterJobsPath/$jobId").mapNode().getOrThrow(webUiUrlAttribute).stringValue())
   )
-
-  override def masterWrapperEndpoint(): Option[HostAndPort] = cypressHostAndPort(masterWrapperPath).toOption
 
   private def operation: Option[String] = getPath(operationPath).toOption
 

@@ -24,8 +24,7 @@ except Exception:
         import process_operation_unsuccesful_finish_state as process_operation_unsuccessful_finish_state
 
 from .conf import read_remote_conf, validate_cluster_version, \
-    update_config_inplace, validate_custom_params, validate_mtn_config, \
-    latest_ytserver_proxy_path, read_global_conf, \
+    update_config_inplace, validate_custom_params, validate_mtn_config, read_global_conf, \
     worker_num_limit, validate_worker_num, read_cluster_conf, validate_ssd_config, cuda_toolkit_version  # noqa: E402
 from .task_proxy import TaskProxyInfo  # noqa: E402
 from .utils import get_spark_master, base_spark_conf, SparkDiscovery, SparkCluster, call_get_proxy_address_url, \
@@ -302,7 +301,7 @@ def run_operation_wrapper(op_builder, address_path, client):
 
 
 def start_livy_server(operation_alias=None, discovery_path=None, pool=None, enable_tmpfs=False, network_project=None,
-                      tvm_id=None, tvm_secret=None, params=None, spark_cluster_version=None, enablers=None,
+                      params=None, spark_cluster_version=None, enablers=None,
                       enable_preference_ipv6=None, client=None,
                       preemption_mode="normal", cluster_log_level="INFO",
                       livy_driver_cores=SparkDefaultArguments.LIVY_DRIVER_CORES,
@@ -327,7 +326,7 @@ def start_livy_server(operation_alias=None, discovery_path=None, pool=None, enab
 
     validate_cluster_version(spark_cluster_version, client=client)
     validate_custom_params(params)
-    validate_mtn_config(enablers, network_project, tvm_id, tvm_secret)
+    validate_mtn_config(enablers, network_project)
 
     global_conf = read_global_conf(client=client)
     dynamic_config = get_base_cluster_config(global_conf, spark_cluster_version, params, discovery_path, client)
@@ -341,7 +340,7 @@ def start_livy_server(operation_alias=None, discovery_path=None, pool=None, enab
         spark_discovery.set_cluster_version_if_none(spark_cluster_version, client)
 
     common_config = CommonComponentConfig(
-        operation_alias, pool, enable_tmpfs, network_project, tvm_id, tvm_secret, enablers, preemption_mode,
+        operation_alias, pool, enable_tmpfs, network_project, enablers, preemption_mode,
         cluster_log_level, rpc_job_proxy, rpc_job_proxy_thread_pool_size, False, tcp_proxy_range_start,
         tcp_proxy_range_size, enable_stderr_table, "livy", spark_discovery, group_id, cluster_java_home
     )
@@ -359,7 +358,7 @@ def start_history_server(operation_alias=None, discovery_path=None, pool=None, e
                          history_server_memory_limit=SparkDefaultArguments.SPARK_HISTORY_SERVER_MEMORY_LIMIT,
                          history_server_cpu_limit=SparkDefaultArguments.SPARK_HISTORY_SERVER_CPU_LIMIT,
                          history_server_memory_overhead=SparkDefaultArguments.SPARK_HISTORY_SERVER_MEMORY_OVERHEAD,
-                         network_project=None, tvm_id=None, tvm_secret=None, advanced_event_log=True,
+                         network_project=None, advanced_event_log=True,
                          params=None, shs_location=None, spark_cluster_version=None, enablers=None,
                          enable_preference_ipv6=None, client=None,
                          preemption_mode="normal", cluster_log_level="INFO", rpc_job_proxy=False,
@@ -375,7 +374,7 @@ def start_history_server(operation_alias=None, discovery_path=None, pool=None, e
 
     validate_cluster_version(spark_cluster_version, client=client)
     validate_custom_params(params)
-    validate_mtn_config(enablers, network_project, tvm_id, tvm_secret)
+    validate_mtn_config(enablers, network_project)
 
     dynamic_config = get_base_cluster_config(global_conf, spark_cluster_version, params,
                                              spark_discovery.base_discovery_path, client)
@@ -385,7 +384,7 @@ def start_history_server(operation_alias=None, discovery_path=None, pool=None, e
     spark_discovery.create(client)
 
     common_config = CommonComponentConfig(
-        operation_alias, pool, enable_tmpfs, network_project, tvm_id, tvm_secret, enablers, preemption_mode,
+        operation_alias, pool, enable_tmpfs, network_project, enablers, preemption_mode,
         cluster_log_level, rpc_job_proxy, rpc_job_proxy_thread_pool_size, False, tcp_proxy_range_start,
         tcp_proxy_range_size, enable_stderr_table, "shs", spark_discovery, None, cluster_java_home
     )
@@ -419,7 +418,7 @@ def start_spark_cluster(worker_cores, worker_memory, worker_num, worker_cores_ov
                         history_server_memory_limit=SparkDefaultArguments.SPARK_HISTORY_SERVER_MEMORY_LIMIT,
                         history_server_cpu_limit=SparkDefaultArguments.SPARK_HISTORY_SERVER_CPU_LIMIT,
                         history_server_memory_overhead=SparkDefaultArguments.SPARK_HISTORY_SERVER_MEMORY_OVERHEAD,
-                        network_project=None, abort_existing=False, tvm_id=None, tvm_secret=None,
+                        network_project=None, abort_existing=False,
                         advanced_event_log=False, worker_log_transfer=False, worker_log_json_mode=False,
                         worker_log_update_interval=SparkDefaultArguments.SPARK_WORKER_LOG_UPDATE_INTERVAL,
                         worker_log_table_ttl=SparkDefaultArguments.SPARK_WORKER_LOG_TABLE_TTL,
@@ -470,8 +469,6 @@ def start_spark_cluster(worker_cores, worker_memory, worker_num, worker_cores_ov
     :param worker_log_json_mode: using json for worker logs
     :param worker_log_update_interval: intervals between log updates
     :param worker_log_table_ttl: TTL of yt table with worker logs
-    :param tvm_id: TVM id for network project
-    :param tvm_secret: TVM secret for network project
     :param params: YT operation params: file_paths, layer_paths, operation_spec, environment, spark_conf
     :param shs_location: hard set path to log directory
     :param enablers: ...
@@ -524,7 +521,6 @@ def start_spark_cluster(worker_cores, worker_memory, worker_num, worker_cores_ov
         else:
             raise RuntimeError("This spark cluster is started already, use --abort-existing for auto restarting")
 
-    ytserver_proxy_path = latest_ytserver_proxy_path(spark_cluster_version, client=client)
     global_conf = read_global_conf(client=client)
     if spark_cluster_version is None:
         spark_cluster_version = __scala_version__
@@ -551,7 +547,7 @@ def start_spark_cluster(worker_cores, worker_memory, worker_num, worker_cores_ov
 
     validate_cluster_version(spark_cluster_version, client=client)
     validate_custom_params(params)
-    validate_mtn_config(enablers, network_project, tvm_id, tvm_secret)
+    validate_mtn_config(enablers, network_project)
     validate_worker_num(worker_res.num, worker_num_limit(global_conf))
     validate_ssd_config(worker_disk_limit, worker_disk_account)
 
@@ -560,8 +556,6 @@ def start_spark_cluster(worker_cores, worker_memory, worker_num, worker_cores_ov
 
     _process_ipv6_preference(dynamic_config, enable_preference_ipv6, enablers)
 
-    if ytserver_proxy_path:
-        dynamic_config["ytserver_proxy_path"] = ytserver_proxy_path
     dynamic_config['spark_conf']['spark.dedicated_operation_mode'] = dedicated_operation_mode
     if enable_ytsaurus_shuffle:
         dynamic_config['spark_conf']['spark.shuffle.manager'] = \
@@ -595,7 +589,7 @@ def start_spark_cluster(worker_cores, worker_memory, worker_num, worker_cores_ov
         job_types.append('worker')
 
     common_config = CommonComponentConfig(
-        operation_alias, pool, enable_tmpfs, network_project, tvm_id, tvm_secret, enablers, preemption_mode,
+        operation_alias, pool, enable_tmpfs, network_project, enablers, preemption_mode,
         cluster_log_level, rpc_job_proxy, rpc_job_proxy_thread_pool_size, enable_ytsaurus_shuffle,
         tcp_proxy_range_start, tcp_proxy_range_size, enable_stderr_table, "spark", spark_discovery, group_id,
         cluster_java_home

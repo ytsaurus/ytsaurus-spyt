@@ -822,20 +822,21 @@ class YtFileFormatTest extends AnyFlatSpec with Matchers with LocalSpark
     }
   }
 
-  // TODO: wrap with testWithDistributedReading when TRspReadTablePartitionMeta will contain statistics
-  it should "count input statistics" in {
-    val customPath = "ytTable:/" + tmpPath
-    val data = Stream.from(1).take(1000)
+  testWithDistributedReading("count input statistics") { _ =>
+    whenSparkVersionAtLeast("3.3.0") {
+      val customPath = "ytTable:/" + tmpPath
+      val data = Stream.from(1).take(1000)
 
-    val store = UtilsWrapper.appStatusStore(spark)
-    val totalInputBefore = store.stageList(null).map(_.inputBytes).sum
+      val store = UtilsWrapper.appStatusStore(spark)
+      val totalInputBefore = store.stageList(null).map(_.inputBytes).sum
 
-    data.toDF().coalesce(1).write.yt(customPath)
-    val allRows = spark.read.yt(customPath).collect()
-    allRows should have size data.length
+      data.toDF().coalesce(1).write.yt(customPath)
+      val allRows = spark.read.yt(customPath).collect()
+      allRows should have size data.length
 
-    val totalInput = store.stageList(null).map(_.inputBytes).sum
-    totalInput should be > totalInputBefore
+      val totalInput = store.stageList(null).map(_.inputBytes).sum
+      totalInput should be > totalInputBefore
+    }
   }
 }
 

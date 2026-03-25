@@ -11,12 +11,11 @@ object YtDataCheck extends Matchers {
 
   def yPathShouldContainExpectedData[T <: Product : Ordering, U: Ordering]
   (yPath: YPath, expectedData: Seq[T], strictRowCheck: Boolean = true, columnShift: Int = 0)
-  (rowKeyExtractor: UnversionedRow => U)
-  (implicit ctx: YtReadContext): Unit = {
+    (rowKeyExtractor: UnversionedRow => U)
+    (implicit ctx: YtReadContext): Unit = {
     val resultRows = YtWrapper.readTable(
       yPath,
-      new UnversionedRowDeserializer(),
-      reportBytesRead = (_ => ())
+      new UnversionedRowDeserializer()
     ).toSeq
 
     resultRows.size shouldEqual expectedData.size

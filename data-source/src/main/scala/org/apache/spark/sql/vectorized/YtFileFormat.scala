@@ -77,8 +77,9 @@ class YtFileFormat extends FileFormat with DataSourceRegister with StreamSourceP
       case ypf: YtPartitionedFile @unchecked =>
         val log = LoggerFactory.getLogger(getClass)
         val yt: CompoundClient =
-          YtClientProvider.ytClientWithProxy(ytClientConf, ypf.delegate.cluster)
+          YtClientProvider.ytClientWithProxy(ytClientConf, ypf.delegate.cluster, Some(StatisticsReporter))
         YtReadContext.withContext(yt, readSettings) { implicit ctx =>
+          StatisticsReporter.registerReadMetrics(ctx.requestId, bytesReadReporter(broadcastedConf))
           val split = YtInputSplit(ypf, requiredSchema, filterPushdownConfig = filterPushdownConfig,
             ytLoggerConfig = ytLoggerConfig)
 
@@ -92,7 +93,6 @@ class YtFileFormat extends FileFormat with DataSourceRegister with StreamSourceP
               optimizedForScan = optimizedForScanValue,
               fullReadAllowed = fullReadAllowedValue,
               timeout = ytClientConf.timeout,
-              reportBytesRead = bytesReadReporter(broadcastedConf),
               countOptimizationEnabled = countOptimizationEnabled,
               hadoopPath = ypf.delegate.hadoopPath
             )
@@ -109,8 +109,7 @@ class YtFileFormat extends FileFormat with DataSourceRegister with StreamSourceP
               iter.asInstanceOf[Iterator[InternalRow]]
             }
           } else {
-            val tableIterator = YtReadingUtils.createRowBaseReader(split, None, requiredSchema,
-              ytClientConf, broadcastedConf)
+            val tableIterator = YtReadingUtils.createRowBaseReader(split, None, requiredSchema, ytClientConf)
             val unsafeProjection = UnsafeProjection.create(requiredSchema)
             tableIterator.map(unsafeProjection(_))
           }

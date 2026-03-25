@@ -98,7 +98,7 @@ trait TestUtils {
     }
 
     implicit val ytReadContext: YtReadContext = YtReadContext(yt, readSettings)
-    YtWrapper.readTable(path, deser, 1 minute, transaction, () => _).toList
+    YtWrapper.readTable(path, deser, 1 minute, transaction).toList
   }
 
   def writeTableFromYson(rows: Seq[String], path: String, schema: TableSchema,

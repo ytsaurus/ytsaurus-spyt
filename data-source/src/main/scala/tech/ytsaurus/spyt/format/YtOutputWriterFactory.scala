@@ -28,7 +28,7 @@ class YtOutputWriterFactory(ytClientConf: YtClientConfiguration,
   override def newInstance(f: String, dataSchema: StructType, context: TaskAttemptContext): OutputWriter = {
     log.debug(s"[${Thread.currentThread().getName}] Creating new output writer for ${context.getTaskAttemptID.getTaskID} at path $f")
 
-    implicit val ytClient: CompoundClient = YtClientProvider.ytClient(ytClientConf, Some(WriteStatisticsReporter))
+    implicit val ytClient: CompoundClient = YtClientProvider.ytClient(ytClientConf, Some(StatisticsReporter))
 
     if (writeConfiguration.distributedWrite) {
       val cookie = YtOutputCommitProtocol.getCookieForTask(context)

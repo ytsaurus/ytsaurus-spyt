@@ -25,16 +25,13 @@ object YtClientProvider extends YtClientProvider {
     ytRpcClient(conf, rpcClientListener).yt
   }
 
-  def ytClientWithProxy(conf: => YtClientConfiguration, proxy: Option[String]): CompoundClient = {
-    ytRpcClientWithProxy(conf, proxy).yt
+  def ytClientWithProxy(conf: YtClientConfiguration, proxy: Option[String],
+    rpcClientListener: Option[SpytRpcClientListener] = None): CompoundClient = {
+    ytRpcClient(conf.replaceProxy(proxy), rpcClientListener).yt
   }
 
-  def ytRpcClientWithProxy(conf: => YtClientConfiguration, proxy: Option[String]): YtRpcClient = {
-    ytRpcClient(conf.replaceProxy(proxy))
-  }
-
-  def ytRpcClient(conf: => YtClientConfiguration,
-                  rpcClientListener: Option[SpytRpcClientListener] = None): YtRpcClient = this.synchronized {
+  def ytRpcClient(conf: YtClientConfiguration,
+    rpcClientListener: Option[SpytRpcClientListener] = None): YtRpcClient = this.synchronized {
     val normalizedProxy = conf.normalizedProxy
     val key = Seq(normalizedProxy, rpcClientListener.map(_.id).getOrElse("")).mkString(";")
     clients.getOrElseUpdate(key, {

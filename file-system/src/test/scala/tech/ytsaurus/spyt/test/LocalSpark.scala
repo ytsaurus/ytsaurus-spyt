@@ -8,6 +8,7 @@ import org.apache.spark.sql.{DataFrame, SparkSession}
 import org.apache.spark.yt.test.Utils
 import org.apache.spark.yt.test.Utils.{SparkConfigEntry, defaultConfValue}
 import org.scalatest.{BeforeAndAfterEach, TestSuite}
+import tech.ytsaurus.spyt.SparkVersionUtils
 import tech.ytsaurus.spyt.wrapper.client.YtClientConfigurationConverter._
 import tech.ytsaurus.spyt.wrapper.config.ConfigEntry
 import tech.ytsaurus.spyt.test.LocalSpark.defaultSparkConf
@@ -142,7 +143,19 @@ trait LocalSpark extends LocalYtClient with BeforeAndAfterEach {
 
   def defaultParallelism: Int = Utils.defaultParallelism(spark)
 
-
+  /**
+   * Run test only if Spark version is at least the specified version.
+   * For older versions, the test will be skipped with a pending status.
+   * @param minVersion minimum required Spark version (e.g., "3.3.0")
+   * @param testBody test code to execute
+   */
+  def whenSparkVersionAtLeast(minVersion: String)(testBody: => Unit): Unit = {
+    if (SparkVersionUtils.greaterThanOrEqual(minVersion)) {
+      testBody
+    } else {
+      cancel(s"Test requires Spark $minVersion or later, current version is ${SparkVersionUtils.currentVersion}")
+    }
+  }
 }
 
 object LocalSpark {
@@ -182,7 +195,7 @@ object LocalSpark {
     .set("spark.hadoop.yt.token", "")
     .set("spark.hadoop.yt.timeout", "300")
     .set(FILE_COMMIT_PROTOCOL_CLASS.key, "tech.ytsaurus.spyt.format.DelegatingOutputCommitProtocol")
-    .set("spark.ui.enabled", "false")
+    .set("spark.ui.enabled", "true")
     .set("spark.hadoop.yt.read.arrow.enabled", "true")
     .set("spark.sql.adaptive.enabled", "true")
     .set("spark.yt.log.enabled", "false")

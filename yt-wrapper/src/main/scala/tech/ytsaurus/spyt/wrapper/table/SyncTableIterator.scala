@@ -7,13 +7,11 @@ import tech.ytsaurus.spyt.wrapper.LogLazy
 import java.util.concurrent.TimeUnit
 import scala.concurrent.duration.Duration
 
-class SyncTableIterator[T](reader: TableReader[T], timeout: Duration,
-                           reportBytesRead: Long => Unit)
+class SyncTableIterator[T](reader: TableReader[T], timeout: Duration)
   extends TableIterator[T] with LogLazy {
   private val log = LoggerFactory.getLogger(getClass)
   private var chunk: java.util.Iterator[T] = _
   private var prevRowCount: Long = 0
-  private var totalBytesRead: Long = 0
 
   override def hasNext: Boolean = {
     if (chunk != null && chunk.hasNext) {
@@ -37,10 +35,6 @@ class SyncTableIterator[T](reader: TableReader[T], timeout: Duration,
     val list = reader.read()
 
     val stats = Option(reader.getDataStatistics)
-    stats.foreach { s =>
-      reportBytesRead(s.getCompressedDataSize - totalBytesRead)
-      totalBytesRead = s.getCompressedDataSize
-    }
 
     log.debugLazy {
       val rowCount = stats.map(_.getRowCount)

@@ -23,7 +23,6 @@ class YtVectorizedReader(split: YtInputSplit,
   optimizedForScan: Boolean,
   fullReadAllowed: Boolean,
   timeout: Duration,
-  reportBytesRead: Long => Unit,
   countOptimizationEnabled: Boolean,
   hadoopPath: YtHadoopPath)
   (implicit ytReadContext: YtReadContext) extends RecordReader[Void, Object] {
@@ -49,9 +48,9 @@ class YtVectorizedReader(split: YtInputSplit,
   private def createArrowBatchReader(path: YPath, schema: StructType): ArrowBatchReader = {
     val ytSchema = TableSchema.fromYTree(YtWrapper.attribute(path, "schema", hadoopPath.ypath.transaction))
     val stream = if (ytReadContext.settings.distributedReadingEnabled) {
-      YtWrapper.createTablePartitionArrowStream(split.file.delegate.cookie.get, reportBytesRead)
+      YtWrapper.createTablePartitionArrowStream(split.file.delegate.cookie.get)
     } else {
-      YtWrapper.readTableArrowStream(path, timeout, hadoopPath.ypath.transaction, reportBytesRead)
+      YtWrapper.readTableArrowStream(path, hadoopPath.ypath.transaction)
     }
     new ArrowBatchReader(stream, schema, ytSchema)
   }
@@ -60,10 +59,9 @@ class YtVectorizedReader(split: YtInputSplit,
     val deserializer = ArrayAnyDeserializer.getOrCreate(schema)
 
     val rowIterator: TableIterator[Array[Any]] = if (ytReadContext.settings.distributedReadingEnabled) {
-      split.file.delegate.expectedBytes.foreach(reportBytesRead)
       YtWrapper.createTablePartitionReader(split.file.delegate.cookie.get, deserializer)
     } else {
-      YtWrapper.readTable(path, deserializer, timeout, hadoopPath.ypath.transaction, reportBytesRead)
+      YtWrapper.readTable(path, deserializer, timeout, hadoopPath.ypath.transaction)
     }
     new WireRowBatchReader(rowIterator, batchMaxSize, schema)
   }

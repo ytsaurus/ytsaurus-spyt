@@ -7,7 +7,6 @@ abstract class TableCopyByteStreamBase extends YtArrowInputStream {
   protected var _batch: ByteBuffer = ByteBuffer.allocate(0)
   private val nextPageToken: ByteBuffer = ByteBuffer.wrap(Array(-1, -1, -1, -1, 0, 0, 0, 0))
   private val emptySchemaToken: ByteBuffer = ByteBuffer.wrap(Array(0, 0, 0, 0, 0, 0, 0, 0))
-  protected val reportBytesRead: Long => Unit
 
   override def read(): Int = ???
 
@@ -55,7 +54,6 @@ abstract class TableCopyByteStreamBase extends YtArrowInputStream {
 
   protected def readFromBatch(b: Array[Byte], off: Int, len: Int): Unit = {
     _batch.get(b, off, len)
-    reportBytesRead(len)
   }
 
   protected def readNextBatch(): Boolean

@@ -242,7 +242,7 @@ class YtInferSchemaTest extends AnyFlatSpec with Matchers with LocalSpark
 
     val filesStatus = tables.flatMap(x => fs.listStatus(new Path(s"ytTable:/$x")))
 
-    val rpcClient = YtClientProvider.ytRpcClientWithProxy(ytClientConfiguration(spark), None)
+    val rpcClient = YtClientProvider.ytRpcClient(ytClientConfiguration(spark))
     val mockYt: CompoundClient = Mockito.spy(rpcClient.yt)
     try {
       YtClientProvider.getClients(s"${rpcClient.normalizedProxy};") = rpcClient.copy(yt = mockYt)

@@ -30,10 +30,10 @@ abstract class AbstractYtOutputWriter[W <: AsyncWriter[InternalRow]](
   protected val log: Logger = LoggerFactory.getLogger(getClass)
 
   protected val requestId: GUID = GUID.create()
-  WriteStatisticsReporter.registerRequest(requestId, TaskContext.get())
+  StatisticsReporter.registerRequest(requestId, TaskContext.get())
 
   private val writer: W = initializeWriter()
-  private var writeFuture: CompletableFuture[Void] = CompletableFuture.completedFuture(null);
+  private var writeFuture: CompletableFuture[Void] = CompletableFuture.completedFuture(null)
 
   private var buffer = createBuffer()
 
@@ -52,7 +52,7 @@ abstract class AbstractYtOutputWriter[W <: AsyncWriter[InternalRow]](
       case e: Throwable =>
         log.warn("Write failed, cancelling writer")
         writer.cancel()
-        WriteStatisticsReporter.unregisterRequest(requestId)
+        StatisticsReporter.unregisterRequest(requestId)
         log.warn("Write failed, writer is cancelled")
         throw e
     }
@@ -77,7 +77,7 @@ abstract class AbstractYtOutputWriter[W <: AsyncWriter[InternalRow]](
     YtMetricsRegister.time(writeCloseTime, writeCloseTimeSum) {
       finishWriter(writer, timeout.toMillis)
     }
-    WriteStatisticsReporter.unregisterRequest(requestId)
+    StatisticsReporter.unregisterRequest(requestId)
   }
 
   protected def initializeWriter(): W
@@ -92,9 +92,9 @@ abstract class AbstractYtOutputWriter[W <: AsyncWriter[InternalRow]](
 }
 
 class YtOutputWriter(richPath: YPathEnriched,
-                     schema: StructType,
-                     writeConfiguration: SparkYtWriteConfiguration,
-                     options: Map[String, String])(implicit client: CompoundClient)
+  schema: StructType,
+  writeConfiguration: SparkYtWriteConfiguration,
+  options: Map[String, String])(implicit client: CompoundClient)
   extends AbstractYtOutputWriter[AsyncWriter[InternalRow]](schema, writeConfiguration, options) {
 
   val path: String = richPath.toStringPath

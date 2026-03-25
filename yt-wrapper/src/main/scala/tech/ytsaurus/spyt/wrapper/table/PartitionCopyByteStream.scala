@@ -4,7 +4,7 @@ import tech.ytsaurus.client.AsyncReader
 
 import java.nio.ByteBuffer
 
-class PartitionCopyByteStream(reader: AsyncReader[ByteBuffer], override val reportBytesRead: Long => Unit)
+class PartitionCopyByteStream(reader: AsyncReader[ByteBuffer])
   extends TableCopyByteStreamBase {
 
   override protected def readNextBatch(): Boolean = {

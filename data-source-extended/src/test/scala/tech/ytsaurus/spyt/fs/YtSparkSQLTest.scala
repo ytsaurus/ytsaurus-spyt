@@ -23,8 +23,9 @@ import tech.ytsaurus.spyt.format.conf.{SparkYtConfiguration => SparkSettings}
 import scala.collection.mutable
 import scala.language.postfixOps
 
-class YtSparkSQLTest extends AnyFlatSpec with Matchers with LocalSpark with TmpDir with TestUtils with MockitoSugar 
+class YtSparkSQLTest extends AnyFlatSpec with Matchers with LocalSpark with TmpDir with TestUtils with MockitoSugar
   with TableDrivenPropertyChecks with DynTableTestUtils with YtDistributedReadingTestUtils {
+
   import spark.implicits._
 
   private val atomicSchema = TableSchema.builder()
@@ -467,8 +468,7 @@ class YtSparkSQLTest extends AnyFlatSpec with Matchers with LocalSpark with TmpD
     res2.collect() shouldBe Seq(Row(1, "str1"), Row(2, "str2"))
   }
 
-  // TODO: wrap with testWithDistributedReading when TRspReadTablePartitionMeta will contain statistics
-  it should "count io statistics" in {
+  testWithDistributedReading("count io statistics") { _ =>
     val customPath = "ytTable:/" + tmpPath
     val data = Stream.from(1).take(1000)
 

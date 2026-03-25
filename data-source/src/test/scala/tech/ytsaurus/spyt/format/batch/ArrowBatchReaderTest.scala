@@ -81,10 +81,9 @@ class ArrowBatchReaderTest extends AnyFlatSpec with Matchers with TmpDir with Sc
     import spark.implicits._
     val schema = StructType(Seq(structField("a", IntegerType)))
 
-    val ytReadSettings =  YtReadSettings.default.copy(distributedReadingEnabled = distributedReadingEnabled)
-    implicit val ytReadContext: YtReadContext = YtReadContext(yt, ytReadSettings)
-
     def testSlice(data: Seq[Int], batchSize: Int, lowerRowIndex: Int, upperRowIndex: Int): Unit = {
+      val ytReadSettings = YtReadSettings.default.copy(distributedReadingEnabled = distributedReadingEnabled)
+      implicit val ytReadContext: YtReadContext = YtReadContext(yt, ytReadSettings)
       if (distributedReadingEnabled) {
         val mtps = YtWrapper.partitionTables(
           YPath.simple(tmpPath),
@@ -115,17 +114,17 @@ class ArrowBatchReaderTest extends AnyFlatSpec with Matchers with TmpDir with Sc
     val chunkRowCounts = List(1, 5, 10)
 
     chunkRowCounts.foreach { chunkRowCount =>
-        val data = (0 to chunkCount * chunkRowCount).toList
-        YtWrapper.remove(tmpPath, force = true)
+      val data = (0 to chunkCount * chunkRowCount).toList
+      YtWrapper.remove(tmpPath, force = true)
 
-        (0 to chunkCount).foreach { chunkIndex =>
-            val chunk = data.slice(chunkIndex * chunkRowCount, (chunkIndex + 1) * chunkRowCount).toDF("a")
-            chunk.write.optimizeFor(OptimizeMode.Scan).sortedBy("a").mode(SaveMode.Append).yt(tmpPath)
-        }
+      (0 to chunkCount).foreach { chunkIndex =>
+        val chunk = data.slice(chunkIndex * chunkRowCount, (chunkIndex + 1) * chunkRowCount).toDF("a")
+        chunk.write.optimizeFor(OptimizeMode.Scan).sortedBy("a").mode(SaveMode.Append).yt(tmpPath)
+      }
 
-        testSlice(data, chunkRowCount, 0, 10)
-        testSlice(data, chunkRowCount, 18, 2)
-        testSlice(data, chunkRowCount, 6, 6)
+      testSlice(data, chunkRowCount, 0, 10)
+      testSlice(data, chunkRowCount, 18, 2)
+      testSlice(data, chunkRowCount, 6, 6)
     }
   }
 

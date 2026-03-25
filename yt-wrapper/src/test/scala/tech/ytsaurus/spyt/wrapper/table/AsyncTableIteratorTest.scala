@@ -12,7 +12,6 @@ class AsyncTableIteratorTest extends AnyFlatSpec with Matchers {
 
   it should "iterate through all elements from AsyncReader" in {
     val mockReader = mock[AsyncReader[String]]
-    val reportBytesRead = mock[Long => Unit]
 
     val batch1 = java.util.List.of("a", "b", "c")
     val batch2 = java.util.List.of("d", "e")
@@ -26,7 +25,7 @@ class AsyncTableIteratorTest extends AnyFlatSpec with Matchers {
 
     doNothing().when(mockReader).close()
 
-    val iterator = new AsyncTableIterator(mockReader, reportBytesRead)
+    val iterator = new AsyncTableIterator(mockReader)
     val result = scala.collection.mutable.ListBuffer[String]()
     while (iterator.hasNext) {
       result += iterator.next()
@@ -38,12 +37,11 @@ class AsyncTableIteratorTest extends AnyFlatSpec with Matchers {
 
   it should "handle empty reader correctly" in {
     val mockReader = mock[AsyncReader[String]]
-    val reportBytesRead = mock[Long => Unit]
 
     when(mockReader.next()).thenReturn(CompletableFuture.completedFuture(null))
     doNothing().when(mockReader).close()
 
-    val iterator = new AsyncTableIterator(mockReader, reportBytesRead)
+    val iterator = new AsyncTableIterator(mockReader)
 
     iterator.hasNext should be(false)
     iterator.hasNext should be(false) // Repeat call after closing reader
@@ -53,7 +51,6 @@ class AsyncTableIteratorTest extends AnyFlatSpec with Matchers {
 
   it should "throw NoSuchElementException when calling next() on empty iterator" in {
     val mockReader = mock[AsyncReader[String]]
-    val reportBytesRead = mock[Long => Unit]
 
     when(mockReader.next()).thenReturn(
       CompletableFuture.completedFuture(java.util.List.of[String]("a")),
@@ -61,7 +58,7 @@ class AsyncTableIteratorTest extends AnyFlatSpec with Matchers {
     )
     doNothing().when(mockReader).close()
 
-    val iterator = new AsyncTableIterator(mockReader, reportBytesRead)
+    val iterator = new AsyncTableIterator(mockReader)
     iterator.hasNext
     println(iterator.next())
     iterator.hasNext
@@ -73,12 +70,11 @@ class AsyncTableIteratorTest extends AnyFlatSpec with Matchers {
 
   it should "throw NullPointerException when calling next() on not initialized iterator" in {
     val mockReader = mock[AsyncReader[String]]
-    val reportBytesRead = mock[Long => Unit]
 
     when(mockReader.next()).thenReturn(CompletableFuture.completedFuture(null))
     doNothing().when(mockReader).close()
 
-    val iterator = new AsyncTableIterator(mockReader, reportBytesRead)
+    val iterator = new AsyncTableIterator(mockReader)
 
     an[NullPointerException] should be thrownBy {
       iterator.next()

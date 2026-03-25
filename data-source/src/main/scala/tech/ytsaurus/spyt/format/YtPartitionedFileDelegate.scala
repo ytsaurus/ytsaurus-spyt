@@ -16,13 +16,12 @@ import java.io.ByteArrayInputStream
 
 // At most one range supported inside ypath.
 class YtPartitionedFileDelegate(val serializedYPath: Array[Byte],
-                                override val byteLength: Long,
-                                override val partitionValues: InternalRow,
-                                val hadoopPath: YtHadoopPath,
-                                val distributedReadingEnabled: Boolean = false,
-                                val cookie: Option[TablePartitionCookie] = None,
-                                val expectedBytes: Option[Long] = None
-                               ) extends YtPartitioningDelegate {
+  override val byteLength: Long,
+  override val partitionValues: InternalRow,
+  val hadoopPath: YtHadoopPath,
+  val distributedReadingEnabled: Boolean = false,
+  val cookie: Option[TablePartitionCookie] = None
+) extends YtPartitioningDelegate {
 
   override val filePath: String = getPath(serializedYPath)
   override val start: Long = getNormalizedStart(serializedYPath)
@@ -89,38 +88,38 @@ object YtPartitionedFileDelegate {
   }
 
   def static(path: String, beginRow: Long, endRow: Long, byteLength: Long,
-             partitionValues: InternalRow = emptyInternalRow,
-             hadoopPath: YtHadoopPath = null): YtPartitionedFile = {
+    partitionValues: InternalRow = emptyInternalRow,
+    hadoopPath: YtHadoopPath = null): YtPartitionedFile = {
     static(toSimpleYPath(path), beginRow, endRow, byteLength, partitionValues, hadoopPath)
   }
 
   def static(path: YPath, beginRow: Long, endRow: Long, byteLength: Long,
-             partitionValues: InternalRow, hadoopPath: YtHadoopPath): YtPartitionedFile = {
+    partitionValues: InternalRow, hadoopPath: YtHadoopPath): YtPartitionedFile = {
     val ypath = path.ranges(new Range(RangeLimit.row(beginRow), RangeLimit.row(endRow)))
     apply(ypath, byteLength, partitionValues, hadoopPath)
   }
 
   def dynamic(path: String, range: RangeCriteria, byteLength: Long,
-              partitionValues: InternalRow, hadoopPath: YtHadoopPath = null): YtPartitionedFile = {
+    partitionValues: InternalRow, hadoopPath: YtHadoopPath = null): YtPartitionedFile = {
     dynamic(toSimpleYPath(path), range, byteLength, partitionValues, hadoopPath)
   }
 
   def dynamic(path: YPath, range: RangeCriteria, byteLength: Long, partitionValues: InternalRow,
-              hadoopPath: YtHadoopPath): YtPartitionedFile = {
+    hadoopPath: YtHadoopPath): YtPartitionedFile = {
     val ypath = path.ranges(range)
     apply(ypath, byteLength, partitionValues, hadoopPath)
   }
 
   def apply(yPath: YPath, byteLength: Long, partitionValues: InternalRow,
-            hadoopPath: YtHadoopPath): YtPartitionedFile = {
-    apply(yPath, byteLength, partitionValues, hadoopPath, distributedReading = false, None, None)
+    hadoopPath: YtHadoopPath): YtPartitionedFile = {
+    apply(yPath, byteLength, partitionValues, hadoopPath, distributedReading = false, None)
   }
 
   def apply(yPath: YPath, byteLength: Long, partitionValues: InternalRow, hadoopPath: YtHadoopPath,
-            distributedReading: Boolean, cookie: Option[TablePartitionCookie], expectedBytes: Option[Long]): YtPartitionedFile = {
+    distributedReading: Boolean, cookie: Option[TablePartitionCookie]): YtPartitionedFile = {
     val serializedYPath: Array[Byte] = serializeYPath(yPath)
     val delegate = new YtPartitionedFileDelegate(serializedYPath, byteLength, partitionValues, hadoopPath,
-      distributedReading, cookie, expectedBytes)
+      distributedReading, cookie)
     SparkAdapter.instance.createYtPartitionedFile(delegate)
   }
 

@@ -5,7 +5,7 @@ import tech.ytsaurus.client.TableReader
 import java.nio.ByteBuffer
 
 
-class TableCopyByteStream(reader: TableReader[ByteBuffer], override val reportBytesRead: Long => Unit)
+class TableCopyByteStream(reader: TableReader[ByteBuffer])
   extends TableCopyByteStreamBase {
 
   override protected def readNextBatch(): Boolean = {

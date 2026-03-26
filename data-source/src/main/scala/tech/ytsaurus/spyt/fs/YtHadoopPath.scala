@@ -12,7 +12,8 @@ case class YtTableMeta(rowCount: Long = 0,
   modificationTime: Long = 0L,
   optimizeMode: OptimizeMode = OptimizeMode.Scan,
   isDynamic: Boolean = false,
-  fullReadAllowed: Boolean = true) extends Serializable {
+  fullReadAllowed: Boolean = true,
+  schemaIdOpt: Option[String] = None) extends Serializable {
   def approximateRowSize: Long = if (rowCount == 0) 0 else (size + rowCount - 1) / rowCount
 }
 
@@ -27,21 +28,33 @@ case class YtHadoopPath(ypath: YPathEnriched, meta: YtTableMeta)
 object YtHadoopPath {
   private def toFileName(meta: YtTableMeta): String = {
     import meta._
-    s"${rowCount}_${size}_${modificationTime}_${optimizeMode.name}_${isDynamic}_${fullReadAllowed}"
+    List(
+      rowCount,
+      size,
+      modificationTime,
+      optimizeMode.name,
+      isDynamic,
+      fullReadAllowed,
+      schemaIdOpt.getOrElse("None")
+    ).mkString("_")
   }
 
   private def tryDeserialize(path: Path): Option[YtHadoopPath] = {
     Try {
-      val rowCountStr :: sizeStr :: modificationTimeStr :: optimizeModeStr :: isDynamicStr :: fullReadAllowedStr :: Nil =
-        path.getName.trim.split("_", 6).toList
+      val (rowCountStr :: sizeStr :: modificationTimeStr :: optimizeModeStr ::
+        isDynamicStr :: fullReadAllowedStr :: schemaIdOptStr :: Nil) = path.getName.trim.split("_", 7).toList
       val rowCount = rowCountStr.trim.toLong
       val size = sizeStr.trim.toLong
       val modificationTime = modificationTimeStr.trim.toLong
       val optimizeMode = OptimizeMode.fromName(optimizeModeStr.trim)
       val isDynamic = isDynamicStr.trim.toBoolean
       val fullReadAllowed = fullReadAllowedStr.trim.toBoolean
+      val schemaIdOpt = schemaIdOptStr.trim match {
+        case "None" => None
+        case s => Some(s)
+      }
       YtHadoopPath(YPathEnriched.fromPath(path.getParent),
-        YtTableMeta(rowCount, size, modificationTime, optimizeMode, isDynamic, fullReadAllowed))
+        YtTableMeta(rowCount, size, modificationTime, optimizeMode, isDynamic, fullReadAllowed, schemaIdOpt))
     }.toOption
   }
 

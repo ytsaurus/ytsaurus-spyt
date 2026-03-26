@@ -161,7 +161,8 @@ class YtTableFileSystem extends YtFileSystemBase {
       size = size,
       modificationTime = modificationTime,
       optimizeMode = optimizeMode,
-      fullReadAllowed = fullReadAllowed
+      fullReadAllowed = fullReadAllowed,
+      schemaIdOpt = YtWrapper.schemaId(attributes)
     )
   }
 
@@ -176,7 +177,8 @@ class YtTableFileSystem extends YtFileSystemBase {
       size = size,
       modificationTime = modificationTime,
       optimizeMode = optimizeMode,
-      isDynamic = true
+      isDynamic = true,
+      schemaIdOpt = YtWrapper.schemaId(attributes)
     )
   }
 

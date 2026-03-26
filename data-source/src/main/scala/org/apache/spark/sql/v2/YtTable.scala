@@ -18,12 +18,14 @@ import tech.ytsaurus.spyt.types.YTsaurusTypes
 import scala.annotation.tailrec
 import scala.collection.JavaConverters._
 
-case class YtTable(name: String,
-                   sparkSession: SparkSession,
-                   options: CaseInsensitiveStringMap,
-                   paths: Seq[String],
-                   userSpecifiedSchemaProvided: Option[StructType],
-                   fallbackFileFormat: Class[_ <: FileFormat])
+case class YtTable(
+  name: String,
+  sparkSession: SparkSession,
+  options: CaseInsensitiveStringMap,
+  paths: Seq[String],
+  userSpecifiedSchemaProvided: Option[StructType],
+  fallbackFileFormat: Class[_ <: FileFormat],
+  providedDataSchema: Option[StructType] = None)
   extends FileTable(sparkSession, options, paths, userSpecifiedSchemaProvided) {
 
   private val userSpecifiedSchema = userSpecifiedSchemaProvided.map { schema =>
@@ -42,7 +44,7 @@ case class YtTable(name: String,
   }
 
   // Almost exact copy of super.dataSchema field with addition of ForcingNullableIfNoMetadata option
-  override lazy val dataSchema: StructType = {
+  override lazy val dataSchema: StructType = providedDataSchema.getOrElse {
     val schema = userSpecifiedSchema.map { schema =>
       val partitionSchema = fileIndex.partitionSchema
       val resolver = sparkSession.sessionState.conf.resolver
@@ -52,9 +54,10 @@ case class YtTable(name: String,
     }.getOrElse {
       throw QueryCompilationErrors.dataSchemaNotSpecifiedError(formatName)
     }
-    fileIndex match {
-      case _ if !sparkSession.getYtConf(ForcingNullableIfNoMetadata).get => schema
-      case _ => schema.asNullable
+    if (sparkSession.getYtConf(ForcingNullableIfNoMetadata).get) {
+      schema.asNullable
+    } else {
+      schema
     }
   }
 

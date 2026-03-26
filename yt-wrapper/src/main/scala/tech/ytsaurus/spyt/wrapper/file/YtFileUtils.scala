@@ -156,6 +156,10 @@ trait YtFileUtils {
     modificationTimeTs(modificationTime(attributes))
   }
 
+  def schemaId(attributes: Map[String, YTreeNode]): Option[String] = {
+    attributes.get(YtAttributes.schemaId).map(_.stringValue())
+  }
+
   /**
    * This method has almost the same logic as it's python equivalent from here:
    * https://github.com/ytsaurus/ytsaurus/blob/484207f63474cd94b9a5814e6e687615aa259e11/yt/python/yt/wrapper/file_commands.py#L450

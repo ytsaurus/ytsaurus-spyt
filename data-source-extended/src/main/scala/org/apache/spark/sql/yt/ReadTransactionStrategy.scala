@@ -39,7 +39,7 @@ class ReadTransactionStrategy(sparkSession: SparkSession) extends Rule[LogicalPl
     plan.transform {
       case relation: DataSourceV2Relation if relation.table.isInstanceOf[YtTable] =>
         val table = relation.table.asInstanceOf[YtTable]
-        relation.copy(table = table.copy(paths = table.paths.map(path => {
+        relation.copy(table = table.copy(providedDataSchema = Some(table.dataSchema), paths = table.paths.map(path => {
           val yPathEnriched = ypathEnriched(path)
           val proxy = yPathEnriched.cluster.getOrElse(configuration.proxy)
           val transactionListener = listeners.getOrElseUpdate(proxy,

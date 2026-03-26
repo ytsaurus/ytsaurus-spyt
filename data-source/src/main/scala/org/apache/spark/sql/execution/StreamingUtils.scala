@@ -23,7 +23,7 @@ object StreamingUtils {
 
   def getStreamingSourceSchema(sparkSession: SparkSession, path: YPath, transaction: Option[String], proxy: Option[String],
                                parameters: Map[String, String]): StructType = {
-    val valuesSchema = YtUtils.getSchema(sparkSession, path, transaction, proxy, parameters)
+    val valuesSchema = YtUtils.getSchemaByPath(sparkSession, path, transaction, proxy, parameters)
     val includeServiceColumns = parameters.get("include_service_columns").exists(_.toBoolean)
     if (includeServiceColumns) createExtendedStreamingSchema(valuesSchema) else valuesSchema
   }

@@ -2,7 +2,7 @@ package tech.ytsaurus.spyt.format
 
 import org.apache.hadoop.fs.Path
 import org.apache.spark.SparkException
-import org.apache.spark.sql.Row
+import org.apache.spark.sql.{Row, SparkSession}
 import org.apache.spark.sql.types.{ArrayType, BooleanType, DoubleType, IntegerType, LongType, Metadata, MetadataBuilder, StringType, StructField, StructType}
 import org.apache.spark.sql.v2.YtUtils
 import org.mockito.Mockito
@@ -16,10 +16,14 @@ import tech.ytsaurus.spyt.serializers.SchemaConverter.MetadataFields
 import tech.ytsaurus.spyt.wrapper.YtWrapper
 import tech.ytsaurus.client.CompoundClient
 import tech.ytsaurus.client.request.GetNode
+import tech.ytsaurus.core.cypress.YPath
 import tech.ytsaurus.core.tables.{ColumnValueType, TableSchema}
 import tech.ytsaurus.spyt.SchemaTestUtils
 import tech.ytsaurus.spyt.fs.YtTableFileSystem
 import tech.ytsaurus.spyt.wrapper.client.{YtClientProvider, YtRpcClient}
+import tech.ytsaurus.typeinfo.TiType
+
+import java.util.concurrent.atomic.AtomicInteger
 
 class YtInferSchemaTest extends AnyFlatSpec with Matchers with LocalSpark
   with TmpDir with SchemaTestUtils with MockitoSugar with TestUtils {
@@ -228,6 +232,18 @@ class YtInferSchemaTest extends AnyFlatSpec with Matchers with LocalSpark
     }
   }
 
+  private def withSpyYt(body: CompoundClient => Unit): Unit = {
+    val rpcClient = YtClientProvider.ytRpcClient(ytClientConfiguration(spark))
+    val spyYt: CompoundClient = Mockito.spy(rpcClient.yt)
+    try {
+      YtClientProvider.getClients(s"${rpcClient.normalizedProxy};") = rpcClient.copy(yt = spyYt)
+      body(spyYt)
+      Mockito.reset(spyYt)
+    } finally {
+      YtClientProvider.getClients(s"${rpcClient.normalizedProxy};") = rpcClient
+    }
+  }
+
   it should "infer table's schema one time" in {
     YtWrapper.createDir(tmpPath)
     val filesCount = 3
@@ -242,18 +258,51 @@ class YtInferSchemaTest extends AnyFlatSpec with Matchers with LocalSpark
 
     val filesStatus = tables.flatMap(x => fs.listStatus(new Path(s"ytTable:/$x")))
 
-    val rpcClient = YtClientProvider.ytRpcClient(ytClientConfiguration(spark))
-    val mockYt: CompoundClient = Mockito.spy(rpcClient.yt)
-    try {
-      YtClientProvider.getClients(s"${rpcClient.normalizedProxy};") = rpcClient.copy(yt = mockYt)
+    withSpyYt { spyYt =>
       YtUtils.inferSchema(spark, Map.empty, filesStatus)
       // getNode invoked in YtWrapper.attribute(path, "schema"), that might be invoked for every chunk in inferSchema
-      // schema should be asked exactly 1 time for every file
-      verify(mockYt, times(tables.length)).getNode(any[GetNode])
-      Mockito.reset(mockYt)
-    } finally {
-      YtClientProvider.getClients(rpcClient.normalizedProxy) = rpcClient
+      // schema should be asked exactly 1 time because all files have the same schema
+      verify(spyYt, times(1)).getNode(any[GetNode])
     }
   }
 
+  it should "infer schema by schema_id" in {
+    YtWrapper.createDir(tmpPath)
+
+    val schema1 = TableSchema.builder()
+      .addValue("a", TiType.int64())
+      .addValue("b", TiType.string())
+      .build()
+    (1 to 10).foreach { i =>
+      writeTableFromYson(Seq(s"""{a = $i; b = "value $i"}"""), s"$tmpPath/table_$i", schema1)
+    }
+
+    val schema2 = TableSchema.builder()
+      .addValue("a", TiType.int64())
+      .addValue("b", TiType.string())
+      .addValue("c", TiType.doubleType())
+      .build()
+    (11 to 20).foreach { i =>
+      writeTableFromYson(Seq(s"""{a = $i; b = "value $i"; c = $i.$i}"""), s"$tmpPath/table_$i", schema2)
+    }
+
+    val schemaId1 = YtWrapper.attribute(s"$tmpPath/table_1", "schema_id").stringValue()
+    val schemaId2 = YtWrapper.attribute(s"$tmpPath/table_11", "schema_id").stringValue()
+
+    withSpyYt { spyYt =>
+      val df = spark.read.option("mergeSchema", "true").yt(tmpPath)
+
+      df.collect() should contain theSameElementsAs (1 to 20).map { i =>
+        val doubleValue = if (i < 11) null else (i + i.toDouble / 100)
+        Row(i, s"value $i", doubleValue)
+      }
+      df.schema.fields.map(_.copy(metadata = Metadata.empty)) should contain theSameElementsInOrderAs Seq(
+        StructField("a", LongType, nullable = true),
+        StructField("b", StringType, nullable = true),
+        StructField("c", DoubleType, nullable = true)
+      )
+      verify(spyYt, times(1)).getNode(eqTo(s"#$schemaId1"))
+      verify(spyYt, times(1)).getNode(eqTo(s"#$schemaId2"))
+    }
+  }
 }

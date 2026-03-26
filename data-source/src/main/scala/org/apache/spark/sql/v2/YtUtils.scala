@@ -7,14 +7,16 @@ import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.types.{MetadataBuilder, StructField, StructType}
 import org.apache.spark.util.SerializableConfiguration
 import org.slf4j.LoggerFactory
+import tech.ytsaurus.client.CompoundClient
 import tech.ytsaurus.core.cypress.YPath
 import tech.ytsaurus.spyt.fs.path.YPathEnriched
-import tech.ytsaurus.spyt.fs.{YtFileSystemBase, YtHadoopPath}
+import tech.ytsaurus.spyt.fs.{YtFileSystemBase, YtHadoopPath, YtTableMeta}
 import tech.ytsaurus.spyt.serializers.SchemaConverter.MetadataFields
 import tech.ytsaurus.spyt.serializers.{SchemaConverter, SchemaConverterConfig}
 import tech.ytsaurus.spyt.wrapper.YtWrapper
 import tech.ytsaurus.spyt.wrapper.client.YtClientConfigurationConverter.ytClientConfiguration
 import tech.ytsaurus.spyt.wrapper.client.YtClientProvider
+import tech.ytsaurus.ysontree.YTreeNode
 
 import java.lang.reflect.InvocationTargetException
 
@@ -37,25 +39,42 @@ object YtUtils {
     mergeFileSchemas(allSchemas, enableMerge)
   }
 
-  private def getTablePath(fileStatus: FileStatus): YPathEnriched = {
-    fileStatus.getPath match {
-      case ytPath: YtHadoopPath => ytPath.ypath
-      case p => YPathEnriched.fromPath(p.getParent)
+  private def getTablePath(fileStatus: FileStatus): YtHadoopPath = {
+    YtHadoopPath.fromPath(fileStatus.getPath) match {
+      case ytPath: YtHadoopPath => ytPath
+      case p => YtHadoopPath(YPathEnriched.fromPath(p.getParent), YtTableMeta())
     }
   }
 
-  private def getSchema(sparkSession: SparkSession, path: YPathEnriched,
-                        parameters: Map[String, String]): StructType = {
-    getSchema(sparkSession, path.toYPath, path.transaction, path.cluster, parameters)
+  def getSchemaById(
+    sparkSession: SparkSession,
+    schemaId: String,
+    proxy: Option[String],
+    parameters: Map[String, String]
+  ): StructType = {
+    getSparkSchema(sparkSession, proxy, parameters) { yt =>
+      yt.getNode(s"#$schemaId").join()
+    }
   }
 
-  def getSchema(sparkSession: SparkSession, path: YPath, transaction: Option[String], proxy: Option[String],
-                parameters: Map[String, String]): StructType = {
+  def getSchemaByPath(sparkSession: SparkSession,
+    path: YPath,
+    transaction: Option[String],
+    proxy: Option[String],
+    parameters: Map[String, String]
+  ): StructType = {
+    getSparkSchema(sparkSession, proxy, parameters) { yt =>
+      YtWrapper.attribute(path, "schema", transaction)(yt)
+    }
+  }
+
+  private def getSparkSchema(sparkSession: SparkSession, proxy: Option[String], parameters: Map[String, String])
+    (doGetSchema: CompoundClient => YTreeNode): StructType = {
     val yt = YtClientProvider.ytClientWithProxy(ytClientConfiguration(sparkSession), proxy)
     val config = SchemaConverterConfig(sparkSession)
     val parsingTypeV3 = parameters.get(Options.PARSING_TYPE_V3).map(_.toBoolean).getOrElse(config.parsingTypeV3)
     val schemaHint = SchemaConverter.schemaHint(parameters)
-    val schemaTree = YtWrapper.attribute(path, "schema", transaction)(yt)
+    val schemaTree = doGetSchema(yt)
     SchemaConverter.sparkSchema(schemaTree, schemaHint, parsingTypeV3)
   }
 
@@ -101,16 +120,30 @@ object YtUtils {
     schema.copy(fields = schema.fields.map(_.withKeyId(-1)))
   }
 
-  private[v2] def getFilesSchemas(sparkSession: SparkSession,
-                                  parameters: Map[String, String],
-                                  files: Seq[FileStatus]): Seq[FileWithSchema] = {
-    val (_, allSchemas) = files.foldLeft((Set.empty[YPathEnriched], List.empty[FileWithSchema])) {
+  private[v2] def getFilesSchemas(
+    sparkSession: SparkSession,
+    parameters: Map[String, String],
+    files: Seq[FileStatus]
+  ): Seq[FileWithSchema] = {
+    val (_, allSchemas) = files.foldLeft((Set.empty[String], List.empty[FileWithSchema])) {
       case ((curSet, schemas), fileStatus) =>
-        val path = getTablePath(fileStatus)
-        if (curSet.contains(path)) {
+        val ytHadoopPath = getTablePath(fileStatus)
+        val schemaIdOpt = ytHadoopPath.meta.schemaIdOpt
+        val pathOrSchema = schemaIdOpt.getOrElse(ytHadoopPath.toStringPath)
+        if (curSet.contains(pathOrSchema)) {
           (curSet, schemas)
         } else {
-          (curSet + path, FileWithSchema(fileStatus, getSchema(sparkSession, path, parameters)) +: schemas)
+          val proxy = ytHadoopPath.ypath.cluster
+          val schema = schemaIdOpt match {
+            case Some(schemaId) => getSchemaById(sparkSession, schemaId, proxy, parameters)
+            case None => getSchemaByPath(
+              sparkSession,
+              ytHadoopPath.toYPath,
+              ytHadoopPath.ypath.transaction,
+              proxy,
+              parameters)
+          }
+          (curSet + pathOrSchema, FileWithSchema(fileStatus, schema) +: schemas)
         }
     }
     allSchemas

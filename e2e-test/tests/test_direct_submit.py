@@ -1,6 +1,8 @@
-import time
-
 import spyt
+
+import os
+import pytest
+import time
 
 from common.helpers import assert_items_equal, wait_for_operation
 from pyspark.conf import SparkConf
@@ -123,7 +125,6 @@ def test_cluster_mode_broken_spark_conf(yt_client, tmp_dir, direct_submitter):
         assert "Failed to submit Spark job" in str(e)
 
 
-
 def test_cluster_mode_with_dependencies(yt_client, tmp_dir, direct_submitter):
     table_in = f"{tmp_dir}/t_dep_in"
     table_out = f"{tmp_dir}/t_dep_out"
@@ -179,6 +180,42 @@ def test_cluster_mode_with_secret_parameters(yt_client, tmp_dir, direct_submitte
         "token_env": "t0k3n",
     }]
     assert_items_equal(yt_client.read_table(table_out), result_rows)
+
+
+@pytest.mark.timeout(150)
+def test_cluster_mode_aborting_executors(yt_client, tmp_dir, direct_submitter):
+    table_out = f"{tmp_dir}/t_out"
+    upload_file(yt_client, 'jobs/spark_job_multiple_tasks.py', f'{tmp_dir}/spark_job_multiple_tasks.py')
+    spark_conf = {
+        "spark.ytsaurus.driver.maxFailures": "1",
+        "spark.executor.cores": "2",
+        "spark.task.maxFailures": "10",
+    }
+    driver_operation_id = direct_submitter.submit(f'yt:/{tmp_dir}/spark_job_multiple_tasks.py',
+                                                  job_args=[table_out],
+                                                  num_executors=2,
+                                                  conf=spark_conf)
+
+    assert driver_operation_id is not None
+
+    executors_operation_id = get_executors_operation_id(yt_client, driver_operation_id, retries=80)
+    # waiting for some tasks to schedule on executors
+    time.sleep(15)
+
+    executor_jobs = yt_client.list_jobs(executors_operation_id, job_state="running")["jobs"]
+    assert len(executor_jobs) == 2
+    victim_job_id = executor_jobs[0]['id']
+
+    # we do not use abort command here because we want the job proxy to die before the executor process
+    kill_command = (
+        f"ps -x | grep 'ytserver-job-proxy' | grep '{victim_job_id}' | "
+        r"awk '{print \$1}' | xargs kill"
+    )
+    os.system(f'docker exec yt.backend /bin/bash -c "{kill_command}"')
+
+    driver_operation_state = wait_for_operation(yt_client, driver_operation_id)
+    assert not driver_operation_state.is_unsuccessfully_finished()
+    assert yt_client.row_count(table_out) == 10000000
 
 
 def test_driver_auto_shutdown(yt_client: YtClient, tmp_dir, direct_submitter):

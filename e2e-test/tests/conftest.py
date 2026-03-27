@@ -87,10 +87,11 @@ def tmp_user(yt_client):
         time.sleep(1)
 
 
-def _create_spark_session(request, user_config=None):
+def _create_local_spark_session(request, user_config=None):
+    local_master_conf = {"spark.master": "local[4]"}
     extra_conf = getattr(request, 'param', {})
 
-    all_conf = SPARK_CONF | extra_conf | (user_config or {})
+    all_conf = SPARK_CONF | local_master_conf | extra_conf | (user_config or {})
 
     conf = default_conf().setAll(all_conf.items())
     session = SparkSession.builder.config(conf=conf).getOrCreate()
@@ -100,7 +101,7 @@ def _create_spark_session(request, user_config=None):
 
 @pytest.fixture(scope="function")
 def local_session(request):
-    session = _create_spark_session(request)
+    session = _create_local_spark_session(request)
     try:
         yield session
     finally:
@@ -113,7 +114,7 @@ def local_session_with_user(request, tmp_user):
     user_conf = {
         "spark.hadoop.yt.token": token_hash,
     }
-    session = _create_spark_session(request, user_config=user_conf)
+    session = _create_local_spark_session(request, user_config=user_conf)
     try:
         yield user_name, session
     finally:

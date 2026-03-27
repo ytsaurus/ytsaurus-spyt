@@ -190,14 +190,14 @@ class DirectSubmitter:
     def __enter__(self):
         return self
 
-    def submit(self, job_path, spark_base_args=[], job_args=[], conf={}):
+    def submit(self, job_path, spark_base_args=[], job_args=[], num_executors=1, conf={}):
         op_path = None
         spark_conf = self.default_conf | conf
         if self.dump_dir:
             _, op_path = tempfile.mkstemp()
             spark_conf |= {"spark.ytsaurus.driver.operation.dump.path": op_path}
-        exit_code = direct_submit(self.proxy, num_executors=1, main_file=job_path, spark_base_args=spark_base_args,
-                                  job_args=job_args, spark_conf=spark_conf)
+        exit_code = direct_submit(self.proxy, num_executors=num_executors, main_file=job_path,
+                                  spark_base_args=spark_base_args, job_args=job_args, spark_conf=spark_conf)
         if op_path:
             with open(op_path, 'r') as fd:
                 self.op_ids.append(fd.read())

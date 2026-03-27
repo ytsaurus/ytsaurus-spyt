@@ -15,7 +15,6 @@ DRIVER_CLIENT_CONF = {
 }
 
 SPARK_CONF = DEFAULT_SPARK_CONF | {
-    "spark.master": "local[4]",
     "spark.hadoop.yt.proxy": YT_PROXY,
     "spark.driver.cores": "1",
     "spark.driver.memory": "768M",

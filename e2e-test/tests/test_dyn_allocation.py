@@ -5,7 +5,6 @@ from time import sleep
 from utils import upload_file, get_executors_operation_id
 
 spark_conf_dynamic_allocation = {
-    "spark.ytsaurus.rpc.job.proxy.enabled": "true",
     "spark.ytsaurus.shuffle.enabled": "true",
     "spark.executor.cores": "1",
     "spark.dynamicAllocation.enabled": "true",

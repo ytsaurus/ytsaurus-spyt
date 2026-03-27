@@ -28,55 +28,35 @@ trait YtClientUtils {
     }
   }
 
-  def createRpcClient(config: YtClientConfiguration,
-                      nThreads: Int,
-                      rpcClientListener: Option[SpytRpcClientListener] = None): YtRpcClient = {
+  def createRpcClient(
+    config: YtClientConfiguration,
+    nThreads: Int,
+    rpcClientListener: Option[SpytRpcClientListener] = None): YtRpcClient = {
     log.info(s"Create RPC YT Client, configuration ${config.copy(token = "*****")}")
-
-    jobProxyEndpoint(config) match {
-      case Some(jobProxy) =>
-        log.info(s"Create job proxy client with config $jobProxy")
-        createYtClientWrapper(
-          config.normalizedProxy,
-          config.timeout,
-          new EpollEventLoopGroup(nThreads, daemonThreadFactory),
-          rpcClientListener
-        ) {
-          case (connector, options) => createJobProxyClient(config, connector, options, jobProxy)
-        }
-      case None =>
-        createYtClientWrapper(
-          config.normalizedProxy,
-          config.timeout,
-          new NioEventLoopGroup(nThreads, daemonThreadFactory),
-          rpcClientListener
-        ) {
-          case (connector, rpcOptions) =>
-            log.info(s"Create remote proxies client")
-            createRemoteProxiesClient(connector, rpcOptions, config)
-        }
+    val maybeJobProxy = jobProxyEndpoint(config)
+    val group = if (maybeJobProxy.isDefined) {
+      new EpollEventLoopGroup(nThreads, daemonThreadFactory)
+    } else {
+      new NioEventLoopGroup(nThreads, daemonThreadFactory)
     }
-  }
 
-  private def createYtClientWrapper(proxy: String,
-                                    timeout: Duration,
-                                    group: MultithreadEventLoopGroup,
-                                    rpcClientListener: Option[SpytRpcClientListener])
-                                   (client: (DefaultBusConnector, RpcOptions) => CompoundClient): YtRpcClient = {
     val connector = new DefaultBusConnector(group, true)
-      .setReadTimeout(toJavaDuration(timeout))
-      .setWriteTimeout(toJavaDuration(timeout))
+      .setReadTimeout(toJavaDuration(config.timeout))
+      .setWriteTimeout(toJavaDuration(config.timeout))
 
     try {
       val rpcOptions = new RpcOptions()
-      rpcOptions.setTimeouts(timeout)
+      rpcOptions.setTimeouts(config.timeout)
       if (rpcClientListener.isDefined) {
         rpcOptions.setRpcClientListener(rpcClientListener.get)
       }
 
-      val yt = client(connector, rpcOptions)
-      log.info(s"YtClient for proxy $proxy created")
-      YtRpcClient(proxy, yt, connector)
+      val yt = maybeJobProxy match {
+        case Some(jobProxy) => createJobProxyClient(config, connector, rpcOptions, jobProxy)
+        case None => createRemoteProxiesClient(connector, rpcOptions, config)
+      }
+      log.info(s"YtClient for proxy ${config.proxy} created")
+      YtRpcClient(config.proxy, yt, connector)
     } catch {
       case e: Throwable =>
         connector.close()

@@ -31,5 +31,9 @@ mkdir -p /opt/$PYTHON_VERSION/bin
 ln -s /usr/bin/$PYTHON_VERSION /opt/$PYTHON_VERSION/bin/python
 ln -s /usr/bin/$PYTHON_VERSION /opt/$PYTHON_VERSION/bin/$PYTHON_VERSION
 
+# Setting as default python3 version
+unlink /usr/bin/python3
+ln -s /usr/bin/$PYTHON_VERSION /usr/bin/python3
+
 apt-get clean
 rm -rf /var/lib/apt/lists/*

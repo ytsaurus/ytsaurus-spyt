@@ -300,8 +300,8 @@ def run_operation_wrapper(op_builder, address_path, client):
     return op
 
 
-def start_livy_server(operation_alias=None, discovery_path=None, pool=None, enable_tmpfs=False, network_project=None,
-                      params=None, spark_cluster_version=None, enablers=None,
+def start_livy_server(operation_title=None, operation_alias=None, discovery_path=None, pool=None, enable_tmpfs=False,
+                      network_project=None, params=None, spark_cluster_version=None, enablers=None,
                       enable_preference_ipv6=None, client=None,
                       preemption_mode="normal", cluster_log_level="INFO",
                       livy_driver_cores=SparkDefaultArguments.LIVY_DRIVER_CORES,
@@ -340,8 +340,8 @@ def start_livy_server(operation_alias=None, discovery_path=None, pool=None, enab
         spark_discovery.set_cluster_version_if_none(spark_cluster_version, client)
 
     common_config = CommonComponentConfig(
-        operation_alias, pool, enable_tmpfs, network_project, enablers, preemption_mode,
-        cluster_log_level, rpc_job_proxy, rpc_job_proxy_thread_pool_size, False, tcp_proxy_range_start,
+        operation_title, operation_alias, pool, enable_tmpfs, network_project, enablers,
+        preemption_mode, cluster_log_level, rpc_job_proxy, rpc_job_proxy_thread_pool_size, False, tcp_proxy_range_start,
         tcp_proxy_range_size, enable_stderr_table, "livy", spark_discovery, group_id, cluster_java_home
     )
     livy_config = LivyConfig(
@@ -354,7 +354,7 @@ def start_livy_server(operation_alias=None, discovery_path=None, pool=None, enab
     return run_operation_wrapper(livy_builder, address_path, client)
 
 
-def start_history_server(operation_alias=None, discovery_path=None, pool=None, enable_tmpfs=False,
+def start_history_server(operation_title=None, operation_alias=None, discovery_path=None, pool=None, enable_tmpfs=False,
                          history_server_memory_limit=SparkDefaultArguments.SPARK_HISTORY_SERVER_MEMORY_LIMIT,
                          history_server_cpu_limit=SparkDefaultArguments.SPARK_HISTORY_SERVER_CPU_LIMIT,
                          history_server_memory_overhead=SparkDefaultArguments.SPARK_HISTORY_SERVER_MEMORY_OVERHEAD,
@@ -384,7 +384,7 @@ def start_history_server(operation_alias=None, discovery_path=None, pool=None, e
     spark_discovery.create(client)
 
     common_config = CommonComponentConfig(
-        operation_alias, pool, enable_tmpfs, network_project, enablers, preemption_mode,
+        operation_title, operation_alias, pool, enable_tmpfs, network_project, enablers, preemption_mode,
         cluster_log_level, rpc_job_proxy, rpc_job_proxy_thread_pool_size, False, tcp_proxy_range_start,
         tcp_proxy_range_size, enable_stderr_table, "shs", spark_discovery, None, cluster_java_home
     )
@@ -407,7 +407,7 @@ def set_random_shuffle_service_port(spark_conf):
 def start_spark_cluster(worker_cores, worker_memory, worker_num, worker_cores_overhead=None,
                         worker_memory_overhead=SparkDefaultArguments.SPARK_WORKER_MEMORY_OVERHEAD,
                         worker_timeout=SparkDefaultArguments.SPARK_WORKER_TIMEOUT,
-                        operation_alias=None, discovery_path=None, pool=None,
+                        operation_alias=None, operation_title=None, discovery_path=None, pool=None,
                         enable_tmpfs=True, tmpfs_limit=SparkDefaultArguments.SPARK_WORKER_TMPFS_LIMIT,
                         ssd_limit=SparkDefaultArguments.SPARK_WORKER_SSD_LIMIT,
                         ssd_account=None, worker_disk_name="default", worker_disk_limit=None, worker_disk_account=None,
@@ -436,6 +436,7 @@ def start_spark_cluster(worker_cores, worker_memory, worker_num, worker_cores_ov
                         tcp_proxy_range_size=100, enable_stderr_table=False, group_id=None,
                         worker_gpu_limit=0, cluster_java_home=None, enable_ytsaurus_shuffle=False):
     """Start Spark cluster
+    :param operation_title: title for the underlying YT operation
     :param operation_alias: alias for the underlying YT operation
     :param pool: pool for the underlying YT operation
     :param discovery_path: Cypress path for discovery files and logs
@@ -589,7 +590,7 @@ def start_spark_cluster(worker_cores, worker_memory, worker_num, worker_cores_ov
         job_types.append('worker')
 
     common_config = CommonComponentConfig(
-        operation_alias, pool, enable_tmpfs, network_project, enablers, preemption_mode,
+        operation_title, operation_alias, pool, enable_tmpfs, network_project, enablers, preemption_mode,
         cluster_log_level, rpc_job_proxy, rpc_job_proxy_thread_pool_size, enable_ytsaurus_shuffle,
         tcp_proxy_range_start, tcp_proxy_range_size, enable_stderr_table, "spark", spark_discovery, group_id,
         cluster_java_home

@@ -60,6 +60,7 @@ class SparkDefaultArguments(object):
 
 @dataclass
 class CommonComponentConfig():
+    operation_title: str = None
     operation_alias: str = None
     pool: str = None
     enable_tmpfs: bool = True
@@ -444,9 +445,11 @@ def build_spark_operation_spec(config: dict, client: YtClient,
         else:
             operation_spec["stderr_table_path"] = str(common_config.spark_discovery.stderr()) + "_worker"
     if "title" not in operation_spec:
-        operation_spec["title"] = common_config.operation_alias or (common_config.alias_prefix + "_" + str(user))
+        operation_spec["title"] = common_config.operation_title or (common_config.alias_prefix + "_" + str(user))
     operation_spec["pool"] = common_config.pool
     operation_spec['preemption_mode'] = common_config.preemption_mode
+    if common_config.operation_alias:
+        operation_spec["alias"] = common_config.operation_alias
     description = {
         "cluster_version": config["cluster_version"],
         "client_version": __version__,

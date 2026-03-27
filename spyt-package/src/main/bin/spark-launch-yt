@@ -113,6 +113,7 @@ def main(raw_args=None):
                         worker_memory_overhead=args.worker_memory_overhead,
                         worker_timeout=args.worker_timeout,
                         operation_alias=args.operation_alias,
+                        operation_title=args.operation_title,
                         discovery_path=args.discovery_path,
                         pool=args.pool or get_user_name(client=yt_client),
                         enable_tmpfs=args.enable_tmpfs,

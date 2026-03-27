@@ -84,8 +84,8 @@ class SpytCluster(ClusterBase):
     def __enter__(self):
         self.op = start_spark_cluster(
             worker_cores=2, worker_memory='3G', worker_num=1, worker_cores_overhead=None, worker_memory_overhead='512M',
-            operation_alias='spark_cluster', discovery_path=self.discovery_path, master_memory_limit='3G',
-            enable_history_server=False, params=self.get_params(), enable_tmpfs=False,
+            operation_title='spark_cluster', discovery_path=self.discovery_path,
+            master_memory_limit='3G', enable_history_server=False, params=self.get_params(), enable_tmpfs=False,
             enablers=self.get_enablers(), client=self.yt_client, spark_cluster_version=VERSION,
             enable_livy=self.enable_livy, livy_max_sessions=1, group_id=self.group_id)
         if self.op is None:
@@ -142,7 +142,7 @@ class LivyServer(ClusterBase):
 
     def __enter__(self):
         self.op = start_livy_server(
-            operation_alias='livy_server', discovery_path=self.discovery_path,
+            operation_title='livy_server', discovery_path=self.discovery_path,
             params=self.get_params(),
             enablers=self.get_enablers(), client=self.yt_client, spark_cluster_version=VERSION,
             livy_max_sessions=1, spark_master_address=self.master_address, group_id=self.group_id)
@@ -223,9 +223,9 @@ class HistoryServer(ClusterBase):
 
     def __enter__(self):
         self.op = start_history_server(
-            operation_alias='integration_tests', discovery_path=self.discovery_path, history_server_cpu_limit=1,
-            history_server_memory_limit='512m', history_server_memory_overhead='512m', params=self.get_params(),
-            enablers=self.get_enablers(), client=self.yt_client, spark_cluster_version=VERSION)
+            operation_title='integration_tests', discovery_path=self.discovery_path,
+            history_server_cpu_limit=1, history_server_memory_limit='512m', history_server_memory_overhead='512m',
+            params=self.get_params(), enablers=self.get_enablers(), client=self.yt_client, spark_cluster_version=VERSION)
         if self.op is None:
             raise YtError("Server starting failed")
         self.wait_component_startup('shs_url')

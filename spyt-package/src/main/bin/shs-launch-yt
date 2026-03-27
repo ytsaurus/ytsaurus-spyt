@@ -21,6 +21,7 @@ def main(raw_args=None):
     yt_client = YtClient(proxy=args.proxy, token=default_token())
 
     start_history_server(operation_alias=args.operation_alias,
+                         operation_title=args.operation_title,
                          discovery_path=args.discovery_path,
                          pool=args.pool or get_user_name(client=yt_client),
                          enable_tmpfs=args.enable_tmpfs,

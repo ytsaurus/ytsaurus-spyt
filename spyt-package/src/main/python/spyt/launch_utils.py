@@ -16,6 +16,7 @@ def add_parser_group(parser, enabler_arg, disabler_arg, dest_arg, default_value)
 def add_default_launch_options(parser):
     parser.add_argument("--pool", required=False)
     parser.add_argument("--operation-alias", required=False)
+    parser.add_argument("--operation-title", required=False)
     parser.add_argument("--network-project", required=False)
     parser.add_argument("--params", required=False, action=ParseStructuredArgument, dest="params",
                         default=SparkDefaultArguments.get_params())

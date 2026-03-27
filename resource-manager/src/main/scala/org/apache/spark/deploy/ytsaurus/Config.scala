@@ -212,4 +212,10 @@ object Config {
     .version("2.8.2")
     .stringConf
     .createOptional
+
+  val YTSAURUS_SPARK_DRIVER_OPERATION_ALIAS =ConfigBuilder("spark.ytsaurus.driver.operation.alias")
+    .doc("Custom driver operation alias. Starts with prefix \"*\"")
+    .version("2.9.0")
+    .stringConf
+    .createOptional
 }

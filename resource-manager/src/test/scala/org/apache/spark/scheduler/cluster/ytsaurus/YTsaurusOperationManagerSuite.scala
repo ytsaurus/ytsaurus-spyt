@@ -1,7 +1,7 @@
 
 package org.apache.spark.scheduler.cluster.ytsaurus
 
-import org.apache.spark.deploy.ytsaurus.ApplicationArguments
+import org.apache.spark.deploy.ytsaurus.{ApplicationArguments, Config}
 import org.apache.spark.deploy.ytsaurus.Config._
 import org.apache.spark.internal.config.{ARCHIVES, DRIVER_HOST_ADDRESS, DRIVER_PORT, FILES, JARS, SUBMIT_PYTHON_FILES}
 import org.apache.spark.launcher.SparkLauncher
@@ -293,6 +293,25 @@ class YTsaurusOperationManagerSuite extends SparkFunSuite with BeforeAndAfterEac
       "YT_TOKEN" -> YTree.stringNode("testToken"),
       "docker_auth" -> YTree.stringNode("docker_auth"),
     ).asJava
+  }
+
+  test("It should be possible to set driver operation alias"){
+    val conf = createBaseSparkConf()
+      .set(Config.YTSAURUS_SPARK_DRIVER_OPERATION_ALIAS, "test_alias")
+
+    val driverParams = opManagerStub.driverParams(conf, baseDriverArgs)
+    opManagerStub.createSpec(conf, "driver", driverParams).getAdditionalSpecParameters.get("alias") shouldBe(
+      YTree.stringNode("test_alias"))
+  }
+
+  test("It should be possible to set driver operation alias through special parameter"){
+    val conf = createBaseSparkConf()
+      .set("spark.ytsaurus.driver.operation.alias", "test_alias")
+      .set("spark.ytsaurus.driver.operation.parameters", "{alias=wrong_alias}")
+
+    val driverParams = opManagerStub.driverParams(conf, baseDriverArgs)
+    opManagerStub.createSpec(conf, "driver", driverParams).getAdditionalSpecParameters.get("alias") shouldBe(
+      YTree.stringNode("test_alias"))
   }
 
   test("It should be possible to set executor secure vault docker_auth") {

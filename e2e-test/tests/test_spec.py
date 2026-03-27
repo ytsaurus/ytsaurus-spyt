@@ -40,12 +40,12 @@ def test_format_memory():
     assert format_memory(256 * 1024 * 1024 * 1024) == "256G"
 
 
-def _build_configs(enable_tmpfs=False):
+def _build_configs(enable_tmpfs=False, alias = None):
     enablers = SpytEnablers(enable_profiling=False)
     discovery = SparkDiscovery("//home/cluster")
-    common_config = CommonComponentConfig(container_home="./spark", enable_tmpfs=enable_tmpfs, enablers=enablers,
-                                          rpc_job_proxy_thread_pool_size=6, spark_discovery=discovery,
-                                          enable_ytsaurus_shuffle=True)
+    common_config = CommonComponentConfig(operation_alias=alias, container_home="./spark",
+                                          enable_tmpfs=enable_tmpfs, enablers=enablers, rpc_job_proxy_thread_pool_size=6,
+                                          spark_discovery=discovery, enable_ytsaurus_shuffle=True)
     common_params = CommonSpecParams(
         spark_distributive="spark-3.2.2-bin-hadoop3.2.tgz", java_home="/opt/jdk",
         extra_java_opts=["-Dtest=true"], environment={"TEST_ENV": "True"}, spark_conf={"spark.yt.option": "2024"},
@@ -66,7 +66,7 @@ def _build_worker_spec(enable_tmpfs=False):
     return builder.build()
 
 
-def _build_worker_operation_spec(yt_client):
+def _build_operation_spec(yt_client, alias = None):
     init_config = {
         "spark_conf":{},
         "operation_spec":{},
@@ -79,7 +79,7 @@ def _build_worker_operation_spec(yt_client):
     dynamic_config = SparkDefaultArguments.get_params()
     init_config = update(init_config, dynamic_config)
 
-    _, worker_config, common_config = _build_configs(enable_tmpfs=False)
+    _, worker_config, common_config = _build_configs(enable_tmpfs=False, alias=alias)
 
     builder = build_spark_operation_spec(config=init_config, client=yt_client, job_types=['worker'],
                                       common_config=common_config, worker_config=worker_config)
@@ -158,7 +158,7 @@ def test_worker_spec_builder_enable_tmpfs():
 
 
 def test_yt_metrics_annotations(yt_client):
-    spec = _build_worker_operation_spec(yt_client)
+    spec = _build_operation_spec(yt_client)
     actual_section = spec['annotations']
     expected_section = {
         "is_spark": True,
@@ -171,4 +171,14 @@ def test_yt_metrics_annotations(yt_client):
 
     assert update(actual_section, expected_section) == actual_section, \
         f"{update(actual_section, expected_section)} != {actual_section}"
+
+
+def test_spark_operation_spec_builder(yt_client):
+    spec = _build_operation_spec(yt_client, "*test_alias")
+    actual_operation_title = spec["title"]
+    actual_operation_alias = spec["alias"]
+
+    assert actual_operation_alias == "*test_alias"
+    assert actual_operation_title == "_root"
+
 

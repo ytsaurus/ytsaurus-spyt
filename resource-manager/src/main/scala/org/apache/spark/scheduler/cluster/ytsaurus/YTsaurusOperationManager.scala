@@ -139,6 +139,11 @@ private[spark] class YTsaurusOperationManager(val ytClient: YTsaurusClient,
     additionalSpecParameters.getOrElseUpdate(
       "title", YTree.stringNode(s"Spark $taskName for ${conf.get("spark.app.name")}${opParams.attemptId}")
     )
+    if (taskName == DRIVER_TASK && conf.contains(Config.YTSAURUS_SPARK_DRIVER_OPERATION_ALIAS)) {
+      additionalSpecParameters.update(
+        "alias", YTree.stringNode(conf.get(Config.YTSAURUS_SPARK_DRIVER_OPERATION_ALIAS).get)
+      )
+    }
 
     val annotations = SpecificationUtils.getAnnotationsAsYTreeMapNode(conf, taskName)
     if (!annotations.isEmpty) {

@@ -116,7 +116,7 @@ def prepare_launch_config(conf_local_dir: str, client: Client, versions: Version
         launch_config['layer_paths'] = [
             client.resolve_from_root("delta/layer_with_unify_agent.tar.gz"),
             "//porto_layers/delta/jdk/layer_with_jdk_lastest.tar.gz",
-            client.resolve_from_root("delta/python/layer_with_python313_jammy_v001.tar.gz"),
+            client.resolve_from_root("delta/python/layer_with_python313_jammy_v002.tar.gz"),
             client.resolve_from_root("delta/python/layer_with_python312_jammy_v002.tar.gz"),
             client.resolve_from_root("delta/python/layer_with_python311_jammy_v001.tar.gz"),
             client.resolve_from_root("delta/python/layer_with_python39_jammy_v001.tar.gz"),
@@ -125,7 +125,7 @@ def prepare_launch_config(conf_local_dir: str, client: Client, versions: Version
         launch_config['squashfs_layer_paths'] = [
             client.resolve_from_root("squashfs/layer_with_unify_agent.squashfs"),
             client.resolve_from_root("squashfs/jdk/layer_with_jdk_latest.squashfs"),
-            client.resolve_from_root("squashfs/python/layer_with_python313_jammy_v001.squashfs"),
+            client.resolve_from_root("squashfs/python/layer_with_python313_jammy_v002.squashfs"),
             client.resolve_from_root("squashfs/python/layer_with_python312_jammy_v002.squashfs"),
             client.resolve_from_root("squashfs/python/layer_with_python311_jammy_v001.squashfs"),
             client.resolve_from_root("squashfs/python/layer_with_python39_jammy_v001.squashfs"),

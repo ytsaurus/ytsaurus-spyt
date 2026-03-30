@@ -36,7 +36,7 @@ def launch_gateway(memory="512m",
     spark_patch = [
         os.path.join(spyt_home, 'jars', jar)
         for jar in os.listdir(os.path.join(spyt_home, 'jars'))
-        if 'spark-yt-spark-patch' in jar][0]
+        if 'spyt-patch-agent' in jar][0]
     command += [
         f"-javaagent:{spark_patch}",
         "-XX:+IgnoreUnrecognizedVMOptions",

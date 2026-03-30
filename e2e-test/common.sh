@@ -120,9 +120,9 @@ main() {
 
     if [ "$rebuild" = "true" ]; then
       # Build SPYT artifacts
-      sbt -DcustomSpytVersion=$spyt_version spytBuildRelease
+      ./gradlew assemble -PcustomSpytVersion=$spyt_version
       # Download pre-built Livy distributive
-      wget -nv -nc -P $root_dir/build_output https://storage.yandexcloud.net/ytsaurus-spyt/livy.tgz
+      wget -nv -nc -P $root_dir/spyt-package/build/output https://storage.yandexcloud.net/ytsaurus-spyt/livy.tgz
       # Build SPYT docker image
       cd $root_dir/tools/release/spyt_image
       ./build.sh --spyt-version $spyt_version

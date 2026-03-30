@@ -52,7 +52,7 @@ if [ ! $use_squashfs ]; then
   done
 
   unzip -o spyt-package.zip -d "$spark_home"
-  javaagent_opt="-javaagent:$(ls $spyt_home/jars/*spark-yt-spark-patch*)"
+  javaagent_opt="-javaagent:$(ls $spyt_home/jars/*spyt-patch-agent*)"
   echo "$javaagent_opt" > $spyt_home/conf/java-opts
 
   if [ $enable_livy ]; then

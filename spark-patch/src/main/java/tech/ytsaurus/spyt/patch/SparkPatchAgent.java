@@ -64,7 +64,7 @@ public class SparkPatchAgent {
                 .filter(path -> path.endsWith(".jar") || path.endsWith("/classes"));
 
         String patchJarPath = ManagementFactory.getRuntimeMXBean().getInputArguments().stream()
-                .filter(arg -> arg.startsWith("-javaagent") && arg.contains("spark-yt-spark-patch"))
+                .filter(arg -> arg.startsWith("-javaagent") && arg.contains("spyt-patch-agent"))
                 .map(arg -> arg.substring(arg.indexOf(':') + 1))
                 .findFirst()
                 .orElseThrow();

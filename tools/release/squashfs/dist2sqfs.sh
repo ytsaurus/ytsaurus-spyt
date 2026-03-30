@@ -112,7 +112,7 @@ case $kind in
     spyt)
       unzip $localfile -d $distroot
       mv "$distroot/spyt-package" "$distroot/$kind"
-      sparkpatchjar="$libroot/$kind/jars/$(basename $distroot/$kind/jars/*spark-yt-spark-patch*)"
+      sparkpatchjar="$libroot/$kind/jars/$(basename $distroot/$kind/jars/*spyt-patch-agent*)"
       javaagent_opt="-javaagent:$sparkpatchjar"
       echo "$javaagent_opt" > $distroot/$kind/conf/java-opts
       sqfsfilename=${filename/.zip/.squashfs}

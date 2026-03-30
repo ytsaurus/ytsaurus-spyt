@@ -12,7 +12,7 @@ if [ -z "$SPYT_CLASSPATH" ] && [ -n "$SPYT_ROOT" ]; then
   export SPYT_CLASSPATH
 fi
 
-javaagent_parameter="-javaagent:$(ls ${SPYT_CLASSPATH}spark-yt-spark-patch*)"
+javaagent_parameter="-javaagent:$(ls ${SPYT_CLASSPATH}spyt-patch-agent*)"
 
 if [ -n "$SPYT_CLASSPATH" ] && [ ! -f "$SPARK_CONF_DIR/java-opts" ]; then
   SPARK_SUBMIT_OPTS="$SPARK_SUBMIT_OPTS $javaagent_parameter"

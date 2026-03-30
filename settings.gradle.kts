@@ -1,6 +1,6 @@
 rootProject.name = "ytsaurus-spyt"
 
-val defaultSpytVersion = "2.9.0-SNAPSHOT"
+val defaultSpytVersion = "2.10.0-SNAPSHOT"
 val customSpytVersion: String? by settings
 var spytVersion = customSpytVersion ?: defaultSpytVersion
 val isSnapshot = spytVersion.endsWith("-SNAPSHOT")

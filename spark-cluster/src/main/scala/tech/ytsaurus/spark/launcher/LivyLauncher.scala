@@ -9,8 +9,7 @@ import tech.ytsaurus.spyt.wrapper.Utils.{parseDuration, ytHostnameOrIpAddress}
 import tech.ytsaurus.spyt.wrapper.client.YtClientConfiguration
 import tech.ytsaurus.spyt.wrapper.discovery.DiscoveryService
 
-import scala.concurrent.duration._
-import scala.language.postfixOps
+import java.time.Duration
 import scala.util.Random
 
 object LivyLauncher extends App with VanillaLauncher with SparkLauncher {
@@ -80,7 +79,7 @@ object LivyLauncherArgs {
     args.optional("discovery-group-id").orElse(sys.env.get("SPARK_DISCOVERY_GROUP_ID")),
     args.optional("master-discovery-group-id").orElse(sys.env.get("SPARK_MASTER_DISCOVERY_GROUP_ID")),
     args.optional("base-discovery-path").orElse(sys.env.get("SPARK_BASE_DISCOVERY_PATH")),
-    args.optional("wait-master-timeout").map(parseDuration).getOrElse(5 minutes),
+    args.optional("wait-master-timeout").map(parseDuration).getOrElse(Duration.ofMinutes(5)),
     args.optional("master-address"),
     args.optional("network-project"),
     args.boolean("enable-squashfs")

@@ -17,7 +17,7 @@ import tech.ytsaurus.spyt.common.utils.{MInfinity, PInfinity, RealValue, Segment
 import tech.ytsaurus.spyt.format.conf.FilterPushdownConfig
 import tech.ytsaurus.spyt.test.TestRow
 
-import scala.language.postfixOps
+
 import scala.util.Random
 
 class YtInputSplitTest extends YtInputSplitTestBase {

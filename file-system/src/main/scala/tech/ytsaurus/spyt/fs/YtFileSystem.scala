@@ -9,7 +9,7 @@ import tech.ytsaurus.spyt.wrapper.YtWrapper
 import tech.ytsaurus.spyt.wrapper.cypress.{PathType, YtAttributes}
 
 import java.io.FileNotFoundException
-import scala.language.postfixOps
+
 
 @SerialVersionUID(1L)
 class YtFileSystem extends YtFileSystemBase {

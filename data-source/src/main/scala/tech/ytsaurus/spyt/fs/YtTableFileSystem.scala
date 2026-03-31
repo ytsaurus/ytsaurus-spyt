@@ -14,7 +14,7 @@ import tech.ytsaurus.spyt.wrapper.table.{OptimizeMode, TableType}
 import tech.ytsaurus.ysontree.YTreeNode
 
 import scala.jdk.CollectionConverters._
-import scala.language.postfixOps
+
 
 @SerialVersionUID(1L)
 class YtTableFileSystem extends YtFileSystemBase {

@@ -11,8 +11,7 @@ import tech.ytsaurus.spyt.wrapper.client.YtClientConfiguration
 import tech.ytsaurus.spyt.wrapper.discovery.{Address, SparkConfYsonable}
 
 import java.net.URI
-import scala.concurrent.duration._
-import scala.language.postfixOps
+import java.time.Duration
 
 object MasterLauncher extends App
   with VanillaLauncher
@@ -36,7 +35,7 @@ object MasterLauncher extends App
       val tcpRouter = TcpProxyService().register("HOST", "WEBUI", "REST", "WRAPPER")(yt)
       val reverseProxyUrl = tcpRouter.map(x => "http://" + x.getExternalAddress("WEBUI").toString)
       withService(startMaster(reverseProxyUrl)) { master =>
-        master.waitAndThrowIfNotAlive(5 minutes)
+        master.waitAndThrowIfNotAlive(Duration.ofMinutes(5))
 
         val masterAddress = tcpRouter.map { router =>
           val webUi = router.getExternalAddress("WEBUI")

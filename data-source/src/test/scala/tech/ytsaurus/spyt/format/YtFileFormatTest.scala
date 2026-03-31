@@ -27,11 +27,9 @@ import tech.ytsaurus.typeinfo.TiType
 import tech.ytsaurus.ysontree.YTree
 
 import java.sql.{Date, Timestamp}
-import java.time.LocalDate
+import java.time.{Duration, LocalDate}
 import java.util.concurrent.TimeUnit
-import scala.concurrent.duration._
 import scala.jdk.CollectionConverters._
-import scala.language.postfixOps
 import scala.util.Random
 
 class YtFileFormatTest extends AnyFlatSpec with Matchers with LocalSpark
@@ -365,7 +363,7 @@ class YtFileFormatTest extends AnyFlatSpec with Matchers with LocalSpark
   testWithDistributedReading("use external transaction in writing") { distributedReadingEnabled =>
     Seq(("a", 1L), ("b", 2L), ("c", 3L)).toDF("c1", "c2").write.yt(tmpPath)
 
-    val transaction = YtWrapper.createTransaction(None, 10 minute)
+    val transaction = YtWrapper.createTransaction(None, Duration.ofMinutes(10))
 
     Seq(("d", 4L)).toDF("c1", "c2").write
       .mode(SaveMode.Append).transaction(transaction.getId.toString).yt(tmpPath)
@@ -388,9 +386,9 @@ class YtFileFormatTest extends AnyFlatSpec with Matchers with LocalSpark
     val data3 = Seq(("e", 5L))
     data1.toDF("_1", "_2").write.yt(tmpPath)
 
-    val trWrite1 = YtWrapper.createTransaction(None, 10 minute)
-    val trWrite2 = YtWrapper.createTransaction(None, 10 minute)
-    val trRead = YtWrapper.createTransaction(None, 10 minute)
+    val trWrite1 = YtWrapper.createTransaction(None, Duration.ofMinutes(10))
+    val trWrite2 = YtWrapper.createTransaction(None, Duration.ofMinutes(10))
+    val trRead = YtWrapper.createTransaction(None, Duration.ofMinutes(10))
     try {
       data2.toDF("_1", "_2").write.mode(SaveMode.Append).transaction(trWrite1.getId.toString).yt(tmpPath)
       val resultInTransaction = spark.read.option("recursiveFileLookup", "false")

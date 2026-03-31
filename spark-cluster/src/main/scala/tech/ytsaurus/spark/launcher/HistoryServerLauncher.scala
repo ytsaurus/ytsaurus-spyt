@@ -6,7 +6,7 @@ import tech.ytsaurus.spyt.wrapper.TcpProxyService
 import tech.ytsaurus.spyt.wrapper.TcpProxyService.updateTcpAddress
 import tech.ytsaurus.spyt.wrapper.client.YtClientConfiguration
 
-import scala.language.postfixOps
+
 
 object HistoryServerLauncher extends App with VanillaLauncher with SparkLauncher {
   val log = LoggerFactory.getLogger(getClass)

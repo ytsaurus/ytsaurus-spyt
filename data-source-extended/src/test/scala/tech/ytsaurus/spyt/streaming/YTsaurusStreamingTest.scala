@@ -18,16 +18,16 @@ import tech.ytsaurus.spyt.serializers.WriteSchemaConverter
 import tech.ytsaurus.spyt.streaming.YTsaurusStreamingTest.{normalizeRow, schemaWithServiceColumnsAndQueuePath}
 import tech.ytsaurus.spyt.test._
 import tech.ytsaurus.spyt.types.UInt64Long
+import tech.ytsaurus.spyt.wrapper.YtJavaConverters.toScalaDuration
 import tech.ytsaurus.spyt.wrapper.YtWrapper
 import tech.ytsaurus.typeinfo.StructType.Member
 import tech.ytsaurus.typeinfo.TiType
 import tech.ytsaurus.ysontree.YTree
 
+import java.time.Duration
 import java.util.UUID
 import scala.jdk.CollectionConverters._
-import scala.concurrent.duration.DurationInt
 import scala.concurrent.{Await, Future, Promise}
-import scala.language.postfixOps
 
 class YTsaurusStreamingTest extends AnyFlatSpec with Matchers with LocalSpark with LocalYtClient
   with TmpDir with DynTableTestUtils with QueueTestUtils {
@@ -100,7 +100,7 @@ class YTsaurusStreamingTest extends AnyFlatSpec with Matchers with LocalSpark wi
     }(scala.concurrent.ExecutionContext.Implicits.global)
 
     val query = job.start()
-    Await.result(recordFuture, 150 seconds)
+    Await.result(recordFuture, toScalaDuration(Duration.ofSeconds(150)))
     query.stop()
   }
 
@@ -140,7 +140,7 @@ class YTsaurusStreamingTest extends AnyFlatSpec with Matchers with LocalSpark wi
     }(scala.concurrent.ExecutionContext.Implicits.global)
 
     val query = job.start()
-    Await.result(recordFuture, 120 seconds)
+    Await.result(recordFuture, toScalaDuration(Duration.ofSeconds(120)))
     query.stop()
   }
 
@@ -179,7 +179,7 @@ class YTsaurusStreamingTest extends AnyFlatSpec with Matchers with LocalSpark wi
     }(scala.concurrent.ExecutionContext.Implicits.global)
 
     val query = job.start()
-    Await.result(recordFuture, 120 seconds)
+    Await.result(recordFuture, toScalaDuration(Duration.ofSeconds(120)))
     query.stop()
   }
 
@@ -230,7 +230,7 @@ class YTsaurusStreamingTest extends AnyFlatSpec with Matchers with LocalSpark wi
     }(scala.concurrent.ExecutionContext.Implicits.global)
 
     val queryForOptionCheck = jobForOptionCheck.start()
-    Await.result(recordFuture, 120 seconds)
+    Await.result(recordFuture, toScalaDuration(Duration.ofSeconds(120)))
     queryForOptionCheck.stop()
   }
 
@@ -297,7 +297,7 @@ class YTsaurusStreamingTest extends AnyFlatSpec with Matchers with LocalSpark wi
         .start()
     }
 
-    val queueWritingDuration = 10.seconds
+    val queueWritingDuration = Duration.ofSeconds(10)
     var endTime = System.currentTimeMillis() + queueWritingDuration.toMillis
     var lowerIndex = 0
     while (System.currentTimeMillis() < endTime) {
@@ -309,7 +309,7 @@ class YTsaurusStreamingTest extends AnyFlatSpec with Matchers with LocalSpark wi
       Thread.sleep(1000)
     }
 
-    endTime = System.currentTimeMillis() + 30.seconds.toMillis
+    endTime = System.currentTimeMillis() + 30000
     queries.foreach(_.stop())
     while (queries.exists(_.isActive) && System.currentTimeMillis() < endTime) {
       Thread.sleep(1000)
@@ -394,7 +394,7 @@ class YTsaurusStreamingTest extends AnyFlatSpec with Matchers with LocalSpark wi
 
     val allFutures = queriesAndFutures.map(_._2)
     import scala.concurrent.ExecutionContext.Implicits.global
-    Await.result(Future.sequence(allFutures), 120.seconds)
+    Await.result(Future.sequence(allFutures), toScalaDuration(Duration.ofSeconds(120)))
     queriesAndFutures.foreach { case (query, _) => query.stop() }
 
     val resultDF = spark.read
@@ -451,7 +451,7 @@ class YTsaurusStreamingTest extends AnyFlatSpec with Matchers with LocalSpark wi
     }
 
     val recordCountLimit = iterations * 10
-    val waitingTimeout = 120.seconds
+    val waitingTimeout = toScalaDuration(Duration.ofSeconds(120))
     val endTime = System.currentTimeMillis() + waitingTimeout.toMillis
     while (System.currentTimeMillis() < endTime &&
       !consumersAndResultPathsPairs.map(pair => pair._2).forall(resultPath =>
@@ -524,7 +524,7 @@ class YTsaurusStreamingTest extends AnyFlatSpec with Matchers with LocalSpark wi
 
     }(scala.concurrent.ExecutionContext.Implicits.global)
 
-    Await.result(recordFuture, 120 seconds)
+    Await.result(recordFuture, toScalaDuration(Duration.ofSeconds(120)))
     queryForResultTableCheck.stop()
   }
 
@@ -847,7 +847,7 @@ class YTsaurusStreamingTest extends AnyFlatSpec with Matchers with LocalSpark wi
         }
       }(scala.concurrent.ExecutionContext.Implicits.global)
 
-      Await.result(recordFuture, 120 seconds)
+      Await.result(recordFuture, toScalaDuration(Duration.ofSeconds(120)))
       queryForResultTableCheck.stop()
     }
 
@@ -889,7 +889,7 @@ class YTsaurusStreamingTest extends AnyFlatSpec with Matchers with LocalSpark wi
           .start()
       }
 
-      val queueWritingDuration = 10.seconds
+      val queueWritingDuration = Duration.ofSeconds(10)
       var endTime = System.currentTimeMillis() + queueWritingDuration.toMillis
       var lowerIndex = 0
       while (System.currentTimeMillis() < endTime) {
@@ -901,7 +901,7 @@ class YTsaurusStreamingTest extends AnyFlatSpec with Matchers with LocalSpark wi
         Thread.sleep(1000)
       }
 
-      endTime = System.currentTimeMillis() + 30.seconds.toMillis
+      endTime = System.currentTimeMillis() + 30000
       queries.foreach(_.stop())
       while (queries.exists(_.isActive) && System.currentTimeMillis() < endTime) {
         Thread.sleep(1000)

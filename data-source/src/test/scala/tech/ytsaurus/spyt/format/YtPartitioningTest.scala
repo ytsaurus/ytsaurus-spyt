@@ -10,7 +10,7 @@ import tech.ytsaurus.spyt.format.conf.SparkYtConfiguration
 import tech.ytsaurus.spyt.test._
 import tech.ytsaurus.spyt.wrapper.YtWrapper
 
-import scala.language.postfixOps
+
 import scala.util.Random
 
 class YtPartitioningTest extends AnyFlatSpec with Matchers with LocalSpark with TmpDir with TestUtils with DynTableTestUtils {

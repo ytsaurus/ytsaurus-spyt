@@ -11,8 +11,7 @@ import tech.ytsaurus.spyt.wrapper.YtWrapper
 import tech.ytsaurus.spyt.wrapper.table.OptimizeMode
 import tech.ytsaurus.spyt.test.{DynTableTestUtils, TestRow}
 
-import scala.concurrent.duration._
-import scala.language.postfixOps
+import java.time.Duration
 
 class YtReadLockTest extends AnyFlatSpec with Matchers with LocalSpark with TestUtils with TmpDir with DynTableTestUtils {
   behavior of "YtDataSource"
@@ -173,7 +172,7 @@ class YtReadLockTest extends AnyFlatSpec with Matchers with LocalSpark with Test
       tmpPath
     )
 
-    val tr = createTransaction(None, 5 minutes)
+    val tr = createTransaction(None, Duration.ofMinutes(5))
     try {
       val res = spark.read
         .option("header", "true")
@@ -363,7 +362,7 @@ class YtReadLockTest extends AnyFlatSpec with Matchers with LocalSpark with Test
 
   private def readWithinTransactionInner(applyOptions: DataFrameReader => DataFrameReader, path: String*)
                                    (f: (DataFrame, String) => Unit): Unit = {
-    val readTransaction = createTransaction(None, 5 minutes)
+    val readTransaction = createTransaction(None, Duration.ofMinutes(5))
     try {
       val reader = spark.read.transaction(readTransaction.getId.toString)
       val df = applyOptions(reader).yt(path: _*)

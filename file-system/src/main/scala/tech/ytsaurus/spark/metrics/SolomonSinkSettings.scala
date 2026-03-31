@@ -2,7 +2,7 @@ package tech.ytsaurus.spark.metrics
 
 import tech.ytsaurus.spyt.wrapper.config.ConfigEntry
 
-import scala.concurrent.duration.{Duration, DurationInt}
+import java.time.Duration
 
 case object SolomonSinkSettings {
   import ConfigEntry.implicits._
@@ -20,6 +20,6 @@ case object SolomonSinkSettings {
   case object ReporterEnabled extends ConfigEntry[Boolean]("reporter_enabled",
     Some(Option(System.getenv("SPARK_YT_METRICS_ENABLED")).map(_.toBoolean).getOrElse(false)))
   case object ReporterPollPeriod extends ConfigEntry[Duration]("poll_period",
-    Some(500.milliseconds))
+    Some(Duration.ofMillis(500)))
   case object ReporterName extends ConfigEntry[String]("reporter_name", Some("spyt"))
 }

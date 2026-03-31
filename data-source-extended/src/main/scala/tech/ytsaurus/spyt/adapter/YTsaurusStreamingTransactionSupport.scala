@@ -8,6 +8,8 @@ import tech.ytsaurus.spyt.wrapper.YtWrapper
 import tech.ytsaurus.spyt.wrapper.client.{YtClientConfigurationConverter, YtClientProvider}
 import tech.ytsaurus.spyt.wrapper.config.SparkYtSparkSession
 
+import java.time.Duration
+
 class YTsaurusStreamingTransactionSupport extends StreamingTransactionSupport {
 
   override def isTransactionalStreamingEnabled(sparkSession: SparkSession): Boolean = {
@@ -20,7 +22,7 @@ class YTsaurusStreamingTransactionSupport extends StreamingTransactionSupport {
     )
     val transaction = YtWrapper.createTransaction(
       parent = None,
-      timeout = scala.concurrent.duration.Duration(5, "minutes"),
+      timeout = Duration.ofMinutes(5),
       sticky = true
     )(ytClient)
 

@@ -7,9 +7,9 @@ import org.scalatest.matchers.should.Matchers
 import tech.ytsaurus.spyt.test.LocalYtClient
 import tech.ytsaurus.spyt.wrapper.YtWrapper
 
+import java.time.Duration
 import java.util.concurrent.CompletionException
 import scala.collection.SortedMap
-import scala.concurrent.duration.DurationInt
 
 class YtQueueUtilsTest extends AnyFlatSpec with Matchers with MockitoSugar with LocalYtClient {
   val consumerPath = "//tmp/path/to/consumer"
@@ -89,7 +89,7 @@ class YtQueueUtilsTest extends AnyFlatSpec with Matchers with MockitoSugar with 
     val lastCommitted = YtQueueOffset(cluster, queuePath, SortedMap(0 -> 50L))
     val newOffset = YtQueueOffset(cluster, queuePath, SortedMap(0 -> 60L))
     intercept[CompletionException] {
-      YtQueueOffset.advance(consumerPath, newOffset, lastCommitted, timeout=1.nanosecond)
+      YtQueueOffset.advance(consumerPath, newOffset, lastCommitted, timeout=Duration.ofNanos(1))
     }
   }
 }

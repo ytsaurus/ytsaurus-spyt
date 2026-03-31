@@ -3,12 +3,12 @@ package tech.ytsaurus.spyt.wrapper.client
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
-import scala.concurrent.duration.Duration
+import java.time.Duration
 
 class YtClientConfigurationTest extends AnyFlatSpec with Matchers {
 
   private val baseConf =
-    YtClientConfiguration("proxy", "user", "token", Duration.Zero, None, extendedFileTimeout = false, proxyNetworkName = None)
+    YtClientConfiguration("proxy", "user", "token", Duration.ZERO, None, extendedFileTimeout = false, proxyNetworkName = None)
 
   "YtClientConfiguration" should "parse short proxy" in {
     val conf = baseConf.copy(proxy = "short")

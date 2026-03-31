@@ -9,8 +9,8 @@ import tech.ytsaurus.spyt.format.conf.SparkYtConfiguration
 import tech.ytsaurus.spyt.test._
 import tech.ytsaurus.spyt.wrapper.YtWrapper.createTransaction
 
-import scala.concurrent.duration.DurationInt
-import scala.language.postfixOps
+import java.time.Duration
+
 
 class DynamicTableReadTest extends AnyFlatSpec with Matchers with LocalSpark with TmpDir with TestUtils
   with TableDrivenPropertyChecks with DynTableTestUtils with YtDistributedReadingTestUtils {
@@ -20,7 +20,7 @@ class DynamicTableReadTest extends AnyFlatSpec with Matchers with LocalSpark wit
 
   testWithDistributedReading("read dynamic table") { _ =>
     prepareTestTable(tmpPath, testData, Nil)
-    val tr = createTransaction(None, 5.minutes)
+    val tr = createTransaction(None, Duration.ofMinutes(5))
     val df = spark.read.transaction(tr.getId.toString).yt(tmpPath)
     df.selectAs[TestRow].collect() should contain theSameElementsAs testData
   }

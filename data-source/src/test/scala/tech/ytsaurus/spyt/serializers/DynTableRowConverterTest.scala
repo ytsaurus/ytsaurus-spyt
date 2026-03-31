@@ -14,9 +14,7 @@ import tech.ytsaurus.typeinfo.StructType.Member
 import tech.ytsaurus.typeinfo.TiType
 import tech.ytsaurus.ysontree.{YTree, YTreeMapNode}
 
-import scala.concurrent.duration._
-import scala.language.postfixOps
-
+import java.time.Duration
 
 class DynTableRowConverterTest extends AnyFlatSpec with TmpDir with LocalSpark with Matchers with TestUtils
   with DynTableTestUtils {
@@ -33,7 +31,7 @@ class DynTableRowConverterTest extends AnyFlatSpec with TmpDir with LocalSpark w
       .build()
 
     YtWrapper.createDynTable(tmpPath, tableSchema)
-    YtWrapper.mountTableSync(tmpPath, 1.minute)
+    YtWrapper.mountTableSync(tmpPath, Duration.ofMinutes(1))
 
     val schema = new StructType()
       .add("key", LongType)

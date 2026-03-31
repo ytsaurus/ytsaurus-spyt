@@ -4,8 +4,7 @@ import org.apache.spark.sql.SparkSession
 import tech.ytsaurus.spyt.wrapper.config.{ConfigEntry, SparkYtSparkSession}
 import tech.ytsaurus.spyt.wrapper.table.YtReadSettings
 
-import scala.concurrent.duration._
-import scala.language.postfixOps
+import java.time.Duration
 
 object SparkYtConfiguration {
   import ConfigEntry.implicits._
@@ -18,7 +17,7 @@ object SparkYtConfiguration {
 
     case object DynBatchSize extends ConfigEntry[Int](s"$prefix.dynBatchSize", Some(50000))
 
-    case object Timeout extends ConfigEntry[Duration](s"$prefix.timeout", Some(300 seconds))
+    case object Timeout extends ConfigEntry[Duration](s"$prefix.timeout", Some(Duration.ofSeconds(300)))
 
     case object TypeV3 extends ConfigEntry[Boolean](s"$prefix.typeV3.enabled", Some(false), List(
       s"$prefix.writingTypeV3.enabled", s"$prefix.typeV3Format.enabled"
@@ -89,16 +88,16 @@ object SparkYtConfiguration {
   object Transaction {
     private val prefix = "transaction"
 
-    case object Timeout extends ConfigEntry[Duration](s"$prefix.timeout", Some(5 minutes))
+    case object Timeout extends ConfigEntry[Duration](s"$prefix.timeout", Some(Duration.ofMinutes(5)))
 
-    case object PingInterval extends ConfigEntry[Duration](s"$prefix.pingInterval", Some(30 seconds))
+    case object PingInterval extends ConfigEntry[Duration](s"$prefix.pingInterval", Some(Duration.ofSeconds(30)))
 
   }
 
   object GlobalTransaction {
     private val prefix = "globalTransaction"
 
-    case object Timeout extends ConfigEntry[Duration](s"$prefix.timeout", Some(2 minutes))
+    case object Timeout extends ConfigEntry[Duration](s"$prefix.timeout", Some(Duration.ofMinutes(2)))
 
     case object Enabled extends ConfigEntry[Boolean](s"$prefix.enabled", Some(false))
 

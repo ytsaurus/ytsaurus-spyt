@@ -6,9 +6,8 @@ import tech.ytsaurus.spyt.wrapper.operation.OperationStatus
 import tech.ytsaurus.core.GUID
 
 import java.net.Socket
+import java.time.Duration
 import scala.annotation.tailrec
-import scala.concurrent.duration._
-import scala.language.postfixOps
 import scala.util.{Failure, Success, Try}
 
 case class OperationSet(master: String, children: Set[String] = Set(), driverOperation: Option[String] = None) {
@@ -60,7 +59,7 @@ object DiscoveryService {
       case r@Some(_) => r
       case _ =>
         log.info(s"Waiting for $description, sleep 5 seconds before next retry")
-        Thread.sleep((5 seconds).toMillis)
+        Thread.sleep(5000)
         log.info(s"Waiting for $description, retry ($retryCount)")
         if (timeout > 0) {
           waitFor(f, timeout - (System.currentTimeMillis() - start), description, retryCount + 1)
@@ -82,13 +81,13 @@ object DiscoveryService {
   def isAlive(hostPort: HostAndPort, retry: Int): Boolean = {
     val socket = new Socket()
     val res = Try(
-      socket.connect(hostPort.toAddress, (5 seconds).toMillis.toInt)
+      socket.connect(hostPort.toAddress, 5000)
     )
     socket.close()
     res match {
       case Success(_) => true
       case Failure(_) => if (retry > 0) {
-        Thread.sleep((5 seconds).toMillis)
+        Thread.sleep(5000)
         isAlive(hostPort, retry - 1)
       } else false
     }

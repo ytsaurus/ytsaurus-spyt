@@ -1,7 +1,7 @@
 package tech.ytsaurus.spyt.wrapper.discovery
 import tech.ytsaurus.spyt.HostAndPort
 
-import scala.concurrent.duration.Duration
+import java.time.Duration
 import scala.util.Try
 
 class CompoundDiscoveryService(services: Seq[DiscoveryService]) extends DiscoveryService {

@@ -8,21 +8,18 @@ import tech.ytsaurus.client.{ApiServiceTransaction, CompoundClient, RetryPolicy}
 import tech.ytsaurus.core.GUID
 import tech.ytsaurus.core.cypress.YPath
 import tech.ytsaurus.core.tables.TableSchema
-import tech.ytsaurus.spyt.wrapper.YtJavaConverters._
 import tech.ytsaurus.spyt.wrapper.YtWrapper.createTable
 import tech.ytsaurus.spyt.wrapper.cypress.{YtAttributes, YtCypressUtils}
 import tech.ytsaurus.spyt.wrapper.table.YtTableSettings
 import tech.ytsaurus.ysontree.{YTreeBinarySerializer, YTreeBuilder, YTreeMapNode, YTreeNode}
 
 import java.io.ByteArrayOutputStream
-import java.time.{Duration => JDuration}
-import java.util.concurrent.{CompletableFuture, Executors, ThreadFactory}
+import java.time.Duration
+import java.util.concurrent.{CompletableFuture, Executors, ThreadFactory, TimeUnit}
 import scala.annotation.tailrec
 import scala.collection.mutable
 import scala.concurrent.TimeoutException
-import scala.concurrent.duration._
 import scala.jdk.CollectionConverters._
-import scala.language.postfixOps
 import scala.util.{Failure, Success, Try}
 
 trait YtDynTableUtils {
@@ -81,12 +78,12 @@ trait YtDynTableUtils {
     yt.mountTable(formatPath(path)).join()
   }
 
-  def mountTableSync(path: String, timeout: Duration = 20 seconds)(implicit yt: CompoundClient): Unit = {
+  def mountTableSync(path: String, timeout: Duration = Duration.ofSeconds(20))(implicit yt: CompoundClient): Unit = {
     mountTable(path)
     waitState(path, TabletState.Mounted, timeout)
   }
 
-  def unmountTableSync(path: String, timeout: Duration = 20 seconds)(implicit yt: CompoundClient): Unit = {
+  def unmountTableSync(path: String, timeout: Duration = Duration.ofSeconds(20))(implicit yt: CompoundClient): Unit = {
     unmountTable(path)
     waitState(path, TabletState.Unmounted, timeout)
   }
@@ -94,10 +91,6 @@ trait YtDynTableUtils {
   def unmountTable(path: String)(implicit yt: CompoundClient): Unit = {
     log.debug(s"Unmount table: $path")
     yt.unmountTable(formatPath(path)).join()
-  }
-
-  def waitState(path: String, state: TabletState, timeout: JDuration)(implicit yt: CompoundClient): Unit = {
-    waitState(path, state, toScalaDuration(timeout)).get
   }
 
   def waitState(path: String, state: TabletState, timeout: Duration)(implicit yt: CompoundClient): Try[Unit] = {
@@ -177,8 +170,8 @@ trait YtDynTableUtils {
     (implicit yt: CompoundClient): Seq[YTreeMapNode] = {
     val request = SelectRowsRequest.of(query)
 
-    waitState(path, TabletState.Mounted, 60 seconds)
-    val f: ApiServiceTransaction => UnversionedRowset = _.selectRows(request).get(10, MINUTES)
+    waitState(path, TabletState.Mounted, Duration.ofSeconds(60))
+    val f: ApiServiceTransaction => UnversionedRowset = _.selectRows(request).get(10, TimeUnit.MINUTES)
     val selected = runWithDefinedTxOrRetry(f, transaction)
     selected.getYTreeRows.asScala.toList
   }
@@ -214,7 +207,7 @@ trait YtDynTableUtils {
 
   private def processModifyRowsRequest(request: ModifyRowsRequest, transaction: Option[ApiServiceTransaction] = None)
     (implicit yt: CompoundClient): Unit = {
-    val f: ApiServiceTransaction => Unit = _.modifyRows(request).get(1, MINUTES)
+    val f: ApiServiceTransaction => Unit = _.modifyRows(request).get(1, TimeUnit.MINUTES)
     runWithDefinedTxOrRetry(f, transaction)
   }
 

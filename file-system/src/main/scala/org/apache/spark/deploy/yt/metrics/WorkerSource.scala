@@ -9,7 +9,7 @@ import org.apache.spark.metrics.source.Source
 import java.io.File
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicLong
-import scala.language.postfixOps
+
 
 class WorkerSource(val worker: Worker) extends Source {
   private val home = new File(sys.env("HOME"))

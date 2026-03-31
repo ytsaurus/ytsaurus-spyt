@@ -20,8 +20,8 @@ import tech.ytsaurus.spyt.wrapper.YtWrapper
 import tech.ytsaurus.spyt.wrapper.client.{YtClientConfiguration, YtClientConfigurationConverter, YtClientProvider}
 import tech.ytsaurus.spyt.wrapper.config._
 
+import java.time.Duration
 import scala.collection.mutable
-import scala.concurrent.duration.DurationInt
 
 class ReadTransactionStrategy(sparkSession: SparkSession) extends Rule[LogicalPlan] {
   override def apply(plan: LogicalPlan): LogicalPlan = {
@@ -68,7 +68,7 @@ object ReadTransactionStrategy {
 
     private val ytRpcClient = YtClientProvider.ytRpcClient(configuration.replaceProxy(Some(proxy)))
     private implicit val ytClient: CompoundClient = ytRpcClient.yt
-    private val transaction: ApiServiceTransaction = YtWrapper.createTransaction(None, 2.minutes)
+    private val transaction: ApiServiceTransaction = YtWrapper.createTransaction(None, Duration.ofMinutes(2))
 
     sc.addSparkListener(this)
 

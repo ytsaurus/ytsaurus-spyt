@@ -9,7 +9,7 @@ import AbstractSegment.SegmentSide
 import Segment._
 import tech.ytsaurus.spyt.test.TestUtils
 
-import scala.language.postfixOps
+
 
 class SegmentSetTest extends AnyFlatSpec with Matchers
   with TestUtils with MockitoSugar with TableDrivenPropertyChecks {

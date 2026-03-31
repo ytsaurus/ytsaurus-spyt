@@ -6,18 +6,17 @@ import tech.ytsaurus.spyt.HostAndPort
 import tech.ytsaurus.spark.launcher.AutoScaler._
 import tech.ytsaurus.spark.launcher.ClusterStateService.State
 import tech.ytsaurus.spark.launcher.SparkStateService.{AppStats, MasterStats, WorkerInfo, WorkerStats}
-import tech.ytsaurus.spyt.HostAndPort
 
 import java.net.URI
-import scala.concurrent.duration.DurationInt
+import java.time.Duration
 import scala.util.Success
 
 class AutoScalerTest extends AnyFlatSpec with Matchers  {
   behavior of "AutoScaler"
 
-  val simpleConf: Conf = AutoScaler.Conf(1.minute, 0, 1, 1, 1, 1)
-  val sliding1Conf: Conf = AutoScaler.Conf(1.minute, 1, 1, 1, 1, 1)
-  val sliding3Conf: Conf = AutoScaler.Conf(1.minute, 3, 1, 1, 1, 1)
+  val simpleConf: Conf = AutoScaler.Conf(Duration.ofMinutes(1), 0, 1, 1, 1, 1)
+  val sliding1Conf: Conf = AutoScaler.Conf(Duration.ofMinutes(1), 1, 1, 1, 1, 1)
+  val sliding3Conf: Conf = AutoScaler.Conf(Duration.ofMinutes(1), 3, 1, 1, 1, 1)
 
   it should "correctly assign action according to cluster state" in {
     val f = AutoScaler.autoScaleFunctionBasic(simpleConf)
@@ -111,8 +110,8 @@ class AutoScalerTest extends AnyFlatSpec with Matchers  {
       HostAndPort.fromString("localhost:8081"))
     val res = srv.parseAppMetrics(metrics).map(_.toSet)
     res shouldEqual Success(Set(
-      AppStats("loop_smoke_test_py_1647589577877", 4L, 121836.millis),
-      AppStats("loop_smoke_test_py_1647589684254", 0L, 15458.millis),
+      AppStats("loop_smoke_test_py_1647589577877", 4L, Duration.ofMillis(121836)),
+      AppStats("loop_smoke_test_py_1647589684254", 0L, Duration.ofMillis(15458)),
     ))
   }
 }

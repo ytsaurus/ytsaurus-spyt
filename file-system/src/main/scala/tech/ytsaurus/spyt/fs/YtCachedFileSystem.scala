@@ -8,7 +8,7 @@ import java.io._
 import java.net.URI
 import java.nio.file.{Files, StandardCopyOption}
 import java.util.UUID
-import scala.language.postfixOps
+
 
 @SerialVersionUID(1L)
 class YtCachedFileSystem extends YtFileSystem {

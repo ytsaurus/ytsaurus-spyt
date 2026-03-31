@@ -4,10 +4,11 @@ import org.apache.spark.deploy.ytsaurus.Config.{SUBMISSION_ID, YTSAURUS_DRIVER_W
 import org.apache.spark.deploy.ytsaurus.YTsaurusClusterApplication
 import org.apache.spark.internal.Logging
 import org.apache.spark.launcher.{InProcessLauncher, SparkAppHandle}
+import tech.ytsaurus.spyt.wrapper.YtJavaConverters.toScalaDuration
 
+import java.time.Duration
 import java.util.UUID
 import scala.concurrent.Await
-import scala.concurrent.duration.DurationInt
 import scala.util.Try
 
 class DirectSubmitter extends Logging  {
@@ -30,7 +31,7 @@ class DirectSubmitter extends Logging  {
     launcher.setConf(YTSAURUS_DRIVER_WATCH.key, "false")
     launcher.startApplication(new SubmissionSparkListener(submissionId))
     Try {
-      Await.result(operationIdPromise.future, timeoutSec.seconds)
+      Await.result(operationIdPromise.future, toScalaDuration(Duration.ofSeconds(timeoutSec)))
     }
   }
 }

@@ -11,7 +11,6 @@ import tech.ytsaurus.spyt.wrapper.transaction.YtTransactionUtils
 
 import java.util.concurrent.TimeUnit
 import scala.annotation.tailrec
-import scala.concurrent.duration.DurationInt
 
 trait YtQueueUtils {
   self: YtCypressUtils with YtTransactionUtils =>
@@ -28,7 +27,7 @@ trait YtQueueUtils {
       .setOffset(offset)
       .setRowBatchReadOptions(options)
       .build()
-    runWithRetry(() => yt.pullConsumer(request).get(30.seconds.toMillis, TimeUnit.MILLISECONDS))
+    runWithRetry(() => yt.pullConsumer(request).get(30000, TimeUnit.MILLISECONDS))
   }
 
   def pullConsumerStrict(consumerPath: String, queuePath: String, partitionIndex: Int, offset: Long, rowCount: Long)

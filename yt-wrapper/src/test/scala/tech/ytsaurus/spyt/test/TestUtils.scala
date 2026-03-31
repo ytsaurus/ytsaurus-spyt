@@ -15,11 +15,10 @@ import tech.ytsaurus.ysontree.{YTreeBuilder, YTreeNode, YTreeNodeUtils, YTreeTex
 
 import java.io.{ByteArrayInputStream, InputStream}
 import java.nio.charset.StandardCharsets
+import java.time.Duration
 import java.util.concurrent.{CompletableFuture, CompletionStage}
 import scala.annotation.tailrec
-import scala.concurrent.duration._
 import scala.jdk.CollectionConverters._
-import scala.language.postfixOps
 
 trait TestUtils {
   val longColumnSchema: TableSchema = TableSchema.builder()
@@ -96,7 +95,7 @@ trait TestUtils {
     }
 
     implicit val ytReadContext: YtReadContext = YtReadContext(yt, readSettings)
-    YtWrapper.readTable(path, deser, 1 minute, transaction).toList
+    YtWrapper.readTable(path, deser, Duration.ofMinutes(1), transaction).toList
   }
 
   def writeTableFromYson(rows: Seq[String], path: String, schema: TableSchema,
@@ -184,7 +183,7 @@ trait TestUtils {
   def writeFileFromStream(input: InputStream, path: String)
                          (implicit yt: CompoundClient): Unit = {
     YtWrapper.createFile(path)
-    val out = YtWrapper.writeFile(path, 1 minute, None)
+    val out = YtWrapper.writeFile(path, Duration.ofMinutes(1), None)
     try {
       val b = new Array[Byte](65536)
       Stream.continually(input.read(b)).takeWhile(_ > 0).foreach(out.write(b, 0, _))

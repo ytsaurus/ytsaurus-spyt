@@ -14,7 +14,7 @@ import tech.ytsaurus.spyt.serializers.ArrayAnyDeserializer
 import tech.ytsaurus.spyt.wrapper.YtWrapper
 import tech.ytsaurus.spyt.wrapper.table.{TableIterator, YtReadContext}
 
-import scala.concurrent.duration.Duration
+import java.time.Duration
 
 class YtVectorizedReader(split: YtInputSplit,
   batchMaxSize: Int,

@@ -15,11 +15,10 @@ import tech.ytsaurus.spyt.wrapper.{LogLazy, YtWrapper}
 
 import java.io.FileNotFoundException
 import java.net.URI
+import java.time.Duration
 import java.util.concurrent.CompletionException
 import scala.annotation.tailrec
 import scala.collection.convert.ImplicitConversions.`collection AsScalaIterable`
-import scala.concurrent.duration._
-import scala.language.postfixOps
 
 abstract class YtFileSystemBase extends FileSystem with LogLazy {
   private val log = LoggerFactory.getLogger(getClass)
@@ -72,12 +71,12 @@ abstract class YtFileSystemBase extends FileSystem with LogLazy {
     def createFile(ytRpcClient: Option[YtRpcClient], ytClient: CompoundClient): FSDataOutputStream = {
       YtWrapper.createFile(path.toYPath, path.transaction, overwrite, recursive = false)(ytClient)
       statistics.incrementWriteOps(1)
-      val writeFile = YtWrapper.writeFile(path.toYPath, 7 days, ytRpcClient, path.transaction)(ytClient)
+      val writeFile = YtWrapper.writeFile(path.toYPath, Duration.ofDays(7), ytRpcClient, path.transaction)(ytClient)
       new FSDataOutputStream(writeFile, statistics)
     }
 
     if (defaultYtConf.extendedFileTimeout) {
-      val ytConf = defaultYtConf.copy(timeout = 7 days)
+      val ytConf = defaultYtConf.copy(timeout = Duration.ofDays(7))
       val ytRpcClient: YtRpcClient = YtClientProvider.ytRpcClient(ytConf)
       try {
         createFile(Some(ytRpcClient), ytRpcClient.yt)

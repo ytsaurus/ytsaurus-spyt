@@ -16,7 +16,7 @@ import tech.ytsaurus.spyt.format.conf.SparkYtConfiguration
 import tech.ytsaurus.spyt.test.{DynTableTestUtils, LocalSpark, TestUtils, TmpDir}
 
 import java.util.UUID
-import scala.language.postfixOps
+
 
 class YtSortedTableJoinTest extends AnyFlatSpec with Matchers with LocalSpark with TmpDir
   with MockitoSugar with DynTableTestUtils with TestUtils {

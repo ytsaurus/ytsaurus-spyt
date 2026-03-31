@@ -4,12 +4,13 @@ import org.apache.spark.yt.test.TestHttpServer.{Request, Response}
 import org.slf4j.{Logger, LoggerFactory}
 import org.sparkproject.jetty.server.handler.AbstractHandler
 import org.sparkproject.jetty.server.{Server, Request => JettyRequest}
+import tech.ytsaurus.spyt.wrapper.YtJavaConverters.toScalaDuration
 
 import java.net.BindException
 import java.nio.charset.Charset
+import java.time.Duration
 import javax.servlet.http.{HttpServletRequest, HttpServletResponse}
 import scala.annotation.tailrec
-import scala.concurrent.duration.{Duration, _}
 import scala.concurrent.{Await, Promise}
 import scala.util.Random
 import scala.util.control.NonFatal
@@ -22,7 +23,7 @@ trait TestHttpServer extends AutoCloseable {
   def expect(check: Request => Boolean): TestHttpServer
   def assert(check: Request => Unit): TestHttpServer = expect(check.andThen(_ => true))
   def respond(response: Response): TestHttpServer
-  def awaitResult(duration: Duration = 5.seconds): Response
+  def awaitResult(duration: Duration = Duration.ofSeconds(5)): Response
 
   override def close(): Unit = stop()
 }
@@ -107,7 +108,7 @@ object TestHttpServer {
 
     override def awaitResult(duration: Duration): Response =
       try {
-        Await.result(promise.future, duration)
+        Await.result(promise.future, toScalaDuration(duration))
       }
       finally promise = Promise()
 

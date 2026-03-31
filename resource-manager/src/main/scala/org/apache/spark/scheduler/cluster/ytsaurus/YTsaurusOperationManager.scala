@@ -30,21 +30,20 @@ import java.time.Duration
 import java.util.{Locale, Properties}
 import scala.jdk.CollectionConverters._
 import scala.collection.mutable
-import scala.concurrent.duration.DurationInt
-import scala.util.{Failure, Success, Try}
+import scala.util.Try
 
 
-private[spark] class YTsaurusOperationManager(val ytClient: YTsaurusClient,
-                                              token: String,
-                                              layerPaths: YTreeNode,
-                                              filePaths: YTreeNode,
-                                              environment: YTreeMapNode,
-                                              home: String,
-                                              prepareEnvCommand: String,
-                                              sparkClassPath: String,
-                                              javaCommand: String,
-                                              ytsaurusJavaOptionsBash: String)
-  extends Logging {
+private[spark] class YTsaurusOperationManager(
+  val ytClient: YTsaurusClient,
+  token: String,
+  layerPaths: YTreeNode,
+  filePaths: YTreeNode,
+  environment: YTreeMapNode,
+  home: String,
+  prepareEnvCommand: String,
+  sparkClassPath: String,
+  javaCommand: String,
+  ytsaurusJavaOptionsBash: String) extends Logging {
 
   import YTsaurusOperationManager._
 
@@ -590,7 +589,7 @@ private[spark] object YTsaurusOperationManager extends Logging {
   def localFileToCacheUploader(conf: SparkConf, ytClient: YTsaurusClient): UploadToCache = (path: String) => {
     val remoteTempFilesDirectory = conf.get(Config.YTSAURUS_REMOTE_TEMP_FILES_DIRECTORY)
     logDebug(s"Uploading ${path} to cypress cache at ${remoteTempFilesDirectory}")
-    YtWrapper.uploadFileToCache(path, 7.days, remoteTempFilesDirectory)(ytClient)
+    YtWrapper.uploadFileToCache(path, Duration.ofDays(7), remoteTempFilesDirectory)(ytClient)
   }
 
   private[ytsaurus] def extractYtFiles(files: Seq[String],

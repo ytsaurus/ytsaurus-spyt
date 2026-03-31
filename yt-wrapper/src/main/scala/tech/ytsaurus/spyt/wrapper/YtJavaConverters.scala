@@ -8,10 +8,8 @@ import java.util.concurrent.TimeUnit
 import scala.concurrent.duration.Duration
 
 object YtJavaConverters {
-  def toJavaDuration(timeout: Duration): JavaDuration = {
-    JavaDuration.ofMillis(timeout.toMillis)
-  }
-
+  // This method should be used only when scala.concurrent.duration.Duration is inevitable
+  // such as in Await.result(). Otherwise, java.time.Duration must be used.
   def toScalaDuration(timeout: JavaDuration): Duration = {
     Duration.apply(timeout.toMillis, TimeUnit.MILLISECONDS)
   }

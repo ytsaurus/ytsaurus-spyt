@@ -41,7 +41,7 @@ trait VanillaLauncher {
 
   def prepareProfiler(): Unit = {
     import sys.process._
-    import scala.language.postfixOps
+
 
     if (isProfilingEnabled) {
       val code = "unzip profiler.zip" !

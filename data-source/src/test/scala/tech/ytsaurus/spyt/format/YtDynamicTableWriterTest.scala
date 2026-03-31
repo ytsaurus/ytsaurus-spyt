@@ -14,8 +14,7 @@ import tech.ytsaurus.spyt.test.{LocalSpark, TmpDir}
 import tech.ytsaurus.spyt.wrapper.YtWrapper
 import tech.ytsaurus.spyt.wrapper.table.{YtReadContext, YtReadSettings}
 
-import scala.concurrent.duration._
-import scala.language.postfixOps
+import java.time.Duration
 
 class YtDynamicTableWriterTest extends AnyFlatSpec with TmpDir with LocalSpark with Matchers {
   import YtDynamicTableWriterTest._
@@ -127,7 +126,7 @@ class YtDynamicTableWriterTest extends AnyFlatSpec with TmpDir with LocalSpark w
       }
 
       if (mountTable) {
-        YtWrapper.mountTableSync(tmpPath, 1.minute)
+        YtWrapper.mountTableSync(tmpPath, Duration.ofMinutes(1))
       }
 
       try {
@@ -142,7 +141,7 @@ class YtDynamicTableWriterTest extends AnyFlatSpec with TmpDir with LocalSpark w
         dfWriter.save("ytTable:/" + tmpPath)
       } finally {
         if (mountTable) {
-          YtWrapper.unmountTableSync(tmpPath, 1.minute)
+          YtWrapper.unmountTableSync(tmpPath, Duration.ofMinutes(1))
         }
       }
     }

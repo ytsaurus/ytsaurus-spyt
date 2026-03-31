@@ -4,7 +4,7 @@ import java.io.InputStream
 import java.util.concurrent.TimeUnit
 import tech.ytsaurus.client.FileReader
 
-import scala.concurrent.duration.Duration
+import java.time.Duration
 
 class YtFileInputStream(reader: FileReader, timeout: Duration) extends InputStream {
   private var chunk: Iterator[Byte] = _
@@ -57,7 +57,7 @@ class YtFileInputStream(reader: FileReader, timeout: Duration) extends InputStre
         val byte = if (hasNextValue) next() else (-1).toByte
         b(off + index) = byte
         hasNextValue
-      }.takeWhile(_ == true).length
+      }.takeWhile(_ == true).size
     }
   }
 

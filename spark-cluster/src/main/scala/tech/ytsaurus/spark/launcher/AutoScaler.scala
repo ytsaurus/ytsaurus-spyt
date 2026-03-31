@@ -5,13 +5,12 @@ import org.slf4j.{Logger, LoggerFactory}
 import ClusterStateService.State
 import tech.ytsaurus.spyt.wrapper.discovery.DiscoveryService
 import tech.ytsaurus.client.CompoundClient
-import tech.ytsaurus.spark.launcher.ClusterStateService.State
+import tech.ytsaurus.spyt.wrapper.Utils
 
 import java.io.Closeable
+import java.time.Duration
 import java.util.concurrent.atomic.{AtomicLong, AtomicReference}
 import java.util.concurrent.{Executors, ScheduledThreadPoolExecutor, ThreadFactory, TimeUnit}
-import scala.concurrent.duration.{Duration, DurationInt, FiniteDuration}
-import scala.language.postfixOps
 import scala.util.control.NonFatal
 
 trait AutoScaler {
@@ -194,7 +193,7 @@ object AutoScaler {
   case object DoNothing extends Action
   case class SetUserSlot(count: Long) extends Action
 
-  case class Conf(period: FiniteDuration, slidingWindowSize: Int, maxFreeWorkers: Long, minFreeWorkers: Long,
+  case class Conf(period: Duration, slidingWindowSize: Int, maxFreeWorkers: Long, minFreeWorkers: Long,
                   slotIncrementStep: Long, slotDecrementStep: Long)
 
   object Conf {
@@ -204,9 +203,8 @@ object AutoScaler {
         .filter(_ == "true")
         .map { _ =>
           val period = props.get("spark.autoscaler.period")
-            .map(p => Duration.create(p))
-            .collect { case d: FiniteDuration => d }
-            .getOrElse(1.second)
+            .map(p => Utils.parseDuration(p))
+            .getOrElse(Duration.ofSeconds(1))
           Conf(
             period = period,
             slidingWindowSize = props.get("spark.autoscaler.sliding_window_size").map(_.toInt).getOrElse(1),

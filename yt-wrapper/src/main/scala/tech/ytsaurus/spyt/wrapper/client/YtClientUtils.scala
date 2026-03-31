@@ -13,9 +13,9 @@ import tech.ytsaurus.client.discovery.StaticDiscoverer
 import tech.ytsaurus.client.rpc.RpcOptions
 
 import java.net.SocketAddress
+import java.time.Duration
 import java.util.concurrent.ThreadFactory
 import java.util.{ArrayList => JArrayList}
-import scala.concurrent.duration.{Duration, DurationInt}
 
 trait YtClientUtils {
   private val log = LoggerFactory.getLogger(getClass)
@@ -41,8 +41,8 @@ trait YtClientUtils {
     }
 
     val connector = new DefaultBusConnector(group, true)
-      .setReadTimeout(toJavaDuration(config.timeout))
-      .setWriteTimeout(toJavaDuration(config.timeout))
+      .setReadTimeout(config.timeout)
+      .setWriteTimeout(config.timeout)
 
     try {
       val rpcOptions = new RpcOptions()
@@ -134,12 +134,12 @@ trait YtClientUtils {
 
   def createDiscoveryClient(): DiscoveryClient = {
     val connector = new DefaultBusConnector(new NioEventLoopGroup(1, daemonThreadFactory), true)
-      .setReadTimeout(toJavaDuration(1 minute))
-      .setWriteTimeout(toJavaDuration(1 minute))
+      .setReadTimeout(Duration.ofMinutes(1))
+      .setWriteTimeout(Duration.ofMinutes(1))
 
     try {
       val rpcOptions = new RpcOptions()
-      rpcOptions.setTimeouts(1 minute)
+      rpcOptions.setTimeouts(Duration.ofMinutes(1))
       val discoverer = StaticDiscoverer.loadFromEnvironment()
       val discoveryClient = DiscoveryClient.builder()
         .setDiscoverer(discoverer)
@@ -156,9 +156,9 @@ trait YtClientUtils {
 
   implicit class RichRpcOptions(options: RpcOptions) {
     def setTimeouts(timeout: Duration): RpcOptions = {
-      options.setGlobalTimeout(toJavaDuration(timeout))
-      options.setStreamingReadTimeout(toJavaDuration(timeout))
-      options.setStreamingWriteTimeout(toJavaDuration(timeout))
+      options.setGlobalTimeout(timeout)
+      options.setStreamingReadTimeout(timeout)
+      options.setStreamingWriteTimeout(timeout)
     }
   }
 

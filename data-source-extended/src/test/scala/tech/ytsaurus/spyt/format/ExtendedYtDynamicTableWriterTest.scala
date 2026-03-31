@@ -17,8 +17,7 @@ import tech.ytsaurus.typeinfo.StructType.Member
 import tech.ytsaurus.typeinfo.TiType
 import tech.ytsaurus.ysontree.{YTree, YTreeMapNode}
 
-import scala.concurrent.duration._
-import scala.language.postfixOps
+import java.time.Duration
 
 
 class ExtendedYtDynamicTableWriterTest extends AnyFlatSpec with TmpDir with LocalSpark with Matchers{
@@ -35,7 +34,7 @@ class ExtendedYtDynamicTableWriterTest extends AnyFlatSpec with TmpDir with Loca
       .build()
 
     YtWrapper.createDynTable(tmpPath, tableSchema)
-    YtWrapper.mountTableSync(tmpPath, 1.minute)
+    YtWrapper.mountTableSync(tmpPath, Duration.ofMinutes(1))
 
     val schema = new StructType()
       .add("key", UInt64Type)

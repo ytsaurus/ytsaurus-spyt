@@ -16,8 +16,6 @@ import java.util.UUID
 import java.util.concurrent.atomic.AtomicReference
 import java.util.concurrent.{Executors, ThreadFactory}
 import scala.annotation.tailrec
-import scala.concurrent.duration._
-import scala.language.postfixOps
 import scala.util.{Failure, Success, Try}
 
 class SubmissionClient(proxy: String,
@@ -239,7 +237,7 @@ class SubmissionClient(proxy: String,
         forceClusterUpdate()
         log.warn("Failed to submit job and retry is enabled")
         log.warn(e.getMessage)
-        log.info(s"Retry to submit job in ${retryConfig.retryInterval.toCoarsest}")
+        log.info(s"Retry to submit job in ${retryConfig.retryInterval}")
         Thread.sleep(retryConfig.retryInterval.toMillis)
         submitInner(launcher, retryConfig, retry + 1)
       case success => success
@@ -253,7 +251,7 @@ class SubmissionClient(proxy: String,
         throw new RuntimeException(s"Files with submission result were not created")
       } else {
         log.warn(s"Waiting for submission id in file: ${submissionFiles.id}")
-        Thread.sleep((5 seconds).toMillis)
+        Thread.sleep(5000)
         waitSubmissionResultFile(submissionFiles, retryLimit - 1)
       }
     }

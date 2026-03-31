@@ -20,11 +20,9 @@ import tech.ytsaurus.ysontree.{YTree, YTreeBuilder, YTreeNode}
 import java.io.{File, FileWriter}
 import java.nio.file.attribute.FileTime
 import java.nio.file.{Files, Path, Paths}
-import java.time.{LocalDate, LocalDateTime, ZoneId, ZoneOffset}
+import java.time.{Duration, LocalDate, LocalDateTime, ZoneId, ZoneOffset}
 import java.util.UUID
 import scala.collection.mutable.ArrayBuffer
-import scala.concurrent.duration.DurationInt
-import scala.language.postfixOps
 
 class WorkerLogLauncherTest extends AnyFlatSpec with LocalYtClient with Matchers with TmpDir {
   behavior of "WorkerLogLauncherTest"
@@ -40,10 +38,10 @@ class WorkerLogLauncherTest extends AnyFlatSpec with LocalYtClient with Matchers
     enableJson = true,
     scanDirectory = tmpLogDir,
     tablesPath = tablesDir,
-    updateInterval = 20 seconds,
+    updateInterval = Duration.ofSeconds(20),
     bufferSize = 1000,
     ytTableRowLimit = 500,
-    tableTTL = 20 seconds,
+    tableTTL = Duration.ofSeconds(20),
     additionalTableOptions = Map[String, Any]("enable_dynamic_store_read" -> true)
   )
 

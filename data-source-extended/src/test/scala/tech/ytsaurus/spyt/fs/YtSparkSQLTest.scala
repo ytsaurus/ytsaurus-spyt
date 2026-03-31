@@ -21,7 +21,7 @@ import tech.ytsaurus.ysontree.YTree
 import tech.ytsaurus.spyt.format.conf.{SparkYtConfiguration => SparkSettings}
 
 import scala.collection.mutable
-import scala.language.postfixOps
+
 
 class YtSparkSQLTest extends AnyFlatSpec with Matchers with LocalSpark with TmpDir with TestUtils with MockitoSugar
   with TableDrivenPropertyChecks with DynTableTestUtils with YtDistributedReadingTestUtils {

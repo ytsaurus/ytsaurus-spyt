@@ -9,8 +9,6 @@ import tech.ytsaurus.spyt.wrapper.discovery.Address
 import tech.ytsaurus.ysontree.{YTree, YTreeNode}
 
 import scala.annotation.tailrec
-import scala.concurrent.duration.DurationInt
-import scala.language.postfixOps
 
 
 class TcpProxyService(isEnabled: Boolean, startPort: Int, endPort: Int) {
@@ -101,7 +99,7 @@ class TcpProxyService(isEnabled: Boolean, startPort: Int, endPort: Int) {
       val tcpRouter = TcpRouter(externalAddress, addressesWithPorts)
       val thread = new Thread(() => {
         while (true) {
-          Thread.sleep((30 seconds).toMillis)
+          Thread.sleep(30000)
           log.debug(f"Ping proxy port nodes")
           tcpRouter.mapping.foreach { case (address, port) => pingPortNode(address, port) }
         }
@@ -135,7 +133,7 @@ object TcpProxyService {
     new TcpProxyService(isEnabled, startPort, endPort)
   }
 
-  private val EXPIRATION_TIMEOUT: Long = (10 minutes).toMillis
+  private val EXPIRATION_TIMEOUT: Long = 600000L // 10 minutes
 
   private val DEFAULT_ROUTES: YPath = YPath.simple("//sys/tcp_proxies/routes/default")
 

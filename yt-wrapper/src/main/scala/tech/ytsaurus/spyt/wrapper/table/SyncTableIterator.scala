@@ -4,8 +4,8 @@ import org.slf4j.LoggerFactory
 import tech.ytsaurus.client.TableReader
 import tech.ytsaurus.spyt.wrapper.LogLazy
 
+import java.time.Duration
 import java.util.concurrent.TimeUnit
-import scala.concurrent.duration.Duration
 
 class SyncTableIterator[T](reader: TableReader[T], timeout: Duration)
   extends TableIterator[T] with LogLazy {

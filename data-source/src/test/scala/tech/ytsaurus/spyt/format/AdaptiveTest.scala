@@ -11,7 +11,7 @@ import org.scalatest.matchers.should.Matchers
 import tech.ytsaurus.spyt._
 import tech.ytsaurus.spyt.test.{LocalSpark, TmpDir}
 
-import scala.language.postfixOps
+
 
 class AdaptiveTest extends AnyFlatSpec with Matchers with LocalSpark with TmpDir with TableDrivenPropertyChecks
   with YtDistributedReadingTestUtils {

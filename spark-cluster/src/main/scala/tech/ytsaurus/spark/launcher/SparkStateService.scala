@@ -13,9 +13,9 @@ import tech.ytsaurus.spark.launcher.rest.AppStatusesRestClient
 import tech.ytsaurus.spyt.HostAndPort
 
 import java.net.URI
+import java.time.Duration
 import java.util.concurrent.{ExecutorService, Executors}
 import scala.concurrent.ExecutionContext
-import scala.concurrent.duration.{Duration, DurationLong}
 import scala.util.{Failure, Try}
 
 trait SparkStateService {
@@ -220,7 +220,7 @@ object SparkStateService {
               .toSeq
               .map { case (appName, vs) =>
                 val m = vs.map{ case (_, metric, value) => (metric, value) }.toMap
-                AppStats(appName, m.getOrElse("cores", 0L), m.getOrElse("runtime_ms", 0L).millis)
+                AppStats(appName, m.getOrElse("cores", 0L), Duration.ofMillis(m.getOrElse("runtime_ms", 0L)))
               }
           )
       }

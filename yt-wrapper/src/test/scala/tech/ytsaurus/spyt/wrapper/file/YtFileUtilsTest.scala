@@ -8,18 +8,17 @@ import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import tech.ytsaurus.client.CompoundClient
 import tech.ytsaurus.client.request.{GetFileFromCache, PutFileToCache, WriteFile}
-import tech.ytsaurus.core.cypress.CypressNodeType
 import tech.ytsaurus.spyt.test.{LocalYtClient, TmpDir}
 import tech.ytsaurus.spyt.wrapper.YtWrapper
 
 import java.nio.charset.Charset
-import java.nio.file.{Files, Paths}
-import scala.concurrent.duration.DurationInt
+import java.nio.file.Paths
+import java.time.Duration
 
 class YtFileUtilsTest extends AnyFlatSpec with Matchers with LocalYtClient with TmpDir {
   behavior of "YtCypressUtils"
 
-  private val timeout = 10 minutes
+  private val timeout = Duration.ofMinutes(10)
 
   it should "upload a local file to the cache and read it from it" in {
     val remoteTempFilesDirectory = s"$tmpPath/yt_wrapper/file_storage"

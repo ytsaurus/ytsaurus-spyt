@@ -1,6 +1,6 @@
 package tech.ytsaurus.spyt.wrapper.transaction
 
-import java.time.{Duration => JDuration}
+import java.time.Duration
 import org.slf4j.LoggerFactory
 import tech.ytsaurus.spyt.wrapper.YtJavaConverters._
 import tech.ytsaurus.spyt.wrapper._
@@ -11,9 +11,7 @@ import tech.ytsaurus.ysontree.YTree
 
 import java.util.Collections
 import scala.annotation.tailrec
-import scala.concurrent.duration._
 import scala.concurrent.{CancellationException, ExecutionContext, Future, Promise}
-import scala.language.postfixOps
 import scala.util.Random
 
 trait YtTransactionUtils {
@@ -21,22 +19,22 @@ trait YtTransactionUtils {
 
   private val log = LoggerFactory.getLogger(getClass)
 
-  def createTransaction(timeout: JDuration, sticky: Boolean)
-                       (implicit yt: CompoundClient): ApiServiceTransaction = {
-    createTransaction(None, toScalaDuration(timeout), sticky)
+  def createTransaction(timeout: Duration, sticky: Boolean)(implicit yt: CompoundClient): ApiServiceTransaction = {
+    createTransaction(None, timeout, sticky)
   }
 
   def createTransaction(
-                         parent: Option[String], timeout: Duration, sticky: Boolean = false,
-                         title: Option[String] = None, pingPeriod: Duration = 30 seconds,
-                       )
-                       (implicit yt: CompoundClient): ApiServiceTransaction = {
+    parent: Option[String],
+    timeout: Duration,
+    sticky: Boolean = false,
+    title: Option[String] = None,
+    pingPeriod: Duration = Duration.ofSeconds(30))(implicit yt: CompoundClient): ApiServiceTransaction = {
     log.debugLazy(s"Start transaction, parent $parent, timeout $timeout, sticky $sticky")
     val request = new StartTransaction(if (sticky) TransactionType.Tablet else TransactionType.Master).toBuilder
-      .setTransactionTimeout(toJavaDuration(timeout))
-      .setTimeout(toJavaDuration(timeout))
+      .setTransactionTimeout(timeout)
+      .setTimeout(timeout)
       .setPing(true)
-      .setPingPeriod(toJavaDuration(pingPeriod))
+      .setPingPeriod(pingPeriod)
     title.foreach(title => request.setAttributes(Collections.singletonMap("title", YTree.stringNode(title))))
 
     parent.foreach(p => request.setParentId(GUID.valueOf(p)))

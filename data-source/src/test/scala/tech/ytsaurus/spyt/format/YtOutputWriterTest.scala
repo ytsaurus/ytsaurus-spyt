@@ -20,9 +20,7 @@ import tech.ytsaurus.spyt.wrapper.YtWrapper
 import tech.ytsaurus.spyt.wrapper.table.{YtReadContext, YtReadSettings}
 
 import java.time.temporal.ChronoUnit
-import java.time.{Instant, LocalDate}
-import scala.concurrent.duration._
-import scala.language.postfixOps
+import java.time.{Duration, Instant, LocalDate}
 
 class YtOutputWriterTest extends AnyFlatSpec with TmpDir with LocalSpark with Matchers {
   import YtOutputWriterTest._
@@ -103,7 +101,7 @@ class YtOutputWriterTest extends AnyFlatSpec with TmpDir with LocalSpark with Ma
 
   def prepareWrite(path: String, sortOption: SortOption)
                   (f: ApiServiceTransaction => Unit): Unit = {
-    val transaction = YtWrapper.createTransaction(parent = None, timeout = 1 minute)
+    val transaction = YtWrapper.createTransaction(parent = None, timeout = Duration.ofMinutes(1))
     val transactionId = transaction.getId.toString
 
     YtWrapper.createTable(path, TestTableSettings(schema, sortOption = sortOption),
@@ -139,7 +137,7 @@ class YtOutputWriterTest extends AnyFlatSpec with TmpDir with LocalSpark with Ma
     extends YtOutputWriter(
       path,
       schema,
-      SparkYtWriteConfiguration(1, batchSize, 5 minutes, typeV3Format = false, distributedWrite = false),
+      SparkYtWriteConfiguration(1, batchSize, Duration.ofMinutes(5), typeV3Format = false, distributedWrite = false),
       Map("sort_columns" -> SortColumns.set(sortOption.keys),
         "sort_orders" -> SortOrders.set(sortOption.orders.map(_.toString)),
         "unique_keys" -> UniqueKeys.set(sortOption.uniqueKeys))

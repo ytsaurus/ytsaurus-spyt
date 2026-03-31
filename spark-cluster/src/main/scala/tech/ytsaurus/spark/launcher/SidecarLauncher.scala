@@ -11,8 +11,7 @@ import tech.ytsaurus.spyt.HostAndPort
 
 import java.io.File
 import java.nio.file.{Path, Paths}
-import scala.concurrent.duration._
-import scala.language.postfixOps
+import java.time.Duration
 import scala.sys.process.Process
 
 trait SidecarLauncher {
@@ -119,6 +118,6 @@ trait SidecarConfigUtils {
   }
 
   protected def timeout(implicit args: Args): Duration = {
-    args.optional("timeout").map(parseDuration).getOrElse(5 minutes)
+    args.optional("timeout").map(parseDuration).getOrElse(Duration.ofMinutes(5))
   }
 }

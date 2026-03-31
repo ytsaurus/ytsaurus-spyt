@@ -14,7 +14,7 @@ import tech.ytsaurus.ysontree.YTreeTextSerializer
 import java.io.FileNotFoundException
 import java.time.{Clock, LocalDateTime, ZoneOffset}
 import scala.io.Source
-import scala.language.postfixOps
+
 
 class YtEventLogFileSystemTest extends AnyFlatSpec with Matchers with LocalSpark with LocalYtClient with TestUtils with TmpDir {
   behavior of "YtEventLogFileSystemTest"

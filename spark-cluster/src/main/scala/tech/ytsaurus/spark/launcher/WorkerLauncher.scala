@@ -12,8 +12,8 @@ import tech.ytsaurus.spyt.wrapper.Utils.parseDuration
 import tech.ytsaurus.spyt.wrapper.client.YtClientConfiguration
 import tech.ytsaurus.spyt.wrapper.discovery.DiscoveryService
 
-import scala.concurrent.duration._
-import scala.language.postfixOps
+import java.time.Duration
+
 
 object WorkerLauncher extends App with VanillaLauncher with SparkLauncher {
   private val log = LoggerFactory.getLogger(getClass)
@@ -59,14 +59,14 @@ object WorkerLauncher extends App with VanillaLauncher with SparkLauncher {
   }
 }
 
-case class WorkerLauncherArgs(cores: Int,
-                              memory: String,
-                              ytConfig: YtClientConfiguration,
-                              baseDiscoveryPath: String,
-                              waitMasterTimeout: Duration,
-                              operationId: String,
-                              enableSquashfs: Boolean
-                             )
+case class WorkerLauncherArgs(
+  cores: Int,
+  memory: String,
+  ytConfig: YtClientConfiguration,
+  baseDiscoveryPath: String,
+  waitMasterTimeout: Duration,
+  operationId: String,
+  enableSquashfs: Boolean)
 
 object WorkerLauncherArgs {
   def apply(args: Args): WorkerLauncherArgs = WorkerLauncherArgs(
@@ -74,7 +74,7 @@ object WorkerLauncherArgs {
     args.required("memory"),
     YtClientConfiguration(args.optional),
     args.optional("base-discovery-path").getOrElse(sys.env("SPARK_BASE_DISCOVERY_PATH")),
-    args.optional("wait-master-timeout").map(parseDuration).getOrElse(5 minutes),
+    args.optional("wait-master-timeout").map(parseDuration).getOrElse(Duration.ofMinutes(5)),
     args.optional("operation-id").getOrElse(sys.env("YT_OPERATION_ID")),
     args.boolean("enable-squashfs")
   )

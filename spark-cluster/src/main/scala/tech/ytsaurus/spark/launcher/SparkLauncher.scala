@@ -17,11 +17,10 @@ import tech.ytsaurus.spyt.{HostAndPort, SparkAdapter, SparkVersionUtils}
 import java.io.File
 import java.net.URI
 import java.nio.file.{Files, Path}
+import java.time.Duration
 import scala.annotation.tailrec
 import scala.collection.mutable.ArrayBuffer
-import scala.concurrent.duration._
 import scala.io.Source
-import scala.language.postfixOps
 import scala.sys.process._
 import scala.util.{Failure, Success, Try}
 
@@ -42,7 +41,7 @@ trait SparkLauncher {
                        defaultMemory: String): SparkDaemonConfig = {
       SparkDaemonConfig(
         sparkSystemProperties.getOrElse(s"spark.$daemonName.memory", defaultMemory),
-        sparkSystemProperties.get(s"spark.$daemonName.timeout").map(parseDuration).getOrElse(5 minutes)
+        sparkSystemProperties.get(s"spark.$daemonName.timeout").map(parseDuration).getOrElse(Duration.ofMinutes(5))
       )
     }
   }
@@ -355,7 +354,7 @@ trait SparkLauncher {
   @tailrec
   final def checkPeriodically(p: => Boolean): Unit = {
     if (p) {
-      Thread.sleep((20 seconds).toMillis)
+      Thread.sleep(20000)
       checkPeriodically(p)
     }
   }

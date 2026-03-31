@@ -16,10 +16,9 @@ import tech.ytsaurus.ysontree.{YTreeBuilder, YTreeNode, YTreeTextSerializer}
 
 import java.nio.ByteBuffer
 import java.nio.file.Paths
+import java.time.Duration
 import scala.annotation.tailrec
-import scala.concurrent.duration._
 import scala.jdk.CollectionConverters._
-import scala.language.postfixOps
 
 trait YtTableUtils {
   self: YtCypressUtils with YtTransactionUtils =>
@@ -60,7 +59,7 @@ trait YtTableUtils {
   }
 
   def readTable[T](path: YPath, deserializer: WireRowDeserializer[T],
-    timeout: Duration = 1 minute, transaction: Option[String] = None)
+    timeout: Duration = Duration.ofMinutes(1), transaction: Option[String] = None)
     (implicit ytReadContext: YtReadContext): SyncTableIterator[T] = {
     val request = ReadTable.builder()
       .setPath(path)
@@ -130,7 +129,7 @@ trait YtTableUtils {
       status
     } else {
       log.info(s"Operation $guid is in status $status")
-      Thread.sleep((5 seconds).toMillis)
+      Thread.sleep(5000)
       awaitOperation(guid)
     }
   }

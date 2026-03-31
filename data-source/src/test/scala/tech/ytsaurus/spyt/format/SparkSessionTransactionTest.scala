@@ -10,7 +10,7 @@ import tech.ytsaurus.spyt.test.{LocalSpark, TestUtils, TmpDir}
 import tech.ytsaurus.spyt.wrapper.YtWrapper
 import tech.ytsaurus.spyt.test.LocalYtClient
 
-import scala.language.postfixOps
+
 
 class SparkSessionTransactionTest extends AnyFlatSpec with Matchers with LocalYtClient with TmpDir with TestUtils
   with YtDistributedReadingTestUtils {

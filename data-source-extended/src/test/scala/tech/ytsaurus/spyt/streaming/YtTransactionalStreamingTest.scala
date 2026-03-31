@@ -11,8 +11,8 @@ import tech.ytsaurus.spyt.format.conf.YtTableSparkSettings.InconsistentReadEnabl
 import tech.ytsaurus.spyt.test._
 import tech.ytsaurus.spyt.wrapper.YtWrapper
 
+import java.time.Duration
 import scala.collection.SortedMap
-import scala.concurrent.duration._
 
 class YtTransactionalStreamingTest extends AnyFlatSpec with Matchers with MockitoSugar with LocalYtClient
   with LocalSpark with TmpDir with DynTableTestUtils with QueueTestUtils {
@@ -72,7 +72,7 @@ class YtTransactionalStreamingTest extends AnyFlatSpec with Matchers with Mockit
   }
 
   private def createTransactionFixture(): TransactionFixture = {
-    val transaction = YtWrapper.createTransaction(None, 5.minutes, sticky = true)
+    val transaction = YtWrapper.createTransaction(None, Duration.ofMinutes(5), sticky = true)
     TransactionFixture(transaction, transaction.getId.toString)
   }
 

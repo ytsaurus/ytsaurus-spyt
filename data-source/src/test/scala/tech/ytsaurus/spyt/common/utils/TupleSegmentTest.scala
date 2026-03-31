@@ -6,7 +6,7 @@ import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import tech.ytsaurus.spyt.test.TestUtils
 
-import scala.language.postfixOps
+
 
 class TupleSegmentTest extends AnyFlatSpec with Matchers
   with TestUtils with MockitoSugar with TableDrivenPropertyChecks {

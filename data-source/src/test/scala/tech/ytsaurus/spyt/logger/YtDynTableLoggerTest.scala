@@ -9,10 +9,9 @@ import tech.ytsaurus.spyt.wrapper.YtWrapper
 import tech.ytsaurus.spyt.test.{DynTableTestUtils, TestTableSettings}
 import tech.ytsaurus.ysontree.YTreeMapNode
 
+import java.time.Duration
 import java.util.UUID
-import scala.concurrent.duration._
 import scala.jdk.CollectionConverters._
-import scala.language.postfixOps
 
 class YtDynTableLoggerTest extends AnyFlatSpec with Matchers with LocalSpark with TmpDir with DynTableTestUtils with TestUtils {
 
@@ -137,13 +136,13 @@ class YtDynTableLoggerTest extends AnyFlatSpec with Matchers with LocalSpark wit
     spark.setYtConf(SparkYtLogConfiguration.Enabled, true)
 
     YtWrapper.createTable(tmpPathGlobal, TestTableSettings(YtDynTableLogger.logTableSchema, isDynamic = true))
-    YtWrapper.mountTableSync(tmpPathGlobal, 5 seconds)
+    YtWrapper.mountTableSync(tmpPathGlobal, Duration.ofSeconds(5))
     spark.setYtConf(SparkYtLogConfiguration.Table, tmpPathGlobal)
   }
 
   override def afterAll(): Unit = {
     spark.setYtConf(SparkYtLogConfiguration.Enabled, false)
-    YtWrapper.unmountTableSync(tmpPathGlobal, 5 seconds)
+    YtWrapper.unmountTableSync(tmpPathGlobal, Duration.ofSeconds(5))
     YtWrapper.remove(tmpPathGlobal)
     super.afterAll()
   }

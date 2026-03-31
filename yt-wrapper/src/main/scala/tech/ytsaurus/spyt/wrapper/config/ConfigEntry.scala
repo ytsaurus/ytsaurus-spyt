@@ -7,7 +7,7 @@ import org.apache.log4j.Level
 import tech.ytsaurus.spyt.wrapper.Utils.parseDuration
 import tech.ytsaurus.ysontree.{YTreeNode, YTreeTextSerializer}
 
-import scala.concurrent.duration._
+import java.time.Duration
 
 /**
  * Shorthand class for working with spark properties.

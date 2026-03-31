@@ -9,7 +9,7 @@ import java.time.Duration
 
 import scala.util.{Failure, Success, Try}
 
-@SerialVersionUID(-4800048291369493456L)
+@SerialVersionUID(-4051409700916829022L)
 case class YtClientConfiguration(
   proxy: String,
   user: String,

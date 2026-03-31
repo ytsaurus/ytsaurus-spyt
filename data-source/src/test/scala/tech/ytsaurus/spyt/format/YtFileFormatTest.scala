@@ -30,6 +30,7 @@ import java.sql.{Date, Timestamp}
 import java.time.LocalDate
 import java.util.concurrent.TimeUnit
 import scala.concurrent.duration._
+import scala.jdk.CollectionConverters._
 import scala.language.postfixOps
 import scala.util.Random
 
@@ -437,8 +438,6 @@ class YtFileFormatTest extends AnyFlatSpec with Matchers with LocalSpark
 
 
   testWithDistributedReading("read int32") { distributedReadingEnabled =>
-    import scala.collection.JavaConverters._
-
     val schema = YTree.builder()
       .beginAttributes()
       .key("strict").value(true)

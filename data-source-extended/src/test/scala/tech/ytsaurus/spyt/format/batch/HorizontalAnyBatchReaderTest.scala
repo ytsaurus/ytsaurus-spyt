@@ -15,7 +15,7 @@ import tech.ytsaurus.spyt.wrapper.YtWrapper.formatPath
 import tech.ytsaurus.spyt.wrapper.table.{YtReadContext, YtReadSettings}
 import tech.ytsaurus.ysontree.YTree
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 import scala.language.postfixOps
 
 class HorizontalAnyBatchReaderTest extends AnyFlatSpec with Matchers with ReadBatchRows with LocalSpark with TmpDir

@@ -13,7 +13,7 @@ import tech.ytsaurus.ysontree.YTreeNode
 import java.io.{ByteArrayInputStream, InputStream, SequenceInputStream}
 import java.nio.ByteBuffer
 import java.util.concurrent.CompletableFuture
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 
 class YTsaurusShuffleReader[K, C](compoundHandle: CompoundShuffleHandle[K, _, C],
                                   startMapIndex: Int,

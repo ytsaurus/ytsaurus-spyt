@@ -22,7 +22,7 @@ import tech.ytsaurus.spyt.format.YtPartitioningDelegate
 import tech.ytsaurus.spyt.format.YtPartitioningSupport.YtPartitionedFileBase
 
 import java.util.ServiceLoader
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 
 trait SparkAdapter
   extends SparkAdapterBase

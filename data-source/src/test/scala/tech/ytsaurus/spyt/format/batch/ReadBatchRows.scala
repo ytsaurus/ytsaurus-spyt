@@ -6,12 +6,12 @@ import org.scalatest.TestSuite
 import org.scalatest.matchers.should.Matchers
 
 import scala.annotation.tailrec
+import scala.jdk.CollectionConverters._
 
 trait ReadBatchRows {
   self: TestSuite with Matchers =>
 
   def readFully(reader: BatchReader, schema: StructType, batchMaxSize: Int): Seq[Row] = {
-    import scala.collection.JavaConverters._
     @tailrec
     def readIteration(rows: Seq[Row]): Seq[Row] = {
       val batchRead = reader.nextBatch

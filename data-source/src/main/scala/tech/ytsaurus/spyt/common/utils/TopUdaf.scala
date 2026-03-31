@@ -5,6 +5,8 @@ import org.apache.spark.sql.functions.col
 import org.apache.spark.sql.types.{DataType, StructType}
 import org.apache.spark.sql.{Column, Row}
 
+import scala.jdk.CollectionConverters._
+
 class TopUdaf(schema: StructType, topColumns: Seq[String]) extends UserDefinedAggregateFunction {
   private val topIndices = topColumns.map(schema.fieldIndex)
 
@@ -63,7 +65,6 @@ object TopUdaf {
   def top(schema: StructType,
           topColumns: java.util.ArrayList[String],
           selectColumns: java.util.ArrayList[String]): Column = {
-    import scala.collection.JavaConverters._
     top(schema, topColumns.asScala, selectColumns.asScala)
   }
 }

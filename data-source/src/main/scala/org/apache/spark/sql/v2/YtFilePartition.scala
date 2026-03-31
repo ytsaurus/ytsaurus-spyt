@@ -1,13 +1,13 @@
 package org.apache.spark.sql.v2
 
 import org.apache.hadoop.fs.{FileStatus, Path}
-import org.apache.spark.TaskContext
 import org.apache.spark.network.util.ByteUnit
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.execution.datasources.{FilePartition, PartitionDirectory, PartitionedFile}
 import org.apache.spark.sql.types.StructType
 import org.slf4j.LoggerFactory
+import scala.jdk.CollectionConverters._
 import tech.ytsaurus.client.CompoundClient
 import tech.ytsaurus.core.cypress.{RangeLimit, YPath}
 import tech.ytsaurus.spyt.SparkAdapter
@@ -75,7 +75,6 @@ object YtFilePartition {
     readDataSchema: Option[StructType] = None,
     pushedFilterSegments: SegmentSet = SegmentSet())
     (implicit ytReadContext: YtReadContext): Seq[PartitionedFile] = {
-    import scala.collection.JavaConverters._
     val richYPath = buildOptimizedYPath(sparkSession, path, maxSplitBytes, partitionValues,
       readDataSchema, pushedFilterSegments)
 

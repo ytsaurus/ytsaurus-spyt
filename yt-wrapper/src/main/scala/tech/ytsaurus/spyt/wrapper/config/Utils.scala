@@ -4,7 +4,7 @@ import tech.ytsaurus.spyt.wrapper.YtJavaConverters.RichJavaMap
 import tech.ytsaurus.spyt.wrapper.YtWrapper
 import tech.ytsaurus.client.CompoundClient
 
-import scala.collection.JavaConverters.mapAsScalaMapConverter
+import scala.jdk.CollectionConverters.mapAsScalaMapConverter
 
 object Utils {
   def parseRemoteConfig(path: String, yt: CompoundClient, key: String = "spark_conf"): Map[String, String] = {

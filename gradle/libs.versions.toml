@@ -2,6 +2,7 @@
 # https://docs.gradle.org/current/userguide/platforms.html#sub::toml-dependencies-format
 
 [versions]
+scala-collection-compat = "2.7.0" # TODO: temporary dependency for backward compatibility before switching to scala 2.13 and Spark 4.x.x
 spark-compile = "3.5.8"
 livy = "0.8.0-incubating"
 ytsaurus-client = "1.2.14"
@@ -19,6 +20,8 @@ mockito = "1.14.4"
 junit-platform = "1.13.1"
 
 [libraries]
+scala-collection-compat = { module = "org.scala-lang.modules:scala-collection-compat_2.12", version.ref = "scala-collection-compat" }
+
 spark-launcher = { module = "org.apache.spark:spark-launcher_2.12", version.ref = "spark-compile" }
 spark-connect = { module = "org.apache.spark:spark-connect_2.12", version.ref = "spark-compile" }
 livy = {module = "org.apache.livy:livy-assembly", version.ref = "livy" }

@@ -5,7 +5,7 @@ import org.apache.spark.deploy.ytsaurus.Config._
 import org.apache.spark.scheduler.cluster.ytsaurus.YTsaurusOperationManager.DRIVER_TASK
 import tech.ytsaurus.ysontree._
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 import scala.collection.mutable
 import scala.util.Try
 

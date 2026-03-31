@@ -11,6 +11,7 @@ import tech.ytsaurus.ysontree.YTreeBuilder
 import scala.annotation.tailrec
 import scala.collection.immutable.ListMap
 import scala.collection.mutable
+import scala.jdk.CollectionConverters._
 
 case class YPathEnriched(path: Path, attributes: Map[String, String] = Map.empty) extends Serializable {
   implicit class RichPath(val path: Path) {
@@ -24,8 +25,6 @@ case class YPathEnriched(path: Path, attributes: Map[String, String] = Map.empty
   def toStringPath: String = toPath.toString
 
   def toYPath: YPath = {
-    import scala.collection.JavaConverters._
-
     val yPath = node.map(n => YPath.objectRoot(GUID.valueOf(n))).getOrElse(YPath.simple(YtWrapper.formatPath(path.toString)))
     val tsYPath = timestamp.filter(_ != -1).map(yPath.withTimestamp).getOrElse(yPath)
     val attrs = attributes.filterKeys(!RESERVED_ATTRIBUTES.contains(_)).mapValues(new YTreeBuilder().value(_).build())

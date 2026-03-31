@@ -8,7 +8,7 @@ import tech.ytsaurus.spyt.test.LocalYtClient
 import tech.ytsaurus.ysontree.YTreeBuilder
 
 import java.util.UUID
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 
 class YtCypressUtilsTest extends AnyFlatSpec with Matchers with LocalYtClient with TmpDir {
   behavior of "YtCypressUtils"

@@ -6,6 +6,7 @@ import org.apache.spark.sql.execution.datasources.v2.FileDataSourceV2
 import org.apache.spark.sql.types.StructType
 import org.apache.spark.sql.util.CaseInsensitiveStringMap
 import org.apache.spark.sql.vectorized.YtFileFormat
+import scala.jdk.CollectionConverters._
 import tech.ytsaurus.spyt.format.GlobalTransactionUtils
 import tech.ytsaurus.spyt.fs.path.YPathEnriched
 
@@ -42,7 +43,6 @@ class YtDataSourceV2 extends FileDataSourceV2 with SessionConfigSupport {
   }
 
   private def getOptions(options: CaseInsensitiveStringMap): CaseInsensitiveStringMap = {
-    import scala.collection.JavaConverters._
     val opts = defaultOptions ++ options.asScala
     new CaseInsensitiveStringMap(opts.asJava)
   }

@@ -31,7 +31,7 @@ import tech.ytsaurus.spyt.wrapper.client.YtClientProvider
 import tech.ytsaurus.spyt.wrapper.table.YtReadContext
 
 import java.util.ServiceLoader
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 
 
 class YtFileFormat extends FileFormat with DataSourceRegister with StreamSourceProvider with StreamSinkProvider with Serializable {

@@ -3,6 +3,8 @@ package tech.ytsaurus.spyt.format
 import tech.ytsaurus.core.cypress.{Exact, Range, RangeCriteria, RangeLimit, YPath}
 import tech.ytsaurus.ysontree.{YTree, YTreeNode}
 
+import scala.jdk.CollectionConverters._
+
 object YPathUtils {
   private def getOnlyKey(limit: RangeLimit): Option[java.util.List[YTreeNode]] = {
     if (!limit.key.isEmpty && limit.rowIndex == -1 && limit.offset == -1) {
@@ -63,12 +65,10 @@ object YPathUtils {
   def endKey(ypath: YPath): Seq[YTreeNode] = endKeyOption(ypath).getOrElse(Nil)
 
   def beginKeyOption(ypath: YPath): Option[Seq[YTreeNode]] = {
-    import scala.collection.JavaConverters._
     rangeOption(ypath).map(_.lower.key.asScala)
   }
 
   def endKeyOption(ypath: YPath): Option[Seq[YTreeNode]] = {
-    import scala.collection.JavaConverters._
     rangeOption(ypath).map(_.upper.key.asScala)
   }
 
@@ -77,7 +77,6 @@ object YPathUtils {
   def endRowOption(ypath: YPath): Option[Long] = rangeOption(ypath).map(_.upper.rowIndex)
 
   def rowCount(ypath: YPath): Option[Long] = {
-    import scala.collection.JavaConverters._
     val ranges = ypath.getRanges.asScala.map(_.toRange)
 
     if (ranges.isEmpty) {

@@ -11,6 +11,7 @@ import tech.ytsaurus.ysontree.YTreeMapNode
 
 import java.util.UUID
 import scala.concurrent.duration._
+import scala.jdk.CollectionConverters._
 import scala.language.postfixOps
 
 class YtDynTableLoggerTest extends AnyFlatSpec with Matchers with LocalSpark with TmpDir with DynTableTestUtils with TestUtils {
@@ -150,7 +151,6 @@ class YtDynTableLoggerTest extends AnyFlatSpec with Matchers with LocalSpark wit
   override def beforeEach(): Unit = {
     super.beforeEach()
 
-    import scala.collection.JavaConverters._
     val allRows = YtWrapper.selectRows(tmpPathGlobal)
     allRows.foreach { row =>
       val keys = YtDynTableLogger.logTableSchema.toKeys
@@ -168,7 +168,6 @@ class YtDynTableLoggerTest extends AnyFlatSpec with Matchers with LocalSpark wit
   private def parseLogs(rawLogs: Seq[YTreeMapNode]): Seq[LogRow] = {
     import tech.ytsaurus.spyt.wrapper.YtJavaConverters._
 
-    import scala.collection.JavaConverters._
     rawLogs.map(row =>
       LogRow(
         row.getString("logger_name"),

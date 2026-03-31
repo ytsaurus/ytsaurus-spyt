@@ -8,9 +8,10 @@ import tech.ytsaurus.ysontree.{YTree, YTreeBinarySerializer, YTreeBooleanNodeImp
 
 import java.io.{ByteArrayInputStream, ByteArrayOutputStream}
 
+import scala.jdk.CollectionConverters._
+
 object PivotKeysConverter {
   def toMap(pivotKey: PivotKey): Map[String, YTreeNode] = {
-    import scala.collection.JavaConverters._
     val is = new ByteArrayInputStream(pivotKey)
     try {
       YTreeBinarySerializer.deserialize(is).asMap().asScala.toMap
@@ -50,7 +51,6 @@ object PivotKeysConverter {
   }
 
   def toList(pivotKey: PivotKey): Seq[YTreeNode] = {
-    import scala.collection.JavaConverters._
     val is = new ByteArrayInputStream(pivotKey)
     try {
       YTreeBinarySerializer.deserialize(is).asList().asScala.toList

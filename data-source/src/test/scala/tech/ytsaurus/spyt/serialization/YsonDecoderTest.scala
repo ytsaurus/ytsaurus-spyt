@@ -15,6 +15,7 @@ import tech.ytsaurus.yson.YsonTags._
 import tech.ytsaurus.ysontree.YTreeBinarySerializer
 
 import scala.io.Source
+import scala.jdk.CollectionConverters._
 
 class YsonDecoderTest extends AnyFlatSpec with Matchers with ScalaCheckPropertyChecks with ScalaCheckDrivenPropertyChecks {
   private def decoder(bytes: Array[Byte]): YsonDecoder = {
@@ -143,7 +144,6 @@ class YsonDecoderTest extends AnyFlatSpec with Matchers with ScalaCheckPropertyC
   }
 
   it should "decode uint64 null values" in {
-    import scala.collection.JavaConverters._
     val bytes = Array[Byte](91, 6, 3, 59, 93)
     val expected = YTreeBinarySerializer.deserialize(new ByteArrayInputStream(bytes))
       .asList().asScala.toList.map(_.longValue())

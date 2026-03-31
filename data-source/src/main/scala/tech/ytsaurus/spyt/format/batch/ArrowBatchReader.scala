@@ -14,7 +14,7 @@ import tech.ytsaurus.spyt.serialization.IndexedDataType
 import tech.ytsaurus.spyt.serializers.SchemaConverter
 import tech.ytsaurus.spyt.wrapper.table.YtArrowInputStream
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 
 class ArrowBatchReader(stream: YtArrowInputStream, schema: StructType,
                        ytSchema: TableSchema) extends BatchReaderBase with LogLazy {

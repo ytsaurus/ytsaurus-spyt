@@ -3,7 +3,7 @@ package tech.ytsaurus.spyt.serializers
 import org.apache.spark.sql.types.Metadata
 import tech.ytsaurus.ysontree.{YTree, YTreeBuilder, YTreeMapNode, YTreeNode, YTreeStringNode}
 
-import scala.collection.JavaConverters.asScalaBufferConverter
+import scala.jdk.CollectionConverters.asScalaBufferConverter
 
 object YtLogicalTypeSerializer {
   private def serializeTupleField(ytType: YtLogicalType, meta: Metadata,

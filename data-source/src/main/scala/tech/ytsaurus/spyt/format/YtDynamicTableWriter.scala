@@ -15,7 +15,7 @@ import tech.ytsaurus.spyt.serializers.SchemaConverter.Unordered
 import tech.ytsaurus.spyt.serializers.{DynTableRowConverter, WriteSchemaConverter}
 import tech.ytsaurus.spyt.wrapper.YtWrapper
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 
 class YtDynamicTableWriter(richPath: YPathEnriched, schema: StructType, wConfig: SparkYtWriteConfiguration,
   options: Map[String, String], parentTransactionId: Option[String] = None)

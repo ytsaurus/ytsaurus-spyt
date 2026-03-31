@@ -9,7 +9,7 @@ import tech.ytsaurus.core.tables.{ColumnSchema, TableSchema}
 import tech.ytsaurus.spyt.serializers.YsonRowConverter.getMapData
 import tech.ytsaurus.ysontree.{YTree, YTreeListNode}
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 
 class DynTableRowConverter(schema: StructType, tableSchema: TableSchema, typeV3: Boolean) {
   def convertRow(row: Seq[Any]): Seq[Any] = {

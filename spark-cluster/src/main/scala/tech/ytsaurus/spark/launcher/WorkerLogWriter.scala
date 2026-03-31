@@ -10,6 +10,7 @@ import tech.ytsaurus.spyt.wrapper.{LogLazy, YtWrapper}
 import java.time.{LocalDate, LocalDateTime}
 import scala.collection.mutable
 import scala.collection.mutable.ArrayBuffer
+import scala.jdk.CollectionConverters._
 
 class WorkerLogWriter(workerLogConfig: WorkerLogConfig)(implicit yt: CompoundClient) extends LogLazy {
   private val log = LoggerFactory.getLogger(getClass)
@@ -108,7 +109,6 @@ class WorkerLogWriter(workerLogConfig: WorkerLogConfig)(implicit yt: CompoundCli
   }
 
   private def upload(date: LocalDate, logArray: Seq[WorkerLogBlock], transaction: Option[ApiServiceTransaction]): Unit = {
-    import scala.collection.JavaConverters._
     val tableSettings = Map("expiration_time" -> (System.currentTimeMillis() + workerLogConfig.tableTTL.toMillis)) ++ workerLogConfig.additionalTableOptions
     log.debugLazy(s"Creating worker log table at ${workerLogConfig.tablesPath}/$date with settings: $tableSettings")
     YtWrapper.createDynTableAndMount(s"${workerLogConfig.tablesPath}/$date", schema, tableSettings)

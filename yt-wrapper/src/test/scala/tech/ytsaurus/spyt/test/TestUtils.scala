@@ -18,6 +18,7 @@ import java.nio.charset.StandardCharsets
 import java.util.concurrent.{CompletableFuture, CompletionStage}
 import scala.annotation.tailrec
 import scala.concurrent.duration._
+import scala.jdk.CollectionConverters._
 import scala.language.postfixOps
 
 trait TestUtils {
@@ -27,8 +28,6 @@ trait TestUtils {
     .build()
 
   private def ytSchema(path: String, fieldName: String)(implicit yt: CompoundClient): java.util.Map[String, YTreeNode] = {
-    import scala.collection.JavaConverters._
-
     val schema = YtWrapper.attribute(path, "schema")
     schema.asList()
       .asScala
@@ -48,7 +47,6 @@ trait TestUtils {
 
   def createEmptyTable(path: String, schema: TableSchema)
                       (implicit yt: CompoundClient): Unit = {
-    import scala.collection.JavaConverters._
     yt.createNode(path, CypressNodeType.TABLE, Map("schema" -> schema.toYTree).asJava).join()
   }
 
@@ -117,8 +115,6 @@ trait TestUtils {
 
   def overwriteTableFromYson(rows: Seq[String], path: String, physicalSchema: TableSchema)
                             (implicit yt: CompoundClient): Unit = {
-    import scala.collection.JavaConverters._
-
     val serializer = new YTreeRowSerializer[String] {
       override def serialize(obj: String, consumer: YsonConsumer): Unit = {
         val node = YTreeTextSerializer.deserialize(new ByteArrayInputStream(obj.getBytes(StandardCharsets.UTF_8)))
@@ -164,8 +160,6 @@ trait TestUtils {
                          physicalSchema: TableSchema, optimizeFor: OptimizeMode = OptimizeMode.Scan,
                          options: Map[String, YTreeNode] = Map.empty)
                         (implicit yt: CompoundClient): Unit = {
-    import scala.collection.JavaConverters._
-
     YtWrapper.createTable(path, options ++ Map("schema" -> physicalSchema.toYTree,
       "optimize_for" -> optimizeFor.node), None, false)
 

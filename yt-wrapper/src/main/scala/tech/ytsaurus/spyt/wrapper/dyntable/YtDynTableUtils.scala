@@ -21,6 +21,7 @@ import scala.annotation.tailrec
 import scala.collection.mutable
 import scala.concurrent.TimeoutException
 import scala.concurrent.duration._
+import scala.jdk.CollectionConverters._
 import scala.language.postfixOps
 import scala.util.{Failure, Success, Try}
 
@@ -50,7 +51,6 @@ trait YtDynTableUtils {
   }
 
   def pivotKeysYson(path: YPath)(implicit yt: CompoundClient): Seq[YTreeNode] = {
-    import scala.collection.JavaConverters._
     log.debug(s"Get pivot keys for $path")
     val res = yt.getTablePivotKeys(
         GetTablePivotKeys.builder().setPath(path.justPath().toString).setRepresentKeyAsList(true).build()
@@ -73,7 +73,6 @@ trait YtDynTableUtils {
   }
 
   def keyColumns(attr: YTreeNode): Seq[String] = {
-    import scala.collection.JavaConverters._
     attr.asList().asScala.map(_.stringValue())
   }
 
@@ -176,7 +175,6 @@ trait YtDynTableUtils {
 
   private def selectRowsRequest(query: String, path: String, transaction: Option[ApiServiceTransaction] = None)
     (implicit yt: CompoundClient): Seq[YTreeMapNode] = {
-    import scala.collection.JavaConverters._
     val request = SelectRowsRequest.of(query)
 
     waitState(path, TabletState.Mounted, 60 seconds)
@@ -205,7 +203,6 @@ trait YtDynTableUtils {
 
   def insertRows(path: String, schema: TableSchema, rows: Seq[Seq[Any]],
     parentTransaction: Option[ApiServiceTransaction] = None)(implicit yt: CompoundClient): Unit = {
-    import scala.collection.JavaConverters._
     processModifyRowsRequest(
       ModifyRowsRequest.builder()
         .setPath(formatPath(path))
@@ -295,7 +292,6 @@ trait YtDynTableUtils {
   }
 
   def reshardTable(path: String, schema: TableSchema, pivotKeys: Seq[Seq[Any]])(implicit yt: CompoundClient): Unit = {
-    import scala.collection.JavaConverters._
     val rawRequest = ReshardTable.builder()
       .setPath(YPath.simple(formatPath(path)))
       .setSchema(schema)

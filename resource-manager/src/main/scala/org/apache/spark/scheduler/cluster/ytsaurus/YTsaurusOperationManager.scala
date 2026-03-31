@@ -28,7 +28,7 @@ import java.net.URI
 import java.nio.file.Paths
 import java.time.Duration
 import java.util.{Locale, Properties}
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 import scala.collection.mutable
 import scala.concurrent.duration.DurationInt
 import scala.util.{Failure, Success, Try}

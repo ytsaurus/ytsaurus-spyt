@@ -18,6 +18,7 @@ import java.nio.ByteBuffer
 import java.nio.file.Paths
 import scala.annotation.tailrec
 import scala.concurrent.duration._
+import scala.jdk.CollectionConverters._
 import scala.language.postfixOps
 
 trait YtTableUtils {
@@ -49,7 +50,6 @@ trait YtTableUtils {
     ignoreExisting: Boolean)
     (implicit yt: CompoundClient): Unit = {
     log.debug(s"Create table: $path, transaction: $transaction")
-    import scala.collection.JavaConverters._
     val request = CreateNode.builder()
       .setPath(YPath.simple(formatPath(path)))
       .setType(CypressNodeType.TABLE)
@@ -169,7 +169,6 @@ trait YtTableUtils {
 
   def partitionTables(path: YPath, splitBytes: Long, enableCookies: Boolean = false)
     (implicit ytReadContext: YtReadContext): Seq[MultiTablePartition] = {
-    import scala.collection.JavaConverters._
 
     val request = PartitionTables.builder()
       .setPaths(java.util.List.of[YPath](path))

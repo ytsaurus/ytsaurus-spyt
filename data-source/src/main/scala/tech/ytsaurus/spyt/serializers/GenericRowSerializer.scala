@@ -14,6 +14,8 @@ import tech.ytsaurus.spyt.types.YTsaurusTypes
 import java.nio.charset.StandardCharsets
 import java.util.Base64
 
+import scala.jdk.CollectionConverters._
+
 class GenericRowSerializer(schema: StructType) {
   private val converter = new WriteSchemaConverter(typeV3Format = true)
 
@@ -147,12 +149,10 @@ class GenericRowSerializer(schema: StructType) {
   }
 
   def serializeRow(row: Row): UnversionedRow = {
-    import scala.collection.JavaConverters._
     new UnversionedRow((0 until row.length).map(i => serializeValue(row, i)).toList.asJava)
   }
 
   def serializeTable(rows: Array[Row]): Seq[Array[Byte]] = {
-    import scala.collection.JavaConverters._
     val writer = new WireProtocolWriter
     writer.writeMessage(serializeTableSchemaExt())
     writer.writeSchemafulRowset(rows.map(serializeRow).toList.asJava)

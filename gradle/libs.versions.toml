@@ -4,7 +4,6 @@
 [versions]
 scala-collection-compat = "2.7.0" # TODO: temporary dependency for backward compatibility before switching to scala 2.13 and Spark 4.x.x
 spark-compile = "3.5.8"
-livy = "0.8.0-incubating"
 ytsaurus-client = "1.2.14"
 circe = "0.12.3"
 circe-yaml = "0.12.0"
@@ -24,7 +23,6 @@ scala-collection-compat = { module = "org.scala-lang.modules:scala-collection-co
 
 spark-launcher = { module = "org.apache.spark:spark-launcher_2.12", version.ref = "spark-compile" }
 spark-connect = { module = "org.apache.spark:spark-connect_2.12", version.ref = "spark-compile" }
-livy = {module = "org.apache.livy:livy-assembly", version.ref = "livy" }
 ytsaurus-client = {module = "tech.ytsaurus:ytsaurus-client", version.ref = "ytsaurus-client"}
 
 circe-core = {module = "io.circe:circe-core_2.12", version.ref = "circe" }

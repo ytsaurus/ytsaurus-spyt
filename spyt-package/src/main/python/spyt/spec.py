@@ -38,9 +38,6 @@ class SparkDefaultArguments(object):
     SPARK_WORKER_LOG_TABLE_TTL = "7d"
     SPARK_WORKER_CORES_OVERHEAD = 0
     SPARK_WORKER_GPU_LIMIT = 0
-    LIVY_DRIVER_CORES = 1
-    LIVY_DRIVER_MEMORY = "1024m"
-    LIVY_MAX_SESSIONS = 3
 
     @staticmethod
     def get_params():
@@ -130,15 +127,6 @@ class HistoryServerConfig(NamedTuple):
     advanced_event_log: bool = False
 
 
-class LivyConfig(NamedTuple):
-    livy_driver_cores: int = SparkDefaultArguments.LIVY_DRIVER_CORES
-    livy_driver_memory: str = SparkDefaultArguments.LIVY_DRIVER_MEMORY
-    livy_max_sessions: int = SparkDefaultArguments.LIVY_MAX_SESSIONS
-    spark_master_address: str = None
-    master_group_id: str = None
-    network_project: str = None
-
-
 class CommonSpecParams(NamedTuple):
     spark_distributive: str
     java_home: str
@@ -218,56 +206,6 @@ def _create_file_and_layer_paths(config, enable_squashfs: bool, spark_distributi
 
     layer_paths += config["squashfs_layer_paths" if enable_squashfs else "layer_paths"]
     return file_paths, layer_paths
-
-
-def build_livy_spec(builder: VanillaSpecBuilder, common_params: CommonSpecParams, config: LivyConfig):
-    livy_launcher_opts = [
-        f"--driver-cores {config.livy_driver_cores}",
-        f"--driver-memory {config.livy_driver_memory}",
-        f"--max-sessions {config.livy_max_sessions}",
-    ]
-    enable_squashfs = common_params.config.enablers.enable_squashfs
-    if config.spark_master_address is not None:
-        livy_launcher_opts.append(f"--master-address {config.spark_master_address}")
-    if config.network_project is not None:
-        livy_launcher_opts.append(f"--network-project {config.network_project}")
-    if enable_squashfs:
-        livy_launcher_opts.append("--enable-squashfs")
-    extra_java_opts = common_params.extra_java_opts + spark_conf_to_opts(common_params.spark_conf)
-    livy_command = _launcher_command("Livy", common_params, additional_parameters=["--enable-livy"],
-                                     extra_java_opts=extra_java_opts, launcher_opts=" ".join(livy_launcher_opts))
-
-    livy_work_dir = "$HOME/{}/livy".format(common_params.config.container_home)
-    livy_environment = {
-        "LIVY_HOME": "/usr/lib/livy" if enable_squashfs else livy_work_dir,
-        "LIVY_WORK_DIR": livy_work_dir
-    }
-    _put_if_not_none(livy_environment, "SPARK_MASTER_DISCOVERY_GROUP_ID", config.master_group_id)
-    livy_environment = update(common_params.environment, livy_environment)
-
-    livy_layer_paths = []
-    livy_file_paths = copy.copy(common_params.task_spec["file_paths"])
-
-    if enable_squashfs:
-        livy_layer_paths.append("//home/spark/livy/livy.squashfs")
-    else:
-        livy_file_paths.append("//home/spark/livy/livy.tgz")
-
-    livy_layer_paths += common_params.task_spec["layer_paths"]
-
-    livy_task_spec = copy.deepcopy(common_params.task_spec)
-    livy_task_spec["environment"] = livy_environment
-    livy_task_spec["file_paths"] = livy_file_paths
-    livy_task_spec["layer_paths"] = livy_layer_paths
-
-    builder.begin_task("livy") \
-        .job_count(1) \
-        .command(livy_command) \
-        .memory_limit(parse_memory("1G") +
-                      parse_memory(config.livy_driver_memory) * config.livy_max_sessions) \
-        .cpu_limit(1 + config.livy_driver_cores * config.livy_max_sessions) \
-        .spec(livy_task_spec) \
-        .end_task()
 
 
 def build_hs_spec(builder: VanillaSpecBuilder, common_params: CommonSpecParams, config: HistoryServerConfig,
@@ -421,7 +359,7 @@ def build_worker_spec(builder: VanillaSpecBuilder, job_type: str,
 def build_spark_operation_spec(config: dict, client: YtClient,
                                job_types: List[str], common_config: CommonComponentConfig,
                                master_config: MasterConfig = None, worker_config: WorkerConfig = None,
-                               hs_config: HistoryServerConfig = None, livy_config: LivyConfig = None):
+                               hs_config: HistoryServerConfig = None):
     if job_types == [] or job_types is None:
         job_types = ['master', 'history', 'worker']
 
@@ -553,8 +491,6 @@ def build_spark_operation_spec(config: dict, client: YtClient,
         build_worker_spec(builder, "workers", common_params, worker_config)
     if "driver" in job_types:
         build_worker_spec(builder, "drivers", common_params, worker_config)
-    if "livy" in job_types:
-        build_livy_spec(builder, common_params, livy_config)
 
     return builder \
         .secure_vault(secure_vault) \

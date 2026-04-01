@@ -3,7 +3,7 @@ import requests
 
 
 def test_spyt_root_existence(yt_client):
-    assert_items_equal(yt_client.list("//home/spark"), ["conf", "distrib", "livy", "spyt"])
+    assert_items_equal(yt_client.list("//home/spark"), ["conf", "distrib", "spyt"])
 
 
 def test_cluster_startup(yt_client, spyt_cluster):

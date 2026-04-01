@@ -66,17 +66,6 @@ class DiscoveryServerService(client: DiscoveryClient, groupId: String,
 
   override def registerSHS(address: HostAndPort): Unit = ???
 
-  override def registerLivy(address: HostAndPort, livyVersion: String): Unit = {
-    val attributes: Map[String, YTreeNode] = Map(
-      urlAttr -> YTree.stringNode(address.toString),
-      versionAttr -> YTree.stringNode(livyVersion),
-    )
-    val memberInfo = new MemberInfo("livy", 0L, 0L, attributes.asJava)
-    sendHeartbeat(groupId, memberInfo)
-  }
-
-  override def updateLivy(address: HostAndPort, livyVersion: String): Unit = registerLivy(address, livyVersion)
-
   override def registerWorker(operationId: String): Unit = ???
 
   private def getMemberAddress(memberInfo: MemberInfo, attr: String): HostAndPort = {

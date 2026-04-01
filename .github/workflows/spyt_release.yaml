@@ -137,11 +137,6 @@ jobs:
     runs-on: ${{ needs.start-vm.outputs.label }}
     steps:
 
-      - name: Download Livy
-        run: |
-          cd spyt-package/build/output/
-          wget https://storage.yandexcloud.net/ytsaurus-spyt/livy.tgz
-
       - name: DockerHub login
         shell: bash
         run: |

@@ -6,7 +6,7 @@ require_yt_client()
 from yt.wrapper import YtClient  # noqa: E402
 from yt.wrapper.http_helpers import get_user_name  # noqa: E402
 from spyt.enabler import SpytEnablers  # noqa: E402
-from spyt.launch_utils import add_default_launch_options, add_hs_options, add_livy_options, add_parser_group  # noqa: E402
+from spyt.launch_utils import add_default_launch_options, add_hs_options, add_parser_group  # noqa: E402
 from spyt.spec import SparkDefaultArguments  # noqa: E402
 from spyt.standalone import start_spark_cluster  # noqa: E402
 from spyt.utils import default_token, get_default_arg_parser, parse_args, show_unspecified_args  # noqa: E402
@@ -93,10 +93,6 @@ def main(raw_args=None):
     subgroup.add_argument("--autoscaler-slot-increment-step", required=False,
                           type=int, help="autoscaler worker slots increment step")
 
-    subgroup = parser.add_argument_group("Livy server")
-    subgroup.add_argument('--enable-livy', action='store_true', default=False)
-    add_livy_options(subgroup)
-
     args, unknown_args = parse_args(parser, raw_args=raw_args)
     show_unspecified_args(unknown_args)
 
@@ -163,10 +159,6 @@ def main(raw_args=None):
                         autoscaler_sliding_window=args.autoscaler_sliding_window,
                         autoscaler_max_free_workers=args.autoscaler_max_free_workers,
                         autoscaler_slot_increment_step=args.autoscaler_slot_increment_step,
-                        enable_livy=args.enable_livy,
-                        livy_driver_cores=args.livy_driver_cores,
-                        livy_driver_memory=args.livy_driver_memory,
-                        livy_max_sessions=args.livy_max_sessions,
                         rpc_job_proxy=args.rpc_job_proxy,
                         rpc_job_proxy_thread_pool_size=args.rpc_job_proxy_thread_pool_size,
                         tcp_proxy_range_start=args.tcp_proxy_range_start,

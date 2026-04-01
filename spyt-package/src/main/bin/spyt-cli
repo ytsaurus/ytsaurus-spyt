@@ -31,7 +31,7 @@ def run(command, args):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('command', choices=['livy-launch', 'shs-launch', 'spark-discovery', 'spark-launch',
+    parser.add_argument('command', choices=['shs-launch', 'spark-discovery', 'spark-launch',
                                             'spark-manage', 'spark-shell', 'spark-submit'])
     args, unknown_args = parser.parse_known_args()
     run(args.command, unknown_args)

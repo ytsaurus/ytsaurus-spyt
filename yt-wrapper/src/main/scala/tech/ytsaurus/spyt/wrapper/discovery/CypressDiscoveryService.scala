@@ -36,8 +36,6 @@ class CypressDiscoveryService(baseDiscoveryPath: String)(implicit yt: CompoundCl
 
   private val shsPath: String = s"$discoveryPath/shs"
 
-  private val livyPath: String = s"$discoveryPath/livy"
-
   private val clusterVersionPath: String = s"$discoveryPath/version"
 
   private val confPath: String = s"$discoveryPath/conf"
@@ -116,10 +114,6 @@ class CypressDiscoveryService(baseDiscoveryPath: String)(implicit yt: CompoundCl
 
   override def registerSHS(address: HostAndPort): Unit = {
     registerSimpleService(shsPath, address)
-  }
-
-  override def registerLivy(address: HostAndPort, livyVersion: String): Unit = {
-    registerSimpleService(livyPath, address)
   }
 
   private def cypressHostAndPort(path: String): Try[HostAndPort] = {

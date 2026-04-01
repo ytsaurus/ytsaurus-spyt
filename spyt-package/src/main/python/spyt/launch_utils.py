@@ -47,14 +47,6 @@ def add_default_launch_options(parser):
     parser.add_argument('--cluster-java-home', required=False, type=str)
 
 
-def add_livy_options(parser):
-    parser.add_argument('--livy-driver-cores', required=False,
-                        default=SparkDefaultArguments.LIVY_DRIVER_CORES, type=int)
-    parser.add_argument('--livy-driver-memory', required=False, default=SparkDefaultArguments.LIVY_DRIVER_MEMORY)
-    parser.add_argument('--livy-max-sessions', required=False,
-                        default=SparkDefaultArguments.LIVY_MAX_SESSIONS, type=int)
-
-
 def add_hs_options(parser):
     parser.add_argument("--history-server-memory-limit",
                         required=False, default=SparkDefaultArguments.SPARK_HISTORY_SERVER_MEMORY_LIMIT)

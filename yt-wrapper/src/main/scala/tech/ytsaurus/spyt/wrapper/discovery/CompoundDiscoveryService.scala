@@ -23,12 +23,6 @@ class CompoundDiscoveryService(services: Seq[DiscoveryService]) extends Discover
 
   override def registerSHS(address: HostAndPort): Unit = services.foreach(_.registerSHS(address))
 
-  override def registerLivy(address: HostAndPort, livyVersion: String): Unit =
-    services.foreach(_.registerLivy(address, livyVersion))
-
-  override def updateLivy(address: HostAndPort, livyVersion: String): Unit =
-    services.foreach(_.updateLivy(address, livyVersion))
-
   override def registerWorker(operationId: String): Unit = services.foreach(_.registerWorker(operationId))
 
   override def discoverAddress(): Try[Address] = services.head.discoverAddress()

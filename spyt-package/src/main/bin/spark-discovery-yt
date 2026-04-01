@@ -22,7 +22,6 @@ def main(raw_args=None):
     for url in spark_cluster.children_operation_urls(client=client):
         print("+- operation: {}".format(url))
     print("Spark History Server: http://{}/".format(spark_cluster.shs_url))
-    print("Livy Server: http://{}/".format(spark_cluster.livy_url))
     print("SPYT Cluster version: {}".format(spark_cluster.spark_cluster_version))
 
 

@@ -1,6 +1,6 @@
 import spyt
 
-from common.cluster import DirectSubmitter, HistoryServer, LivyServer, SpytCluster, ReverseProxySpytCluster, direct_spark_session
+from common.cluster import DirectSubmitter, HistoryServer, SpytCluster, ReverseProxySpytCluster, direct_spark_session
 from common.cluster_utils import default_conf
 import logging
 import os
@@ -46,12 +46,6 @@ def reverse_proxy_spyt_cluster(request):
 @pytest.fixture(scope="function")
 def history_server():
     with HistoryServer(proxy=YT_PROXY) as server:
-        yield server
-
-
-@pytest.fixture(scope="function")
-def livy_server(request):
-    with LivyServer(proxy=YT_PROXY, master_address="ytsaurus://" + YT_PROXY, dump_dir=test_directory(request)) as server:
         yield server
 
 

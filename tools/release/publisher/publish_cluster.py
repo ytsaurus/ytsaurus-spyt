@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 import argparse
 from os import listdir
-from os.path import join
+from os.path import join, exists
 
 from .local_manager import Versions, get_release_level, load_versions, ReleaseLevel
 from .remote_manager import ClientBuilder, conf_remote_dir, PublishConfig, \
@@ -9,14 +9,6 @@ from .remote_manager import ClientBuilder, conf_remote_dir, PublishConfig, \
 from .utils import configure_logger
 
 logger = configure_logger("Cluster publisher")
-
-
-def upload_livy(uploader: Client, sources_path: str):
-    logger.info("Uploading Livy files")
-    uploader.mkdir("livy")
-    livy_tgz = join(sources_path, 'livy.tgz')
-    if not uploader.exists("livy/livy.tgz"):
-        uploader.write_file(livy_tgz, "livy/livy.tgz")
 
 
 def upload_spyt(uploader: Client, versions: Versions, sources_path: str, publish_conf: PublishConfig):
@@ -35,9 +27,10 @@ def upload_spyt(uploader: Client, versions: Versions, sources_path: str, publish
     spark_launch_conf_file = join(conf_local_dir, 'spark-launch-conf')
     uploader.write_document(spark_launch_conf_file, f"{conf_remote_dir(versions)}/spark-launch-conf")
     sidecar_configs_dir = join(conf_local_dir, 'sidecar_configs')
-    for config_name in listdir(sidecar_configs_dir):
-        sidecar_config_file = join(sidecar_configs_dir, config_name)
-        uploader.write_file(sidecar_config_file, f"{conf_remote_dir(versions)}/{config_name}")
+    if exists(sidecar_configs_dir):
+        for config_name in listdir(sidecar_configs_dir):
+            sidecar_config_file = join(sidecar_configs_dir, config_name)
+            uploader.write_file(sidecar_config_file, f"{conf_remote_dir(versions)}/{config_name}")
     if versions.spyt_version.release_type == "release":
         global_conf_file_name = publish_conf.specific_global_file or 'global'
         global_conf_file = join(conf_local_dir, global_conf_file_name)
@@ -55,8 +48,6 @@ def main(sources_path: str, uploader_builder: ClientBuilder, publish_conf: Publi
     versions = load_versions(sources_path)
     uploader = Client(uploader_builder)
     create_base_dirs(uploader, versions)
-    if publish_conf.include_livy:
-        upload_livy(uploader, sources_path)
     if release_level >= ReleaseLevel.SPYT:
         upload_spyt(uploader, versions, sources_path, publish_conf)
     logger.info("Publication finished successfully")
@@ -69,14 +60,11 @@ if __name__ == '__main__':
     parser.add_argument('--specific-global-file', type=str, default="", help='Specific global conf file name')
     parser.add_argument('--ignore-existing', action='store_true', dest='ignore_existing', help='Overwrite cluster files')
     parser.set_defaults(ignore_existing=False)
-    parser.add_argument('--include-livy', action='store_true', dest='include_livy', help='Include built Livy')
-    parser.set_defaults(include_livy=True)
     args, _ = parser.parse_known_args()
 
     publish_conf = PublishConfig(
         specific_global_file=args.specific_global_file,
         ignore_existing=args.ignore_existing,
-        include_livy=args.include_livy,
     )
     uploader_builder = ClientBuilder(
         root_path=args.root,

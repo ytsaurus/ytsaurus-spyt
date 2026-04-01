@@ -2,8 +2,7 @@ import spyt
 
 from spyt.client import spark_session
 from spyt.enabler import SpytEnablers
-from spyt.standalone import start_spark_cluster, SparkDefaultArguments, \
-    find_spark_cluster, start_livy_server, start_history_server
+from spyt.standalone import start_spark_cluster, SparkDefaultArguments, find_spark_cluster, start_history_server
 from spyt.submit import java_gateway, SparkSubmissionClient, direct_submit
 
 from .cluster_utils import DEFAULT_SPARK_CONF, default_conf, dump_debug_data, is_accessible
@@ -75,24 +74,19 @@ class ClusterBase(object):
 
 
 class SpytCluster(ClusterBase):
-    def __init__(self, proxy, discovery_path=None, group_id=None, java_home=None, yt_root_path=None, enable_livy=False,
-                 dump_dir=None):
+    def __init__(self, proxy, discovery_path=None, group_id=None, java_home=None, yt_root_path=None, dump_dir=None):
         super().__init__(proxy, discovery_path, group_id, yt_root_path, dump_dir)
         self.java_home = java_home
-        self.enable_livy = enable_livy
 
     def __enter__(self):
         self.op = start_spark_cluster(
             worker_cores=2, worker_memory='3G', worker_num=1, worker_cores_overhead=None, worker_memory_overhead='512M',
             operation_title='spark_cluster', discovery_path=self.discovery_path,
             master_memory_limit='3G', enable_history_server=False, params=self.get_params(), enable_tmpfs=False,
-            enablers=self.get_enablers(), client=self.yt_client, spark_cluster_version=VERSION,
-            enable_livy=self.enable_livy, livy_max_sessions=1, group_id=self.group_id)
+            enablers=self.get_enablers(), client=self.yt_client, spark_cluster_version=VERSION, group_id=self.group_id)
         if self.op is None:
             raise YtError("Cluster starting failed")
         cluster_info = find_spark_cluster(self.discovery_path, self.yt_client)
-        if self.enable_livy:
-            self.wait_component_startup('livy_url')
         logger.info(f"Master webUI: {cluster_info.master_web_ui_url}")
         return self
 
@@ -132,30 +126,6 @@ class ReverseProxySpytCluster(SpytCluster):
         spark_conf["spark.ui.reverseProxy"] = "true"
         spark_conf["spark.ui.reverseProxyUrl"] = "https://some-host/some-path/"
         return params
-
-
-class LivyServer(ClusterBase):
-    def __init__(self, proxy, discovery_path=None, group_id=None, yt_root_path=None, master_address=None,
-                 dump_dir=None):
-        super().__init__(proxy, discovery_path, group_id, yt_root_path, dump_dir)
-        self.master_address = master_address
-
-    def __enter__(self):
-        self.op = start_livy_server(
-            operation_title='livy_server', discovery_path=self.discovery_path,
-            params=self.get_params(),
-            enablers=self.get_enablers(), client=self.yt_client, spark_cluster_version=VERSION,
-            livy_max_sessions=1, spark_master_address=self.master_address, group_id=self.group_id)
-        if self.op is None:
-            raise YtError("Server starting failed")
-        self.wait_component_startup('livy_url')
-        return self
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        self.finish(exc_type, exc_val)
-
-    def rest(self):
-        return self.get_component_url('livy_url')
 
 
 @contextmanager

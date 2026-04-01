@@ -34,7 +34,6 @@ Homepage = "https://github.com/ytsaurus/ytsaurus/tree/main/yt/spark/spark-over-y
 [tool.setuptools]
 packages = ["spyt", "spyt.jars", "spyt.bin", "spyt.conf"]
 script-files = [
-    "deps/bin/livy-launch-yt",
     "deps/bin/shs-launch-yt",
     "deps/bin/spark-discovery-yt",
     "deps/bin/spark-launch-yt",

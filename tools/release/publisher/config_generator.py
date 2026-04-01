@@ -78,10 +78,12 @@ def get_file_paths(conf_local_dir: str, root_path: str, versions: Versions) -> L
         f"{root_path}/{spyt_remote_dir(versions)}/spyt-package.zip",
         f"{root_path}/{spyt_remote_dir(versions)}/setup-spyt-env.sh",
     ]
-    file_paths.extend([
-        f"{root_path}/{conf_remote_dir(versions)}/{config_name}"
-        for config_name in listdir(get_sidecar_configs_dir(conf_local_dir))
-    ])
+    sidecar_configs_dir = get_sidecar_configs_dir(conf_local_dir)
+    if os.path.exists(sidecar_configs_dir):
+        file_paths.extend([
+            f"{root_path}/{conf_remote_dir(versions)}/{config_name}"
+            for config_name in listdir(sidecar_configs_dir)
+        ])
     return file_paths
 
 
@@ -91,8 +93,9 @@ def prepare_sidecar_configs(conf_local_dir: str, os_release: bool):
         logger.info("Sidecar configs are already prepared")
     else:
         raw_sidecar_configs_dir = join(conf_local_dir, 'sidecar-config' if os_release else 'inner-sidecar-config')
-        shutil.copytree(raw_sidecar_configs_dir, sidecar_configs_dir)
-        logger.info(f"Sidecar configs have been copied from {raw_sidecar_configs_dir}")
+        if os.path.exists(raw_sidecar_configs_dir):
+            shutil.copytree(raw_sidecar_configs_dir, sidecar_configs_dir)
+            logger.info(f"Sidecar configs have been copied from {raw_sidecar_configs_dir}")
 
 
 def prepare_launch_config(conf_local_dir: str, client: Client, versions: Versions,

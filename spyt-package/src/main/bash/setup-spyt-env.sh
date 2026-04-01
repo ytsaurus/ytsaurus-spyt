@@ -14,10 +14,6 @@ while [[ $# -gt 0 ]]; do
       shift
       shift
       ;;
-    --enable-livy)
-      enable_livy=1
-      shift
-      ;;
     --use-squashfs)
       use_squashfs=1
       shift
@@ -54,10 +50,6 @@ if [ ! $use_squashfs ]; then
   unzip -o spyt-package.zip -d "$spark_home"
   javaagent_opt="-javaagent:$(ls $spyt_home/jars/*spyt-patch-agent*)"
   echo "$javaagent_opt" > $spyt_home/conf/java-opts
-
-  if [ $enable_livy ]; then
-    tar --warning=no-unknown-keyword -xf livy.tgz -C $spark_home
-  fi
 else
   spyt_home=$SPYT_HOME
 fi

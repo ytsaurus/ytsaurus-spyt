@@ -36,8 +36,6 @@ def dump_debug_data(dump_dir=None, op_id=None, yt_root_path=None, yt_client=None
         cluster = find_spark_cluster(discovery_path, yt_client)
         if cluster.master_web_ui_url:
             dump_html_page(dump_dir, cluster.master_web_ui_url, "spark_webui")
-        if cluster.livy_url:
-            dump_livy_logs(dump_dir, yt_root_path, cluster.livy_url)
 
 
 def get_data_path(dump_dir, relative_path, create_dir=False):
@@ -101,25 +99,6 @@ def dump_html_page(dump_dir, address, component):
         Path(dest_html_path, component + '.html').write_text(page_html)
     except Exception:
         logger.info(f"HTML page ({address}) is not available", exc_info=True)
-
-
-def dump_livy_logs(dump_dir, yt_root_path, livy_url):
-    if not livy_url:
-        logger.warn("Livy server is not defined, logs will not be saved")
-
-    dump_html_page(dump_dir, livy_url + "/ui", "livy_ui")
-
-    dump_runtime_files(dump_dir, yt_root_path, os.path.join("livy", "logs"), "livy", ignore_function=None)
-
-    dest_logs_path = get_data_path(dump_dir, "livy_session_logs", create_dir=True)
-    for i in range(5):
-        try:
-            response = requests.get(f"http://{livy_url}/sessions/{i}/log?size=-1")
-            if response.status_code == 200:
-                logs = response.json()['log']
-                Path(dest_logs_path, f'stderr_{i}').write_text('\n'.join(logs))
-        except Exception:
-            logger.debug(f"Error in getting logs for session#{i}", exc_info=True)
 
 
 def is_accessible(url):

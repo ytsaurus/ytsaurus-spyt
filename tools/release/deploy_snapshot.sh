@@ -49,5 +49,5 @@ trap 'rm -r $build_dir' EXIT
 
 cd "$script_dir"
 
-python3.12 -m publisher.config_generator build --inner-release
-python3.12 -m publisher.publish_cluster build
+python3 -m publisher.config_generator build --inner-release
+python3 -m publisher.publish_cluster build

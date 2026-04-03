@@ -24,6 +24,7 @@ dependencies {
     testImplementation(project(":spark-adapter-impl-330"))
     testImplementation(project(":spark-adapter-impl-340"))
     testImplementation(project(":spark-adapter-impl-350"))
+    testImplementation(project(":spark-adapter-provider"))
 }
 
 val generateBuildInfo = tasks.register<BuildInfoTask>("generateBuildInfo") {

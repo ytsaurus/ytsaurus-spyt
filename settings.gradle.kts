@@ -28,6 +28,9 @@ adapterSparkVersions.forEach { (version, vShort) ->
     project(":spark-adapter-impl-$vShort").projectDir = file("spark-adapter/impl/spark-$version")
 }
 
+include("spark-adapter-provider")
+project(":spark-adapter-provider").projectDir = file("spark-adapter/provider")
+
 include("yt-wrapper")
 
 include("file-system")

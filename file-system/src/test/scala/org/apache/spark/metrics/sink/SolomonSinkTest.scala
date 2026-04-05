@@ -9,15 +9,13 @@ import org.scalatest.funsuite.AnyFunSuite
 import org.scalatest.matchers.should.Matchers._
 import org.slf4j.{Logger, LoggerFactory}
 
-import java.nio.charset.Charset
 import java.util.Properties
 import java.util.concurrent.TimeUnit
 
 class SolomonSinkTest extends AnyFunSuite {
   val log: Logger = LoggerFactory.getLogger(this.getClass)
 
-  def body(req: Request): String = new String(req.body, Charset.defaultCharset)
-  def json(req: Request): Json = parser.parse(body(req)).right.get
+  def json(req: Request): Json = parser.parse(req.body).right.get
 
 
   def checkSink(prepareMetrics: MetricRegistry => Unit, extraProps: Map[String, String] = Map(), appAlias: String = "")
@@ -27,6 +25,7 @@ class SolomonSinkTest extends AnyFunSuite {
     prepareMetrics(registry)
     val props: Properties = new Properties()
     try {
+      server.assert(req => assert(json(req)))
       server.start()
       val port = server.port
       props.setProperty("solomon_port", port.toString)
@@ -34,7 +33,6 @@ class SolomonSinkTest extends AnyFunSuite {
       props.setProperty("app_alias", appAlias)
       extraProps.foreach(p => props.setProperty(p._1, p._2))
       val sink = SolomonSink(props, registry, null)
-      server.assert(req => assert(json(req)))
       sink.report()
       server.awaitResult().httpStatusCode should be(200)
     } finally {

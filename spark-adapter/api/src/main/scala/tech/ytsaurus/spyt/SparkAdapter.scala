@@ -85,7 +85,6 @@ object SparkAdapter {
     val provider = providerLoader.findFirst().orElseThrow()
     val adapter = provider.createSparkAdapter(SparkVersionUtils.currentVersion)
     log.debug(s"Runtime Spark version: ${SparkVersionUtils.currentVersion}, using ${adapter.getClass} adapter")
-    println(s"Runtime Spark version: ${SparkVersionUtils.currentVersion},  using ${adapter.getClass} adapter")
     adapter
   }
 }

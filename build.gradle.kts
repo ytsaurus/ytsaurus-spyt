@@ -54,6 +54,12 @@ subprojects {
         javaLauncher = javaToolchains.launcherFor {
             languageVersion = JavaLanguageVersion.of(testJdkVersion)
         }
+        debugOptions{
+            enabled = false
+            host = "*"
+            port = 5006
+            suspend = true
+        }
     }
 
     val isSnapshot: Boolean by extra

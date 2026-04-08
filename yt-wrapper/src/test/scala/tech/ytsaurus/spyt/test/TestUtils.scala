@@ -239,15 +239,4 @@ trait TestUtils {
         |}""".stripMargin
     ), path, ytSchema)
   }
-
-  /**
-   * A utility method than can be used in any test to pause test execution and investigate intermediate state.
-   * SPYT_TEST_CONSOLE env variable must be set to true in order to enable this functionality.
-   */
-  def pressAnyKey(): Unit = {
-    if (sys.env.get("SPYT_TEST_CONSOLE").exists(_.toBoolean)) {
-      println("Press any key to continue.....")
-      scala.io.StdIn.readLine()
-    }
-  }
 }

@@ -13,7 +13,11 @@ import tech.ytsaurus.spyt.wrapper.YtWrapper
 
 import scala.util.Random
 
-class YtPartitioningTest extends AnyFlatSpec with Matchers with LocalSpark with TmpDir with TestUtils with DynTableTestUtils {
+class YtDynamicPartitioningTest extends AnyFlatSpec with Matchers with LocalSpark with TmpDir with TestUtils
+  with DynTableTestUtils {
+
+  behavior of "YtDynamicPartitioningTest"
+
   import spark.implicits._
 
   private val atomicSchema = new TableSchema.Builder()
@@ -93,7 +97,9 @@ class YtPartitioningTest extends AnyFlatSpec with Matchers with LocalSpark with 
       val filtered = res.filter(res("a") <= 55 && res("a") > 10)
       filtered.collect() should contain theSameElementsAs data
         .filter { a => a <= 55 && a > 10 }
-        .map { Row(_) }
+        .map {
+          Row(_)
+        }
     }
   }
 

@@ -169,14 +169,21 @@ trait YtTableUtils {
   def partitionTables(path: YPath, splitBytes: Long, enableCookies: Boolean = false)
     (implicit ytReadContext: YtReadContext): Seq[MultiTablePartition] = {
 
-    val request = PartitionTables.builder()
+    val partitionSize = DataSize.fromBytes(splitBytes)
+
+    val builder = PartitionTables.builder()
       .setPaths(java.util.List.of[YPath](path))
       .setPartitionMode(PartitionTablesMode.Ordered)
-      .setDataWeightPerPartition(DataSize.fromBytes(splitBytes))
       .setOmitInaccessibleRows(ytReadContext.settings.omitInaccessibleRows)
       .setEnableCookies(enableCookies)
-      .build()
 
+    if (ytReadContext.settings.useCompressedSizeForPartitioning) {
+      builder.setCompressedDataSizePerPartition(partitionSize)
+    } else {
+      builder.setDataWeightPerPartition(partitionSize)
+    }
+
+    val request = builder.build()
     val result = ytReadContext.yt.partitionTables(request).join()
     result.asScala.toList
   }

@@ -6,6 +6,7 @@ package tech.ytsaurus.spyt.wrapper.table
 case class YtReadSettings(omitInaccessibleColumns: Boolean,
   omitInaccessibleRows: Boolean,
   distributedReadingEnabled: Boolean,
+  useCompressedSizeForPartitioning: Boolean,
   unordered: Boolean
 )
 
@@ -14,6 +15,7 @@ object YtReadSettings {
     omitInaccessibleColumns = true,
     omitInaccessibleRows = true,
     distributedReadingEnabled = false,
+    useCompressedSizeForPartitioning = true,
     unordered = true
   )
 }

@@ -4,7 +4,7 @@
 [versions]
 scala-collection-compat = "2.7.0" # TODO: temporary dependency for backward compatibility before switching to scala 2.13 and Spark 4.x.x
 spark-compile = "3.5.8"
-ytsaurus-client = "1.2.14"
+ytsaurus-client = "1.2.14-SNAPSHOT"
 circe = "0.12.3"
 circe-yaml = "0.12.0"
 scalding = "0.17.4"

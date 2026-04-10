@@ -94,7 +94,6 @@
   "data-source-extended/src/test/scala/tech/ytsaurus/spyt/streaming/YtStreamingSourceTest.scala":"yt/spark/spark-over-yt/data-source-extended/src/test/scala/tech/ytsaurus/spyt/streaming/YtStreamingSourceTest.scala",
   "data-source-extended/src/test/scala/tech/ytsaurus/spyt/streaming/YtTransactionalStreamingTest.scala":"yt/spark/spark-over-yt/data-source-extended/src/test/scala/tech/ytsaurus/spyt/streaming/YtTransactionalStreamingTest.scala",
   "data-source/build.gradle.kts":"yt/spark/spark-over-yt/data-source/build.gradle.kts",
-  "data-source/debian/changelog":"yt/spark/spark-over-yt/data-source/debian/changelog",
   "data-source/src/main/java/tech/ytsaurus/spyt/SparkAppJava.java":"yt/spark/spark-over-yt/data-source/src/main/java/tech/ytsaurus/spyt/SparkAppJava.java",
   "data-source/src/main/resources/META-INF/services/org.apache.spark.sql.sources.DataSourceRegister":"yt/spark/spark-over-yt/data-source/src/main/resources/META-INF/services/org.apache.spark.sql.sources.DataSourceRegister",
   "data-source/src/main/resources/META-INF/services/tech.ytsaurus.spyt.types.YTsaurusTypes":"yt/spark/spark-over-yt/data-source/src/main/resources/META-INF/services/tech.ytsaurus.spyt.types.YTsaurusTypes",

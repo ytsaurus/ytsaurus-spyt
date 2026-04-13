@@ -2,7 +2,7 @@ package org.apache.spark.deploy.master
 
 import org.apache.spark.deploy.DriverDescription
 import org.apache.spark.deploy.master.DriverState.DriverState
-import org.apache.spark.internal.Logging
+import tech.ytsaurus.spyt.logging.Logging
 import org.apache.spark.rpc.RpcEndpointRef
 import tech.ytsaurus.spyt.adapter.ClusterSupport.{instance => cs}
 import tech.ytsaurus.spyt.patch.annotations.{Decorate, DecoratedMethod, OriginClass}

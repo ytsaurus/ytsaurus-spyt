@@ -3,10 +3,11 @@ package org.apache.spark.deploy.worker
 import org.apache.spark.{SecurityManager, SparkConf}
 import org.apache.spark.deploy.worker.Worker.{ENDPOINT_NAME, SYSTEM_NAME, log, startRpcEnvAndEndpoint}
 import org.apache.spark.deploy.worker.ui.WorkerWebUI
-import org.apache.spark.internal.{Logging, config}
+import org.apache.spark.internal.config
 import org.apache.spark.internal.config.Worker.SPARK_WORKER_RESOURCE_FILE
 import org.apache.spark.rpc.{RpcAddress, RpcEnv}
 import org.apache.spark.util.{SparkUncaughtExceptionHandler, Utils}
+import tech.ytsaurus.spyt.logging.Logging
 import tech.ytsaurus.spark.launcher.AddressUtils
 
 class YtWorker(rpcEnv: RpcEnv,

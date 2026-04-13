@@ -23,7 +23,7 @@ import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.module.scala.DefaultScalaModule
 import com.fasterxml.jackson.module.scala.ScalaObjectMapper
 
-import org.apache.spark.internal.Logging
+import tech.ytsaurus.spyt.logging.Logging
 
 object AddressUtils extends Logging {
   def writeAddressToFile(name: String,

@@ -4,7 +4,7 @@ package org.apache.spark.scheduler.cluster.ytsaurus
 import org.apache.spark.deploy.ytsaurus.Config._
 import org.apache.spark.deploy.ytsaurus.YTsaurusUtils.isShell
 import org.apache.spark.deploy.ytsaurus.{ApplicationArguments, Config, YTsaurusUtils}
-import org.apache.spark.internal.Logging
+import tech.ytsaurus.spyt.logging.Logging
 import org.apache.spark.internal.config._
 import org.apache.spark.launcher.SparkLauncher
 import org.apache.spark.resource.ResourceProfile

@@ -2,7 +2,6 @@ package org.apache.spark.sql.v2
 
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
-import org.apache.spark.internal.Logging
 import org.apache.spark.sql.catalyst.expressions.Expression
 import org.apache.spark.sql.catalyst.expressions.codegen.GenerateUnsafeProjection
 import org.apache.spark.sql.connector.read.partitioning.Partitioning
@@ -35,7 +34,7 @@ case class YtScan(sparkSession: SparkSession,
                   dataFilters: Seq[Expression],
                   pushedFilterSegments: SegmentSet = SegmentSet(),
                   keyPartitionsHint: Option[Seq[FilePartition]] = None) extends FileScan
-  with SupportsReportPartitioning with Logging {
+  with SupportsReportPartitioning {
   private val filterPushdownConf = FilterPushdownConfig(sparkSession)
   private val keyPartitioningConf = KeyPartitioningConfig(sparkSession)
   private val pushedFiltersStr: String = pushedFilterSegments.toFilters.mkString("[", ", ", "]")

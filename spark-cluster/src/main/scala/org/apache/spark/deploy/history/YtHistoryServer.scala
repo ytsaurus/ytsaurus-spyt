@@ -1,7 +1,7 @@
 package org.apache.spark.deploy.history
 
 import org.apache.spark.deploy.history.HistoryServer.{createSecurityManager, initSecurity}
-import org.apache.spark.internal.Logging
+import tech.ytsaurus.spyt.logging.Logging
 import org.apache.spark.internal.config.{ConfigBuilder, History}
 import org.apache.spark.ui.JettyUtils
 import org.apache.spark.util.{ShutdownHookManager, Utils}

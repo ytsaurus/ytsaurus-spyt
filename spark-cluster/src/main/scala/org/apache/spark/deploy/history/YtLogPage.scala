@@ -2,7 +2,7 @@ package org.apache.spark.deploy.history
 
 import org.apache.spark.SparkConf
 import org.apache.spark.deploy.history.WorkerLogReader.getLogMeta
-import org.apache.spark.internal.Logging
+import tech.ytsaurus.spyt.logging.Logging
 import org.apache.spark.ui.{UIUtils, WebUIPage}
 import tech.ytsaurus.spyt.wrapper.YtWrapper
 import tech.ytsaurus.spyt.wrapper.client.{YtClientConfiguration, YtClientConfigurationConverter}

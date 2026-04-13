@@ -3,7 +3,7 @@ package org.apache.spark.sql.v2
 import org.apache.hadoop.mapreduce.{InputSplit, RecordReader, TaskAttemptContext}
 import org.apache.spark.TaskContext
 import org.apache.spark.broadcast.Broadcast
-import org.apache.spark.internal.Logging
+import tech.ytsaurus.spyt.logging.Logging
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.UnsafeProjection
 import org.apache.spark.sql.connector.read.{InputPartition, PartitionReader}

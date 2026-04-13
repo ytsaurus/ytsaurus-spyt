@@ -4,7 +4,7 @@ package org.apache.spark.scheduler.cluster.ytsaurus
 import org.apache.spark.SparkContext
 
 import org.apache.spark.deploy.ytsaurus.YTsaurusUtils
-import org.apache.spark.internal.Logging
+import tech.ytsaurus.spyt.logging.Logging
 import org.apache.spark.scheduler.{ExternalClusterManager, SchedulerBackend, TaskScheduler, TaskSchedulerImpl}
 
 private[spark] class YTsaurusClusterManager extends ExternalClusterManager with Logging {

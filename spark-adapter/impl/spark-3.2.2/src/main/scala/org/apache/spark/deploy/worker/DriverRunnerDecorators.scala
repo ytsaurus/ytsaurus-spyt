@@ -3,7 +3,7 @@ package org.apache.spark.deploy.worker
 import org.apache.spark.SparkConf
 import org.apache.spark.deploy.{DriverDescription, SparkHadoopUtil}
 import org.apache.spark.deploy.worker.DriverRunnerDecorators.addLocalPyFiles
-import org.apache.spark.internal.Logging
+import tech.ytsaurus.spyt.logging.Logging
 import org.apache.spark.internal.config.SUBMIT_PYTHON_FILES
 import org.apache.spark.util.Utils
 import tech.ytsaurus.spyt.patch.annotations.{Decorate, DecoratedMethod, OriginClass}

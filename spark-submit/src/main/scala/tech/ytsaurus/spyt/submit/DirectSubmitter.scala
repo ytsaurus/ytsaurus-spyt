@@ -2,7 +2,7 @@ package tech.ytsaurus.spyt.submit
 
 import org.apache.spark.deploy.ytsaurus.Config.{SUBMISSION_ID, YTSAURUS_DRIVER_WATCH}
 import org.apache.spark.deploy.ytsaurus.YTsaurusClusterApplication
-import org.apache.spark.internal.Logging
+import tech.ytsaurus.spyt.logging.Logging
 import org.apache.spark.launcher.{InProcessLauncher, SparkAppHandle}
 import tech.ytsaurus.spyt.wrapper.YtJavaConverters.toScalaDuration
 

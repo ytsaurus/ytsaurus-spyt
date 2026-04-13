@@ -3,7 +3,7 @@ package org.apache.spark.deploy.rest
 import org.apache.commons.io.FileUtils
 import org.apache.hadoop.fs.FileSystem
 import org.apache.spark.deploy.SparkHadoopUtil
-import org.apache.spark.internal.Logging
+import tech.ytsaurus.spyt.logging.Logging
 import org.apache.spark.{SparkConf, SparkException}
 import tech.ytsaurus.spyt.patch.annotations.{OriginClass, Subclass}
 

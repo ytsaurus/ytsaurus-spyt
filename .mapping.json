@@ -415,6 +415,7 @@
   "spark-adapter/api/src/main/scala/tech/ytsaurus/spyt/adapter/StreamingTransactionSupport.scala":"yt/spark/spark-over-yt/spark-adapter/api/src/main/scala/tech/ytsaurus/spyt/adapter/StreamingTransactionSupport.scala",
   "spark-adapter/api/src/main/scala/tech/ytsaurus/spyt/adapter/TypeSupport.scala":"yt/spark/spark-over-yt/spark-adapter/api/src/main/scala/tech/ytsaurus/spyt/adapter/TypeSupport.scala",
   "spark-adapter/api/src/main/scala/tech/ytsaurus/spyt/format/YtPartitioningSupport.scala":"yt/spark/spark-over-yt/spark-adapter/api/src/main/scala/tech/ytsaurus/spyt/format/YtPartitioningSupport.scala",
+  "spark-adapter/api/src/main/scala/tech/ytsaurus/spyt/logging/Logging.scala":"yt/spark/spark-over-yt/spark-adapter/api/src/main/scala/tech/ytsaurus/spyt/logging/Logging.scala",
   "spark-adapter/api/src/main/scala/tech/ytsaurus/spyt/types/UInt64Long.scala":"yt/spark/spark-over-yt/spark-adapter/api/src/main/scala/tech/ytsaurus/spyt/types/UInt64Long.scala",
   "spark-adapter/impl/base/build.gradle.kts":"yt/spark/spark-over-yt/spark-adapter/impl/base/build.gradle.kts",
   "spark-adapter/impl/spark-3.2.2/build.gradle.kts":"yt/spark/spark-over-yt/spark-adapter/impl/spark-3.2.2/build.gradle.kts",

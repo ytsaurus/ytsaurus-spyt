@@ -1,6 +1,6 @@
 package org.apache.spark.sql.catalyst.catalog
 
-import org.apache.spark.internal.Logging
+import tech.ytsaurus.spyt.logging.Logging
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.analysis.TableAlreadyExistsException
 import org.apache.spark.sql.errors.QueryCompilationErrors

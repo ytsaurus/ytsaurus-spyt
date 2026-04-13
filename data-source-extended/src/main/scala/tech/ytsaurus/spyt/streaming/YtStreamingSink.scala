@@ -1,7 +1,7 @@
 package tech.ytsaurus.spyt.streaming
 
 import org.apache.hadoop.fs.Path
-import org.apache.spark.internal.Logging
+import tech.ytsaurus.spyt.logging.Logging
 import org.apache.spark.sql.execution.streaming.Sink
 import org.apache.spark.sql.{DataFrame, SQLContext}
 import tech.ytsaurus.spyt.format.YtDynamicTableWriter

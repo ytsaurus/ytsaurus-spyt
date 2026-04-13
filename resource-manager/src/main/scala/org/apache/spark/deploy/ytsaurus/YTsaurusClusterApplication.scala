@@ -4,7 +4,7 @@ package org.apache.spark.deploy.ytsaurus
 import org.apache.spark.SparkConf
 import org.apache.spark.deploy.SparkApplication
 import org.apache.spark.deploy.ytsaurus.Config.{SUBMISSION_ID, YTSAURUS_DRIVER_OPERATION_DUMP_PATH, YTSAURUS_DRIVER_WATCH}
-import org.apache.spark.internal.Logging
+import tech.ytsaurus.spyt.logging.Logging
 import org.apache.spark.scheduler.cluster.ytsaurus.YTsaurusOperationManager
 import org.apache.spark.scheduler.cluster.ytsaurus.YTsaurusOperationManager.{getOperation, getOperationState, getWebUIAddress, isCompletedState}
 import tech.ytsaurus.spyt.wrapper.Utils.bashCommand

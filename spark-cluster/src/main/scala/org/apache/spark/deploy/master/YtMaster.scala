@@ -2,7 +2,7 @@ package org.apache.spark.deploy.master
 
 import org.apache.spark.deploy.master.Master.{ENDPOINT_NAME, SYSTEM_NAME}
 import org.apache.spark.deploy.master.ui.MasterWebUI
-import org.apache.spark.internal.Logging
+import tech.ytsaurus.spyt.logging.Logging
 import org.apache.spark.internal.config.{MASTER_REST_SERVER_PORT, MASTER_UI_PORT}
 import org.apache.spark.{SecurityManager, SparkConf}
 import org.apache.spark.rpc.{RpcAddress, RpcCallContext, RpcEnv}

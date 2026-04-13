@@ -1,7 +1,7 @@
 package org.apache.spark.sql.v2
 
 import org.apache.hadoop.mapreduce.Job
-import org.apache.spark.internal.Logging
+import tech.ytsaurus.spyt.logging.Logging
 import org.apache.spark.sql.connector.write.LogicalWriteInfo
 import org.apache.spark.sql.execution.datasources.v2.FileWrite
 import org.apache.spark.sql.execution.datasources.{OutputWriter, OutputWriterFactory}

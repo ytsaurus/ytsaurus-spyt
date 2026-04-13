@@ -1,7 +1,7 @@
 package org.apache.spark.shuffle.ytsaurus
 
 import org.apache.commons.codec.binary.Hex
-import org.apache.spark.internal.Logging
+import tech.ytsaurus.spyt.logging.Logging
 import org.apache.spark.internal.config.OptionalConfigEntry
 import org.apache.spark.io.CompressionCodec
 import org.apache.spark.network.buffer.ManagedBuffer

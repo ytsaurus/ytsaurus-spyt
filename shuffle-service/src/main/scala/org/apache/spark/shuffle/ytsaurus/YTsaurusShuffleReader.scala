@@ -1,6 +1,6 @@
 package org.apache.spark.shuffle.ytsaurus
 
-import org.apache.spark.internal.Logging
+import tech.ytsaurus.spyt.logging.Logging
 import org.apache.spark.{InterruptibleIterator, SparkEnv, TaskContext}
 import org.apache.spark.shuffle.{ShuffleReadMetricsReporter, ShuffleReader}
 import org.apache.spark.storage.ShuffleBlockId

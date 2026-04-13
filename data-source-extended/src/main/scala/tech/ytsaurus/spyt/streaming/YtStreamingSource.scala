@@ -1,6 +1,6 @@
 package tech.ytsaurus.spyt.streaming
 
-import org.apache.spark.internal.Logging
+import tech.ytsaurus.spyt.logging.Logging
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.connector.read.streaming
 import org.apache.spark.sql.connector.read.streaming.{CompositeReadLimit, ReadLimit, ReadMaxRows, SupportsAdmissionControl}

@@ -1,6 +1,5 @@
 package tech.ytsaurus.spyt.format.optimizer
 
-import org.apache.spark.internal.Logging
 import org.apache.spark.sql.catalyst.catalog.BucketSpec
 import org.apache.spark.sql.catalyst.expressions
 import org.apache.spark.sql.catalyst.expressions.{Attribute, AttributeReference, AttributeSet, EmptyRow, Expression, ExpressionSet, Literal, NamedExpression, SubqueryExpression}
@@ -13,7 +12,7 @@ import org.apache.spark.sql.{Strategy, execution}
 import org.apache.spark.util.collection.BitSet
 import tech.ytsaurus.spyt.SparkVersionUtils
 
-class YtSourceStrategy extends Strategy with Logging {
+class YtSourceStrategy extends Strategy {
 
   // should prune buckets iff num buckets is greater than 1 and there is only one bucket column
   private def shouldPruneBuckets(bucketSpec: Option[BucketSpec]): Boolean = {

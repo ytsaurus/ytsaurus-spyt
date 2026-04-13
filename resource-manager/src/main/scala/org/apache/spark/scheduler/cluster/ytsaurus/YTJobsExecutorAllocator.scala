@@ -2,7 +2,7 @@ package org.apache.spark.scheduler.cluster.ytsaurus
 
 import org.apache.spark.SparkConf
 import org.apache.spark.deploy.ytsaurus.Config
-import org.apache.spark.internal.Logging
+import tech.ytsaurus.spyt.logging.Logging
 import org.apache.spark.resource.ResourceProfile
 import org.apache.spark.scheduler.cluster.ytsaurus.YTsaurusOperationManager.patchOperation
 

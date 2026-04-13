@@ -2,11 +2,11 @@ package org.apache.spark.sql.catalyst.catalog
 
 import org.apache.hadoop.conf.Configuration
 import org.apache.spark.SparkConf
-import org.apache.spark.internal.Logging
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.analysis.NoSuchTableException
 import org.apache.spark.sql.types.StructType
 import tech.ytsaurus.client.CompoundClient
+import tech.ytsaurus.spyt.logging.Logging
 import tech.ytsaurus.spyt.wrapper.client.YtClientConfigurationConverter.ytClientConfiguration
 import tech.ytsaurus.spyt.fs.path.YPathEnriched
 import tech.ytsaurus.spyt.serializers.SchemaConverter.{Sorted, Unordered}

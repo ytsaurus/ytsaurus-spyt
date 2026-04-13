@@ -56,24 +56,32 @@ class YtSparkSQLTest extends AnyFlatSpec with Matchers with LocalSpark with TmpD
     spark.sessionState.catalog.invalidateAllCachedTables()
   }
 
+  private def createTestTable(path: String, optimizeFor: OptimizeMode): Unit = {
+    writeTableFromYson(Seq(
+      """{a = 1; b = "a"; c = 0.3}""",
+      """{a = 2; b = "b"; c = 0.5}""",
+      """{a = 3; b = "c"; c = 1.0}"""
+    ), path, atomicSchema, optimizeFor)
+  }
+
+  private val testRows = Seq(
+    Row(1, "a", 0.3),
+    Row(2, "b", 0.5),
+    Row(3, "c", 1.0)
+  )
+
   testWithDistributedReading("select rows using views") { _ =>
     YtWrapper.createDir(tmpPath)
     forAll(testModes) { optimizeFor =>
       val path = s"$tmpPath/${optimizeFor.name}"
-      writeTableFromYson(Seq(
-        """{a = 1; b = "a"; c = 0.3}""",
-        """{a = 2; b = "b"; c = 0.5}"""
-      ), path, atomicSchema, optimizeFor)
+      createTestTable(path, optimizeFor)
 
       val table = spark.read.yt(path)
       table.createOrReplaceTempView("table")
       val res = spark.sql(s"SELECT * FROM table")
 
       res.columns should contain theSameElementsAs Seq("a", "b", "c")
-      res.select("a", "b", "c").collect() should contain theSameElementsAs Seq(
-        Row(1, "a", 0.3),
-        Row(2, "b", 0.5)
-      )
+      res.select("a", "b", "c").collect() should contain theSameElementsAs testRows
     }
   }
 
@@ -81,26 +89,17 @@ class YtSparkSQLTest extends AnyFlatSpec with Matchers with LocalSpark with TmpD
     YtWrapper.createDir(tmpPath)
     forAll(testModes) { optimizeFor =>
       val path = s"$tmpPath/${optimizeFor.name}"
-      writeTableFromYson(Seq(
-        """{a = 1; b = "a"; c = 0.3}""",
-        """{a = 2; b = "b"; c = 0.5}"""
-      ), path, atomicSchema, optimizeFor)
+      createTestTable(path, optimizeFor)
 
       val res = spark.sql(s"SELECT * FROM yt.`ytTable:/$path`")
 
       res.columns should contain theSameElementsAs Seq("a", "b", "c")
-      res.select("a", "b", "c").collect() should contain theSameElementsAs Seq(
-        Row(1, "a", 0.3),
-        Row(2, "b", 0.5)
-      )
+      res.select("a", "b", "c").collect() should contain theSameElementsAs testRows
 
       val res2 = spark.sql(s"SELECT * FROM yt.`$path`")
 
       res2.columns should contain theSameElementsAs Seq("a", "b", "c")
-      res2.select("a", "b", "c").collect() should contain theSameElementsAs Seq(
-        Row(1, "a", 0.3),
-        Row(2, "b", 0.5)
-      )
+      res2.select("a", "b", "c").collect() should contain theSameElementsAs testRows
     }
   }
 
@@ -148,17 +147,77 @@ class YtSparkSQLTest extends AnyFlatSpec with Matchers with LocalSpark with TmpD
     YtWrapper.createDir(tmpPath)
     forAll(testModes) { optimizeFor =>
       val path = s"$tmpPath/${optimizeFor.name}"
-      writeTableFromYson(Seq(
-        """{a = 1; b = "a"; c = 0.3}""",
-        """{a = 2; b = "b"; c = 0.5}""",
-        """{a = 3; b = "c"; c = 1.0}"""
-      ), path, atomicSchema, optimizeFor)
+      createTestTable(path, optimizeFor)
 
       val res = spark.sql(s"SELECT * FROM yt.`ytTable:/$path` WHERE a > 1")
       res.collect() should contain theSameElementsAs Seq(
         Row(2, "b", 0.5),
         Row(3, "c", 1.0)
       )
+    }
+  }
+
+  testWithDistributedReading("correctly apply equality filters") { _ =>
+    YtWrapper.createDir(tmpPath)
+    forAll(testModes) { optimizeFor =>
+      val path = s"$tmpPath/${optimizeFor.name}"
+      createTestTable(path, optimizeFor)
+
+      val res = spark.sql(s"SELECT * FROM yt.`ytTable:/$path` WHERE a = 2")
+      res.collect() should contain theSameElementsAs Seq(Row(2, "b", 0.5))
+    }
+  }
+
+  testWithDistributedReading("correctly apply IN filters") { _ =>
+    YtWrapper.createDir(tmpPath)
+    forAll(testModes) { optimizeFor =>
+      val path = s"$tmpPath/${optimizeFor.name}"
+      createTestTable(path, optimizeFor)
+
+      val res = spark.sql(s"SELECT * FROM yt.`ytTable:/$path` WHERE a IN (1, 3)")
+      res.collect() should contain theSameElementsAs Seq(
+        Row(1, "a", 0.3),
+        Row(3, "c", 1.0)
+      )
+    }
+  }
+
+  testWithDistributedReading("correctly apply compound AND/OR filters") { _ =>
+    YtWrapper.createDir(tmpPath)
+    forAll(testModes) { optimizeFor =>
+      val path = s"$tmpPath/${optimizeFor.name}"
+      createTestTable(path, optimizeFor)
+
+      val res = spark.sql(s"SELECT * FROM yt.`ytTable:/$path` WHERE (a = 1 OR a = 3) AND c > 0.5")
+      res.collect() should contain theSameElementsAs Seq(Row(3, "c", 1.0))
+    }
+  }
+
+  testWithDistributedReading("correctly apply IS NULL filters") { _ =>
+    YtWrapper.createDir(tmpPath)
+    forAll(testModes) { optimizeFor =>
+      val path = s"$tmpPath/${optimizeFor.name}"
+      writeTableFromYson(Seq(
+        """{a = 1; b = "x"; c = 0.1}""",
+        """{a = 2; b = #; c = 0.2}"""
+      ), path, atomicSchema, optimizeFor)
+
+      val res = spark.sql(s"SELECT a FROM yt.`ytTable:/$path` WHERE b IS NULL")
+      res.collect() should contain theSameElementsAs Seq(Row(2))
+    }
+  }
+
+  testWithDistributedReading("correctly apply IS NOT NULL filters") { _ =>
+    YtWrapper.createDir(tmpPath)
+    forAll(testModes) { optimizeFor =>
+      val path = s"$tmpPath/${optimizeFor.name}"
+      writeTableFromYson(Seq(
+        """{a = 1; b = "x"; c = 0.1}""",
+        """{a = 2; b = #; c = 0.2}"""
+      ), path, atomicSchema, optimizeFor)
+
+      val res = spark.sql(s"SELECT a FROM yt.`ytTable:/$path` WHERE b IS NOT NULL")
+      res.collect() should contain theSameElementsAs Seq(Row(1))
     }
   }
 

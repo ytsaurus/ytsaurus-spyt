@@ -8,6 +8,7 @@ import org.scalatest.matchers.should.Matchers
 import tech.ytsaurus.core.tables.{ColumnSchema, ColumnValueType, TableSchema}
 import tech.ytsaurus.spyt.{YtReader, YtWriter}
 import tech.ytsaurus.spyt.test.{LocalSpark, TestUtils, TmpDir}
+import tech.ytsaurus.spyt.wrapper.YtWrapper
 
 import scala.jdk.CollectionConverters._
 
@@ -87,5 +88,25 @@ class ExtendedYtDistributedWriterTest extends AnyFlatSpec with TmpDir with Local
     )
 
     appendTestTemplate(_spark, columns, data)
+  }
+
+  it should "write custom options to attributes with append" in withSparkSession() { _spark =>
+    import _spark.implicits._
+
+    val sample = _spark.range(50).select(col("id"), concat(lit("id = "), col("id")).as("a"))
+
+    sample.write.option("attr_custom_string", "before_append").yt(tmpPath)
+
+    val toAppend = _spark.range(51, 100).select(col("id"), concat(lit("id = "), col("id")).as("a"))
+    toAppend.write
+      .option("attr_custom_string", "after_append")
+      .option("attr_new_attribute", 10)
+      .mode(SaveMode.Append)
+      .yt(tmpPath)
+
+    val outputPathAttributes = YtWrapper.attributes(tmpPath, None, Set.empty[String])
+
+    outputPathAttributes("new_attribute").intValue() shouldBe 10
+    outputPathAttributes("custom_string").stringValue() shouldBe "after_append"
   }
 }

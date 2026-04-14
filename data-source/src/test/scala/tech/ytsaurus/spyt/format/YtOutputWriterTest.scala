@@ -12,12 +12,14 @@ import tech.ytsaurus.client.ApiServiceTransaction
 import tech.ytsaurus.core.cypress.YPath
 import tech.ytsaurus.spyt._
 import tech.ytsaurus.spyt.format.conf.SparkYtWriteConfiguration
-import tech.ytsaurus.spyt.format.conf.YtTableSparkSettings.{SortColumns, SortOrders, UniqueKeys}
+import tech.ytsaurus.spyt.format.conf.YtTableSparkSettings.{CustomAttribute, SortColumns, SortOrders, UniqueKeys}
 import tech.ytsaurus.spyt.fs.path.YPathEnriched
 import tech.ytsaurus.spyt.serializers.SchemaConverter.{SortOption, Sorted, Unordered}
 import tech.ytsaurus.spyt.test.{LocalSpark, TmpDir}
 import tech.ytsaurus.spyt.wrapper.YtWrapper
 import tech.ytsaurus.spyt.wrapper.table.{YtReadContext, YtReadSettings}
+import org.apache.spark.sql.functions._
+import org.apache.spark.sql.SaveMode
 
 import java.time.temporal.ChronoUnit
 import java.time.{Duration, Instant, LocalDate}
@@ -97,6 +99,48 @@ class YtOutputWriterTest extends AnyFlatSpec with TmpDir with LocalSpark with Ma
       .collect()
 
     result should contain theSameElementsAs sampleData.map(_.nested)
+  }
+
+  it should "write custom options to attributes" in {
+    val sample = spark.range(100).select(col("id"), concat(lit("id = "), col("id")).as("a"))
+
+    sample.write.option("attr_custom_int", 10)
+      .option("attr_custom_boolean", "%false")
+      .option("attr_custom_yson", "{key1=1; key2=2}")
+      .option("attr_attr_string", "101-102")
+      .option("attr_", "value")
+      .option("attr_empty", "")
+      .option("attr_write_type_v3", value = true)
+      .yt(tmpPath)
+
+    val outputPathAttributes = YtWrapper.attributes(tmpPath, None, Set.empty[String])
+
+    outputPathAttributes("custom_int").intValue() shouldBe 10
+    outputPathAttributes("custom_boolean").boolValue() shouldBe false
+    outputPathAttributes("custom_yson").asMap()
+      .equals(java.util.Map.of("key1", CustomAttribute.get("1"), "key2", CustomAttribute.get("2"))) shouldBe true
+    outputPathAttributes("attr_string").stringValue() shouldBe "101-102"
+    outputPathAttributes.keySet.contains("empty") shouldBe false
+    outputPathAttributes.values.count(_.equals(CustomAttribute.get("value"))) shouldBe 0
+    outputPathAttributes.keySet.contains("write_type_v3") shouldBe false
+  }
+
+  it should "write custom options to attributes with append" in {
+    val sample = spark.range(50).select(col("id"), concat(lit("id = "), col("id")).as("a"))
+
+    sample.write.option("attr_custom_string", "before_append").yt(tmpPath)
+
+    val toAppend = spark.range(51, 100).select(col("id"), concat(lit("id = "), col("id")).as("a"))
+    toAppend.write
+      .option("attr_custom_string", "after_append")
+      .option("attr_new_attribute", 10)
+      .mode(SaveMode.Append)
+      .yt(tmpPath)
+
+    val outputPathAttributes = YtWrapper.attributes(tmpPath, None, Set.empty[String])
+
+    outputPathAttributes("new_attribute").intValue() shouldBe 10
+    outputPathAttributes("custom_string").stringValue() shouldBe "after_append"
   }
 
   def prepareWrite(path: String, sortOption: SortOption)

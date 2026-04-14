@@ -7,6 +7,7 @@ import tech.ytsaurus.spyt.serializers.YtLogicalTypeSerializer.{deserializeTypeV3
 import tech.ytsaurus.spyt.serializers.{SchemaConverter, WriteSchemaConverter, YtLogicalType}
 import tech.ytsaurus.spyt.wrapper.config.{ConfigEntry, _}
 import tech.ytsaurus.spyt.wrapper.table.YtTableSettings
+import tech.ytsaurus.yson.YsonError
 import tech.ytsaurus.ysontree.{YTreeNode, YTreeTextSerializer}
 
 case class YtTableSparkSettings(configuration: Configuration) extends YtTableSettings {
@@ -23,8 +24,10 @@ case class YtTableSparkSettings(configuration: Configuration) extends YtTableSet
 
   override def optionsAny: Map[String, Any] = {
     val optionsKeys = configuration.ytConf(Options)
-    optionsKeys.collect { case key if !Options.excludeOptions.contains(key) =>
-      key -> Options.get(key, configuration)
+    optionsKeys.map(key => (key, key.stripPrefix(CustomAttribute.name)))
+      .filter(key => !configuration.getYtConf(key._1).get.isBlank && key._2.nonEmpty)
+      .collect { case key if !Options.excludeOptions.contains(key._2) =>
+        key._2 -> Options.get(key._1, configuration)
     }.toMap
   }
 }
@@ -87,6 +90,8 @@ object YtTableSparkSettings {
 
   case object WriteTypeV3 extends ConfigEntry[Boolean]("write_type_v3", Some(false))
 
+  case object CustomAttribute extends ConfigEntry[YTreeNode]("attr_")
+
   case object StringToUtf8 extends ConfigEntry[Boolean]("string_to_utf8", Some(false))
 
   case object NullTypeAllowed extends ConfigEntry[Boolean]("null_type_allowed", Some(false))
@@ -97,16 +102,21 @@ object YtTableSparkSettings {
 
   case object Options extends ConfigEntry[Seq[String]]("options") {
 
-    private val transformOptions: Set[ConfigEntry[_]] = Set(Dynamic)
+    private val transformOptions: Set[ConfigEntry[_]] = Set(Dynamic, CustomAttribute)
 
     def get(key: String, configuration: Configuration): Any = {
       val str = configuration.getYtConf(key).get
       transformOptions.collectFirst {
-        case conf if conf.name == key => conf.get(str)
+        case conf if conf.name == key || conf.name == key.substring(0, CustomAttribute.name.length) => try {
+          conf.get(str)
+        } catch {
+          case _: YsonError => str
+        }
       }.getOrElse(str)
     }
 
-    val excludeOptions: Set[String] = Set(SortColumns, SortOrders, Schema, WriteTypeV3, NullTypeAllowed, Path, TableWriterConfig).map(_.name)
+    val excludeOptions: Set[String] = Set(SortColumns, SortOrders, Schema, WriteTypeV3, NullTypeAllowed, Path, TableWriterConfig).map(_.name) ++
+      Set("write_transaction", "__partition_columns", "write_schema_hint")
   }
 
   def isTable(configuration: Configuration): Boolean = {

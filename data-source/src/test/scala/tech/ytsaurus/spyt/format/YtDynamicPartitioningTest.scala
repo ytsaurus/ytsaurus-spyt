@@ -96,10 +96,8 @@ class YtDynamicPartitioningTest extends AnyFlatSpec with Matchers with LocalSpar
 
       val filtered = res.filter(res("a") <= 55 && res("a") > 10)
       filtered.collect() should contain theSameElementsAs data
-        .filter { a => a <= 55 && a > 10 }
-        .map {
-          Row(_)
-        }
+        .filter(a => a <= 55 && a > 10)
+        .map(Row(_))
     }
   }
 

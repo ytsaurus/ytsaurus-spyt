@@ -7,33 +7,34 @@ import org.apache.spark.sql.catalyst.{InternalRow, TableIdentifier}
 import org.apache.spark.sql.execution._
 import org.apache.spark.sql.execution.datasources._
 import org.apache.spark.sql.execution.metric.SQLMetric
+import org.apache.spark.sql.sources.Filter
 import org.apache.spark.sql.types.StructType
 import org.apache.spark.sql.v2.YtReaderOptions
 import org.apache.spark.sql.vectorized.{ColumnarBatch, YtFileFormat}
 import org.apache.spark.util.collection.BitSet
-import tech.ytsaurus.spyt.SparkAdapter
+import tech.ytsaurus.spyt.{SparkAdapter, SparkVersionUtils}
 import tech.ytsaurus.spyt.format.conf.{SparkYtInternalConfiguration, YtTableSparkSettings}
 import tech.ytsaurus.spyt.fs.YtHadoopPath
 import tech.ytsaurus.spyt.wrapper.table.OptimizeMode
 
 case class YtSourceScanExec(@transient relation: HadoopFsRelation,
-                            output: Seq[Attribute],
-                            requiredSchema: StructType,
-                            partitionFilters: Seq[Expression],
-                            optionalBucketSet: Option[BitSet],
-                            dataFilters: Seq[Expression],
-                            tableIdentifier: Option[TableIdentifier])
+  output: Seq[Attribute],
+  requiredSchema: StructType,
+  partitionFilters: Seq[Expression],
+  optionalBucketSet: Option[BitSet],
+  dataFilters: Seq[Expression],
+  tableIdentifier: Option[TableIdentifier])
   extends DataSourceScanExec {
 
   private lazy val optimizedForScan: Boolean = relation.fileFormat match {
     case _: YtFileFormat =>
       relation.location.asInstanceOf[InMemoryFileIndex]
         .allFiles().forall { fileStatus =>
-        YtHadoopPath.fromPath(fileStatus.getPath) match {
-          case yp: YtHadoopPath => !yp.meta.isDynamic && yp.meta.optimizeMode == OptimizeMode.Scan
-          case _ => false
+          YtHadoopPath.fromPath(fileStatus.getPath) match {
+            case yp: YtHadoopPath => !yp.meta.isDynamic && yp.meta.optimizeMode == OptimizeMode.Scan
+            case _ => false
+          }
         }
-      }
     case _ => false
   }
 
@@ -41,11 +42,11 @@ case class YtSourceScanExec(@transient relation: HadoopFsRelation,
     case _: YtFileFormat =>
       relation.location.asInstanceOf[InMemoryFileIndex]
         .allFiles().forall { fileStatus =>
-        YtHadoopPath.fromPath(fileStatus.getPath) match {
-          case yp: YtHadoopPath => yp.meta.fullReadAllowed
-          case _ => false
+          YtHadoopPath.fromPath(fileStatus.getPath) match {
+            case yp: YtHadoopPath => yp.meta.fullReadAllowed
+            case _ => false
+          }
         }
-      }
     case _ => false
   }
 
@@ -62,6 +63,8 @@ case class YtSourceScanExec(@transient relation: HadoopFsRelation,
   val maybeReadParallelism: Option[Int] = delegate.relation.options.get("readParallelism").map(_.toInt)
 
   override lazy val metadata: Map[String, String] = delegate.metadata
+
+  lazy val pushedDownFilters: Seq[Filter] = delegate.pushedDownFiltersInternal
 
   override def inputRDDs(): Seq[RDD[InternalRow]] = delegate.inputRDDs()
 
@@ -101,12 +104,12 @@ object YtSourceScanExec {
 }
 
 class FileSourceScanExecDelegate(relation: HadoopFsRelation,
-                                 output: Seq[Attribute],
-                                 requiredSchema: StructType,
-                                 partitionFilters: Seq[Expression],
-                                 optionalBucketSet: Option[BitSet],
-                                 dataFilters: Seq[Expression],
-                                 tableIdentifier: Option[TableIdentifier])
+  output: Seq[Attribute],
+  requiredSchema: StructType,
+  partitionFilters: Seq[Expression],
+  optionalBucketSet: Option[BitSet],
+  dataFilters: Seq[Expression],
+  tableIdentifier: Option[TableIdentifier])
   extends FileSourceScanExec(relation, output, requiredSchema, partitionFilters, optionalBucketSet,
     None, dataFilters, tableIdentifier) {
 
@@ -118,6 +121,18 @@ class FileSourceScanExecDelegate(relation: HadoopFsRelation,
       case f => f.supportBatch(relation.sparkSession, SparkAdapter.instance.fromAttributes(output))
     }
   }
+
+  @transient
+  private lazy val pushedDownFiltersMethod = {
+    val m = getClass.getSuperclass.getDeclaredMethod("pushedDownFilters")
+    m.setAccessible(true)
+    m
+  }
+
+  def pushedDownFiltersInternal: Seq[Filter] =
+    scala.util.Try {
+      pushedDownFiltersMethod.invoke(this).asInstanceOf[Seq[Filter]]
+    }.getOrElse(Seq.empty)
 
   def doExecuteInternal(): RDD[InternalRow] = this.doExecute()
   def doExecuteColumnarInternal(): RDD[ColumnarBatch] = this.doExecuteColumnar()

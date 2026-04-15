@@ -247,6 +247,29 @@ class YtSparkSQLTest extends AnyFlatSpec with Matchers with LocalSpark with TmpD
     }
   }
 
+  testWithDistributedReading("pushdown filters with direct SQL access") { _ =>
+
+    YtWrapper.createDir(tmpPath)
+    withConfs(Map(s"spark.yt.${SparkSettings.Read.KeyColumnsFilterPushdown.Enabled.name}" -> "true",
+      s"spark.yt.${SparkSettings.Read.YtPartitioningEnabled.name}" -> "true")
+    ) {
+      forAll(testModes) { optimizeFor =>
+        val path = s"$tmpPath/${optimizeFor.name}"
+
+        val data = (1L to 1000L).map(x => (x, x % 2))
+        val df = data.toDF("a", "b").repartition(2)
+        df.sort("a", "b").write.sortedBy("a", "b").yt(path)
+
+        val resDf = spark.sql(s"SELECT * FROM yt.`ytTable:/$path` WHERE a >= 49 AND a <= 50 AND b == 1")
+        val res = resDf.collect()
+        val expectedData = data.filter { case (a, b) => a >= 49 && a <= 50 && b == 1 }
+
+        scanOutputRows(resDf) should equal(2)
+        res should contain theSameElementsAs expectedData.map(Row.fromTuple)
+      }
+    }
+  }
+
   testWithDistributedReading("sort rows") { _ =>
     YtWrapper.createDir(tmpPath)
     forAll(testModes) { optimizeFor =>

@@ -74,15 +74,26 @@ class ClusterBase(object):
 
 
 class SpytCluster(ClusterBase):
-    def __init__(self, proxy, discovery_path=None, group_id=None, java_home=None, yt_root_path=None, dump_dir=None):
+
+    @staticmethod
+    def get_params(spark_conf={}):
+        params = ClusterBase.get_params()
+        if spark_conf != {}:
+            params["spark_conf"] = {}
+            for key, value in spark_conf.items():
+                params["spark_conf"][key] = value
+        return params
+
+    def __init__(self, proxy, discovery_path=None, group_id=None, java_home=None, yt_root_path=None, dump_dir=None, spark_conf=None):
         super().__init__(proxy, discovery_path, group_id, yt_root_path, dump_dir)
         self.java_home = java_home
+        self.spark_conf = spark_conf or {}
 
     def __enter__(self):
         self.op = start_spark_cluster(
             worker_cores=2, worker_memory='3G', worker_num=1, worker_cores_overhead=None, worker_memory_overhead='512M',
             operation_title='spark_cluster', discovery_path=self.discovery_path,
-            master_memory_limit='3G', enable_history_server=False, params=self.get_params(), enable_tmpfs=False,
+            master_memory_limit='3G', enable_history_server=False, params=self.get_params(self.spark_conf), enable_tmpfs=False,
             enablers=self.get_enablers(), client=self.yt_client, spark_cluster_version=VERSION, group_id=self.group_id)
         if self.op is None:
             raise YtError("Cluster starting failed")
@@ -120,7 +131,7 @@ class SpytCluster(ClusterBase):
 
 class ReverseProxySpytCluster(SpytCluster):
     @staticmethod
-    def get_params():
+    def get_params(spark_conf={}):
         params = SpytCluster.get_params()
         spark_conf = params.setdefault("spark_conf", {})
         spark_conf["spark.ui.reverseProxy"] = "true"

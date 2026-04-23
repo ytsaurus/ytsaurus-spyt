@@ -66,12 +66,27 @@ case class SolomonReporter(registry: MetricRegistry, solomonConfig: SolomonConfi
 object SolomonReporter {
   private val STARTUP_THRESHOLD: Duration = Duration.ofMinutes(1)
 
-  def tryCreateSolomonReporter(registry: MetricRegistry, solomonConfig: SolomonConfig,
-            reporterConfig: ReporterConfig): Try[SolomonReporter] = {
+  def tryCreateSolomonReporter(registry: MetricRegistry, solomonConfig: SolomonConfig, reporterConfig: ReporterConfig,
+                               envAccessor: EnvAccessor = SystemEnvAccessor): Try[SolomonReporter] = {
     if (reporterConfig.enabled) {
-      Success(SolomonReporter(registry, solomonConfig, reporterConfig))
+      val isSparkApp = envAccessor.getEnv("YT_TASK_NAME") match { case Some("driver") | Some("executor") => true
+        case _ => false
+      }
+      if(isSparkApp && !solomonConfig.commonLabels.keySet.contains(SolomonSinkSettings.SolomonJobLabel.name)) {
+        Failure(new RuntimeException("Failed to start metrics reporting: app_alias option wasn't defined"))
+      } else {
+        Success(SolomonReporter(registry, solomonConfig, reporterConfig))
+      }
     } else {
       Failure(new RuntimeException("Solomon reporter is disabled"))
     }
   }
+}
+
+trait EnvAccessor {
+  def getEnv(key: String): Option[String]
+}
+
+object SystemEnvAccessor extends EnvAccessor {
+  override def getEnv(key: String): Option[String] = Option(System.getenv(key))
 }

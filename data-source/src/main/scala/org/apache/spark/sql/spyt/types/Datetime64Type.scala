@@ -3,8 +3,6 @@ package org.apache.spark.sql.spyt.types
 import org.apache.spark.sql.AnalysisException
 import org.apache.spark.sql.spyt.types.Datetime64.{MAX_DATETIME64, MIN_DATETIME64}
 import org.apache.spark.sql.types.{DataType, LongType, SQLUserDefinedType, UserDefinedType}
-import org.json4s.JsonAST.JValue
-import org.json4s.JsonDSL._
 import tech.ytsaurus.spyt.common.utils.DateTimeTypesConverter.{localDateTimeToSeconds, longToDatetime, toLocalDatetime}
 
 import java.time.LocalDateTime
@@ -39,13 +37,6 @@ class Datetime64Type extends UserDefinedType[Datetime64] {
   }
 
   override def userClass: Class[Datetime64] = classOf[Datetime64]
-
-  override private[sql] def jsonValue: JValue = {
-    ("type" -> "udt") ~
-      ("pyClass" -> pyUDT) ~
-      ("serializedClass" -> serializedPyClass) ~
-      ("sqlType" -> sqlType.jsonValue)
-  }
 
   override def catalogString: String = "datetime64"
 }

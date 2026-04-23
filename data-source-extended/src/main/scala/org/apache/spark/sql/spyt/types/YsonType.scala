@@ -3,8 +3,6 @@ package org.apache.spark.sql.spyt.types
 import org.apache.spark.sql.catalyst.expressions.codegen.Block.BlockHelper
 import org.apache.spark.sql.catalyst.expressions.codegen.{Block, ExprValue}
 import org.apache.spark.sql.types._
-import org.json4s.JsonAST.JValue
-import org.json4s.JsonDSL._
 import tech.ytsaurus.spyt.serialization.{IndexedDataType, YsonDecoder}
 
 class YsonType extends UserDefinedType[YsonBinary] {
@@ -21,13 +19,6 @@ class YsonType extends UserDefinedType[YsonBinary] {
   }
 
   override def userClass: Class[YsonBinary] = classOf[YsonBinary]
-
-  override private[sql] def jsonValue: JValue = {
-    ("type" -> "udt") ~
-      ("pyClass" -> pyUDT) ~
-      ("serializedClass" -> serializedPyClass) ~
-      ("sqlType" -> sqlType.jsonValue)
-  }
 
   override def catalogString: String = "yson"
 

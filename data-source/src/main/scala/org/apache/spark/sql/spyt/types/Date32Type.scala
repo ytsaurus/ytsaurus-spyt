@@ -3,8 +3,6 @@ package org.apache.spark.sql.spyt.types
 import org.apache.spark.sql.AnalysisException
 import org.apache.spark.sql.spyt.types.Date32.{MAX_DATE32, MIN_DATE32}
 import org.apache.spark.sql.types.{DataType, IntegerType, SQLUserDefinedType, UserDefinedType}
-import org.json4s.JsonAST.JValue
-import org.json4s.JsonDSL._
 import tech.ytsaurus.spyt.common.utils.DateTimeTypesConverter.dateToLong
 
 import java.time.LocalDate
@@ -37,13 +35,6 @@ class Date32Type extends UserDefinedType[Date32] {
   }
 
   override def userClass: Class[Date32] = classOf[Date32]
-
-  override private[sql] def jsonValue: JValue = {
-    ("type" -> "udt") ~
-      ("pyClass" -> pyUDT) ~
-      ("serializedClass" -> serializedPyClass) ~
-      ("sqlType" -> sqlType.jsonValue)
-  }
 
   override def catalogString: String = "date32"
 }

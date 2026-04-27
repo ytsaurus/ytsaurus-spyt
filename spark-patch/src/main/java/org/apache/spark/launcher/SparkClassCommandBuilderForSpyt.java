@@ -14,7 +14,6 @@ public class SparkClassCommandBuilderForSpyt extends SparkClassCommandBuilder {
 
     private static final Map<String, String> DAEMON_SUBSTITUTES = Map.of(
             "org.apache.spark.deploy.master.YtMaster", "org.apache.spark.deploy.master.Master",
-            "org.apache.spark.deploy.worker.YtWorker", "org.apache.spark.deploy.worker.Worker",
             "org.apache.spark.deploy.history.YtHistoryServer", "org.apache.spark.deploy.history.HistoryServer"
     );
 

@@ -4,7 +4,6 @@ import io.circe.generic.auto._
 import io.circe.parser._
 import org.apache.spark.deploy.history.YtHistoryServer
 import org.apache.spark.deploy.master.YtMaster
-import org.apache.spark.deploy.worker.YtWorker
 import org.slf4j.{Logger, LoggerFactory}
 import tech.ytsaurus.client.CompoundClient
 import tech.ytsaurus.spark.launcher.Service.{BasicService, MasterService}
@@ -12,11 +11,10 @@ import tech.ytsaurus.spyt.wrapper.Utils.{bashCommand, parseDuration, ytHostnameO
 import tech.ytsaurus.spyt.wrapper.YtWrapper
 import tech.ytsaurus.spyt.wrapper.client.{YtClientConfiguration, YtClientProvider}
 import tech.ytsaurus.spyt.wrapper.discovery._
-import tech.ytsaurus.spyt.{HostAndPort, SparkAdapter, SparkVersionUtils}
+import tech.ytsaurus.spyt.HostAndPort
 
 import java.io.File
 import java.net.URI
-import java.nio.file.{Files, Path}
 import java.time.Duration
 import scala.annotation.tailrec
 import scala.collection.mutable.ArrayBuffer
@@ -29,7 +27,7 @@ trait SparkLauncher {
 
   private val log = LoggerFactory.getLogger(getClass)
   private val masterClass = classOf[YtMaster].getName
-  private val workerClass = classOf[YtWorker].getName
+  private val workerClass = "org.apache.spark.deploy.worker.Worker"
   private val historyServerClass = classOf[YtHistoryServer].getName
   private val commonJavaOpts = configureJavaOptions()
 

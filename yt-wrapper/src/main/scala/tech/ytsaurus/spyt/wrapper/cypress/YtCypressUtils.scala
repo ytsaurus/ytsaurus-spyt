@@ -1,16 +1,17 @@
 package tech.ytsaurus.spyt.wrapper.cypress
 
 import org.slf4j.LoggerFactory
-import tech.ytsaurus.spyt.wrapper.YtWrapper
-import tech.ytsaurus.spyt.wrapper.YtWrapper.RichLogger
-import tech.ytsaurus.spyt.wrapper.transaction.YtTransactionUtils
 import tech.ytsaurus.client.CompoundClient
 import tech.ytsaurus.client.request._
 import tech.ytsaurus.core.GUID
 import tech.ytsaurus.core.cypress.{CypressNodeType, YPath}
 import tech.ytsaurus.core.request.LockMode
+import tech.ytsaurus.spyt.wrapper.YtWrapper
+import tech.ytsaurus.spyt.wrapper.YtWrapper.RichLogger
+import tech.ytsaurus.spyt.wrapper.transaction.YtTransactionUtils
 import tech.ytsaurus.ysontree.{YTree, YTreeNode}
 
+import java.util.concurrent.CompletableFuture
 import scala.annotation.tailrec
 import scala.jdk.CollectionConverters._
 import scala.util.control.NonFatal
@@ -290,15 +291,10 @@ trait YtCypressUtils {
     yt.concatenateNodes(request).join()
   }
 
-  def lockNode(path: String, transaction: String, mode: LockMode)
-              (implicit yt: CompoundClient): String = {
-    lockNode(YPath.simple(formatPath(path)), transaction, mode)
-  }
-
-  def lockNode(path: YPath, transaction: String, mode: LockMode = LockMode.Snapshot)
-              (implicit yt: CompoundClient): String = {
-    val request = LockNode.builder().setPath(path).setMode(mode).optionalTransaction(Some(transaction)).build()
-    yt.lockNode(request).join().nodeId.toString
+  def lockNodeAsync(path: YPath, transaction: String, mode: LockMode = LockMode.Snapshot)
+    (implicit yt: CompoundClient): CompletableFuture[String] = {
+    val req = LockNode.builder().setPath(path).setMode(mode).optionalTransaction(Some(transaction)).build()
+    yt.lockNode(req).thenApply(_.nodeId.toString)
   }
 
   def lockCount(path: String)(implicit yt: CompoundClient): Long = {

@@ -1,9 +1,9 @@
 package tech.ytsaurus.spark.launcher
 
-import com.twitter.scalding.Args
 import org.slf4j.LoggerFactory
 import tech.ytsaurus.client.CompoundClient
 import tech.ytsaurus.spark.launcher.WorkerLogLauncher.WorkerLogConfig
+import tech.ytsaurus.spyt.args.Args
 import tech.ytsaurus.spyt.wrapper.Utils.parseDuration
 import tech.ytsaurus.spyt.wrapper.model.WorkerLogBlock
 import tech.ytsaurus.spyt.wrapper.model.WorkerLogSchema.{getMetaPath, metaSchema}

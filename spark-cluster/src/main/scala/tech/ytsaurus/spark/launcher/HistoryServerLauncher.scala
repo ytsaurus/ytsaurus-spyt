@@ -1,7 +1,7 @@
 package tech.ytsaurus.spark.launcher
 
-import com.twitter.scalding.Args
 import org.slf4j.LoggerFactory
+import tech.ytsaurus.spyt.args.Args
 import tech.ytsaurus.spyt.wrapper.TcpProxyService
 import tech.ytsaurus.spyt.wrapper.TcpProxyService.updateTcpAddress
 import tech.ytsaurus.spyt.wrapper.client.YtClientConfiguration

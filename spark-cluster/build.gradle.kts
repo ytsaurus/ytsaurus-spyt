@@ -5,7 +5,6 @@ plugins {
 
 dependencies {
     api(project(":data-source-extended"))
-    api(libs.scalding.args)
 
     implementation(project(":spyt-connect"))
 

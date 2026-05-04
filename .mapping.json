@@ -549,6 +549,7 @@
   "spark-cluster/src/main/scala/tech/ytsaurus/spark/launcher/WorkerLogWriter.scala":"yt/spark/spark-over-yt/spark-cluster/src/main/scala/tech/ytsaurus/spark/launcher/WorkerLogWriter.scala",
   "spark-cluster/src/main/scala/tech/ytsaurus/spark/launcher/rest/AppStatusesRestClient.scala":"yt/spark/spark-over-yt/spark-cluster/src/main/scala/tech/ytsaurus/spark/launcher/rest/AppStatusesRestClient.scala",
   "spark-cluster/src/main/scala/tech/ytsaurus/spyt/adapter/YTsaurusClusterSupport.scala":"yt/spark/spark-over-yt/spark-cluster/src/main/scala/tech/ytsaurus/spyt/adapter/YTsaurusClusterSupport.scala",
+  "spark-cluster/src/main/scala/tech/ytsaurus/spyt/args/Args.scala":"yt/spark/spark-over-yt/spark-cluster/src/main/scala/tech/ytsaurus/spyt/args/Args.scala",
   "spark-cluster/src/main/scala/tech/ytsaurus/spyt/launcher/DeployMessages.scala":"yt/spark/spark-over-yt/spark-cluster/src/main/scala/tech/ytsaurus/spyt/launcher/DeployMessages.scala",
   "spark-cluster/src/test/resources/log4j.properties":"yt/spark/spark-over-yt/spark-cluster/src/test/resources/log4j.properties",
   "spark-cluster/src/test/scala/org/apache/spark/deploy/history/FsHistoryProviderTest.scala":"yt/spark/spark-over-yt/spark-cluster/src/test/scala/org/apache/spark/deploy/history/FsHistoryProviderTest.scala",

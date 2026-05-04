@@ -1,13 +1,13 @@
 package tech.ytsaurus.spark.launcher
 
 import com.codahale.metrics.MetricRegistry
-import com.twitter.scalding.Args
 import org.slf4j.LoggerFactory
 import tech.ytsaurus.client.CompoundClient
 import tech.ytsaurus.spark.launcher.AdditionalMetricsSender.startAdditionalMetricsSenderIfDefined
 import tech.ytsaurus.spark.launcher.Service.LocalService
 import tech.ytsaurus.spark.launcher.WorkerLogLauncher.WorkerLogConfig
 import tech.ytsaurus.spark.metrics.AdditionalMetrics
+import tech.ytsaurus.spyt.args.Args
 import tech.ytsaurus.spyt.wrapper.Utils.parseDuration
 import tech.ytsaurus.spyt.wrapper.client.YtClientConfiguration
 import tech.ytsaurus.spyt.wrapper.discovery.DiscoveryService

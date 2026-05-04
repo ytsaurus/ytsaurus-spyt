@@ -1,12 +1,11 @@
 package tech.ytsaurus.spark.launcher
 
-import com.twitter.scalding.Args
 import org.slf4j.LoggerFactory
-import Service.BasicService
+import tech.ytsaurus.spark.launcher.Service.BasicService
+import tech.ytsaurus.spyt.args.Args
 import tech.ytsaurus.spyt.wrapper.Utils.parseDuration
 import tech.ytsaurus.spyt.wrapper.client.YtClientConfiguration
 import tech.ytsaurus.spyt.wrapper.discovery.DiscoveryService
-import tech.ytsaurus.spark.launcher.Service.BasicService
 import tech.ytsaurus.spyt.HostAndPort
 
 import java.io.File

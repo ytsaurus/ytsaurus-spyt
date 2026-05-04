@@ -7,7 +7,6 @@ spark-compile = "3.5.8"
 ytsaurus-client = "1.2.15"
 circe = "0.12.3"
 circe-yaml = "0.12.0"
-scalding = "0.17.4"
 jsonevent-layout = "1.7"
 shapeless = "2.3.7"
 sttp = "2.1.4"
@@ -29,7 +28,6 @@ circe-core = {module = "io.circe:circe-core_2.12", version.ref = "circe" }
 circe-generic = {module = "io.circe:circe-generic_2.12", version.ref = "circe" }
 circe-parser = {module = "io.circe:circe-parser_2.12", version.ref = "circe" }
 circe-yaml = {module = "io.circe:circe-yaml_2.12", version.ref = "circe-yaml" }
-scalding-args = {module = "com.twitter:scalding-args_2.12", version.ref = "scalding" }
 jsonevent-layout = { module = "net.logstash.log4j:jsonevent-layout", version.ref = "jsonevent-layout" }
 shapeless = { module = "com.chuusai:shapeless_2.12", version.ref = "shapeless" }
 sttp = {module = "com.softwaremill.sttp.client:core_2.12", version.ref = "sttp" }

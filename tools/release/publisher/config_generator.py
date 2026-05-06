@@ -122,7 +122,6 @@ def prepare_launch_config(conf_local_dir: str, client: Client, versions: Version
             client.resolve_from_root("delta/python/layer_with_python313_jammy_v002.tar.gz"),
             client.resolve_from_root("delta/python/layer_with_python312_jammy_v002.tar.gz"),
             client.resolve_from_root("delta/python/layer_with_python311_jammy_v001.tar.gz"),
-            client.resolve_from_root("delta/python/layer_with_python39_jammy_v001.tar.gz"),
             "//porto_layers/base/jammy/porto_layer_search_ubuntu_jammy_app_lastest.tar.gz"
         ]
         launch_config['squashfs_layer_paths'] = [
@@ -131,7 +130,6 @@ def prepare_launch_config(conf_local_dir: str, client: Client, versions: Version
             client.resolve_from_root("squashfs/python/layer_with_python313_jammy_v002.squashfs"),
             client.resolve_from_root("squashfs/python/layer_with_python312_jammy_v002.squashfs"),
             client.resolve_from_root("squashfs/python/layer_with_python311_jammy_v001.squashfs"),
-            client.resolve_from_root("squashfs/python/layer_with_python39_jammy_v001.squashfs"),
             "//porto_layers/base/jammy/porto_layer_search_ubuntu_jammy_app_lastest.tar.gz"
         ]
     else:
@@ -147,16 +145,10 @@ def prepare_global_config(os_release: bool) -> Dict[str, Any]:
     global_config['latest_spyt_version'] = "1.76.1"
     global_config['latest_spark_cluster_version'] = "1.75.4"
     if not os_release:
-        # is preserved for backward compatibility and is subject to remove
         python_cluster_paths = {
             "3.11": "/opt/python3.11/bin/python3.11",
             "3.12": "/opt/python3.12/bin/python3.12",
-            "3.9": "/opt/python3.9/bin/python3.9",
-            "3.8": "/opt/python3.8/bin/python3.8",
-            "3.7": "/opt/python3.7/bin/python3.7",
-            "3.5": "python3.5",
-            "3.4": "/opt/python3.4/bin/python3.4",
-            "2.7": "python2.7"
+            "3.13": "/opt/python3.13/bin/python3.13"
         }
         global_config['default_cluster_java_home'] = '/opt/jdk11'
         global_config['environment']['SPARK_PREFER_IPV6'] = 'true'

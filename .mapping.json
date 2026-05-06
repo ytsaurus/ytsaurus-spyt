@@ -515,7 +515,6 @@
   "spark-cluster/src/main/bash/python311.sh":"yt/spark/spark-over-yt/spark-cluster/src/main/bash/python311.sh",
   "spark-cluster/src/main/bash/python312.sh":"yt/spark/spark-over-yt/spark-cluster/src/main/bash/python312.sh",
   "spark-cluster/src/main/bash/python313.sh":"yt/spark/spark-over-yt/spark-cluster/src/main/bash/python313.sh",
-  "spark-cluster/src/main/bash/python39.sh":"yt/spark/spark-over-yt/spark-cluster/src/main/bash/python39.sh",
   "spark-cluster/src/main/bash/solomon-agent.sh":"yt/spark/spark-over-yt/spark-cluster/src/main/bash/solomon-agent.sh",
   "spark-cluster/src/main/bash/unified-agent.sh":"yt/spark/spark-over-yt/spark-cluster/src/main/bash/unified-agent.sh",
   "spark-cluster/src/main/resources/META-INF/services/org.apache.spark.deploy.rest.RestSubmitSupport":"yt/spark/spark-over-yt/spark-cluster/src/main/resources/META-INF/services/org.apache.spark.deploy.rest.RestSubmitSupport",

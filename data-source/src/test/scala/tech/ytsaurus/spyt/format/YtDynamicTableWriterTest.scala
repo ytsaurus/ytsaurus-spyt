@@ -1,12 +1,10 @@
 package tech.ytsaurus.spyt.format
 
-import org.apache.spark.SparkException
 import org.apache.spark.sql.{AnalysisException, SaveMode}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import tech.ytsaurus.core.cypress.YPath
 import tech.ytsaurus.core.tables.{ColumnValueType, TableSchema}
-import tech.ytsaurus.spyt.SparkVersionUtils
 import tech.ytsaurus.spyt.exceptions._
 import tech.ytsaurus.spyt.serializers.SchemaConverter.Unordered
 import tech.ytsaurus.spyt.serializers.WriteSchemaConverter
@@ -44,7 +42,7 @@ class YtDynamicTableWriterTest extends AnyFlatSpec with TmpDir with LocalSpark w
   }
 
   it should "not write to the table with not matching schema" in {
-    val sparkException = the [SparkException] thrownBy {
+    val thrown = the[Exception] thrownBy {
       val tableSchema = TableSchema.builder()
           .addValue("index", ColumnValueType.INT64)
           .addValue("content", ColumnValueType.STRING)
@@ -52,11 +50,7 @@ class YtDynamicTableWriterTest extends AnyFlatSpec with TmpDir with LocalSpark w
       doTheTest(externalTableSchema = Some(tableSchema))
     }
 
-    if (SparkVersionUtils.lessThan("3.4.0")) {
-      sparkException.getMessage shouldEqual "Job aborted."
-    } else {
-      sparkException.getCause.getMessage should startWith ("[TASK_WRITE_FAILED]")
-    }
+    assertWriteFailed(thrown, "Cannot find YT columns for Spark fields")
   }
 
   it should "write the data to the table when dataframe contains some part of the table's columns" in {
@@ -71,7 +65,7 @@ class YtDynamicTableWriterTest extends AnyFlatSpec with TmpDir with LocalSpark w
   }
 
   it should "not write the data to the table when dataframe does not contain all key columns" in {
-    val sparkException = the [SparkException] thrownBy {
+    val thrown = the[Exception] thrownBy {
         doTheTest(schemaModifier = { baseSchema =>
             TableSchema.builder()
                 .addKey("extra_key", ColumnValueType.INT64)
@@ -81,11 +75,7 @@ class YtDynamicTableWriterTest extends AnyFlatSpec with TmpDir with LocalSpark w
         })
     }
 
-    if (SparkVersionUtils.lessThan("3.4.0")) {
-      sparkException.getMessage shouldEqual "Job aborted."
-    } else {
-      sparkException.getCause.getMessage should startWith ("[TASK_WRITE_FAILED]")
-    }
+    assertWriteFailed(thrown, "Cannot find Spark field for YT key column 'extra_key'")
   }
 
   it should "check that the saveMode is set to Append" in {
@@ -175,6 +165,18 @@ object YtDynamicTableWriterTest {
   )
 
   implicit val sampleRowOrdering: Ordering[SampleRow] = Ordering.by(_.key)
+
+  def assertWriteFailed(thrown: Throwable, invariantSubstring: String): Unit = {
+    var found = false
+    var cur: Throwable = thrown
+    while (cur != null) {
+      if (cur.getMessage != null && cur.getMessage.contains(invariantSubstring)) {
+        found = true
+      }
+      cur = cur.getCause
+    }
+    assert(found, s"Expected to find '$invariantSubstring' in exception cause chain")
+  }
 
   def generateSampleData(limit: Int): Seq[SampleRow] = {
     (1 to limit).map { n =>

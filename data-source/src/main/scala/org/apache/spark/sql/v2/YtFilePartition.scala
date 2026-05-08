@@ -80,8 +80,11 @@ object YtFilePartition {
 
     log.info(s"richYPath passed to partitionTables: ${richYPath.toStableString}")
 
-    if (ytReadContext.settings.distributedReadingEnabled) {
-      val multiTablePartitions = YtWrapper.partitionTables(richYPath, maxSplitBytes, enableCookies = true)
+    val distributedReading = ytReadContext.settings.distributedReadingEnabled
+
+    val multiTablePartitions = YtWrapper.partitionTables(richYPath, maxSplitBytes, enableCookies = distributedReading)
+
+    if (distributedReading) {
       multiTablePartitions.map { multiTablePartition =>
         val allRanges = multiTablePartition.getTableRanges.asScala
         val combinedYPath = allRanges.foldLeft(path.toYPath) { (currentPath, tableRange) =>
@@ -90,12 +93,10 @@ object YtFilePartition {
           }
         }
         val cookie = multiTablePartition.getCookie
-
         YtPartitionedFileDelegate(combinedYPath, maxSplitBytes, partitionValues, path, distributedReading = true,
           cookie = Some(cookie))
       }
     } else {
-      val multiTablePartitions = YtWrapper.partitionTables(richYPath, maxSplitBytes)
       multiTablePartitions.flatMap { multiTablePartition =>
         val tableRanges = multiTablePartition.getTableRanges.asScala
         tableRanges.flatMap { tableRange =>

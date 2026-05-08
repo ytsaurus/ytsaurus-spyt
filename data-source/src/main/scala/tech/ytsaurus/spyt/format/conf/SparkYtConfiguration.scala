@@ -40,6 +40,9 @@ object SparkYtConfiguration {
 
     case object YtPartitioningEnabled extends ConfigEntry[Boolean](s"$prefix.ytPartitioning.enabled", Some(false))
 
+    case object YtPartitioningCompressedSizeEnabled
+      extends ConfigEntry[Boolean](s"$prefix.ytPartitioning.compressedSize.enabled", Some(false))
+
     case object YtOmitInaccessibleRowsEnabled
       extends ConfigEntry[Boolean](s"$prefix.ytOmitInaccessibleRows.enabled", Some(true))
 
@@ -117,7 +120,8 @@ object SparkYtConfiguration {
       val omitColumns = spark.ytConf(YtOmitInaccessibleColumnsEnabled)
       val omitRows = spark.ytConf(YtOmitInaccessibleRowsEnabled)
       val distributedReading = spark.ytConf(YtDistributedReadingEnabled)
-      YtReadSettings(omitColumns, omitRows, distributedReading, unordered = true)
+      val useCompressedSizeForPartitioning = spark.ytConf(YtPartitioningCompressedSizeEnabled)
+      YtReadSettings(omitColumns, omitRows, distributedReading, useCompressedSizeForPartitioning, unordered = true)
     }
   }
 

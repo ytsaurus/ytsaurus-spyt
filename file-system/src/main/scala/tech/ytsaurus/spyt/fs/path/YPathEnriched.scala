@@ -8,6 +8,7 @@ import tech.ytsaurus.spyt.fs.path.YPathEnriched._
 import tech.ytsaurus.spyt.wrapper.YtWrapper
 import tech.ytsaurus.ysontree.YTreeBuilder
 
+import java.util.concurrent.CompletableFuture
 import scala.annotation.tailrec
 import scala.collection.immutable.ListMap
 import scala.collection.mutable
@@ -61,9 +62,11 @@ case class YPathEnriched(path: Path, attributes: Map[String, String] = Map.empty
 
   def dropTimestamp(): YPathEnriched = YPathEnriched(path, attributes - TIMESTAMP_KEY)
 
-  def lock()(implicit yt: CompoundClient): YPathEnriched = transaction match {
-    case Some(tId) if node.isEmpty => withAttr(NODE_KEY, YtWrapper.lockNode(toYPath, tId))
-    case _ => this
+  def lockAsync()(implicit yt: CompoundClient): CompletableFuture[YPathEnriched] = transaction match {
+    case Some(tId) if node.isEmpty =>
+      YtWrapper.lockNodeAsync(toYPath, tId).thenApply(nodeId => withAttr(NODE_KEY, nodeId))
+    case _ =>
+      CompletableFuture.completedFuture(this)
   }
 
   override def equals(obj: Any): Boolean = obj match {

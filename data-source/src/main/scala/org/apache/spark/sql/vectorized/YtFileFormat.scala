@@ -18,7 +18,7 @@ import org.apache.spark.sql.{SQLContext, SparkSession}
 import org.apache.spark.util.SerializableConfiguration
 import org.slf4j.LoggerFactory
 import tech.ytsaurus.client.CompoundClient
-import tech.ytsaurus.spyt.common.utils.{ExpressionTransformer, YtReadingUtils}
+import tech.ytsaurus.spyt.common.utils.YtReadingUtils
 import tech.ytsaurus.spyt.format.YtPartitionedFileDelegate.YtPartitionedFile
 import tech.ytsaurus.spyt.format._
 import tech.ytsaurus.spyt.format.conf.SparkYtConfiguration.Read._
@@ -31,7 +31,7 @@ import tech.ytsaurus.spyt.wrapper.client.YtClientProvider
 import tech.ytsaurus.spyt.wrapper.table.YtReadContext
 
 import java.util.ServiceLoader
-import scala.jdk.CollectionConverters._
+import scala.collection.JavaConverters._
 
 
 class YtFileFormat extends FileFormat with DataSourceRegister with StreamSourceProvider with StreamSinkProvider with Serializable {
@@ -80,8 +80,7 @@ class YtFileFormat extends FileFormat with DataSourceRegister with StreamSourceP
           YtClientProvider.ytClientWithProxy(ytClientConf, ypf.delegate.cluster, Some(StatisticsReporter))
         YtReadContext.withContext(yt, readSettings) { implicit ctx =>
           StatisticsReporter.registerReadMetrics(ctx.requestId, bytesReadReporter(broadcastedConf))
-          val pushedFilterSegments = ExpressionTransformer.filtersToSegmentSet(filters)
-          val split = YtInputSplit(ypf, requiredSchema, pushedFilterSegments, filterPushdownConfig = filterPushdownConfig,
+          val split = YtInputSplit(ypf, requiredSchema, filterPushdownConfig = filterPushdownConfig,
             ytLoggerConfig = ytLoggerConfig)
 
           log.info(s"Reading ${split.ytPathWithFilters}")

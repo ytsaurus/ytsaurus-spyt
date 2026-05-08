@@ -13,7 +13,7 @@ import org.scalatest.matchers.should.Matchers
 import tech.ytsaurus.client.operations.Spec
 import tech.ytsaurus.ysontree._
 
-import scala.jdk.CollectionConverters._
+import scala.collection.JavaConverters._
 
 class YTsaurusOperationManagerSuite extends SparkFunSuite with BeforeAndAfterEach with Matchers {
 

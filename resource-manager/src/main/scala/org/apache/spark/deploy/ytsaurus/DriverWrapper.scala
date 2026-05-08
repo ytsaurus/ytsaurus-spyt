@@ -1,6 +1,6 @@
 package org.apache.spark.deploy.ytsaurus
 
-import tech.ytsaurus.spyt.logging.Logging
+import org.apache.spark.internal.Logging
 import org.apache.spark.util._
 
 /**

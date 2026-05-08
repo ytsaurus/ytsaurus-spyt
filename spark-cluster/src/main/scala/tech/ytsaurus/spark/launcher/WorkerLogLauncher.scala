@@ -1,9 +1,9 @@
 package tech.ytsaurus.spark.launcher
 
+import com.twitter.scalding.Args
 import org.slf4j.LoggerFactory
 import tech.ytsaurus.client.CompoundClient
 import tech.ytsaurus.spark.launcher.WorkerLogLauncher.WorkerLogConfig
-import tech.ytsaurus.spyt.args.Args
 import tech.ytsaurus.spyt.wrapper.Utils.parseDuration
 import tech.ytsaurus.spyt.wrapper.model.WorkerLogBlock
 import tech.ytsaurus.spyt.wrapper.model.WorkerLogSchema.{getMetaPath, metaSchema}
@@ -12,25 +12,27 @@ import tech.ytsaurus.spyt.wrapper.{LogLazy, YtWrapper}
 import java.io.{File, RandomAccessFile}
 import java.nio.file.attribute.FileTime
 import java.nio.file.{Files, Path}
-import java.time.{Duration, ZoneOffset}
+import java.time.ZoneOffset
 import scala.collection.mutable
+import scala.concurrent.duration.{Duration, DurationInt}
+import scala.language.postfixOps
 
 object WorkerLogLauncher extends VanillaLauncher {
   private val log = LoggerFactory.getLogger(getClass)
 
-  case class WorkerLogConfig(
-    enableService: Boolean,
-    enableJson: Boolean,
-    scanDirectory: String,
-    tablesPath: String,
-    updateInterval: Duration,
-    bufferSize: Int,
-    ytTableRowLimit: Int,
-    tableTTL: Duration,
-    additionalTableOptions: Map[String, Any])
+  case class WorkerLogConfig(enableService: Boolean,
+                             enableJson: Boolean,
+                             scanDirectory: String,
+                             tablesPath: String,
+                             updateInterval: Duration,
+                             bufferSize: Int,
+                             ytTableRowLimit: Int,
+                             tableTTL: Duration,
+                             additionalTableOptions: Map[String, Any]
+                            )
 
   object WorkerLogConfig {
-    val minimalInterval: Duration = Duration.ofMinutes(1)
+    val minimalInterval: Duration = 1 minute
 
     def create(sparkConf: Map[String, String], args: Array[String]): Option[WorkerLogConfig] = {
       create(sparkConf, Args(args))
@@ -43,7 +45,7 @@ object WorkerLogLauncher extends VanillaLauncher {
     def create(sparkConf: Map[String, String], args: Args): Option[WorkerLogConfig] = {
       val userUpdateInterval = args.optional("wlog-update-interval")
         .orElse(sparkConf.get("spark.workerLog.updateInterval"))
-        .map(parseDuration).getOrElse(Duration.ofMinutes(10))
+        .map(parseDuration).getOrElse(10 minutes)
       val tablesPathOpt = args.optional("wlog-table-path")
         .orElse(sparkConf.get("spark.workerLog.tablePath"))
       val enableService = args.optional("wlog-service-enabled")
@@ -56,7 +58,7 @@ object WorkerLogLauncher extends VanillaLauncher {
         log.warn(s"Path to worker log yt directory is not defined, WorkerLogService couldn't be started")
         None
       } else {
-        val updateInterval = if (userUpdateInterval.compareTo(minimalInterval) < 0) {
+        val updateInterval = if (userUpdateInterval < minimalInterval) {
           log.warn(s"Update interval that less than $minimalInterval doesn't allowed, $minimalInterval will be used")
           minimalInterval
         } else {
@@ -85,7 +87,7 @@ object WorkerLogLauncher extends VanillaLauncher {
             .map(_.toInt).getOrElse(16777216),
           tableTTL = args.optional("wlog-table-ttl")
             .orElse(sparkConf.get("spark.workerLog.tableTTL"))
-            .map(parseDuration).getOrElse(Duration.ofDays(7)),
+            .map(parseDuration).getOrElse(7 days),
           additionalTableOptions = additionalTableOptions
         ))
       }

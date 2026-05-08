@@ -1,5 +1,7 @@
 package tech.ytsaurus.spyt.adapter
 
+import org.apache.spark.SparkConf
+
 import java.util.ServiceLoader
 
 trait ClusterSupport {

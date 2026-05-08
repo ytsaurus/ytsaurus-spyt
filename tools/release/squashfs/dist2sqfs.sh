@@ -17,7 +17,7 @@ Usage: $script_name [-h|--help]
   --proxy: YT proxy address
   --path: Path to distributive on Cypress
   --jar: Extra jar to include, may be repeated, applicable only to spark kind
-  --kind: distributive type: spark or spyt
+  --kind: distributive type: spark, spyt or livy
   --enable-nbd: use squashfs layer as nbd image
   --replication-factor: replication factor for nbd layers (default 10)
 
@@ -77,7 +77,7 @@ if [[ -z "$path" ]]; then
 fi
 
 case $kind in
-    spark|spyt) echo "Converting $kind distributive to squashfs";;
+    spark|spyt|livy) echo "Converting $kind distributive to squashfs";;
     *)
     echo "Kind must be specified and should be spark or spyt"
     exit 1
@@ -95,10 +95,10 @@ yt --proxy $proxy read-file $path > $localfile
 distroot="$tmpdir/root$libroot"
 mkdir -p $distroot
 case $kind in
-    spark)
+    spark|livy)
       mkdir "$distroot/$kind"
       tar xzf $localfile --strip-components 1 -C "$distroot/$kind"
-      if [[ -n "$jars" ]]; then
+      if [[ $kind = "spark" && -n "$jars" ]]; then
         for jar in $jars
         do
           jar_filename=${jar##*/}

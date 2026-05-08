@@ -4,40 +4,36 @@ import com.codahale.metrics.{Counter, Gauge, Histogram, Meter, MetricRegistry, T
 import io.circe.{Json, parser}
 import org.apache.spark.yt.test.TestHttpServer
 import org.apache.spark.yt.test.TestHttpServer.Request
-import org.mockito.MockitoSugar._
 import org.scalatest.Assertion
 import org.scalatest.funsuite.AnyFunSuite
 import org.scalatest.matchers.should.Matchers._
 import org.slf4j.{Logger, LoggerFactory}
-import tech.ytsaurus.spark.metrics.EnvAccessor
 
+import java.nio.charset.Charset
 import java.util.Properties
 import java.util.concurrent.TimeUnit
 
 class SolomonSinkTest extends AnyFunSuite {
   val log: Logger = LoggerFactory.getLogger(this.getClass)
 
-  def json(req: Request): Json = parser.parse(req.body).right.get
+  def body(req: Request): String = new String(req.body, Charset.defaultCharset)
+  def json(req: Request): Json = parser.parse(body(req)).right.get
 
 
-  def checkSink(prepareMetrics: MetricRegistry => Unit, extraProps: Map[String, String] = Map(), appAlias: String = "")
+  def checkSink(prepareMetrics: MetricRegistry => Unit, extraProps: Map[String, String] = Map())
                (assert: Json => Unit): Assertion = {
     val server = TestHttpServer()
     val registry: MetricRegistry = new MetricRegistry()
     prepareMetrics(registry)
     val props: Properties = new Properties()
-
-    val mockEnv = mock[EnvAccessor]
-    when(mockEnv.getEnv("YT_TASK_NAME")).thenReturn(Some("driver"))
     try {
-      server.assert(req => assert(json(req)))
       server.start()
       val port = server.port
       props.setProperty("solomon_port", port.toString)
       props.setProperty("reporter_enabled", true.toString)
-      props.setProperty("app_alias", appAlias)
       extraProps.foreach(p => props.setProperty(p._1, p._2))
       val sink = SolomonSink(props, registry, null)
+      server.assert(req => assert(json(req)))
       sink.report()
       server.awaitResult().httpStatusCode should be(200)
     } finally {
@@ -51,12 +47,6 @@ class SolomonSinkTest extends AnyFunSuite {
       json.hcursor.downField("commonLabels").as[Json].right.get.asObject.get.isEmpty shouldBe true
       json.hcursor.downField("ts").as[Long].right.get should be > 0L
       json.hcursor.downField("ts").as[Long].right.get should be < (System.currentTimeMillis() / 1000L + 100)
-    }
-  }
-
-  test("test empty metric with app_alias label"){
-    checkSink(_ =>{}, appAlias = "alias"){json =>
-      json.hcursor.downField("commonLabels").downField("app_alias").as[String].right.get shouldBe "alias"
     }
   }
 

@@ -6,7 +6,8 @@ import org.slf4j.LoggerFactory
 import tech.ytsaurus.spyt.wrapper.YtWrapper
 import tech.ytsaurus.client.CompoundClient
 
-import java.time.Duration
+import scala.concurrent.duration._
+import scala.language.postfixOps
 import scala.reflect.ClassTag
 
 class YtPersistenceEngine(baseDir: String,
@@ -36,7 +37,7 @@ class YtPersistenceEngine(baseDir: String,
     log.info(s"Create file $path")
     YtWrapper.createFile(path)
     log.info(s"Write to file $path")
-    val fileOut = YtWrapper.writeFile(path, Duration.ofMinutes(5), transaction = None)
+    val fileOut = YtWrapper.writeFile(path, 5 minutes, transaction = None)
     var out: SerializationStream = null
     Utils.tryWithSafeFinally {
       out = serializer.newInstance().serializeStream(fileOut)

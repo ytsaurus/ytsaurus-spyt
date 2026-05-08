@@ -11,7 +11,8 @@ import tech.ytsaurus.spyt.wrapper.YtWrapper
 import tech.ytsaurus.spyt.wrapper.YtWrapper.formatPath
 import tech.ytsaurus.spyt.wrapper.table.{TableIterator, YtReadContext, YtReadSettings}
 
-import java.time.Duration
+import scala.concurrent.duration._
+import scala.language.postfixOps
 import scala.util.Random
 
 class WireRowBatchReaderTest extends AnyFlatSpec with Matchers with ReadBatchRows with LocalSpark with TmpDir
@@ -39,7 +40,7 @@ class WireRowBatchReaderTest extends AnyFlatSpec with Matchers with ReadBatchRow
       YtWrapper.createTablePartitionReader(delegates.head.cookie.get, ArrayAnyDeserializer.getOrCreate(df.schema))
     } else {
       YtWrapper.readTable(YPath.simple(formatPath(tmpPath)),
-        ArrayAnyDeserializer.getOrCreate(df.schema), Duration.ofSeconds(10), None)
+        ArrayAnyDeserializer.getOrCreate(df.schema), 10 seconds, None)
     }
 
     val reader = new WireRowBatchReader(rowIterator, batchMaxSize, df.schema)

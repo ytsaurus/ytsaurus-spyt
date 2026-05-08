@@ -11,7 +11,7 @@ import tech.ytsaurus.typeinfo.{TiType, TypeName}
 import tech.ytsaurus.yson.YsonConsumer
 
 import java.util.ServiceLoader
-import scala.jdk.CollectionConverters._
+import scala.collection.JavaConverters._
 
 trait YTsaurusTypes {
   /**

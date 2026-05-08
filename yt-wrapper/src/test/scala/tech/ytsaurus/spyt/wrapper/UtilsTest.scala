@@ -5,7 +5,8 @@ import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import tech.ytsaurus.spyt.wrapper.Utils.flatten
 
-import java.time.Duration
+import scala.concurrent.duration._
+import scala.language.postfixOps
 
 class UtilsTest extends AnyFlatSpec with Matchers with TableDrivenPropertyChecks {
   behavior of "UtilsTest"
@@ -21,11 +22,11 @@ class UtilsTest extends AnyFlatSpec with Matchers with TableDrivenPropertyChecks
   it should "parseDuration" in {
     val table = Table(
       ("str", "expected"),
-      ("5", Duration.ofSeconds(5)),
-      ("13s", Duration.ofSeconds(13)),
-      ("123m", Duration.ofMinutes(123)),
-      ("1min", Duration.ofMinutes(1)),
-      ("305h", Duration.ofHours(305)),
+      ("5", 5 seconds),
+      ("13s", 13 seconds),
+      ("123m", 123 minutes),
+      ("1min", 1 minute),
+      ("305h", 305 hours),
     )
 
     forAll(table) { case (str: String, expected: Duration) =>

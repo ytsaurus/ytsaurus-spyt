@@ -4,8 +4,6 @@ import org.slf4j.LoggerFactory
 import tech.ytsaurus.client.DiscoveryClient
 import tech.ytsaurus.client.discovery.{Heartbeat, ListMembers, ListMembersOptions, MemberInfo}
 
-import scala.jdk.CollectionConverters._
-
 object DiscoveryClientWrapper {
   private val log = LoggerFactory.getLogger(getClass)
 
@@ -21,6 +19,8 @@ object DiscoveryClientWrapper {
 
   def listMembers(groupId: String, limit: Int = 20, attrs: Seq[String] = Seq.empty)
                  (implicit client: DiscoveryClient): Seq[MemberInfo] = {
+    import scala.collection.JavaConverters._
+
     log.debug(s"List members: $groupId")
     val listMembersReq = ListMembers.builder()
       .setGroupId(groupId)

@@ -17,15 +17,17 @@ import tech.ytsaurus.ysontree.YTreeNode
 import java.io.{FileOutputStream, OutputStream}
 import java.nio.file.{Files, Paths}
 import java.time.format.DateTimeFormatter
-import java.time.{Duration, LocalDateTime, ZoneOffset}
+import java.time.{LocalDateTime, ZoneOffset}
+import scala.concurrent.duration._
 import scala.io.Source
+import scala.language.postfixOps
 
 trait YtFileUtils {
   self: YtCypressUtils with YtTransactionUtils with YtClientUtils =>
 
   private val log = LoggerFactory.getLogger(getClass)
 
-  def readFile(path: String, transaction: Option[String] = None, timeout: Duration = Duration.ofMinutes(1))
+  def readFile(path: String, transaction: Option[String] = None, timeout: Duration = 1 minute)
               (implicit yt: CompoundClient): YtFileInputStream = {
     readFile(YPath.simple(formatPath(path)), transaction, timeout)
   }
@@ -37,7 +39,7 @@ trait YtFileUtils {
     new YtFileInputStream(fileReader, timeout)
   }
 
-  def readFileAsString(path: String, transaction: Option[String] = None, timeout: Duration = Duration.ofMinutes(1))
+  def readFileAsString(path: String, transaction: Option[String] = None, timeout: Duration = 1.minute)
                       (implicit yt: CompoundClient): String = {
     val in = readFile(path, transaction, timeout)
     try {
@@ -89,7 +91,7 @@ trait YtFileUtils {
       .setWindowSize(10000000L)
       .setPacketSize(1000000L)
       .optionalTransaction(transaction)
-      .setTimeout(timeout)
+      .setTimeout(toJavaDuration(timeout))
       .setComputeMd5(computeMd5)
       .build()
   }

@@ -2,20 +2,21 @@ package tech.ytsaurus.spyt.wrapper
 
 import java.io.{FileInputStream, InputStream}
 import java.net.InetAddress
-import java.time.Duration
 import java.util.Properties
 import scala.annotation.tailrec
-import scala.jdk.CollectionConverters._
+import scala.concurrent.duration._
 import scala.util.{Failure, Success, Try}
 
 object Utils {
   def parseDuration(s: String): Duration = {
     val regex = """(\d+)(.*)""".r
     s match {
-      case regex(amount, "" | "s") => Duration.ofSeconds(amount.toInt)
-      case regex(amount, "m" | "min") => Duration.ofMinutes(amount.toInt)
-      case regex(amount, "h") => Duration.ofHours(amount.toInt)
-      case regex(amount, "d") => Duration.ofDays(amount.toInt)
+      case regex(amount, "") => amount.toInt.seconds
+      case regex(amount, "s") => amount.toInt.seconds
+      case regex(amount, "m") => amount.toInt.minutes
+      case regex(amount, "min") => amount.toInt.minutes
+      case regex(amount, "h") => amount.toInt.hours
+      case regex(amount, "d") => amount.toInt.days
       case regex(_, unit) => throw new IllegalArgumentException(s"Unknown time unit: $unit")
       case _ => throw new IllegalArgumentException(s"Illegal time format: $s")
     }
@@ -46,6 +47,7 @@ object Utils {
   def bashCommand(args: String*): String = args.map { arg => s"'${arg.replace("'", "'\"'\"'")}'" }.mkString(" ")
 
   lazy val sparkSystemProperties: Map[String, String] = {
+    import scala.collection.JavaConverters._
     System.getProperties.stringPropertyNames().asScala.collect {
       case name if name.startsWith("spark.") => name -> System.getProperty(name)
     }.toMap
@@ -76,23 +78,20 @@ object Utils {
   def runWithRetry[T](
                        operation: () => T,
                        maxRetries: Int = 5,
-                       initialDelay: Duration = Duration.ofSeconds(5),
-                       maxDelay: Duration = Duration.ofSeconds(60)
+                       initialDelay: FiniteDuration = 5.seconds,
+                       maxDelay: FiniteDuration = 60.seconds
                      ): T = {
     require(maxRetries >= 0, "maxRetries must be non-negative")
-    require(initialDelay.compareTo(Duration.ZERO) >= 0, "initialDelay must be non-negative")
-    require(maxDelay.compareTo(initialDelay) >= 0, "maxDelay must be >= initialDelay")
+    require(initialDelay >= Duration.Zero, "initialDelay must be non-negative")
+    require(maxDelay >= initialDelay, "maxDelay must be >= initialDelay")
 
     @tailrec
-    def attempt(retry: Int, currentDelay: Duration): T = {
+    def attempt(retry: Int, currentDelay: FiniteDuration): T = {
       Try(operation()) match {
         case Success(value) => value
         case Failure(_) if retry > 0 =>
           Thread.sleep(currentDelay.toMillis)
-          var nextDelay = currentDelay.multipliedBy(2)
-          if (nextDelay.compareTo(maxDelay) > 0) {
-            nextDelay = maxDelay
-          }
+          val nextDelay = (currentDelay * 2).min(maxDelay)
           attempt(retry - 1, nextDelay)
         case Failure(finalEx) =>
           throw new RuntimeException(s"Operation failed after ${maxRetries + 1} attempts", finalEx)

@@ -6,7 +6,8 @@ import tech.ytsaurus.spyt.wrapper.client._
 import tech.ytsaurus.client.CompoundClient
 import tech.ytsaurus.spyt.wrapper.client.YtClientProvider
 
-import java.time.Duration
+import scala.concurrent.duration._
+import scala.language.postfixOps
 
 trait LocalYt extends BeforeAndAfterAll {
   self: TestSuite =>
@@ -33,7 +34,7 @@ trait LocalYtClient extends LocalYt {
     proxy = LocalYt.proxy,
     user = "root",
     token = "",
-    timeout = Duration.ofMinutes(5),
+    timeout = 5 minutes,
     proxyRole = None,
     extendedFileTimeout = true,
     proxyNetworkName = None

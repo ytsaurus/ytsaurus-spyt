@@ -4,7 +4,7 @@ import io.circe._
 import io.circe.generic.semiauto.{deriveDecoder, deriveEncoder}
 import io.circe.parser._
 import io.circe.syntax._
-import tech.ytsaurus.spyt.logging.Logging
+import org.apache.spark.internal.Logging
 import org.apache.spark.sql.connector.read.streaming
 import org.apache.spark.sql.execution.streaming.{Offset, SerializedOffset}
 import tech.ytsaurus.client.CompoundClient
@@ -13,9 +13,8 @@ import tech.ytsaurus.spyt.wrapper.Utils.runWithRetry
 import tech.ytsaurus.spyt.wrapper.YtWrapper
 import tech.ytsaurus.spyt.wrapper.dyntable.ConsumerUtils
 
-import java.time.Duration
 import scala.collection.SortedMap
-import scala.jdk.CollectionConverters._
+import scala.concurrent.duration.{Duration, DurationInt}
 import scala.util.Try
 import scala.util.control.NonFatal
 
@@ -59,6 +58,7 @@ object YtQueueOffset extends Logging {
     Try {
       runWithRetry[YtQueueOffset](
         operation = () => {
+          import scala.collection.JavaConverters._
           val partitionsAttribute = YtWrapper.attribute(queuePath, "queue_partitions")
           val partitionSeq = partitionsAttribute.asList().asScala.zipWithIndex.map {
             case (node, index) =>
@@ -101,13 +101,9 @@ object YtQueueOffset extends Logging {
     }
   }
 
-  def advance(
-    consumerPath: String,
-    newOffset: YtQueueOffset,
-    lastCommittedOffset: YtQueueOffset,
-    maxOffset: Option[YtQueueOffset] = None,
-    parentTransactionId: Option[String] = None,
-    timeout: Duration = Duration.ofMinutes(1))(implicit client: CompoundClient): Option[YtQueueOffset] = {
+  def advance(consumerPath: String, newOffset: YtQueueOffset, lastCommittedOffset: YtQueueOffset,
+    maxOffset: Option[YtQueueOffset] = None, parentTransactionId: Option[String] = None, timeout: Duration = 1.minute)
+    (implicit client: CompoundClient): Option[YtQueueOffset] = {
     if (!(newOffset >= lastCommittedOffset)) {
       logWarning(f"New offset is less than last committed offset. $newOffset < $lastCommittedOffset")
       return None

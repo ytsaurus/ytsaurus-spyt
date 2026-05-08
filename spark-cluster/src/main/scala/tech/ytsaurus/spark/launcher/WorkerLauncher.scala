@@ -1,19 +1,19 @@
 package tech.ytsaurus.spark.launcher
 
 import com.codahale.metrics.MetricRegistry
+import com.twitter.scalding.Args
 import org.slf4j.LoggerFactory
 import tech.ytsaurus.client.CompoundClient
 import tech.ytsaurus.spark.launcher.AdditionalMetricsSender.startAdditionalMetricsSenderIfDefined
 import tech.ytsaurus.spark.launcher.Service.LocalService
 import tech.ytsaurus.spark.launcher.WorkerLogLauncher.WorkerLogConfig
 import tech.ytsaurus.spark.metrics.AdditionalMetrics
-import tech.ytsaurus.spyt.args.Args
 import tech.ytsaurus.spyt.wrapper.Utils.parseDuration
 import tech.ytsaurus.spyt.wrapper.client.YtClientConfiguration
 import tech.ytsaurus.spyt.wrapper.discovery.DiscoveryService
 
-import java.time.Duration
-
+import scala.concurrent.duration._
+import scala.language.postfixOps
 
 object WorkerLauncher extends App with VanillaLauncher with SparkLauncher {
   private val log = LoggerFactory.getLogger(getClass)
@@ -59,14 +59,14 @@ object WorkerLauncher extends App with VanillaLauncher with SparkLauncher {
   }
 }
 
-case class WorkerLauncherArgs(
-  cores: Int,
-  memory: String,
-  ytConfig: YtClientConfiguration,
-  baseDiscoveryPath: String,
-  waitMasterTimeout: Duration,
-  operationId: String,
-  enableSquashfs: Boolean)
+case class WorkerLauncherArgs(cores: Int,
+                              memory: String,
+                              ytConfig: YtClientConfiguration,
+                              baseDiscoveryPath: String,
+                              waitMasterTimeout: Duration,
+                              operationId: String,
+                              enableSquashfs: Boolean
+                             )
 
 object WorkerLauncherArgs {
   def apply(args: Args): WorkerLauncherArgs = WorkerLauncherArgs(
@@ -74,7 +74,7 @@ object WorkerLauncherArgs {
     args.required("memory"),
     YtClientConfiguration(args.optional),
     args.optional("base-discovery-path").getOrElse(sys.env("SPARK_BASE_DISCOVERY_PATH")),
-    args.optional("wait-master-timeout").map(parseDuration).getOrElse(Duration.ofMinutes(5)),
+    args.optional("wait-master-timeout").map(parseDuration).getOrElse(5 minutes),
     args.optional("operation-id").getOrElse(sys.env("YT_OPERATION_ID")),
     args.boolean("enable-squashfs")
   )

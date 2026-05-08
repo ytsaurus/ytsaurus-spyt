@@ -19,12 +19,10 @@ dependencies {
 
     testImplementation(libs.bundles.test)
     testImplementation(libs.bundles.junit.platform)
-    testImplementation(libs.scala.collection.compat)
     testImplementation(project(":spark-adapter-impl-322"))
     testImplementation(project(":spark-adapter-impl-330"))
     testImplementation(project(":spark-adapter-impl-340"))
     testImplementation(project(":spark-adapter-impl-350"))
-    testImplementation(project(":spark-adapter-provider"))
 }
 
 val generateBuildInfo = tasks.register<BuildInfoTask>("generateBuildInfo") {

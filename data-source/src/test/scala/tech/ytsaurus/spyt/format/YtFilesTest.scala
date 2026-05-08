@@ -11,9 +11,10 @@ import tech.ytsaurus.spyt.wrapper.YtWrapper
 import java.io.File
 import java.nio.charset.StandardCharsets
 import java.nio.file.Files
-import java.time.Duration
 import java.util.stream.Collectors.toList
-import scala.jdk.CollectionConverters._
+import scala.collection.JavaConverters._
+import scala.concurrent.duration._
+import scala.language.postfixOps
 
 class YtFilesTest extends AnyFlatSpec with Matchers with LocalSpark with TmpDir with TestUtils {
   behavior of "YtDataSource"
@@ -56,7 +57,7 @@ class YtFilesTest extends AnyFlatSpec with Matchers with LocalSpark with TmpDir 
 
   it should "read csv" in withSparkSession() { _spark =>
     YtWrapper.createFile(tmpPath)
-    val os = YtWrapper.writeFile(tmpPath, Duration.ofMinutes(1), None)
+    val os = YtWrapper.writeFile(tmpPath, 1 minute, None)
     try {
       os.write(
         """a,b,c

@@ -4,14 +4,13 @@ import org.apache.spark.sql.SQLContext
 import org.apache.spark.sql.internal.SQLConf
 import tech.ytsaurus.spyt.wrapper.config._
 
-import java.time.Duration
+import scala.concurrent.duration.Duration
 
-case class SparkYtWriteConfiguration(
-  bufferSize: Int,
-  dynBatchSize: Int,
-  timeout: Duration,
-  typeV3Format: Boolean,
-  distributedWrite: Boolean)
+case class SparkYtWriteConfiguration(bufferSize: Int,
+                                     dynBatchSize: Int,
+                                     timeout: Duration,
+                                     typeV3Format: Boolean,
+                                     distributedWrite: Boolean)
 
 object SparkYtWriteConfiguration {
 

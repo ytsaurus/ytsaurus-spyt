@@ -1,7 +1,7 @@
 package tech.ytsaurus.spyt.wrapper.discovery
 import tech.ytsaurus.spyt.HostAndPort
 
-import java.time.Duration
+import scala.concurrent.duration.Duration
 import scala.util.Try
 
 class CompoundDiscoveryService(services: Seq[DiscoveryService]) extends DiscoveryService {
@@ -22,6 +22,12 @@ class CompoundDiscoveryService(services: Seq[DiscoveryService]) extends Discover
     services.foreach(_.updateMaster(operationId, address, clusterVersion, clusterConf))
 
   override def registerSHS(address: HostAndPort): Unit = services.foreach(_.registerSHS(address))
+
+  override def registerLivy(address: HostAndPort, livyVersion: String): Unit =
+    services.foreach(_.registerLivy(address, livyVersion))
+
+  override def updateLivy(address: HostAndPort, livyVersion: String): Unit =
+    services.foreach(_.updateLivy(address, livyVersion))
 
   override def registerWorker(operationId: String): Unit = services.foreach(_.registerWorker(operationId))
 

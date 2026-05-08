@@ -1,5 +1,7 @@
 package tech.ytsaurus.spyt.format
 
+import com.google.common.base.Charsets
+import com.google.protobuf.ByteString
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
 import org.apache.hadoop.mapreduce.TaskAttemptContext
@@ -7,13 +9,14 @@ import org.apache.spark.sql.execution.datasources.{OutputWriter, OutputWriterFac
 import org.apache.spark.sql.types.StructType
 import org.slf4j.LoggerFactory
 import tech.ytsaurus.client.CompoundClient
+import tech.ytsaurus.client.request.DistributedWriteCookie
 import tech.ytsaurus.spyt.format.conf.SparkYtInternalConfiguration.{BaseSchema, IdMapping}
 import tech.ytsaurus.spyt.format.conf.{SparkYtWriteConfiguration, YtTableSparkSettings}
 import tech.ytsaurus.spyt.fs.path.YPathEnriched
 import tech.ytsaurus.spyt.serializers.{SchemaConverter, WriteSchemaConverter}
 import tech.ytsaurus.spyt.wrapper.YtWrapper
 import tech.ytsaurus.spyt.wrapper.client.{YtClientConfiguration, YtClientProvider}
-import tech.ytsaurus.spyt.wrapper.config.SparkYtHadoopConfiguration
+import tech.ytsaurus.spyt.wrapper.config.{ConfigEntry, SparkYtHadoopConfiguration}
 
 class YtOutputWriterFactory(ytClientConf: YtClientConfiguration,
                             writeConfiguration: SparkYtWriteConfiguration,

@@ -4,7 +4,8 @@ import org.apache.spark.sql.SparkSession
 import tech.ytsaurus.spyt.wrapper.config.{ConfigEntry, SparkYtSparkSession}
 import tech.ytsaurus.spyt.wrapper.table.YtReadSettings
 
-import java.time.Duration
+import scala.concurrent.duration._
+import scala.language.postfixOps
 
 object SparkYtConfiguration {
   import ConfigEntry.implicits._
@@ -17,7 +18,7 @@ object SparkYtConfiguration {
 
     case object DynBatchSize extends ConfigEntry[Int](s"$prefix.dynBatchSize", Some(50000))
 
-    case object Timeout extends ConfigEntry[Duration](s"$prefix.timeout", Some(Duration.ofSeconds(300)))
+    case object Timeout extends ConfigEntry[Duration](s"$prefix.timeout", Some(300 seconds))
 
     case object TypeV3 extends ConfigEntry[Boolean](s"$prefix.typeV3.enabled", Some(false), List(
       s"$prefix.writingTypeV3.enabled", s"$prefix.typeV3Format.enabled"
@@ -38,9 +39,6 @@ object SparkYtConfiguration {
     case object ArrowEnabled extends ConfigEntry[Boolean](s"$prefix.arrow.enabled", Some(true))
 
     case object YtPartitioningEnabled extends ConfigEntry[Boolean](s"$prefix.ytPartitioning.enabled", Some(false))
-
-    case object YtPartitioningCompressedSizeEnabled
-      extends ConfigEntry[Boolean](s"$prefix.ytPartitioning.compressedSize.enabled", Some(false))
 
     case object YtOmitInaccessibleRowsEnabled
       extends ConfigEntry[Boolean](s"$prefix.ytOmitInaccessibleRows.enabled", Some(true))
@@ -91,16 +89,16 @@ object SparkYtConfiguration {
   object Transaction {
     private val prefix = "transaction"
 
-    case object Timeout extends ConfigEntry[Duration](s"$prefix.timeout", Some(Duration.ofMinutes(5)))
+    case object Timeout extends ConfigEntry[Duration](s"$prefix.timeout", Some(5 minutes))
 
-    case object PingInterval extends ConfigEntry[Duration](s"$prefix.pingInterval", Some(Duration.ofSeconds(30)))
+    case object PingInterval extends ConfigEntry[Duration](s"$prefix.pingInterval", Some(30 seconds))
 
   }
 
   object GlobalTransaction {
     private val prefix = "globalTransaction"
 
-    case object Timeout extends ConfigEntry[Duration](s"$prefix.timeout", Some(Duration.ofMinutes(2)))
+    case object Timeout extends ConfigEntry[Duration](s"$prefix.timeout", Some(2 minutes))
 
     case object Enabled extends ConfigEntry[Boolean](s"$prefix.enabled", Some(false))
 
@@ -119,8 +117,7 @@ object SparkYtConfiguration {
       val omitColumns = spark.ytConf(YtOmitInaccessibleColumnsEnabled)
       val omitRows = spark.ytConf(YtOmitInaccessibleRowsEnabled)
       val distributedReading = spark.ytConf(YtDistributedReadingEnabled)
-      val useCompressedSizeForPartitioning = spark.ytConf(YtPartitioningCompressedSizeEnabled)
-      YtReadSettings(omitColumns, omitRows, distributedReading, useCompressedSizeForPartitioning, unordered = true)
+      YtReadSettings(omitColumns, omitRows, distributedReading, unordered = true)
     }
   }
 

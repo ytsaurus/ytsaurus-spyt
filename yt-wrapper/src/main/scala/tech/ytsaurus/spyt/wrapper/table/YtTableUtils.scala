@@ -16,9 +16,9 @@ import tech.ytsaurus.ysontree.{YTreeBuilder, YTreeNode, YTreeTextSerializer}
 
 import java.nio.ByteBuffer
 import java.nio.file.Paths
-import java.time.Duration
 import scala.annotation.tailrec
-import scala.jdk.CollectionConverters._
+import scala.concurrent.duration._
+import scala.language.postfixOps
 
 trait YtTableUtils {
   self: YtCypressUtils with YtTransactionUtils =>
@@ -49,6 +49,7 @@ trait YtTableUtils {
     ignoreExisting: Boolean)
     (implicit yt: CompoundClient): Unit = {
     log.debug(s"Create table: $path, transaction: $transaction")
+    import scala.collection.JavaConverters._
     val request = CreateNode.builder()
       .setPath(YPath.simple(formatPath(path)))
       .setType(CypressNodeType.TABLE)
@@ -59,7 +60,7 @@ trait YtTableUtils {
   }
 
   def readTable[T](path: YPath, deserializer: WireRowDeserializer[T],
-    timeout: Duration = Duration.ofMinutes(1), transaction: Option[String] = None)
+    timeout: Duration = 1 minute, transaction: Option[String] = None)
     (implicit ytReadContext: YtReadContext): SyncTableIterator[T] = {
     val request = ReadTable.builder()
       .setPath(path)
@@ -129,7 +130,7 @@ trait YtTableUtils {
       status
     } else {
       log.info(s"Operation $guid is in status $status")
-      Thread.sleep(5000)
+      Thread.sleep((5 seconds).toMillis)
       awaitOperation(guid)
     }
   }
@@ -168,22 +169,16 @@ trait YtTableUtils {
 
   def partitionTables(path: YPath, splitBytes: Long, enableCookies: Boolean = false)
     (implicit ytReadContext: YtReadContext): Seq[MultiTablePartition] = {
+    import scala.collection.JavaConverters._
 
-    val partitionSize = DataSize.fromBytes(splitBytes)
-
-    val builder = PartitionTables.builder()
+    val request = PartitionTables.builder()
       .setPaths(java.util.List.of[YPath](path))
       .setPartitionMode(PartitionTablesMode.Ordered)
+      .setDataWeightPerPartition(DataSize.fromBytes(splitBytes))
       .setOmitInaccessibleRows(ytReadContext.settings.omitInaccessibleRows)
       .setEnableCookies(enableCookies)
+      .build()
 
-    if (ytReadContext.settings.useCompressedSizeForPartitioning) {
-      builder.setCompressedDataSizePerPartition(partitionSize)
-    } else {
-      builder.setDataWeightPerPartition(partitionSize)
-    }
-
-    val request = builder.build()
     val result = ytReadContext.yt.partitionTables(request).join()
     result.asScala.toList
   }

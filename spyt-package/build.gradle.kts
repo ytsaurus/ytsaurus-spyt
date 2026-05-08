@@ -8,7 +8,6 @@ dependencies {
     runtimeOnly(project(":spark-adapter-impl-330"))
     runtimeOnly(project(":spark-adapter-impl-340"))
     runtimeOnly(project(":spark-adapter-impl-350"))
-    runtimeOnly(project(":spark-adapter-provider"))
 }
 
 configurations.configureEach {

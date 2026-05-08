@@ -1,6 +1,6 @@
 package org.apache.spark.sql.execution.streaming
 
-import tech.ytsaurus.spyt.logging.Logging
+import org.apache.spark.internal.Logging
 import org.apache.spark.sql.SparkSession
 import tech.ytsaurus.spyt.adapter.{StreamingTransactionHandle, StreamingTransactionSupport}
 import tech.ytsaurus.spyt.patch.annotations.{Decorate, DecoratedMethod, OriginClass}

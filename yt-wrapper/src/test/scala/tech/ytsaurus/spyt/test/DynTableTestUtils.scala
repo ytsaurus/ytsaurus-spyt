@@ -5,8 +5,8 @@ import tech.ytsaurus.spyt.wrapper.YtWrapper.{createTable, insertRows, mountTable
 import tech.ytsaurus.spyt.wrapper.table.YtTableSettings
 import tech.ytsaurus.ysontree.YTreeNode
 
-import java.time.Duration
-import scala.jdk.CollectionConverters._
+import scala.concurrent.duration._
+import scala.language.postfixOps
 
 trait DynTableTestUtils {
   self: LocalYtClient =>
@@ -41,14 +41,15 @@ trait DynTableTestUtils {
 
   def prepareTestTable(path: String, data: Seq[TestRow], pivotKeys: Seq[Seq[Any]] = Nil,
                        schema: TableSchema = testSchema, enableDynamicStoreRead: Boolean = false): Unit = {
+    import scala.collection.JavaConverters._
     val sortColumns = schema.getColumns.asScala.filter(_.getSortOrder != null).map(_.getName)
     val options = Map("enable_dynamic_store_read" -> enableDynamicStoreRead.toString)
     createTable(path, TestTableSettings(schema.toYTree, isDynamic = true, sortColumns = sortColumns, options))
-    mountTableSync(path, Duration.ofSeconds(10))
+    mountTableSync(path, 10 seconds)
     insertRows(path, schema, data.map(r => r.productIterator.toList))
-    unmountTableSync(path, Duration.ofSeconds(10))
+    unmountTableSync(path, 10 seconds)
     if (pivotKeys.nonEmpty) reshardTable(path, schema, pivotKeys)
-    mountTableSync(path, Duration.ofSeconds(10))
+    mountTableSync(path, 10 seconds)
   }
 
   def prepareOrderedTestTable(path: String, schema: TableSchema = orderedTestSchema,
@@ -87,6 +88,7 @@ case class TestTableSettings(ytSchema: YTreeNode,
 
 object TestTableSettings {
   def apply(schema: TableSchema, isDynamic: Boolean): YtTableSettings = {
+    import scala.collection.JavaConverters._
     val keyColumns = schema.getColumns.asScala.filter(_.getSortOrder != null).map(_.getName)
     TestTableSettings(schema.toYTree, isDynamic, sortColumns = keyColumns)
   }

@@ -11,8 +11,9 @@ import tech.ytsaurus.spyt.wrapper.YtWrapper.readDocument
 import tech.ytsaurus.ysontree.{YTree, YTreeNode}
 
 import java.net.URI
-import java.time.Duration
 import java.util.Optional
+import scala.concurrent.duration._
+import scala.language.{implicitConversions, postfixOps}
 import scala.util.{Failure, Success, Try}
 
 class CypressDiscoveryService(baseDiscoveryPath: String)(implicit yt: CompoundClient) extends DiscoveryService {
@@ -35,6 +36,8 @@ class CypressDiscoveryService(baseDiscoveryPath: String)(implicit yt: CompoundCl
   private val childrenOperationsPath: String = s"$discoveryPath/children_operations"
 
   private val shsPath: String = s"$discoveryPath/shs"
+
+  private val livyPath: String = s"$discoveryPath/livy"
 
   private val clusterVersionPath: String = s"$discoveryPath/version"
 
@@ -67,7 +70,7 @@ class CypressDiscoveryService(baseDiscoveryPath: String)(implicit yt: CompoundCl
         throw ex
     }
 
-    val transaction = YtWrapper.createTransaction(None, Duration.ofMinutes(1))
+    val transaction = YtWrapper.createTransaction(None, 1 minute)
     val tr = Some(transaction.getId.toString)
     try {
       if (clearDir) removeAddress(tr)
@@ -96,7 +99,7 @@ class CypressDiscoveryService(baseDiscoveryPath: String)(implicit yt: CompoundCl
     log.info(s"Registering worker operation $operationId")
     if (!operation.contains(operationId) && operationId != null && !operationId.isBlank) {
       log.info(s"Registering worker operation $operationId: started")
-      val tr = YtWrapper.createTransaction(None, Duration.ofMinutes(1))
+      val tr = YtWrapper.createTransaction(None, 1 minute)
       YtWrapper.createDir(s"$childrenOperationsPath/$operationId", Some(tr.getId.toString), ignoreExisting = true)
       tr.commit().join()
       log.info(s"Registering worker operation $operationId: completed")
@@ -104,7 +107,7 @@ class CypressDiscoveryService(baseDiscoveryPath: String)(implicit yt: CompoundCl
   }
 
   private def registerSimpleService(dirPath: String, address: HostAndPort): Unit = {
-    val transaction = YtWrapper.createTransaction(None, Duration.ofMinutes(1))
+    val transaction = YtWrapper.createTransaction(None, 1 minute)
     val tr = Some(transaction.getId.toString)
     val addr = YtWrapper.escape(address.toString)
     YtWrapper.removeDir(dirPath, recursive = true, force = true, transaction = tr)
@@ -114,6 +117,10 @@ class CypressDiscoveryService(baseDiscoveryPath: String)(implicit yt: CompoundCl
 
   override def registerSHS(address: HostAndPort): Unit = {
     registerSimpleService(shsPath, address)
+  }
+
+  override def registerLivy(address: HostAndPort, livyVersion: String): Unit = {
+    registerSimpleService(livyPath, address)
   }
 
   private def cypressHostAndPort(path: String): Try[HostAndPort] = {

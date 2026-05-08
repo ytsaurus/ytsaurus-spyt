@@ -4,7 +4,7 @@ package org.apache.spark.scheduler.cluster.ytsaurus
 import org.apache.spark.deploy.ytsaurus.Config._
 import org.apache.spark.deploy.ytsaurus.YTsaurusUtils.isShell
 import org.apache.spark.deploy.ytsaurus.{ApplicationArguments, Config, YTsaurusUtils}
-import tech.ytsaurus.spyt.logging.Logging
+import org.apache.spark.internal.Logging
 import org.apache.spark.internal.config._
 import org.apache.spark.launcher.SparkLauncher
 import org.apache.spark.resource.ResourceProfile
@@ -28,22 +28,23 @@ import java.net.URI
 import java.nio.file.Paths
 import java.time.Duration
 import java.util.{Locale, Properties}
-import scala.jdk.CollectionConverters._
+import scala.collection.JavaConverters._
 import scala.collection.mutable
-import scala.util.Try
+import scala.concurrent.duration.DurationInt
+import scala.util.{Failure, Success, Try}
 
 
-private[spark] class YTsaurusOperationManager(
-  val ytClient: YTsaurusClient,
-  token: String,
-  layerPaths: YTreeNode,
-  filePaths: YTreeNode,
-  environment: YTreeMapNode,
-  home: String,
-  prepareEnvCommand: String,
-  sparkClassPath: String,
-  javaCommand: String,
-  ytsaurusJavaOptionsBash: String) extends Logging {
+private[spark] class YTsaurusOperationManager(val ytClient: YTsaurusClient,
+                                              token: String,
+                                              layerPaths: YTreeNode,
+                                              filePaths: YTreeNode,
+                                              environment: YTreeMapNode,
+                                              home: String,
+                                              prepareEnvCommand: String,
+                                              sparkClassPath: String,
+                                              javaCommand: String,
+                                              ytsaurusJavaOptionsBash: String)
+  extends Logging {
 
   import YTsaurusOperationManager._
 
@@ -589,7 +590,7 @@ private[spark] object YTsaurusOperationManager extends Logging {
   def localFileToCacheUploader(conf: SparkConf, ytClient: YTsaurusClient): UploadToCache = (path: String) => {
     val remoteTempFilesDirectory = conf.get(Config.YTSAURUS_REMOTE_TEMP_FILES_DIRECTORY)
     logDebug(s"Uploading ${path} to cypress cache at ${remoteTempFilesDirectory}")
-    YtWrapper.uploadFileToCache(path, Duration.ofDays(7), remoteTempFilesDirectory)(ytClient)
+    YtWrapper.uploadFileToCache(path, 7.days, remoteTempFilesDirectory)(ytClient)
   }
 
   private[ytsaurus] def extractYtFiles(files: Seq[String],

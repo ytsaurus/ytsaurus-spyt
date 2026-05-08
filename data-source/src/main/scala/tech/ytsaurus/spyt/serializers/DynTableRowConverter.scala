@@ -2,64 +2,35 @@ package tech.ytsaurus.spyt.serializers
 
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.catalyst.InternalRow
-import org.apache.spark.sql.catalyst.expressions.UnsafeArrayData
+import org.apache.spark.sql.catalyst.expressions.{UnsafeArrayData, UnsafeRow}
 import org.apache.spark.sql.types._
 import org.apache.spark.unsafe.types.UTF8String
-import tech.ytsaurus.core.tables.TableSchema
+import tech.ytsaurus.core.tables.{ColumnSchema, TableSchema}
 import tech.ytsaurus.spyt.serializers.YsonRowConverter.getMapData
-import tech.ytsaurus.spyt.types.{UInt64Long, YTsaurusTypes}
-import tech.ytsaurus.typeinfo.TiType
 import tech.ytsaurus.ysontree.{YTree, YTreeListNode}
 
-import scala.jdk.CollectionConverters._
+import scala.collection.JavaConverters._
 
 class DynTableRowConverter(schema: StructType, tableSchema: TableSchema, typeV3: Boolean) {
-  private val sparkSchemaFields = schema.fields
-  private val tableSchemaColumns = tableSchema.getColumns.asScala.toIndexedSeq
-  private val sparkFieldNames = sparkSchemaFields.map(_.name)
-  private val ytColumnNames: Set[String] = tableSchemaColumns.map(_.getName).toSet
-  private val sparkFieldsMissingInYtSchema = sparkFieldNames.filterNot(ytColumnNames.contains)
-  require(
-    sparkFieldsMissingInYtSchema.isEmpty,
-    s"Cannot find YT columns for Spark fields: ${sparkFieldsMissingInYtSchema.mkString("[", ", ", "]")}. " +
-      s"YT schema columns: ${ytColumnNames.toSeq.sorted.mkString("[", ", ", "]")}"
-  )
-
-  private val sparkFieldIndexByName: Map[String, Int] = sparkSchemaFields.zipWithIndex.map {
-    case (field, index) => field.name -> index
-  }.toMap
-
-  private val columnConverters: IndexedSeq[Seq[Any] => Any] = tableSchemaColumns.map { columnSchema =>
-    sparkFieldIndexByName.get(columnSchema.getName) match {
-      case Some(sparkIndex) =>
-        val dataType = sparkSchemaFields(sparkIndex).dataType
-        val ytType = YtTypeHolder(columnSchema.getTypeV3)
-        (row: Seq[Any]) => convertField(row(sparkIndex), dataType, typeV3, ytType)
-      case None if columnSchema.getSortOrder != null =>
-        throw new IllegalArgumentException(
-          s"Cannot find Spark field for YT key column '${columnSchema.getName}'. " +
-            s"Spark schema fields: ${sparkFieldNames.mkString("[", ", ", "]")}"
-        )
-      case None =>
-        (_: Seq[Any]) => null
-    }
-  }
-
   def convertRow(row: Seq[Any]): Seq[Any] = {
-    columnConverters.map(_(row))
+    val sparkSchemaFields = schema.fields
+    val tableSchemaColumns: java.util.List[ColumnSchema] = tableSchema.getColumns
+
+    require(row.length == sparkSchemaFields.length, "row.length != sparkSchemaFields.length")
+    require(row.length == tableSchemaColumns.size(), "row.length != tableSchemaColumns.size()")
+
+    row.zip(sparkSchemaFields.map(_.dataType)).zipWithIndex.map {
+      case ((value, dataType), index) =>
+        val ytType = YtTypeHolder(tableSchemaColumns.get(index).getTypeV3)
+        convertField(value, dataType, typeV3, ytType)
+    }
   }
 
   private def convertField(value: Any, dataType: DataType, typeV3: Boolean = false, ytType: YtTypeHolder = YtTypeHolder.empty): Any = {
     dataType match {
-      case ArrayType(elementType, _) => convertArray(value, elementType, typeV3, ytType)
-      case mapType: MapType => mapToYTreeListNode(value, mapType, typeV3, ytType)
+      case ArrayType(elementType, _) => convertArray(value, elementType, typeV3)
+      case mapType: MapType => mapToYTreeListNode(value, mapType, typeV3)
       case structType: StructType => structToYTreeListNode(value, structType, ytType, typeV3)
-      case _ if value != null &&
-        (DynTableRowConverter.isIntegerLikeType(dataType) ||
-          DynTableRowConverter.isUInt64DataType(dataType) ||
-          value.isInstanceOf[UInt64Long]) &&
-        DynTableRowConverter.isUnsignedInt(ytType) =>
-        YTree.unsignedLongNode(DynTableRowConverter.toUnsignedLong(value))
       case _ =>
         value match {
           case v: UTF8String => v.getBytes
@@ -68,22 +39,19 @@ class DynTableRowConverter(schema: StructType, tableSchema: TableSchema, typeV3:
     }
   }
 
-  private def convertArray(value: Any, elementType: DataType, typeV3: Boolean = false,
-    ytType: YtTypeHolder = YtTypeHolder.empty): Any = {
+  private def convertArray(value: Any, elementType: DataType, typeV3: Boolean = false): Any = {
     value match {
       case uad: UnsafeArrayData =>
         val arrayData = uad.toArray[AnyRef](elementType).toSeq
-        val elementYtType = ytType.getListItem
-        arrayData.map(el => convertField(el, elementType, typeV3, elementYtType)).asJava
+        arrayData.map(el => convertField(el, elementType, typeV3)).asJava
       case _ => value
     }
   }
 
-  private def mapToYTreeListNode(value: Any, mapType: MapType, typeV3: Boolean,
-    ytType: YtTypeHolder = YtTypeHolder.empty): YTreeListNode = {
+  private def mapToYTreeListNode(value: Any, mapType: MapType, typeV3: Boolean): YTreeListNode = {
     val map: Iterable[(Any, Any)] = getMapData(value, mapType.keyType, mapType.valueType)
     val convertedMap: Iterable[(Any, Any)] = if (typeV3) {
-      convertMapTypeV3(map, mapType, ytType)
+      convertMapTypeV3(map, mapType)
     } else {
       convertMapTypeV1(map, mapType)
     }
@@ -122,8 +90,7 @@ class DynTableRowConverter(schema: StructType, tableSchema: TableSchema, typeV3:
     listBuilder.buildList
   }
 
-  private def convertMapTypeV3(mapIterable: Iterable[(Any, Any)], mapType: MapType,
-    ytType: YtTypeHolder): Iterable[(Any, Any)] = {
+  private def convertMapTypeV3(mapIterable: Iterable[(Any, Any)], mapType: MapType): Iterable[(Any, Any)] = {
     if (!mapType.valueContainsNull) {
       mapIterable.foreach { case (_, value) =>
         if (value == null) {
@@ -131,11 +98,9 @@ class DynTableRowConverter(schema: StructType, tableSchema: TableSchema, typeV3:
         }
       }
     }
-    val keyYtType = ytType.getMapKey
-    val valueYtType = ytType.getMapValue
     mapIterable.map { case (key, value) =>
-      val convertedKey = convertField(key, mapType.keyType, typeV3 = true, keyYtType)
-      val convertedValue = convertField(value, mapType.valueType, typeV3 = true, valueYtType)
+      val convertedKey = convertField(key, mapType.keyType)
+      val convertedValue = convertField(value, mapType.valueType)
       (convertedKey, convertedValue)
     }
   }
@@ -145,31 +110,5 @@ class DynTableRowConverter(schema: StructType, tableSchema: TableSchema, typeV3:
       val convertedValue = convertField(value, mapType.valueType)
       (key, convertedValue)
     }
-  }
-}
-
-object DynTableRowConverter {
-  private[serializers] def isUnsignedInt(ytType: YtTypeHolder): Boolean = {
-    ytType.ytType.exists(t => t.isUint8 || t.isUint16 || t.isUint32 || t.isUint64)
-  }
-
-  private[serializers] def isIntegerLikeType(dataType: DataType): Boolean = dataType match {
-    case ByteType | ShortType | IntegerType | LongType => true
-    case _ => false
-  }
-
-  private lazy val sparkUInt64DataType: DataType = YTsaurusTypes.instance.sparkTypeFor(TiType.uint64())
-
-  private[serializers] def isUInt64DataType(dataType: DataType): Boolean = dataType == sparkUInt64DataType
-
-  private[serializers] def toUnsignedLong(value: Any): Long = value match {
-    case v: Long => v
-    case v: Int => java.lang.Integer.toUnsignedLong(v)
-    case v: Short => java.lang.Short.toUnsignedInt(v).toLong
-    case v: Byte => java.lang.Byte.toUnsignedInt(v).toLong
-    case v: UInt64Long => v.toLong
-    case v: java.lang.Number => v.longValue()
-    case other => throw new IllegalArgumentException(
-      s"Cannot convert ${other.getClass.getName} to unsigned long")
   }
 }

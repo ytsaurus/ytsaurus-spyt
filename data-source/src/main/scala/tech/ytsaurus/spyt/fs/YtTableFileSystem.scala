@@ -13,9 +13,8 @@ import tech.ytsaurus.spyt.wrapper.cypress.{PathType, YtAttributes}
 import tech.ytsaurus.spyt.wrapper.table.{OptimizeMode, TableType}
 import tech.ytsaurus.ysontree.YTreeNode
 
-import java.util.concurrent.CompletableFuture
-import scala.jdk.CollectionConverters._
-
+import scala.collection.JavaConverters._
+import scala.language.postfixOps
 
 @SerialVersionUID(1L)
 class YtTableFileSystem extends YtFileSystemBase {
@@ -36,70 +35,50 @@ class YtTableFileSystem extends YtFileSystemBase {
   override def listStatus(f: Path, filter: PathFilter): Array[FileStatus] = {
     log.debugLazy(s"List status $f")
     val (path, attributes, yt) = setupContext(f)
-    listStatusAsync(path, expandDirectory = true, attributes, filter)(yt).join()
+    listStatus(path, expandDirectory = true, attributes, filter)(yt)
   }
 
-  private def listStatusAsync(
-    path: YPathEnriched,
-    expandDirectory: Boolean,
-    attributes: Map[String, YTreeNode],
-    filter: PathFilter)(implicit yt: CompoundClient): CompletableFuture[Array[FileStatus]] = {
-
+  private def listStatus(path: YPathEnriched, expandDirectory: Boolean, attributes: Map[String, YTreeNode], filter: PathFilter)
+    (implicit yt: CompoundClient): Array[FileStatus] = {
     PathType.fromAttributes(attributes) match {
-      case PathType.File => path.lockAsync()
-        .thenCompose(lockedPath => getFileStatus(lockedPath, attributes))
-        .thenApply(fileStatus => Array(fileStatus))
-      case PathType.Table =>
-        lockTableAsync(path, attributes).thenApply(status => Array(status))
-      case PathType.Directory => if (expandDirectory) {
-          listYtDirectory(path, filter)
-        } else {
-          getFileStatus(path, attributes).thenApply(fileStatus => Array(fileStatus))
-        }
-      case pathType =>
-        throw new IllegalArgumentException(s"Can't list $pathType")
+      case PathType.File => Array(getFileStatus(path.lock(), attributes))
+      case PathType.Table => Array(lockTable(path, attributes))
+      case PathType.Directory => if (expandDirectory) listYtDirectory(path, filter) else Array(getFileStatus(path, attributes))
+      case pathType => throw new IllegalArgumentException(s"Can't list $pathType")
     }
   }
 
-  private def listYtDirectory(path: YPathEnriched, filter: PathFilter)(implicit yt: CompoundClient): CompletableFuture[Array[FileStatus]] = {
-    val childFutures = YtWrapper.listDir(path.toYPath, path.transaction, YtAttributes.tableAttributes).flatMap { nameWithAttrs =>
+  private def listYtDirectory(path: YPathEnriched, filter: PathFilter)(implicit yt: CompoundClient): Array[FileStatus] = {
+    YtWrapper.listDir(path.toYPath, path.transaction, YtAttributes.tableAttributes).flatMap { nameWithAttrs =>
       val name = nameWithAttrs.stringValue()
       if (filter.accept(new PathName(name))) {
         val attributes: Map[String, YTreeNode] = nameWithAttrs.getAttributes.asScala.toMap
-        Some(listStatusAsync(path.child(name), expandDirectory = false, attributes, filter))
+        listStatus(path.child(name), expandDirectory = false, attributes, filter)
       } else {
-        None
+        Nil
       }
-    }.toSeq
-
-    if (childFutures.isEmpty) {
-      CompletableFuture.completedFuture(Array.empty)
-    } else {
-      childFutures.reduce { (f1, f2) =>
-        f1.thenCombine(f2, (a1: Array[FileStatus], a2: Array[FileStatus]) => a1 ++ a2)
-      }
-    }
+    }.toArray
   }
 
-  private def lockTableAsync(path: YPathEnriched, attributes: Map[String, YTreeNode])
-    (implicit yt: CompoundClient): CompletableFuture[FileStatus] = {
+  private def lockTable(path: YPathEnriched, attributes: Map[String, YTreeNode])
+    (implicit yt: CompoundClient): FileStatus = {
     YtWrapper.tableType(attributes) match {
-      case TableType.Static => lockStaticTableAsync(path, attributes)
-      case TableType.Dynamic => lockDynamicTableAsync(path, attributes)
+      case TableType.Static => lockStaticTable(path, attributes)
+      case TableType.Dynamic => lockDynamicTable(path, attributes)
     }
   }
 
   private lazy val isDriver: Boolean = SparkSession.getDefaultSession.nonEmpty
 
-  private def lockStaticTableAsync(path: YPathEnriched, attributes: Map[String, YTreeNode])
-    (implicit yt: CompoundClient): CompletableFuture[FileStatus] = {
-    path.dropTimestamp().lockAsync().thenCompose(lockedPath => getFileStatus(lockedPath, attributes))
+  private def lockStaticTable(path: YPathEnriched, attributes: Map[String, YTreeNode])
+    (implicit yt: CompoundClient): FileStatus = {
+    getFileStatus(path.dropTimestamp().lock(), attributes)
   }
 
-  private def lockDynamicTableAsync(path: YPathEnriched, attributes: Map[String, YTreeNode])
-    (implicit yt: CompoundClient): CompletableFuture[FileStatus] = {
+  private def lockDynamicTable(path: YPathEnriched, attributes: Map[String, YTreeNode])
+    (implicit yt: CompoundClient): FileStatus = {
     if (path.timestamp.isDefined || path.transaction.isDefined) {
-      path.lockAsync().thenCompose(lockedPath => getFileStatus(lockedPath, attributes))
+      getFileStatus(path.lock(), attributes)
     } else {
       if (!isDriver) {
         log.warn("Generating timestamps of dynamic tables on executors causes reading files with different timestamps")
@@ -111,16 +90,16 @@ class YtTableFileSystem extends YtFileSystemBase {
 
   override def getFileStatus(f: Path): FileStatus = {
     val (path, attributes, yt) = setupContext(f)
-    getFileStatus(f, path, attributes)(yt).join()
+    getFileStatus(f, path, attributes)(yt)
   }
 
   private def getFileStatus(path: YPathEnriched, attributes: Map[String, YTreeNode])
-    (implicit yt: CompoundClient): CompletableFuture[FileStatus] = {
+    (implicit yt: CompoundClient): FileStatus = {
     getFileStatus(path.toPath, path, attributes)
   }
 
   private def getFileStatus(f: Path, path: YPathEnriched, attributes: Map[String, YTreeNode])
-    (implicit yt: CompoundClient): CompletableFuture[FileStatus] = {
+    (implicit yt: CompoundClient): FileStatus = {
     log.debugLazy(s"Get file status $f")
 
     val modificationTime = YtWrapper.modificationTimeTs(attributes)
@@ -129,28 +108,28 @@ class YtTableFileSystem extends YtFileSystemBase {
 
       case PathType.Table => buildTableStatus(path, attributes, modificationTime)
 
-      case PathType.Directory => CompletableFuture.completedFuture(new FileStatus(0L, true, 1, 0L, modificationTime, f))
+      case PathType.Directory => new FileStatus(0L, true, 1, 0L, modificationTime, f)
 
-      case PathType.None => CompletableFuture.completedFuture(null)
+      case PathType.None => null
     }
   }
 
   private def buildFileStatus(f: Path,
     attributes: Map[String, YTreeNode],
     modificationTime: Long
-  ): CompletableFuture[FileStatus] = {
+  ): FileStatus = {
     val size = YtWrapper.fileSize(attributes)
-    CompletableFuture.completedFuture(new FileStatus(size, false, 1, size, modificationTime, f))
+    new FileStatus(size, false, 1, size, modificationTime, f)
   }
 
   private def buildTableStatus(path: YPathEnriched,
     attributes: Map[String, YTreeNode],
     modificationTime: Long
-  )(implicit yt: CompoundClient): CompletableFuture[FileStatus] = {
+  )(implicit yt: CompoundClient): FileStatus = {
     val size = YtWrapper.fileSize(attributes) max 1L // size may be 0 when real data exists
     val optimizeMode = YtWrapper.optimizeMode(attributes)
 
-    val tableMetaFuture = YtWrapper.tableType(attributes) match {
+    val tableMeta = YtWrapper.tableType(attributes) match {
       case TableType.Static =>
         buildStaticTableMeta(path, attributes, size, modificationTime, optimizeMode)
 
@@ -158,10 +137,8 @@ class YtTableFileSystem extends YtFileSystemBase {
         buildDynamicTableMeta(attributes, size, modificationTime, optimizeMode)
     }
 
-    tableMetaFuture.thenApply { tableMeta =>
-      val richPath = YtHadoopPath(path, tableMeta)
-      YtFileStatus.toFileStatus(richPath)
-    }
+    val richPath = YtHadoopPath(path, tableMeta)
+    YtFileStatus.toFileStatus(richPath)
   }
 
   private def buildStaticTableMeta(path: YPathEnriched,
@@ -169,25 +146,24 @@ class YtTableFileSystem extends YtFileSystemBase {
     size: Long,
     modificationTime: Long,
     optimizeMode: OptimizeMode
-  )(implicit yt: CompoundClient): CompletableFuture[YtTableMeta] = {
+  )(implicit yt: CompoundClient): YtTableMeta = {
     val directRowCount = YtWrapper.rowCount(attributes)
     val resolvedRowCount = directRowCount.getOrElse(YtWrapper.chunkRowCount(attributes))
 
-    val fullReadAllowedFuture = directRowCount match {
-      case Some(_) => CompletableFuture.completedFuture(true)
-      case None => isFullReadAllowed(path)
-    }
+    val fullReadAllowed =
+      directRowCount match {
+        case Some(_) => true
+        case None => isFullReadAllowed(path)
+      }
 
-    fullReadAllowedFuture.thenApply { fullReadAllowed =>
-      YtTableMeta(
-        rowCount = resolvedRowCount,
-        size = size,
-        modificationTime = modificationTime,
-        optimizeMode = optimizeMode,
-        fullReadAllowed = fullReadAllowed,
-        schemaIdOpt = YtWrapper.schemaId(attributes)
-      )
-    }
+    YtTableMeta(
+      rowCount = resolvedRowCount,
+      size = size,
+      modificationTime = modificationTime,
+      optimizeMode = optimizeMode,
+      fullReadAllowed = fullReadAllowed,
+      schemaIdOpt = YtWrapper.schemaId(attributes)
+    )
   }
 
   private def buildDynamicTableMeta(
@@ -195,40 +171,34 @@ class YtTableFileSystem extends YtFileSystemBase {
     size: Long,
     modificationTime: Long,
     optimizeMode: OptimizeMode
-  ): CompletableFuture[YtTableMeta] = {
-    CompletableFuture.completedFuture(YtTableMeta(
+  ): YtTableMeta = {
+    YtTableMeta(
       rowCount = YtWrapper.chunkRowCount(attributes),
       size = size,
       modificationTime = modificationTime,
       optimizeMode = optimizeMode,
       isDynamic = true,
       schemaIdOpt = YtWrapper.schemaId(attributes)
-    ))
+    )
   }
 
   private val FullReadPermission = 0x2000
 
-  private def isFullReadAllowed(path: YPathEnriched)(implicit yt: CompoundClient): CompletableFuture[Boolean] = {
-    val userFuture = Option(ytUser) match {
-      case Some(user) => CompletableFuture.completedFuture(user)
-      case None => yt.getCurrentUser(GetCurrentUser.builder().build())
-    }
+  private def isFullReadAllowed(path: YPathEnriched)(implicit yt: CompoundClient): Boolean = {
+    val user = Option(ytUser).getOrElse(yt.getCurrentUser(GetCurrentUser.builder().build()).join())
 
-    val resultFuture = userFuture.thenCompose { user =>
-      val request = CheckPermission.builder()
-        .setUser(user)
-        .setPath(path.toYPath.toString)
-        .setPermissions(FullReadPermission)
-        .setColumns(null)
-        .build()
+    val request = CheckPermission.builder()
+      .setUser(user)
+      .setPath(path.toYPath.toString)
+      .setPermissions(FullReadPermission)
+      .setColumns(null)
+      .build()
 
-      yt.checkPermission(request)
-    }
+    val result = yt.checkPermission(request).join()
 
-    resultFuture.thenApply { result =>
-      result.getAction == ESecurityAction.SA_ALLOW
-    }
+    result.getAction == ESecurityAction.SA_ALLOW
   }
+
 }
 
 object YtTableFileSystem {

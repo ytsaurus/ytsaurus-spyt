@@ -12,6 +12,7 @@ class PublishConfig(NamedTuple):
     specific_global_file: Optional[str] = None
     ignore_existing: bool = False
     snapshot_ttl: int = 14 * 24 * 60 * 60 * 1000
+    include_livy: bool = True
 
 
 class ClientBuilder(NamedTuple):

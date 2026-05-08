@@ -2,7 +2,7 @@ package tech.ytsaurus.spark.metrics
 
 import tech.ytsaurus.spyt.wrapper.config.ConfigEntry
 
-import java.time.Duration
+import scala.concurrent.duration.{Duration, DurationInt}
 
 case object SolomonSinkSettings {
   import ConfigEntry.implicits._
@@ -14,13 +14,12 @@ case object SolomonSinkSettings {
     Option(System.getenv(YT_MONITORING_PUSH_PORT_ENV_NAME)).map(_.toInt))
   case object SolomonToken extends ConfigEntry[String]("solomon_token", None)
   case object SolomonCommonLabels extends ConfigEntry[Map[String, String]]("common_labels", Some(Map()))
-  case object SolomonJobLabel extends ConfigEntry[String]("app_alias", Some(""))
   case object SolomonMetricNameRegex extends ConfigEntry[String]("accept_metrics", Some(".*"))
   case object SolomonMetricNameTransform extends ConfigEntry[String]("rename_metrics", Some(""))
 
   case object ReporterEnabled extends ConfigEntry[Boolean]("reporter_enabled",
     Some(Option(System.getenv("SPARK_YT_METRICS_ENABLED")).map(_.toBoolean).getOrElse(false)))
   case object ReporterPollPeriod extends ConfigEntry[Duration]("poll_period",
-    Some(Duration.ofMillis(500)))
+    Some(500.milliseconds))
   case object ReporterName extends ConfigEntry[String]("reporter_name", Some("spyt"))
 }

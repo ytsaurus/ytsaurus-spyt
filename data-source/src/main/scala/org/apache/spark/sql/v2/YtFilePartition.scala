@@ -1,13 +1,13 @@
 package org.apache.spark.sql.v2
 
 import org.apache.hadoop.fs.{FileStatus, Path}
+import org.apache.spark.TaskContext
 import org.apache.spark.network.util.ByteUnit
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.execution.datasources.{FilePartition, PartitionDirectory, PartitionedFile}
 import org.apache.spark.sql.types.StructType
 import org.slf4j.LoggerFactory
-import scala.jdk.CollectionConverters._
 import tech.ytsaurus.client.CompoundClient
 import tech.ytsaurus.core.cypress.{RangeLimit, YPath}
 import tech.ytsaurus.spyt.SparkAdapter
@@ -75,16 +75,14 @@ object YtFilePartition {
     readDataSchema: Option[StructType] = None,
     pushedFilterSegments: SegmentSet = SegmentSet())
     (implicit ytReadContext: YtReadContext): Seq[PartitionedFile] = {
+    import scala.collection.JavaConverters._
     val richYPath = buildOptimizedYPath(sparkSession, path, maxSplitBytes, partitionValues,
       readDataSchema, pushedFilterSegments)
 
     log.info(s"richYPath passed to partitionTables: ${richYPath.toStableString}")
 
-    val distributedReading = ytReadContext.settings.distributedReadingEnabled
-
-    val multiTablePartitions = YtWrapper.partitionTables(richYPath, maxSplitBytes, enableCookies = distributedReading)
-
-    if (distributedReading) {
+    if (ytReadContext.settings.distributedReadingEnabled) {
+      val multiTablePartitions = YtWrapper.partitionTables(richYPath, maxSplitBytes, enableCookies = true)
       multiTablePartitions.map { multiTablePartition =>
         val allRanges = multiTablePartition.getTableRanges.asScala
         val combinedYPath = allRanges.foldLeft(path.toYPath) { (currentPath, tableRange) =>
@@ -93,10 +91,12 @@ object YtFilePartition {
           }
         }
         val cookie = multiTablePartition.getCookie
+
         YtPartitionedFileDelegate(combinedYPath, maxSplitBytes, partitionValues, path, distributedReading = true,
           cookie = Some(cookie))
       }
     } else {
+      val multiTablePartitions = YtWrapper.partitionTables(richYPath, maxSplitBytes)
       multiTablePartitions.flatMap { multiTablePartition =>
         val tableRanges = multiTablePartition.getTableRanges.asScala
         tableRanges.flatMap { tableRange =>

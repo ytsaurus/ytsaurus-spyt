@@ -4,12 +4,13 @@ import org.apache.hadoop.fs.{Path, PathNotFoundException}
 import org.apache.hadoop.io.IOUtils
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
-import tech.ytsaurus.spyt.test.{LocalYtClient, TmpDir}
+import tech.ytsaurus.spyt.test.{LocalYt, LocalYtClient, TmpDir}
 import tech.ytsaurus.spyt.wrapper.YtWrapper
 
 import java.io.{ByteArrayInputStream, FileNotFoundException}
-import java.time.Duration
+import scala.concurrent.duration._
 import scala.io.Source
+import scala.language.postfixOps
 
 class YtFileSystemTest extends AnyFlatSpec with Matchers with LocalYtClient with TmpDir {
 
@@ -21,7 +22,7 @@ class YtFileSystemTest extends AnyFlatSpec with Matchers with LocalYtClient with
   fs.initialize(new Path("/").toUri, fsConf)
   fs.setConf(fsConf)
 
-  def writeBytesToFile(path: String, content: Array[Byte], timeout: Duration = Duration.ofMinutes(1)): Unit = {
+  def writeBytesToFile(path: String, content: Array[Byte], timeout: Duration = 1 minute): Unit = {
     val os = YtWrapper.writeFile(path, timeout, transaction = None)
     try os.write(content) finally os.close()
   }
@@ -136,7 +137,7 @@ class YtFileSystemTest extends AnyFlatSpec with Matchers with LocalYtClient with
   it should "consider timeout" ignore {
     val out = fs.create(new Path(tmpPath))
     try {
-      Thread.sleep(150000)
+      Thread.sleep((150 seconds).toMillis)
       out.write("123".getBytes())
     } finally {
       out.close()

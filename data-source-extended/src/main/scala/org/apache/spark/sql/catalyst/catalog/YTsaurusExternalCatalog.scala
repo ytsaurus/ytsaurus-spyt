@@ -2,11 +2,11 @@ package org.apache.spark.sql.catalyst.catalog
 
 import org.apache.hadoop.conf.Configuration
 import org.apache.spark.SparkConf
+import org.apache.spark.internal.Logging
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.analysis.NoSuchTableException
 import org.apache.spark.sql.types.StructType
 import tech.ytsaurus.client.CompoundClient
-import tech.ytsaurus.spyt.logging.Logging
 import tech.ytsaurus.spyt.wrapper.client.YtClientConfigurationConverter.ytClientConfiguration
 import tech.ytsaurus.spyt.fs.path.YPathEnriched
 import tech.ytsaurus.spyt.serializers.SchemaConverter.{Sorted, Unordered}
@@ -18,7 +18,6 @@ import tech.ytsaurus.spyt.wrapper.table.{BaseYtTableSettings, TableType}
 import tech.ytsaurus.ysontree.{YTreeNode, YTreeTextSerializer}
 
 import java.net.URI
-import scala.jdk.CollectionConverters._
 
 class YTsaurusExternalCatalog(conf: SparkConf, hadoopConf: Configuration)
   extends InMemoryCatalog(conf, hadoopConf) with Logging {
@@ -53,6 +52,7 @@ class YTsaurusExternalCatalog(conf: SparkConf, hadoopConf: Configuration)
   private val excludeKeys = Set("key_columns", "sort_orders", "unique_keys")
 
   private def getSortOption(extraProperties: Map[String, YTreeNode]): SchemaConverter.SortOption = {
+    import scala.collection.JavaConverters._
     val keyColumns = extraProperties.get("key_columns").map(_.asList().asScala.map(_.stringValue())).getOrElse(Seq())
     val sortOrders = extraProperties.get("sort_orders").map(_.asList().asScala.map(_.stringValue())).getOrElse(Seq())
     if (keyColumns.nonEmpty) {

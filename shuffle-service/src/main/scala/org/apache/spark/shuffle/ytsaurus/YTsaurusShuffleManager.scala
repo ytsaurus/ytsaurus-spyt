@@ -1,7 +1,7 @@
 package org.apache.spark.shuffle.ytsaurus
 
 import org.apache.commons.codec.binary.Hex
-import tech.ytsaurus.spyt.logging.Logging
+import org.apache.spark.internal.Logging
 import org.apache.spark.internal.config.OptionalConfigEntry
 import org.apache.spark.io.CompressionCodec
 import org.apache.spark.network.buffer.ManagedBuffer
@@ -18,10 +18,12 @@ import tech.ytsaurus.core.GUID
 import tech.ytsaurus.spyt.wrapper.YtWrapper
 import tech.ytsaurus.spyt.wrapper.client.YtClientProvider
 import tech.ytsaurus.spyt.wrapper.client.YtClientConfigurationConverter.ytClientConfiguration
-import tech.ytsaurus.ysontree.YTreeNode
+import tech.ytsaurus.ysontree.{YTreeNode, YTreeTextSerializer}
 
-import java.time.Duration
-import java.util.concurrent.TimeUnit
+import java.io.{ByteArrayInputStream, ByteArrayOutputStream, InputStream}
+import java.nio.ByteBuffer
+import java.util.concurrent.{CompletableFuture, TimeUnit}
+import scala.concurrent.duration.Duration
 
 class YTsaurusShuffleManager(conf: SparkConf) extends ShuffleManager with Logging {
 
@@ -39,7 +41,7 @@ class YTsaurusShuffleManager(conf: SparkConf) extends ShuffleManager with Loggin
   override def registerShuffle[K, V, C](shuffleId: Int, dependency: ShuffleDependency[K, V, C]): ShuffleHandle = {
     // IS CALLED ON DRIVER
     val baseHandle = delegate.registerShuffle(shuffleId, dependency).asInstanceOf[BaseShuffleHandle[K, V, C]]
-    val shuffleTransactionTimeout = Duration.ofMillis(conf.get(YTSAURUS_SHUFFLE_TRANSACTION_TIMEOUT))
+    val shuffleTransactionTimeout = Duration(conf.get(YTSAURUS_SHUFFLE_TRANSACTION_TIMEOUT), TimeUnit.MILLISECONDS)
     val shuffleTransaction = YtWrapper.createTransaction(None, shuffleTransactionTimeout)
     val partitionCount = dependency.partitioner.numPartitions
 

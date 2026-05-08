@@ -7,13 +7,12 @@ import org.apache.spark.sql.connect.ytsaurus.SpytConnectServer.INNER_CLUSTER
 import org.apache.spark.sql.connect.ytsaurus.Config.{YTSAURUS_CONNECT_SETTINGS_HASH, YTSAURUS_CONNECT_STARTUP_TIMEOUT}
 import tech.ytsaurus.spyt.launcher.DeployMessages
 import tech.ytsaurus.spyt.launcher.DeployMessages.SpytConnectApplication
-import tech.ytsaurus.spyt.wrapper.YtJavaConverters.toScalaDuration
 
-import java.time.Duration
 import java.util.UUID
 import java.util.concurrent.{TimeUnit, TimeoutException}
 import javax.servlet.http.{HttpServletRequest, HttpServletResponse}
 import scala.concurrent.{Await, Future}
+import scala.concurrent.duration.Duration
 import scala.io.Source
 
 class SpytConnectServerServlet(masterEndpoint: RpcEndpointRef, masterUrl: String, conf: SparkConf)
@@ -94,9 +93,9 @@ class SpytConnectServerServlet(masterEndpoint: RpcEndpointRef, masterUrl: String
     requestToken: String,
     responseServlet: HttpServletResponse
   ): SubmitRestProtocolResponse = {
-    val timeout = Duration.ofMillis(conf.get(YTSAURUS_CONNECT_STARTUP_TIMEOUT))
+    val timeout = Duration(conf.get(YTSAURUS_CONNECT_STARTUP_TIMEOUT), TimeUnit.MILLISECONDS)
     try {
-      val endpoint = Await.result(endpointFuture, toScalaDuration(timeout))
+      val endpoint = Await.result(endpointFuture, timeout)
       createSpytConnectServerResponse(endpoint)
     } catch {
       case _: TimeoutException =>

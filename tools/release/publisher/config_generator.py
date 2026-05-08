@@ -78,12 +78,10 @@ def get_file_paths(conf_local_dir: str, root_path: str, versions: Versions) -> L
         f"{root_path}/{spyt_remote_dir(versions)}/spyt-package.zip",
         f"{root_path}/{spyt_remote_dir(versions)}/setup-spyt-env.sh",
     ]
-    sidecar_configs_dir = get_sidecar_configs_dir(conf_local_dir)
-    if os.path.exists(sidecar_configs_dir):
-        file_paths.extend([
-            f"{root_path}/{conf_remote_dir(versions)}/{config_name}"
-            for config_name in listdir(sidecar_configs_dir)
-        ])
+    file_paths.extend([
+        f"{root_path}/{conf_remote_dir(versions)}/{config_name}"
+        for config_name in listdir(get_sidecar_configs_dir(conf_local_dir))
+    ])
     return file_paths
 
 
@@ -93,9 +91,8 @@ def prepare_sidecar_configs(conf_local_dir: str, os_release: bool):
         logger.info("Sidecar configs are already prepared")
     else:
         raw_sidecar_configs_dir = join(conf_local_dir, 'sidecar-config' if os_release else 'inner-sidecar-config')
-        if os.path.exists(raw_sidecar_configs_dir):
-            shutil.copytree(raw_sidecar_configs_dir, sidecar_configs_dir)
-            logger.info(f"Sidecar configs have been copied from {raw_sidecar_configs_dir}")
+        shutil.copytree(raw_sidecar_configs_dir, sidecar_configs_dir)
+        logger.info(f"Sidecar configs have been copied from {raw_sidecar_configs_dir}")
 
 
 def prepare_launch_config(conf_local_dir: str, client: Client, versions: Versions,
@@ -122,6 +119,7 @@ def prepare_launch_config(conf_local_dir: str, client: Client, versions: Version
             client.resolve_from_root("delta/python/layer_with_python313_jammy_v002.tar.gz"),
             client.resolve_from_root("delta/python/layer_with_python312_jammy_v002.tar.gz"),
             client.resolve_from_root("delta/python/layer_with_python311_jammy_v001.tar.gz"),
+            client.resolve_from_root("delta/python/layer_with_python39_jammy_v001.tar.gz"),
             "//porto_layers/base/jammy/porto_layer_search_ubuntu_jammy_app_lastest.tar.gz"
         ]
         launch_config['squashfs_layer_paths'] = [
@@ -130,6 +128,7 @@ def prepare_launch_config(conf_local_dir: str, client: Client, versions: Version
             client.resolve_from_root("squashfs/python/layer_with_python313_jammy_v002.squashfs"),
             client.resolve_from_root("squashfs/python/layer_with_python312_jammy_v002.squashfs"),
             client.resolve_from_root("squashfs/python/layer_with_python311_jammy_v001.squashfs"),
+            client.resolve_from_root("squashfs/python/layer_with_python39_jammy_v001.squashfs"),
             "//porto_layers/base/jammy/porto_layer_search_ubuntu_jammy_app_lastest.tar.gz"
         ]
     else:
@@ -145,10 +144,16 @@ def prepare_global_config(os_release: bool) -> Dict[str, Any]:
     global_config['latest_spyt_version'] = "1.76.1"
     global_config['latest_spark_cluster_version'] = "1.75.4"
     if not os_release:
+        # is preserved for backward compatibility and is subject to remove
         python_cluster_paths = {
             "3.11": "/opt/python3.11/bin/python3.11",
             "3.12": "/opt/python3.12/bin/python3.12",
-            "3.13": "/opt/python3.13/bin/python3.13"
+            "3.9": "/opt/python3.9/bin/python3.9",
+            "3.8": "/opt/python3.8/bin/python3.8",
+            "3.7": "/opt/python3.7/bin/python3.7",
+            "3.5": "python3.5",
+            "3.4": "/opt/python3.4/bin/python3.4",
+            "2.7": "python2.7"
         }
         global_config['default_cluster_java_home'] = '/opt/jdk11'
         global_config['environment']['SPARK_PREFER_IPV6'] = 'true'

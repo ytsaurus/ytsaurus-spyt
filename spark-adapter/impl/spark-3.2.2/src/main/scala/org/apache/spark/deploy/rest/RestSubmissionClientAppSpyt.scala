@@ -3,14 +3,14 @@ package org.apache.spark.deploy.rest
 import org.apache.commons.io.FileUtils
 import org.apache.hadoop.fs.FileSystem
 import org.apache.spark.deploy.SparkHadoopUtil
-import tech.ytsaurus.spyt.logging.Logging
+import org.apache.spark.internal.Logging
 import org.apache.spark.{SparkConf, SparkException}
 import tech.ytsaurus.spyt.patch.annotations.{OriginClass, Subclass}
 
 import java.io.File
 import java.net.URI
-import java.time.Duration
 import scala.annotation.tailrec
+import scala.concurrent.duration._
 import scala.util.{Failure, Random, Success, Try}
 
 @Subclass
@@ -31,19 +31,18 @@ class RestSubmissionClientAppSpyt extends RestSubmissionClientApp with Logging {
   }
 
   @tailrec
-  private def getSubmissionStatus(
-    submissionId: String,
-    client: RestSubmissionClient,
-    retry: Int,
-    retryInterval: Duration,
-    rnd: Random = new Random): SubmissionStatusResponse = {
+  private def getSubmissionStatus(submissionId: String,
+                                  client: RestSubmissionClient,
+                                  retry: Int,
+                                  retryInterval: Duration,
+                                  rnd: Random = new Random): SubmissionStatusResponse = {
     val response = Try(client.requestSubmissionStatus(submissionId)
       .asInstanceOf[SubmissionStatusResponse])
     response match {
       case Success(value) => value
       case Failure(exception) if retry > 0 =>
         log.error(s"Exception while getting submission status: ${exception.getMessage}")
-        val sleepInterval = if (retryInterval.toSeconds > 1) {
+        val sleepInterval = if (retryInterval > 1.second) {
           1000 + rnd.nextInt(retryInterval.toMillis.toInt - 1000)
         } else rnd.nextInt(retryInterval.toMillis.toInt)
         Thread.sleep(sleepInterval)
@@ -123,8 +122,9 @@ class RestSubmissionClientAppSpyt extends RestSubmissionClientApp with Logging {
       submissionIdFile.foreach(writeToFile(_, submissionId))
 
       if (conf.getOption("spark.rest.client.awaitTermination.enabled").forall(_.toBoolean)) {
-        val checkStatusIntervalSeconds = conf.getOption("spark.rest.client.statusInterval").map(_.toInt).getOrElse(5)
-        awaitAppTermination(submissionId, conf, Duration.ofSeconds(checkStatusIntervalSeconds))
+        val checkStatusInterval = conf.getOption("spark.rest.client.statusInterval")
+          .map(_.toInt.seconds).getOrElse(5.seconds)
+        awaitAppTermination(submissionId, conf, checkStatusInterval)
       }
     } catch {
       case e: Throwable =>

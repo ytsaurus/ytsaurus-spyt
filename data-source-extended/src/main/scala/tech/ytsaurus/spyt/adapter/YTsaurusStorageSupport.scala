@@ -9,7 +9,6 @@ import org.apache.spark.sql.catalyst.rules.Rule
 import org.apache.spark.sql.execution.datasources.{PartitionDirectory, PartitionedFile}
 import org.apache.spark.sql.v2.YtFilePartition
 import org.apache.spark.sql.yt.YtSourceScanExec
-import tech.ytsaurus.spyt.common.utils.ExpressionTransformer
 import tech.ytsaurus.spyt.format.conf.SparkYtConfiguration
 import tech.ytsaurus.spyt.format.optimizer.YtSortedTableMarkerRule
 import tech.ytsaurus.spyt.wrapper.config.SparkYtSparkSession
@@ -20,13 +19,10 @@ class YTsaurusStorageSupport extends StorageSupport {
   }
 
   override def splitFiles(sparkSession: SparkSession, file: FileStatus, filePath: Path,
-    maxSplitBytes: Long, partitionValues: InternalRow): Seq[PartitionedFile] = {
+                          maxSplitBytes: Long, partitionValues: InternalRow): Seq[PartitionedFile] = {
     val ytSourceScanExec = YtSourceScanExec.currentThreadInstance.get()
     val readDataSchema = Option(ytSourceScanExec).map(_.requiredSchema)
-    val pushedFilterSegments = ExpressionTransformer.filtersToSegmentSet(ytSourceScanExec.pushedDownFilters)
-
-    YtFilePartition.splitFiles(sparkSession, file, filePath, maxSplitBytes, partitionValues,
-      pushedFilterSegments = pushedFilterSegments, readDataSchema = readDataSchema)
+    YtFilePartition.splitFiles(sparkSession, file, filePath, maxSplitBytes, partitionValues, readDataSchema = readDataSchema)
   }
 
   override def maxSplitBytes(sparkSession: SparkSession, selectedPartitions: Seq[PartitionDirectory]): Long = {

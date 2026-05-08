@@ -1,17 +1,18 @@
 package tech.ytsaurus.spark.launcher
 
 import com.codahale.metrics.MetricRegistry
+import com.twitter.scalding.Args
 import org.slf4j.LoggerFactory
 import tech.ytsaurus.spark.launcher.AdditionalMetricsSender.startAdditionalMetricsSenderIfDefined
 import tech.ytsaurus.spark.metrics.AdditionalMetrics
-import tech.ytsaurus.spyt.args.Args
 import tech.ytsaurus.spyt.wrapper.TcpProxyService
 import tech.ytsaurus.spyt.wrapper.TcpProxyService.updateTcpAddress
 import tech.ytsaurus.spyt.wrapper.client.YtClientConfiguration
 import tech.ytsaurus.spyt.wrapper.discovery.{Address, SparkConfYsonable}
 
 import java.net.URI
-import java.time.Duration
+import scala.concurrent.duration._
+import scala.language.postfixOps
 
 object MasterLauncher extends App
   with VanillaLauncher
@@ -35,7 +36,7 @@ object MasterLauncher extends App
       val tcpRouter = TcpProxyService().register("HOST", "WEBUI", "REST", "WRAPPER")(yt)
       val reverseProxyUrl = tcpRouter.map(x => "http://" + x.getExternalAddress("WEBUI").toString)
       withService(startMaster(reverseProxyUrl)) { master =>
-        master.waitAndThrowIfNotAlive(Duration.ofMinutes(5))
+        master.waitAndThrowIfNotAlive(5 minutes)
 
         val masterAddress = tcpRouter.map { router =>
           val webUi = router.getExternalAddress("WEBUI")

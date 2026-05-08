@@ -1,16 +1,18 @@
 package tech.ytsaurus.spark.launcher
 
+import com.twitter.scalding.Args
 import org.slf4j.LoggerFactory
-import tech.ytsaurus.spark.launcher.Service.BasicService
-import tech.ytsaurus.spyt.args.Args
+import Service.BasicService
 import tech.ytsaurus.spyt.wrapper.Utils.parseDuration
 import tech.ytsaurus.spyt.wrapper.client.YtClientConfiguration
 import tech.ytsaurus.spyt.wrapper.discovery.DiscoveryService
+import tech.ytsaurus.spark.launcher.Service.BasicService
 import tech.ytsaurus.spyt.HostAndPort
 
 import java.io.File
 import java.nio.file.{Path, Paths}
-import java.time.Duration
+import scala.concurrent.duration._
+import scala.language.postfixOps
 import scala.sys.process.Process
 
 trait SidecarLauncher {
@@ -117,6 +119,6 @@ trait SidecarConfigUtils {
   }
 
   protected def timeout(implicit args: Args): Duration = {
-    args.optional("timeout").map(parseDuration).getOrElse(Duration.ofMinutes(5))
+    args.optional("timeout").map(parseDuration).getOrElse(5 minutes)
   }
 }

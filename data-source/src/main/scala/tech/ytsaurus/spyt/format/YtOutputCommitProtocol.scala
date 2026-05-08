@@ -16,8 +16,8 @@ import tech.ytsaurus.core.GUID
 import tech.ytsaurus.spyt.exceptions._
 import tech.ytsaurus.spyt.format.YtOutputCommitProtocol._
 import tech.ytsaurus.spyt.format.conf.SparkYtConfiguration.Write.DynBatchSize
-import tech.ytsaurus.spyt.format.conf.SparkYtInternalConfiguration.{BaseSchema, GlobalTransaction, IdMapping, Transaction}
-import tech.ytsaurus.spyt.format.conf.YtTableSparkSettings.{CustomAttribute, InconsistentDynamicWrite, Schema, WriteTransaction, isTable, isTableSorted}
+import tech.ytsaurus.spyt.format.conf.SparkYtInternalConfiguration.{GlobalTransaction, Transaction, IdMapping, BaseSchema}
+import tech.ytsaurus.spyt.format.conf.YtTableSparkSettings.{InconsistentDynamicWrite, Schema, WriteTransaction, isTable, isTableSorted}
 import tech.ytsaurus.spyt.format.conf.{SparkYtConfiguration, YtTableSparkSettings}
 import tech.ytsaurus.spyt.fs.path.YPathEnriched
 import tech.ytsaurus.spyt.wrapper.YtWrapper
@@ -28,7 +28,7 @@ import tech.ytsaurus.spyt.wrapper.config.{ConfigEntry, _}
 
 import java.io.{IOException, ObjectOutputStream}
 import java.util.concurrent.{ConcurrentHashMap, ConcurrentMap, Semaphore}
-import scala.jdk.CollectionConverters._
+import scala.collection.JavaConverters._
 import scala.collection.mutable.ArrayBuffer
 import scala.concurrent.Promise
 
@@ -57,30 +57,9 @@ abstract class AbstractYtOutputCommitProtocol(
     }
   }
 
-  protected def updateAttributes(path: YPathEnriched, options: YtTableSparkSettings, transaction: String): Unit = {
-    val attrsFromTable = YtWrapper.attributes(path.toStringPath, Some(transaction), options.optionsAny.keySet)
-      .map { case (k, v) => k -> v.toString.stripPrefix("\"").stripSuffix("\"")}
-    val attrsForUpdate = options.optionsAny.flatMap { case (k, v) =>
-      val cleanedV = v.toString.stripPrefix("\"").stripSuffix("\"")
-      if (!attrsFromTable.get(k).getOrElse("").equals(cleanedV)) {
-        Some(k -> cleanedV)
-      } else {
-        None
-      }
-    }
-
-    if(!attrsForUpdate.isEmpty){
-      attrsForUpdate.foreach { case (k, v) =>
-        YtWrapper.setAttribute(path.toStringPath, k, CustomAttribute.get(v), Some(transaction))}
-    }
-  }
-
   protected def setupTable(path: YPathEnriched, conf: Configuration, transaction: String): Unit = {
     val options = YtTableSparkSettings.deserialize(conf)
-
     YtWrapper.createTable(path.toStringYPath, options, Some(transaction), ignoreExisting = true)
-
-    updateAttributes(path, options, transaction)
   }
 
   override def newTaskTempFileAbsPath(taskContext: TaskAttemptContext, absoluteDir: String, ext: String): String = {
@@ -331,10 +310,6 @@ class DistributedWriteOutputCommitProtocol(
     }
     prepareWrite(conf) { transaction =>
       if (isAppend) {
-
-        val options = YtTableSparkSettings.deserialize(conf)
-        updateAttributes(rootPath, options, transaction)
-
         val tableSchema = YtWrapper.attribute(rootPath.toString, "schema")
         val sparkSchema = conf.ytConf(Schema).sparkType.topLevel.asInstanceOf[StructType]
 

@@ -5,7 +5,7 @@ import tech.ytsaurus.spyt.wrapper.Utils.ytHostnameOrIpAddress
 import tech.ytsaurus.spyt.wrapper.discovery.{Address, DiscoveryService}
 import tech.ytsaurus.spyt.HostAndPort
 
-import java.time.Duration
+import scala.concurrent.duration.Duration
 
 sealed trait Service {
   private val log = LoggerFactory.getLogger(getClass)

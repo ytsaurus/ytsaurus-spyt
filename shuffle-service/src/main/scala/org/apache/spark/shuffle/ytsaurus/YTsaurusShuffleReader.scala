@@ -1,6 +1,6 @@
 package org.apache.spark.shuffle.ytsaurus
 
-import tech.ytsaurus.spyt.logging.Logging
+import org.apache.spark.internal.Logging
 import org.apache.spark.{InterruptibleIterator, SparkEnv, TaskContext}
 import org.apache.spark.shuffle.{ShuffleReadMetricsReporter, ShuffleReader}
 import org.apache.spark.storage.ShuffleBlockId
@@ -13,7 +13,7 @@ import tech.ytsaurus.ysontree.YTreeNode
 import java.io.{ByteArrayInputStream, InputStream, SequenceInputStream}
 import java.nio.ByteBuffer
 import java.util.concurrent.CompletableFuture
-import scala.jdk.CollectionConverters._
+import scala.collection.JavaConverters._
 
 class YTsaurusShuffleReader[K, C](compoundHandle: CompoundShuffleHandle[K, _, C],
                                   startMapIndex: Int,

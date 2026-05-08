@@ -3,22 +3,23 @@ package tech.ytsaurus.spyt.wrapper.client
 import org.slf4j.LoggerFactory
 import tech.ytsaurus.client.rpc.YTsaurusClientAuth
 import tech.ytsaurus.spyt.wrapper.Utils
+import tech.ytsaurus.spyt.wrapper.YtJavaConverters.toScalaDuration
 
 import java.net.URL
-import java.time.Duration
-
+import java.time.{Duration => JDuration}
+import scala.concurrent.duration._
+import scala.language.postfixOps
 import scala.util.{Failure, Success, Try}
 
-@SerialVersionUID(-4051409700916829022L)
-case class YtClientConfiguration(
-  proxy: String,
-  user: String,
-  token: String,
-  timeout: Duration,
-  proxyRole: Option[String],
-  extendedFileTimeout: Boolean,
-  proxyNetworkName: Option[String],
-  useCommonProxies: Boolean = false) extends Serializable {
+@SerialVersionUID(-4800048291369493456L)
+case class YtClientConfiguration(proxy: String,
+                                 user: String,
+                                 token: String,
+                                 timeout: Duration,
+                                 proxyRole: Option[String],
+                                 extendedFileTimeout: Boolean,
+                                 proxyNetworkName: Option[String],
+                                 useCommonProxies: Boolean = false) extends Serializable {
 
   private lazy val initialUrlAttempt: Try[URL] = Try(new URL(proxy))
 
@@ -63,7 +64,7 @@ object YtClientConfiguration {
     )
     val user = getByName("user").orElse(sys.env.get("YT_SECURE_VAULT_YT_USER"))
       .getOrElse(DefaultRpcCredentials.tokenUser(token))
-    val timeout = getByName("timeout").map(Utils.parseDuration).getOrElse(Duration.ofSeconds(60))
+    val timeout = getByName("timeout").map(Utils.parseDuration).getOrElse(60 seconds)
     val extendedFileTimeout = getByName("extendedFileTimeout").forall(_.toBoolean)
     val proxyNetworkName = sys.env.get("YT_JOB_ID") match {
       case Some(_) => None
@@ -98,22 +99,21 @@ object YtClientConfiguration {
     proxy = proxy,
     user = user,
     token = token,
-    timeout = Duration.ofMinutes(5),
+    timeout = 5 minutes,
     proxyRole = None,
     extendedFileTimeout = true,
     None
   )
 
-  def create(
-    proxy: String,
-    user: String,
-    token: String,
-    timeout: Duration,
-    proxyRole: String,
-    extendedFileTimeout: Boolean,
-    proxyNetworkName: Option[String] = None): YtClientConfiguration = {
-    new YtClientConfiguration(
-      proxy, user, token, timeout,Option(proxyRole), extendedFileTimeout, proxyNetworkName)
-  }
+  def create(proxy: String,
+             user: String,
+             token: String,
+             timeout: JDuration,
+             proxyRole: String,
+             extendedFileTimeout: Boolean,
+             proxyNetworkName: Option[String] = None) = new YtClientConfiguration(
+    proxy, user, token, toScalaDuration(timeout),
+    Option(proxyRole), extendedFileTimeout, proxyNetworkName
+  )
 }
 

@@ -10,7 +10,7 @@ import tech.ytsaurus.spyt.wrapper.YtWrapper
 import tech.ytsaurus.spyt.wrapper.table.YtReadSettings
 import tech.ytsaurus.ysontree.YTree
 
-import scala.jdk.CollectionConverters._
+import scala.collection.JavaConverters._
 
 class YtSortedTablesTest extends AnyFlatSpec with Matchers with LocalSpark with TestUtils with TmpDir {
 

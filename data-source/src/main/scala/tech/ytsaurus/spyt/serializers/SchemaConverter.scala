@@ -18,7 +18,6 @@ import tech.ytsaurus.typeinfo.TiType
 import tech.ytsaurus.ysontree.YTreeNode
 
 import scala.annotation.tailrec
-import scala.jdk.CollectionConverters._
 
 object SchemaConverter {
   object MetadataFields {
@@ -117,6 +116,7 @@ object SchemaConverter {
   def sparkSchema(schemaTree: YTreeNode, schemaHint: Option[StructType] = None, parsingTypeV3: Boolean = true): StructType = {
     import tech.ytsaurus.spyt.wrapper.YtJavaConverters._
 
+    import scala.collection.JavaConverters._
     StructType(schemaTree.asList().asScala.zipWithIndex.map { case (fieldSchema, index) =>
       val fieldMap = fieldSchema.asMap()
       val originalName = fieldMap.getOrThrow("name").stringValue()

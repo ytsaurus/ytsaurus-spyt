@@ -1,9 +1,13 @@
 package tech.ytsaurus.spyt.serializers
 
+import org.apache.spark.metrics.yt.YtMetricsRegister
+import org.apache.spark.metrics.yt.YtMetricsRegister.ytMetricsSource._
 import org.apache.spark.sql.catalyst.InternalRow
+import org.apache.spark.sql.sources.Filter
 import org.apache.spark.sql.spyt.types._
 import org.apache.spark.sql.types._
 import org.slf4j.LoggerFactory
+import tech.ytsaurus.client.AsyncWriter
 import tech.ytsaurus.client.rows.{WireProtocolWriteable, WireRowSerializer}
 import tech.ytsaurus.core.tables.{ColumnValueType, TableSchema}
 import tech.ytsaurus.spyt.serialization.YsonEncoder
@@ -13,6 +17,12 @@ import tech.ytsaurus.spyt.types.YTsaurusTypes
 import tech.ytsaurus.spyt.wrapper.LogLazy
 import tech.ytsaurus.typeinfo.TiType
 import tech.ytsaurus.ysontree.YTreeNode
+
+import java.util.concurrent.{Executors, TimeUnit}
+import scala.annotation.tailrec
+import scala.collection.mutable
+import scala.concurrent.duration.Duration
+import scala.concurrent.{ExecutionContext, Future}
 
 class InternalRowSerializer(sparkSchema: StructType,
   writeSchemaConverter: WriteSchemaConverter,

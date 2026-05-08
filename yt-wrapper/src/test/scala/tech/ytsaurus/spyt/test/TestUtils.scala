@@ -15,10 +15,10 @@ import tech.ytsaurus.ysontree.{YTreeBuilder, YTreeNode, YTreeNodeUtils, YTreeTex
 
 import java.io.{ByteArrayInputStream, InputStream}
 import java.nio.charset.StandardCharsets
-import java.time.Duration
 import java.util.concurrent.{CompletableFuture, CompletionStage}
 import scala.annotation.tailrec
-import scala.jdk.CollectionConverters._
+import scala.concurrent.duration._
+import scala.language.postfixOps
 
 trait TestUtils {
   val longColumnSchema: TableSchema = TableSchema.builder()
@@ -27,6 +27,8 @@ trait TestUtils {
     .build()
 
   private def ytSchema(path: String, fieldName: String)(implicit yt: CompoundClient): java.util.Map[String, YTreeNode] = {
+    import scala.collection.JavaConverters._
+
     val schema = YtWrapper.attribute(path, "schema")
     schema.asList()
       .asScala
@@ -46,6 +48,7 @@ trait TestUtils {
 
   def createEmptyTable(path: String, schema: TableSchema)
                       (implicit yt: CompoundClient): Unit = {
+    import scala.collection.JavaConverters._
     yt.createNode(path, CypressNodeType.TABLE, Map("schema" -> schema.toYTree).asJava).join()
   }
 
@@ -95,7 +98,7 @@ trait TestUtils {
     }
 
     implicit val ytReadContext: YtReadContext = YtReadContext(yt, readSettings)
-    YtWrapper.readTable(path, deser, Duration.ofMinutes(1), transaction).toList
+    YtWrapper.readTable(path, deser, 1 minute, transaction).toList
   }
 
   def writeTableFromYson(rows: Seq[String], path: String, schema: TableSchema,
@@ -114,6 +117,8 @@ trait TestUtils {
 
   def overwriteTableFromYson(rows: Seq[String], path: String, physicalSchema: TableSchema)
                             (implicit yt: CompoundClient): Unit = {
+    import scala.collection.JavaConverters._
+
     val serializer = new YTreeRowSerializer[String] {
       override def serialize(obj: String, consumer: YsonConsumer): Unit = {
         val node = YTreeTextSerializer.deserialize(new ByteArrayInputStream(obj.getBytes(StandardCharsets.UTF_8)))
@@ -159,6 +164,8 @@ trait TestUtils {
                          physicalSchema: TableSchema, optimizeFor: OptimizeMode = OptimizeMode.Scan,
                          options: Map[String, YTreeNode] = Map.empty)
                         (implicit yt: CompoundClient): Unit = {
+    import scala.collection.JavaConverters._
+
     YtWrapper.createTable(path, options ++ Map("schema" -> physicalSchema.toYTree,
       "optimize_for" -> optimizeFor.node), None, false)
 
@@ -183,7 +190,7 @@ trait TestUtils {
   def writeFileFromStream(input: InputStream, path: String)
                          (implicit yt: CompoundClient): Unit = {
     YtWrapper.createFile(path)
-    val out = YtWrapper.writeFile(path, Duration.ofMinutes(1), None)
+    val out = YtWrapper.writeFile(path, 1 minute, None)
     try {
       val b = new Array[Byte](65536)
       Stream.continually(input.read(b)).takeWhile(_ > 0).foreach(out.write(b, 0, _))
@@ -238,5 +245,16 @@ trait TestUtils {
         |f11=[[{a=%true};1];[{b=%false};2];[{c=#};3];];
         |}""".stripMargin
     ), path, ytSchema)
+  }
+
+  /**
+   * A utility method than can be used in any test to pause test execution and investigate intermediate state.
+   * SPYT_TEST_CONSOLE env variable must be set to true in order to enable this functionality.
+   */
+  def pressAnyKey(): Unit = {
+    if (sys.env.get("SPYT_TEST_CONSOLE").exists(_.toBoolean)) {
+      println("Press any key to continue.....")
+      scala.io.StdIn.readLine()
+    }
   }
 }

@@ -41,7 +41,6 @@ def process_sensors(payload):
                                                                      is_spark_component_label_missed)
                 labels = sensor["labels"]
                 labels['sensor'] = clean_name
-                labels['spark_application_id'] = app_id
                 labels['spark_component'] = spark_component
 
 

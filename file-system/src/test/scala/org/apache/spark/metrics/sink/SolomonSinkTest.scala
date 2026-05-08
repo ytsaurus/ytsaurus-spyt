@@ -20,7 +20,7 @@ class SolomonSinkTest extends AnyFunSuite {
   def json(req: Request): Json = parser.parse(body(req)).right.get
 
 
-  def checkSink(prepareMetrics: MetricRegistry => Unit, extraProps: Map[String, String] = Map())
+  def checkSink(prepareMetrics: MetricRegistry => Unit, extraProps: Map[String, String] = Map(), appAlias: String = "")
                (assert: Json => Unit): Assertion = {
     val server = TestHttpServer()
     val registry: MetricRegistry = new MetricRegistry()
@@ -31,6 +31,7 @@ class SolomonSinkTest extends AnyFunSuite {
       val port = server.port
       props.setProperty("solomon_port", port.toString)
       props.setProperty("reporter_enabled", true.toString)
+      props.setProperty("app_alias", appAlias)
       extraProps.foreach(p => props.setProperty(p._1, p._2))
       val sink = SolomonSink(props, registry, null)
       server.assert(req => assert(json(req)))
@@ -47,6 +48,12 @@ class SolomonSinkTest extends AnyFunSuite {
       json.hcursor.downField("commonLabels").as[Json].right.get.asObject.get.isEmpty shouldBe true
       json.hcursor.downField("ts").as[Long].right.get should be > 0L
       json.hcursor.downField("ts").as[Long].right.get should be < (System.currentTimeMillis() / 1000L + 100)
+    }
+  }
+
+  test("test empty metric with app_alias label"){
+    checkSink(_ =>{}, appAlias = "alias"){json =>
+      json.hcursor.downField("commonLabels").downField("app_alias").as[String].right.get shouldBe "alias"
     }
   }
 

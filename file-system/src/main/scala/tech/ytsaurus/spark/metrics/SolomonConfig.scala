@@ -2,6 +2,7 @@ package tech.ytsaurus.spark.metrics
 
 import org.slf4j.{Logger, LoggerFactory}
 import SolomonConfig.Encoding
+import org.apache.spark.SparkEnv
 import tech.ytsaurus.spyt.wrapper.config.PropertiesConf
 import tech.ytsaurus.spyt.HostAndPort
 
@@ -32,12 +33,15 @@ object SolomonConfig {
   }
 
   def read(props: Properties): SolomonConfig = {
-    val host = props.ytConf(SolomonSinkSettings.SolomonHost)
-    val port = props.ytConf(SolomonSinkSettings.SolomonPort)
-    val token = props.getYtConf(SolomonSinkSettings.SolomonToken)
-    val commonLabels = props.ytConf(SolomonSinkSettings.SolomonCommonLabels)
-    val metricNameRegex = props.ytConf(SolomonSinkSettings.SolomonMetricNameRegex)
-    val metricNameTransform = Some(props.ytConf(SolomonSinkSettings.SolomonMetricNameTransform)).filter(!_.isBlank)
+
+    import SolomonSinkSettings._
+
+    val host = props.ytConf(SolomonHost)
+    val port = props.ytConf(SolomonPort)
+    val token = props.getYtConf(SolomonToken)
+    val commonLabels = buildSolomonCommonLabels(props)
+    val metricNameRegex = props.ytConf(SolomonMetricNameRegex)
+    val metricNameTransform = Some(props.ytConf(SolomonMetricNameTransform)).filter(!_.isBlank)
     //noinspection UnstableApiUsage
     val hostAndPort = HostAndPort(host, port)
     log.info(s"Solomon host: $host, port: $port commonLabels=$commonLabels")
@@ -49,5 +53,16 @@ object SolomonConfig {
       metricNameRegex,
       metricNameTransform
     )
+  }
+
+  private def buildSolomonCommonLabels(props: Properties): Map[String, String] = {
+    import SolomonSinkSettings._
+
+    if(props.ytConf(SolomonJobLabel).isBlank) {
+      props.ytConf(SolomonCommonLabels)
+    } else {
+      props.ytConf(SolomonCommonLabels) ++
+        Map(SolomonJobLabel.name -> props.ytConf(SolomonJobLabel))
+    }
   }
 }

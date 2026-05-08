@@ -14,6 +14,7 @@ case object SolomonSinkSettings {
     Option(System.getenv(YT_MONITORING_PUSH_PORT_ENV_NAME)).map(_.toInt))
   case object SolomonToken extends ConfigEntry[String]("solomon_token", None)
   case object SolomonCommonLabels extends ConfigEntry[Map[String, String]]("common_labels", Some(Map()))
+  case object SolomonJobLabel extends ConfigEntry[String]("app_alias", Some(""))
   case object SolomonMetricNameRegex extends ConfigEntry[String]("accept_metrics", Some(".*"))
   case object SolomonMetricNameTransform extends ConfigEntry[String]("rename_metrics", Some(""))
 

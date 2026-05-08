@@ -55,10 +55,11 @@ object SolomonConfig {
     )
   }
 
-  private def buildSolomonCommonLabels(props: Properties): Map[String, String] = {
+  private def buildSolomonCommonLabels(props: Properties, envAccessor: EnvAccessor = SystemEnvAccessor): Map[String, String] = {
     import SolomonSinkSettings._
 
-    if(props.ytConf(SolomonJobLabel).isBlank) {
+    val taskName = envAccessor.getEnv("YT_TASK_NAME")
+    if(props.ytConf(SolomonJobLabel).isBlank || taskName.contains("workers") || taskName.contains("master")) {
       props.ytConf(SolomonCommonLabels)
     } else {
       props.ytConf(SolomonCommonLabels) ++

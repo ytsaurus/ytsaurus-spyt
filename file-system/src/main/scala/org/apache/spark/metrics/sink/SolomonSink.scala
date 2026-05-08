@@ -21,7 +21,7 @@ private[this] case class SolomonSink(props: Properties, registry: MetricRegistry
 
   override def start(): Unit = reporter match {
     case Failure(ex) =>
-      log.info("No Solomon metrics available", ex)
+      log.error("No Solomon metrics available", ex)
     case Success(r) =>
       r.start()
   }

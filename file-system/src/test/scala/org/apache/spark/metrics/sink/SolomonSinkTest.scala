@@ -4,10 +4,12 @@ import com.codahale.metrics.{Counter, Gauge, Histogram, Meter, MetricRegistry, T
 import io.circe.{Json, parser}
 import org.apache.spark.yt.test.TestHttpServer
 import org.apache.spark.yt.test.TestHttpServer.Request
+import org.mockito.MockitoSugar._
 import org.scalatest.Assertion
 import org.scalatest.funsuite.AnyFunSuite
 import org.scalatest.matchers.should.Matchers._
 import org.slf4j.{Logger, LoggerFactory}
+import tech.ytsaurus.spark.metrics.EnvAccessor
 
 import java.nio.charset.Charset
 import java.util.Properties
@@ -26,6 +28,9 @@ class SolomonSinkTest extends AnyFunSuite {
     val registry: MetricRegistry = new MetricRegistry()
     prepareMetrics(registry)
     val props: Properties = new Properties()
+
+    val mockEnv = mock[EnvAccessor]
+    when(mockEnv.getEnv("YT_TASK_NAME")).thenReturn(Some("driver"))
     try {
       server.start()
       val port = server.port

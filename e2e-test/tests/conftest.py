@@ -33,7 +33,8 @@ def yt_client():
 
 @pytest.fixture(scope="function")
 def spyt_cluster(request):
-    with SpytCluster(proxy=YT_PROXY, dump_dir=test_directory(request)) as cluster:
+    spark_conf = getattr(request, 'param', {})
+    with SpytCluster(proxy=YT_PROXY, dump_dir=test_directory(request), spark_conf=spark_conf) as cluster:
         yield cluster
 
 

@@ -8,6 +8,8 @@ import org.apache.spark.sql.util.CaseInsensitiveStringMap
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
+import scala.jdk.CollectionConverters._
+
 class MultiConfigEntryTest extends AnyFlatSpec with Matchers {
   import ConfigEntry.implicits._
 
@@ -60,7 +62,6 @@ class MultiConfigEntryTest extends AnyFlatSpec with Matchers {
   }
 
   it should "get value from case insensitive map" in {
-    import scala.collection.JavaConverters._
     val options = new CaseInsensitiveStringMap(Map(
       "log.level" -> "INFO",
       "log.test2.level" -> "WARN"

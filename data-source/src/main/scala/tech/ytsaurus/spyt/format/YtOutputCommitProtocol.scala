@@ -28,7 +28,7 @@ import tech.ytsaurus.spyt.wrapper.config.{ConfigEntry, _}
 
 import java.io.{IOException, ObjectOutputStream}
 import java.util.concurrent.{ConcurrentHashMap, ConcurrentMap, Semaphore}
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 import scala.collection.mutable.ArrayBuffer
 import scala.concurrent.Promise
 

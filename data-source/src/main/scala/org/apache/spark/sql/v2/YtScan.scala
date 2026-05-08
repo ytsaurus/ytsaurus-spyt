@@ -22,7 +22,7 @@ import tech.ytsaurus.spyt.fs.YtHadoopPath
 import tech.ytsaurus.spyt.logger.YtDynTableLoggerConfig
 
 import java.util.{Locale, OptionalLong}
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 
 case class YtScan(sparkSession: SparkSession,
                   hadoopConf: Configuration,

@@ -5,6 +5,7 @@ import java.net.InetAddress
 import java.util.Properties
 import scala.annotation.tailrec
 import scala.concurrent.duration._
+import scala.jdk.CollectionConverters._
 import scala.util.{Failure, Success, Try}
 
 object Utils {
@@ -47,7 +48,6 @@ object Utils {
   def bashCommand(args: String*): String = args.map { arg => s"'${arg.replace("'", "'\"'\"'")}'" }.mkString(" ")
 
   lazy val sparkSystemProperties: Map[String, String] = {
-    import scala.collection.JavaConverters._
     System.getProperties.stringPropertyNames().asScala.collect {
       case name if name.startsWith("spark.") => name -> System.getProperty(name)
     }.toMap

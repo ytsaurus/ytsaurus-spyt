@@ -14,6 +14,8 @@ import tech.ytsaurus.typeinfo.StructType.Member
 import tech.ytsaurus.typeinfo.TiType
 import tech.ytsaurus.ysontree.{YTree, YTreeMapNode}
 
+import scala.jdk.CollectionConverters._
+
 
 class ExtendedSchemaConverterTest extends AnyFlatSpec with Matchers
   with TestUtils with TmpDir with LocalSpark with SchemaTestUtils {
@@ -157,7 +159,6 @@ class ExtendedSchemaConverterTest extends AnyFlatSpec with Matchers
   }
 
   it should "convert spark schema to yt one" in {
-    import scala.collection.JavaConverters._
     def getColumn(name: String, t: String): YTreeMapNode = {
       YTree.builder.beginMap.key("name").value(name).key("type").value(t)
         .key("required").value(false).buildMap

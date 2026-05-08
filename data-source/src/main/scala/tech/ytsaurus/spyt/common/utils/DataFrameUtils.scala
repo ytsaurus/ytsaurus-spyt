@@ -6,6 +6,7 @@ import org.apache.spark.sql.functions._
 import org.apache.spark.sql.types.StructType
 import tech.ytsaurus.spyt.SparkAdapter
 
+import scala.jdk.CollectionConverters._
 import scala.reflect.runtime.universe.TypeTag
 
 object DataFrameUtils {
@@ -102,7 +103,6 @@ object DataFrameUtils {
   }
 
   def getDataFrameTop(df: DataFrame, groupBy: JList[String], topBy: JList[String], partitions: java.lang.Integer): DataFrame = {
-    import scala.collection.JavaConverters._
     df.top(groupBy.asScala, topBy.asScala, partitions)
   }
 
@@ -113,7 +113,6 @@ object DataFrameUtils {
   def minByColumns(df: DataFrame, groupBy: String,
                    minBy: JList[JList[String]],
                    maxBy: JList[JList[String]]): DataFrame = {
-    import scala.collection.JavaConverters._
     val minByScala = minBy.asScala.map { v =>
       val asScala = v.asScala
       asScala.head -> asScala

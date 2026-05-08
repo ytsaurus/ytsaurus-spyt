@@ -14,6 +14,8 @@ import tech.ytsaurus.ysontree.{YTreeBinarySerializer, YTreeNode}
 
 import java.io.ByteArrayInputStream
 
+import scala.jdk.CollectionConverters._
+
 // At most one range supported inside ypath.
 class YtPartitionedFileDelegate(val serializedYPath: Array[Byte],
   override val byteLength: Long,
@@ -31,7 +33,6 @@ class YtPartitionedFileDelegate(val serializedYPath: Array[Byte],
   def cluster: Option[String] = hadoopPath.ypath.cluster
 
   def copy(newBeginKey: Array[Byte], newEndKey: Array[Byte]): YtPartitionedFile = {
-    import scala.collection.JavaConverters._
     withNewRangeCriteria(
       new Range(
         RangeLimit.key(PivotKeysConverter.toList(newBeginKey).asJava),

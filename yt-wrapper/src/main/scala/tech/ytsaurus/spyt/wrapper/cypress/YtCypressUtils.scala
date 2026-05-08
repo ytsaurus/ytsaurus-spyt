@@ -12,7 +12,7 @@ import tech.ytsaurus.core.request.LockMode
 import tech.ytsaurus.ysontree.{YTree, YTreeNode}
 
 import scala.annotation.tailrec
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 import scala.util.control.NonFatal
 
 trait YtCypressUtils {
@@ -123,7 +123,6 @@ trait YtCypressUtils {
   def listDir(path: YPath, transaction: Option[String], attributes: Seq[String])
              (implicit yt: CompoundClient): Iterable[YTreeNode] = {
     log.debug(s"List directory: $path, transaction $transaction")
-    import scala.collection.JavaConverters._
     val requestBuilder = ListNode.builder().setPath(path).optionalTransaction(transaction)
     if (attributes.nonEmpty) {
       requestBuilder.setAttributes(attributes.asJava)
@@ -219,7 +218,6 @@ trait YtCypressUtils {
 
   def attributes(path: YPath, transaction: Option[String] = None, attrNames: Set[String] = Set.empty)
                 (implicit yt: CompoundClient): Map[String, YTreeNode] = {
-    import scala.collection.JavaConverters._
     log.debug(s"Get attributes: $path/@$attrNames, transaction $transaction")
     val request = GetNode.builder().setPath(path.allAttributes()).optionalTransaction(transaction).build()
     val map = yt.getNode(request).join().asMap().asScala
@@ -283,7 +281,6 @@ trait YtCypressUtils {
 
   def concatenate(from: Array[String], to: String, transaction: Option[String] = None)
                  (implicit yt: CompoundClient): Unit = {
-    import scala.collection.JavaConverters._
     log.debug(s"Concatenate: ${from.mkString(",")} -> $to, transaction $transaction")
     val request = ConcatenateNodes.builder()
       .setSourcePaths(from.map(formatPath).map(YPath.simple).toList.asJava)

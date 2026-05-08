@@ -17,7 +17,7 @@ import tech.ytsaurus.spyt.logger.{YtDynTableLogger, YtLogger}
 import tech.ytsaurus.spyt.serializers.SchemaConverter
 import tech.ytsaurus.spyt.wrapper.table.OptimizeMode
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 
 case class YtScanBuilderAdapter(sparkSession: SparkSession,
                                 fileIndex: PartitioningAwareFileIndex,

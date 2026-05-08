@@ -7,6 +7,7 @@ import tech.ytsaurus.spyt.HostAndPort
 import tech.ytsaurus.ysontree.{YTree, YTreeNode}
 
 import java.net.URI
+import scala.jdk.CollectionConverters._
 import scala.util.Try
 
 class DiscoveryServerService(client: DiscoveryClient, groupId: String,
@@ -41,8 +42,6 @@ class DiscoveryServerService(client: DiscoveryClient, groupId: String,
                               address: Address,
                               clusterVersion: String,
                               clusterConf: SparkConfYsonable): Unit = {
-    import scala.collection.JavaConverters._
-
     val confYTree = clusterConf.spark_conf.foldLeft(YTree.mapBuilder()) {
       case (builder, (k, v)) => builder.key(k).value(v)
     }.buildMap()
@@ -68,8 +67,6 @@ class DiscoveryServerService(client: DiscoveryClient, groupId: String,
   override def registerSHS(address: HostAndPort): Unit = ???
 
   override def registerLivy(address: HostAndPort, livyVersion: String): Unit = {
-    import scala.collection.JavaConverters._
-
     val attributes: Map[String, YTreeNode] = Map(
       urlAttr -> YTree.stringNode(address.toString),
       versionAttr -> YTree.stringNode(livyVersion),

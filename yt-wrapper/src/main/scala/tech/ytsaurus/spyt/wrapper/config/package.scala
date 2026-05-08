@@ -9,7 +9,7 @@ import tech.ytsaurus.ysontree.{YTreeNode, YTreeTextSerializer}
 
 import java.util.Properties
 import scala.annotation.tailrec
-import scala.collection.JavaConverters.asScalaSetConverter
+import scala.jdk.CollectionConverters._
 import scala.util.Try
 
 package object config {
@@ -115,8 +115,6 @@ package object config {
   }
 
   implicit class SparkYtHadoopConfiguration(configuration: Configuration) extends ConfProvider {
-    import scala.collection.JavaConverters._
-
     private val configurationPrefix = "yt"
 
     override def getYtConf(name: String): Option[String] = {
@@ -171,7 +169,6 @@ package object config {
     } else None
 
     override def getAllKeys: Seq[String] = {
-      import scala.collection.JavaConverters._
       options.keySet().asScala.toList
     }
   }

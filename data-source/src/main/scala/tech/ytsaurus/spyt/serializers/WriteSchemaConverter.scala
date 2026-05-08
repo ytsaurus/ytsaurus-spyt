@@ -12,6 +12,8 @@ import tech.ytsaurus.spyt.types.YTsaurusTypes
 import tech.ytsaurus.spyt.wrapper.config.{OptionsConf, SparkYtHadoopConfiguration}
 import tech.ytsaurus.ysontree.{YTree, YTreeNode}
 
+import scala.jdk.CollectionConverters._
+
 class WriteSchemaConverter(
                             val hint: Map[String, YtLogicalType] = Map.empty,
                             val typeV3Format: Boolean = false,
@@ -105,8 +107,6 @@ class WriteSchemaConverter(
   private def ytLogicalSchemaImpl(sparkSchema: StructType,
                                   sortOption: SortOption,
                                   isTableSchema: Boolean = false): YTreeNode = {
-    import scala.collection.JavaConverters._
-
     def serializeColumn(field: StructField, sortOrder: Option[SortOrder]): YTreeNode = {
       val builder = YTree.builder
         .beginMap

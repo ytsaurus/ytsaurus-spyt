@@ -16,7 +16,7 @@ import tech.ytsaurus.client.rows.{UnversionedRow, UnversionedValue}
 import tech.ytsaurus.core.tables.{ColumnValueType, TableSchema}
 import tech.ytsaurus.typeinfo.TiType
 
-import scala.collection.JavaConverters.{collectionAsScalaIterableConverter, seqAsJavaListConverter}
+import scala.jdk.CollectionConverters.{collectionAsScalaIterableConverter, seqAsJavaListConverter}
 
 private class YtSortedTableBaseProperties extends AnyFlatSpec with Matchers with BeforeAndAfterAll
   with ScalaCheckDrivenPropertyChecks with TmpDir with LocalSpark with TestUtils {

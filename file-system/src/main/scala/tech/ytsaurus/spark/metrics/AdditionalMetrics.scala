@@ -6,6 +6,7 @@ import org.slf4j.{Logger, LoggerFactory}
 import java.io.File
 import java.nio.file.{Files, Path}
 import scala.io.Source
+import scala.jdk.CollectionConverters._
 import scala.util.control.NonFatal
 
 object AdditionalMetrics {
@@ -64,7 +65,6 @@ object AdditionalMetrics {
   }
 
   private def isSsd(devName: String): Boolean = {
-    import scala.collection.JavaConverters._
     val sysinfo = new File("/").toPath.getRoot.resolve("sys").resolve("block")
     val d = Files.newDirectoryStream(sysinfo).asScala
       .filter(d => d.getFileName.startsWith(devName))

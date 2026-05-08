@@ -6,6 +6,8 @@ import org.apache.spark.sql.types.StructType
 import tech.ytsaurus.client.rows.{QueueRowset, UnversionedRowset, UnversionedValue}
 import tech.ytsaurus.core.tables.{ColumnSchema, TableSchema}
 
+import scala.jdk.CollectionConverters._
+
 class UnversionedRowsetDeserializer(schema: StructType) {
   private var deserializer: InternalRowDeserializer = _
 
@@ -31,7 +33,6 @@ class UnversionedRowsetDeserializer(schema: StructType) {
   }
 
   def deserializeRowset(rowset: UnversionedRowset): Iterator[InternalRow] = {
-    import scala.collection.JavaConverters._
     deserializer = InternalRowDeserializer.getOrCreate(schema)
     deserializer.updateSchema(rowset.getSchema)
     rowset.getRows.asScala.iterator.map { row =>
@@ -45,7 +46,6 @@ class UnversionedRowsetDeserializer(schema: StructType) {
   }
 
   def deserializeQueueRowsetWithServiceColumns(rowset: QueueRowset): Iterator[InternalRow] = {
-    import scala.collection.JavaConverters._
     deserializer = InternalRowDeserializer.getOrCreate(schema)
     val changedYtSchema = getSchemaColumnsWithChangedServiceColumnsNames(rowset.getSchema)
     deserializer.updateSchema(changedYtSchema)
@@ -66,8 +66,6 @@ class UnversionedRowsetDeserializer(schema: StructType) {
   }
 
   private def getSchemaColumnsWithChangedServiceColumnsNames(ytSchema: TableSchema): TableSchema = {
-    import scala.collection.JavaConverters._
-
     val columnsWithChangedServiceColumnsNames: List[ColumnSchema] = ytSchema.getColumns.asScala.map(column =>
       if (column.getName.equals("$tablet_index") || column.getName.equals("$row_index")) {
         val changedColumnName = if (column.getName.equals("$tablet_index")) {

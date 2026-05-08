@@ -15,6 +15,7 @@ import tech.ytsaurus.spyt.wrapper.dyntable.ConsumerUtils
 
 import scala.collection.SortedMap
 import scala.concurrent.duration.{Duration, DurationInt}
+import scala.jdk.CollectionConverters._
 import scala.util.Try
 import scala.util.control.NonFatal
 
@@ -58,7 +59,6 @@ object YtQueueOffset extends Logging {
     Try {
       runWithRetry[YtQueueOffset](
         operation = () => {
-          import scala.collection.JavaConverters._
           val partitionsAttribute = YtWrapper.attribute(queuePath, "queue_partitions")
           val partitionSeq = partitionsAttribute.asList().asScala.zipWithIndex.map {
             case (node, index) =>

@@ -18,6 +18,7 @@ import tech.ytsaurus.spyt.wrapper.table.{BaseYtTableSettings, TableType}
 import tech.ytsaurus.ysontree.{YTreeNode, YTreeTextSerializer}
 
 import java.net.URI
+import scala.jdk.CollectionConverters._
 
 class YTsaurusExternalCatalog(conf: SparkConf, hadoopConf: Configuration)
   extends InMemoryCatalog(conf, hadoopConf) with Logging {
@@ -52,7 +53,6 @@ class YTsaurusExternalCatalog(conf: SparkConf, hadoopConf: Configuration)
   private val excludeKeys = Set("key_columns", "sort_orders", "unique_keys")
 
   private def getSortOption(extraProperties: Map[String, YTreeNode]): SchemaConverter.SortOption = {
-    import scala.collection.JavaConverters._
     val keyColumns = extraProperties.get("key_columns").map(_.asList().asScala.map(_.stringValue())).getOrElse(Seq())
     val sortOrders = extraProperties.get("sort_orders").map(_.asList().asScala.map(_.stringValue())).getOrElse(Seq())
     if (keyColumns.nonEmpty) {

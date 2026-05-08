@@ -20,8 +20,8 @@ import tech.ytsaurus.ysontree._
 import java.io.{ByteArrayInputStream, ByteArrayOutputStream}
 import scala.annotation.tailrec
 import scala.collection.mutable
+import scala.jdk.CollectionConverters._
 import scala.reflect.ClassTag
-import scala.runtime.{BoxedUnit, BoxesRunTime}
 
 class YsonRowConverter(schema: StructType, ytSchema: YtTypeHolder,
                        config: YsonEncoderConfig) extends YTreeSerializer[Row] {
@@ -181,7 +181,6 @@ class YsonRowConverter(schema: StructType, ytSchema: YtTypeHolder,
 
   @tailrec
   final def writeRows(writer: TableWriter[Row], rows: Seq[Row]): Unit = {
-    import scala.collection.JavaConverters._
     if (!writer.write(rows.asJava, tableSchema)) {
       writer.readyEvent().join()
       writeRows(writer, rows)

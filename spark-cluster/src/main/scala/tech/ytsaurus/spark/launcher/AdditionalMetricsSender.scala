@@ -7,6 +7,7 @@ import tech.ytsaurus.spark.metrics.SolomonSinkSettings.YT_MONITORING_PUSH_PORT_E
 import tech.ytsaurus.spark.metrics.{ReporterConfig, SolomonReporter, SolomonConfig => SC}
 import tech.ytsaurus.spyt.wrapper.Utils
 
+import scala.jdk.CollectionConverters._
 import scala.util.Try
 
 trait AdditionalMetricsSender {
@@ -49,9 +50,7 @@ object AdditionalMetricsSender {
 
   object MetricsConfig {
     /* taken from org.apache.spark.MetricsConfig, spark deps removed */
-    import java.io.{FileInputStream, InputStream}
     import java.util.Properties
-    import scala.collection.JavaConverters._
     import scala.collection.mutable
     import scala.util.matching.Regex
 

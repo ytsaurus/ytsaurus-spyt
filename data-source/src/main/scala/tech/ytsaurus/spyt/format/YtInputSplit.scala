@@ -1,6 +1,5 @@
 package tech.ytsaurus.spyt.format
 
-import org.apache.hadoop.fs.Path
 import org.apache.hadoop.mapreduce.InputSplit
 import org.apache.log4j.Level
 import org.apache.spark.sql.types.StructType
@@ -11,9 +10,7 @@ import tech.ytsaurus.spyt.format.YPathUtils.RichRangeCriteria
 import tech.ytsaurus.spyt.format.YtInputSplit._
 import tech.ytsaurus.spyt.logger.YtLogger
 import tech.ytsaurus.core.cypress.{Exact, Range, RangeCriteria, RangeLimit, YPath}
-import tech.ytsaurus.spyt.serializers.PivotKeysConverter.{prepareKey, toList, toRangeLimit}
 import tech.ytsaurus.spyt.serializers.SchemaConverter.MetadataFields
-import tech.ytsaurus.core.cypress.{RangeLimit, YPath}
 import tech.ytsaurus.spyt.common.utils.{AbstractSegment, ExpressionTransformer, MInfinity, PInfinity, Point, RealValue, SegmentSet}
 import tech.ytsaurus.spyt.format.YtPartitionedFileDelegate.YtPartitionedFile
 import tech.ytsaurus.spyt.format.conf.FilterPushdownConfig
@@ -22,6 +19,7 @@ import tech.ytsaurus.spyt.serializers.SchemaConverter
 import tech.ytsaurus.spyt.types.UInt64Long
 import tech.ytsaurus.ysontree.{YTreeBooleanNodeImpl, YTreeBuilder, YTreeDoubleNodeImpl, YTreeEntityNodeImpl, YTreeIntegerNodeImpl, YTreeNode, YTreeStringNodeImpl}
 
+import scala.jdk.CollectionConverters._
 import scala.annotation.tailrec
 
 
@@ -77,8 +75,6 @@ object YtInputSplit {
   }
 
   private[format] def applySegmentsToYPath(tupleSegments: Seq[TupleSegment], ypath: YPath): YPath = {
-    import scala.collection.JavaConverters._
-
     val newRanges = ypath.getRanges.asScala.flatMap {
       criteria =>
         val range = criteria.toRange
@@ -194,7 +190,6 @@ object YtInputSplit {
   }
 
   private def getRangeLimit(keys: Seq[YTreeNode], rowIndex: Long): RangeLimit = {
-    import scala.collection.JavaConverters._
     RangeLimit.builder().setKey(keys.toList.asJava).setRowIndex(rowIndex).build()
   }
 

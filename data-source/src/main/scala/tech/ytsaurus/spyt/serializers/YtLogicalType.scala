@@ -8,6 +8,7 @@ import tech.ytsaurus.typeinfo.StructType.Member
 import tech.ytsaurus.typeinfo.{TiType, TypeName}
 
 import scala.annotation.tailrec
+import scala.jdk.CollectionConverters._
 
 sealed trait SparkType {
   def topLevel: DataType
@@ -195,7 +196,6 @@ object YtLogicalType {
     override def sparkType: SparkType = SingleSparkType(StructType(fields
       .map { case (name, ytType, meta) => getStructField(name, ytType, meta, topLevel = false) }))
 
-    import scala.collection.JavaConverters._
     override def tiType: TiType = TiType.struct(
       fields.map{ case (name, ytType, _) => new Member(name, ytType.tiType)}.asJava
     )
@@ -209,7 +209,6 @@ object YtLogicalType {
     override def sparkType: SparkType = SingleSparkType(StructType(elements.zipWithIndex
       .map { case ((ytType, meta), index) => getStructField(s"_${1 + index}", ytType, meta, topLevel = false) }))
 
-    import scala.collection.JavaConverters._
     override def tiType: TiType = TiType.tuple(
       elements.map { case (e, _) => e.tiType } .asJava
     )
@@ -233,7 +232,6 @@ object YtLogicalType {
     override def sparkType: SparkType = SingleSparkType(StructType(fields.map { case (name, ytType, meta) =>
       getStructField(s"_v$name", ytType, meta, forcedNullability = Some(true), topLevel = false) }))
 
-    import scala.collection.JavaConverters._
     override def tiType: TiType = TiType.variantOverStruct(
       fields.map{ case (name, ytType, _) => new Member(name, ytType.tiType)}.asJava
     )
@@ -247,7 +245,6 @@ object YtLogicalType {
         getStructField(s"_v_${1 + index}", ytType, meta, forcedNullability = Some(true), topLevel = false) })
     )
 
-    import scala.collection.JavaConverters._
     override def tiType: TiType = TiType.variantOverTuple(
       fields.map { case (e, _) => e.tiType }.asJava
     )

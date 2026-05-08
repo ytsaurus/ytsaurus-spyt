@@ -9,6 +9,8 @@ import tech.ytsaurus.client.rows.{UnversionedRow, UnversionedRowset, Unversioned
 import tech.ytsaurus.core.tables.{ColumnValueType, TableSchema}
 import tech.ytsaurus.typeinfo.TiType
 
+import scala.jdk.CollectionConverters._
+
 class UnversionedRowsetDeserializerTest extends AnyFlatSpec with Matchers {
   private def deserialize(sparkSchema: StructType, rowset: UnversionedRowset): Seq[Seq[Any]] = {
     val deserializer = new UnversionedRowsetDeserializer(sparkSchema)
@@ -17,7 +19,6 @@ class UnversionedRowsetDeserializerTest extends AnyFlatSpec with Matchers {
   }
 
   it should "deserialize nulls" in {
-    import scala.collection.JavaConverters._
     val tableSchema = TableSchema.builder()
       .addValue("a", TiType.int64()).addValue("b", TiType.string())
       .build()
@@ -41,7 +42,6 @@ class UnversionedRowsetDeserializerTest extends AnyFlatSpec with Matchers {
   }
 
   it should "deserialize primitive types" in {
-    import scala.collection.JavaConverters._
     val tableSchema = TableSchema.builder()
       .addValue("a", TiType.int64()).addValue("b", TiType.string()).addValue("c", TiType.bool())
       .build()
@@ -68,7 +68,6 @@ class UnversionedRowsetDeserializerTest extends AnyFlatSpec with Matchers {
   }
 
   it should "deserialize part of columns" in {
-    import scala.collection.JavaConverters._
     val tableSchema = TableSchema.builder()
       .addValue("a", TiType.floatType()).addValue("b", TiType.bool()).addValue("c", TiType.int32())
       .build()
@@ -94,7 +93,6 @@ class UnversionedRowsetDeserializerTest extends AnyFlatSpec with Matchers {
   }
 
   it should "deserialize complex types" in {
-    import scala.collection.JavaConverters._
     val tableSchema = TableSchema.builder()
       .addValue("c1", TiType.dict(TiType.int32(), TiType.string())).addValue("c2", TiType.list(TiType.doubleType()))
       .build()

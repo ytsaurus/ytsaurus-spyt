@@ -9,7 +9,7 @@ import tech.ytsaurus.core.tables.{ColumnSchema, ColumnValueType, TableSchema}
 import tech.ytsaurus.spyt.{YtReader, YtWriter}
 import tech.ytsaurus.spyt.test.{LocalSpark, TestUtils, TmpDir}
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 
 class ExtendedYtDistributedWriterTest extends AnyFlatSpec with TmpDir with LocalSpark with Matchers with TestUtils {
   behavior of "DistributedWriteOutputCommitProtocol"

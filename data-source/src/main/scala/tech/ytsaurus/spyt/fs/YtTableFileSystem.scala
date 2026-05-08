@@ -13,7 +13,7 @@ import tech.ytsaurus.spyt.wrapper.cypress.{PathType, YtAttributes}
 import tech.ytsaurus.spyt.wrapper.table.{OptimizeMode, TableType}
 import tech.ytsaurus.ysontree.YTreeNode
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 import scala.language.postfixOps
 
 @SerialVersionUID(1L)

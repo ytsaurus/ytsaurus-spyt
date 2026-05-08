@@ -195,7 +195,7 @@ object LocalSpark {
     .set("spark.hadoop.yt.token", "")
     .set("spark.hadoop.yt.timeout", "300")
     .set(FILE_COMMIT_PROTOCOL_CLASS.key, "tech.ytsaurus.spyt.format.DelegatingOutputCommitProtocol")
-    .set("spark.ui.enabled", "true")
+    .set("spark.ui.enabled", "false")
     .set("spark.hadoop.yt.read.arrow.enabled", "true")
     .set("spark.sql.adaptive.enabled", "true")
     .set("spark.yt.log.enabled", "false")

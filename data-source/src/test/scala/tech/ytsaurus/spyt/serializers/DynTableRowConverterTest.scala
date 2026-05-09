@@ -205,6 +205,26 @@ class DynTableRowConverterTest extends AnyFlatSpec with TmpDir with LocalSpark w
     converter.convertRow(Seq[Any](1L, 2L)) shouldEqual Seq[Any](1L, null, 2L)
   }
 
+  it should "return null for nullable composite columns when row value is null" in {
+    val sparkSchema = StructType(Seq(
+      StructField("key", LongType, nullable = false),
+      StructField("dict", MapType(StringType, LongType), nullable = true),
+      StructField("arr", ArrayType(LongType), nullable = true),
+      StructField("nested", StructType(Seq(StructField("x", LongType))), nullable = true)
+    ))
+
+    val tableSchema = TableSchema.builder()
+      .addKey("key", ColumnValueType.INT64)
+      .addValue("dict", TiType.optional(TiType.dict(TiType.string(), TiType.int64())))
+      .addValue("arr", TiType.optional(TiType.list(TiType.int64())))
+      .addValue("nested", TiType.optional(TiType.struct(new Member("x", TiType.int64()))))
+      .build()
+
+    val converter = new DynTableRowConverter(sparkSchema, tableSchema, typeV3 = true)
+
+    converter.convertRow(Seq[Any](1L, null, null, null)) shouldEqual Seq[Any](1L, null, null, null)
+  }
+
   it should "throw IllegalArgumentException when spark schema contains columns absent in yt schema" in {
     val sparkSchema = StructType(Seq(
       StructField("known", LongType),

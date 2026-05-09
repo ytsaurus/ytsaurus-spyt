@@ -50,6 +50,7 @@ class DynTableRowConverter(schema: StructType, tableSchema: TableSchema, typeV3:
   }
 
   private def convertField(value: Any, dataType: DataType, typeV3: Boolean = false, ytType: YtTypeHolder = YtTypeHolder.empty): Any = {
+    if (value == null) return null
     dataType match {
       case ArrayType(elementType, _) => convertArray(value, elementType, typeV3, ytType)
       case mapType: MapType => mapToYTreeListNode(value, mapType, typeV3, ytType)

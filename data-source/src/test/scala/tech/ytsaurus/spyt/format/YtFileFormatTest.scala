@@ -466,6 +466,48 @@ class YtFileFormatTest extends AnyFlatSpec with Matchers with LocalSpark
     result.collect() should contain theSameElementsAs Seq(Row(1), Row(2))
   }
 
+  testWithDistributedReading("read lookup table with non-optional columns preserves nullable schema") { distributedReadingEnabled =>
+    val schema = YTree.builder()
+      .beginAttributes()
+      .key("strict").value(true)
+      .key("unique_keys").value(false)
+      .endAttributes
+      .value(
+        Seq(
+          YTree.builder()
+            .beginMap()
+            .key("name").value("a")
+            .key("type").value(TiType.int64().getTypeName.getWireName)
+            .key("required").value(true)
+            .buildMap,
+          YTree.builder()
+            .beginMap()
+            .key("name").value("b")
+            .key("type").value(TiType.string().getTypeName.getWireName)
+            .key("required").value(true)
+            .buildMap
+        ).asJava)
+      .build
+    val physicalSchema = TableSchema.builder()
+      .setUniqueKeys(false)
+      .addValue("a", ColumnValueType.INT64)
+      .addValue("b", ColumnValueType.STRING)
+      .build()
+    writeTableFromYson(Seq(
+      """{a = 1; b = "x"}""",
+      """{a = 2; b = "y"}"""
+    ), tmpPath, schema, physicalSchema, OptimizeMode.Lookup, Map.empty)
+
+    YtWrapper.attribute(tmpPath, "optimize_for").stringValue() shouldEqual "lookup"
+
+    val result = spark.read.yt(tmpPath).select("a", "b")
+    result.schema.fields.foreach(_.nullable shouldEqual true)
+    result.collect() should contain theSameElementsAs Seq(
+      Row(1L, "x"),
+      Row(2L, "y")
+    )
+  }
+
   testWithDistributedReading("read empty table") { distributedReadingEnabled =>
     createEmptyTable(tmpPath, atomicSchema)
     val res = spark.read.yt(tmpPath)

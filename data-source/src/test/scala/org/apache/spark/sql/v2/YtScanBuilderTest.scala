@@ -36,8 +36,38 @@ class YtScanBuilderTest extends AnyFlatSpec with Matchers with SchemaTestUtils w
     val result = YtScanBuilderBase.pushStructMetadata(requiredSchema, dataSchema)
     result shouldBe StructType(Seq(
       structField("b", StructType(Seq(
-        StructField("c", BooleanType, metadata = new MetadataBuilder().putString("s", "t").build())
+        StructField("c", BooleanType, nullable = false, metadata = new MetadataBuilder().putString("s", "t").build())
       )))
+    ))
+  }
+
+  it should "propagate nullable from meta schema" in {
+    val requiredSchema = StructType(Seq(
+      structField("a", StringType, nullable = false)))
+    val dataSchema = StructType(Seq(
+      structField("a", StringType, nullable = true)))
+    val result = YtScanBuilderBase.pushStructMetadata(requiredSchema, dataSchema)
+    result shouldBe StructType(Seq(
+      structField("a", StringType, nullable = true)
+    ))
+  }
+
+  it should "propagate nullable from meta in nested struct type" in {
+    val requiredSchema = StructType(Seq(
+      structField("b", StructType(Seq(
+        StructField("c", BooleanType, nullable = false)
+      )), nullable = false)
+    ))
+    val dataSchema = StructType(Seq(
+      structField("b", StructType(Seq(
+        StructField("c", BooleanType, nullable = true)
+      )), nullable = true)
+    ))
+    val result = YtScanBuilderBase.pushStructMetadata(requiredSchema, dataSchema)
+    result shouldBe StructType(Seq(
+      structField("b", StructType(Seq(
+        StructField("c", BooleanType, nullable = true)
+      )), nullable = true)
     ))
   }
 
@@ -55,7 +85,7 @@ class YtScanBuilderTest extends AnyFlatSpec with Matchers with SchemaTestUtils w
     result shouldBe StructType(Seq(
       structField("b", ArrayType(MapType(StructType(Seq(
         StructField("p", NullType, nullable = false, metadata = new MetadataBuilder().putString("0", "A").putString("1", "B").build())
-      )), StringType), containsNull = false), metadata = new MetadataBuilder().putString("2", "C"))
+      )), StringType), containsNull = false), nullable = false, metadata = new MetadataBuilder().putString("2", "C"))
     ))
   }
 }

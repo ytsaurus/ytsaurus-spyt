@@ -23,8 +23,10 @@ object YtScanBuilderBase {
         val opt = meta.fields.find(sf => sf.name == f.name)
         opt match {
           case None => f
-          case Some(v) => f.copy(dataType = pushMetadata(f.dataType, v.dataType),
-            metadata = v.metadata)
+          case Some(v) => f.copy(
+            dataType = pushMetadata(f.dataType, v.dataType),
+            metadata = v.metadata,
+            nullable = v.nullable)
         }
     })
   }

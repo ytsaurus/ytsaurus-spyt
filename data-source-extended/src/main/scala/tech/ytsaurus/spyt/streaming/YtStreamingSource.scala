@@ -11,9 +11,10 @@ import org.apache.spark.sql.{DataFrame, SQLContext}
 import tech.ytsaurus.client.CompoundClient
 import tech.ytsaurus.spyt.format.conf.SparkYtConfiguration.Streaming
 import tech.ytsaurus.spyt.wrapper.YtWrapper
+import tech.ytsaurus.spyt.wrapper.client.{YtClientConfigurationConverter, YtClientProvider}
 import tech.ytsaurus.spyt.wrapper.config.SparkYtSparkSession
 
-import scala.util.{Failure, Success}
+import scala.util.{Failure, Success, Try}
 
 class YtStreamingSource(sqlContext: SQLContext, consumerPath: String, queuePath: String, val schema: StructType,
   parameters: Map[String, String], offsetProvider: YtQueueOffsetProvider = YtQueueOffsetProvider)
@@ -24,6 +25,9 @@ class YtStreamingSource(sqlContext: SQLContext, consumerPath: String, queuePath:
 
   private var lastCommittedOffset: YtQueueOffset = getLastCommittedOffset
   private var maxOffset: Option[YtQueueOffset] = None
+
+  private def transactionalEnabled: Boolean =
+    Try(sqlContext.sparkSession.ytConf(Streaming.Transactional)).getOrElse(false)
 
   protected[streaming] def getMaxOffset: Option[YtQueueOffset] = {
     logDebug(s"Get offset for $queuePath")
@@ -61,16 +65,19 @@ class YtStreamingSource(sqlContext: SQLContext, consumerPath: String, queuePath:
     "latestOffset(Offset, ReadLimit) should be called instead of this method")
 
   override def latestOffset(startOffset: streaming.Offset, limit: ReadLimit): streaming.Offset = {
-    val lastOffsetCachedBySpark: Option[YtQueueOffset] = Option(startOffset).map(YtQueueOffset.apply)
-
-    val startOffsetParsed = if (lastOffsetCachedBySpark.isEmpty) {
+    val startOffsetParsed = if (transactionalEnabled) {
       getLastCommittedOffset
-    } else if (lastOffsetCachedBySpark.get >= lastCommittedOffset) {
-      lastOffsetCachedBySpark.get
     } else {
-      logWarning(s"Offset cached by Spark is less than offset from consumer: " +
-        s"${lastOffsetCachedBySpark.get.partitions} < ${lastCommittedOffset.partitions}. Using last committed offset.")
-      lastCommittedOffset
+      val lastOffsetCachedBySpark: Option[YtQueueOffset] = Option(startOffset).map(YtQueueOffset.apply)
+      if (lastOffsetCachedBySpark.isEmpty) {
+        getLastCommittedOffset
+      } else if (lastOffsetCachedBySpark.get >= lastCommittedOffset) {
+        lastOffsetCachedBySpark.get
+      } else {
+        logWarning(s"Offset cached by Spark is less than offset from consumer: " +
+          s"${lastOffsetCachedBySpark.get.partitions} < ${lastCommittedOffset.partitions}. Using last committed offset.")
+        lastCommittedOffset
+      }
     }
 
     val newMaxOffsetOpt = getMaxOffset
@@ -103,8 +110,11 @@ class YtStreamingSource(sqlContext: SQLContext, consumerPath: String, queuePath:
       logInfo("return empty RDD")
       sqlContext.sparkContext.emptyRDD[InternalRow].setName("empty")
     } else {
-      val currentOffset = getLastCommittedOffset
-      val preparedStart = start.map(YtQueueOffset.apply).filter(_ >= currentOffset).getOrElse(currentOffset)
+      val preparedStart = if (transactionalEnabled) {
+        lastCommittedOffset
+      } else {
+        start.map(YtQueueOffset.apply).filter(_ >= lastCommittedOffset).getOrElse(lastCommittedOffset)
+      }
       val preparedEnd = YtQueueOffset(end)
 
       if (!(preparedEnd >= preparedStart)) {
@@ -120,15 +130,28 @@ class YtStreamingSource(sqlContext: SQLContext, consumerPath: String, queuePath:
   }
 
   override def commit(end: Offset): Unit = {
-    val transactionalEnabled = sqlContext.sparkSession.ytConf(Streaming.Transactional)
-    val parentTransactionId = YtStreamingTransactionContext.currentTransactionId.get()
+    val txContext = YtStreamingTransactionContext.get
 
-    if (transactionalEnabled && parentTransactionId.isEmpty) {
-      logDebug("Skipping commit: transactional mode enabled but no transaction ID in context (likely called from commitSources)")
+    if (txContext.isEmpty) {
+      val transactionalEnabled = sqlContext.sparkSession.ytConf(Streaming.Transactional)
+      if (transactionalEnabled) {
+        return
+      }
+      offsetProvider.advance(consumerPath, YtQueueOffset(end), lastCommittedOffset, maxOffset, None)(yt)
       return
     }
 
-    offsetProvider.advance(consumerPath, YtQueueOffset(end), lastCommittedOffset, maxOffset, parentTransactionId)
+    val parentTransactionId = txContext.map(_.txId)
+    val stickyAddr = txContext.flatMap(_.stickyAddress)
+    val advanceClient: CompoundClient = stickyAddr match {
+      case Some(addr) =>
+        val conf = YtClientConfigurationConverter.ytClientConfiguration(sqlContext.sparkSession.sparkContext.getConf)
+        YtClientProvider.ytClient(conf.copy(fixedProxyAddress = Some(addr)))
+      case None => yt
+    }
+
+    offsetProvider.advance(consumerPath, YtQueueOffset(end), lastCommittedOffset, maxOffset,
+      parentTransactionId)(advanceClient)
   }
 
   override def stop(): Unit = {

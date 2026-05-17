@@ -18,7 +18,8 @@ case class YtClientConfiguration(
   proxyRole: Option[String],
   extendedFileTimeout: Boolean,
   proxyNetworkName: Option[String],
-  useCommonProxies: Boolean = false) extends Serializable {
+  useCommonProxies: Boolean = false,
+  fixedProxyAddress: Option[String] = None) extends Serializable {
 
   private lazy val initialUrlAttempt: Try[URL] = Try(new URL(proxy))
 

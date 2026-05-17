@@ -6,7 +6,7 @@ import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.execution.datasources.OutputWriter
 import org.apache.spark.sql.types.StructType
 import org.slf4j.LoggerFactory
-import tech.ytsaurus.client.CompoundClient
+import tech.ytsaurus.client.{ApiServiceTransaction, CompoundClient}
 import tech.ytsaurus.client.request.ModifyRowsRequest
 import tech.ytsaurus.core.tables.TableSchema
 import tech.ytsaurus.spyt.format.conf.SparkYtWriteConfiguration
@@ -18,7 +18,7 @@ import tech.ytsaurus.spyt.wrapper.YtWrapper
 import scala.jdk.CollectionConverters._
 
 class YtDynamicTableWriter(richPath: YPathEnriched, schema: StructType, wConfig: SparkYtWriteConfiguration,
-  options: Map[String, String], parentTransactionId: Option[String] = None)
+  options: Map[String, String], parentTransaction: Option[ApiServiceTransaction] = None)
   (implicit ytClient: CompoundClient) extends OutputWriter {
 
   import YtDynamicTableWriter._
@@ -60,10 +60,7 @@ class YtDynamicTableWriter(richPath: YPathEnriched, schema: StructType, wConfig:
     log.debug(s"Batch size: ${wConfig.dynBatchSize}, actual batch size: $count")
     YtMetricsRegister.time(writeBatchTime, writeBatchTimeSum) {
       val request = modifyRowsRequestBuilder.build()
-      parentTransactionId match {
-        case Some(txId) => YtWrapper.insertRows(request, txId)
-        case None => YtWrapper.insertRows(request, None)
-      }
+      YtWrapper.insertRows(request, parentTransaction)
     }
     initBatch()
   }

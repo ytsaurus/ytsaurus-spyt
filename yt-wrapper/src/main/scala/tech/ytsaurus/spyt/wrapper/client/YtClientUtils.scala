@@ -12,7 +12,7 @@ import tech.ytsaurus.client.bus.DefaultBusConnector
 import tech.ytsaurus.client.discovery.StaticDiscoverer
 import tech.ytsaurus.client.rpc.RpcOptions
 
-import java.net.SocketAddress
+import java.net.{InetSocketAddress, SocketAddress}
 import java.time.Duration
 import java.util.concurrent.ThreadFactory
 import java.util.{ArrayList => JArrayList}
@@ -28,10 +28,38 @@ trait YtClientUtils {
     }
   }
 
-  def createRpcClient(
+  private def createFixedProxyRpcClient(
+    config: YtClientConfiguration,
+    address: String,
+    nThreads: Int): YtRpcClient = {
+    log.info(s"Create fixed-proxy RPC YT Client to $address")
+    val socketAddress = parseHostPort(address)
+    val group = new NioEventLoopGroup(nThreads, daemonThreadFactory)
+    val connector = new DefaultBusConnector(group, true)
+      .setReadTimeout(config.timeout)
+      .setWriteTimeout(config.timeout)
+
+    try {
+      val rpcOptions = new RpcOptions()
+      rpcOptions.setTimeouts(config.timeout)
+      val yt = DirectYTsaurusClient.builder()
+        .setSharedBusConnector(connector)
+        .setAddress(socketAddress)
+        .setAuth(config.clientAuth)
+        .setConfig(YTsaurusClientConfig.builder().setRpcOptions(rpcOptions).build())
+        .build()
+      YtRpcClient(s"${config.normalizedProxy}@$address", yt, connector)
+    } catch {
+      case e: Throwable =>
+        connector.close()
+        throw e
+    }
+  }
+
+  private def createDynamicProxiesRpcClient(
     config: YtClientConfiguration,
     nThreads: Int,
-    rpcClientListener: Option[SpytRpcClientListener] = None): YtRpcClient = {
+    rpcClientListener: Option[SpytRpcClientListener]): YtRpcClient = {
     log.info(s"Create RPC YT Client, configuration ${config.copy(token = "*****")}")
     val maybeJobProxy = jobProxyEndpoint(config)
     val group = if (maybeJobProxy.isDefined) {
@@ -61,6 +89,24 @@ trait YtClientUtils {
       case e: Throwable =>
         connector.close()
         throw e
+    }
+  }
+
+  private def parseHostPort(address: String): SocketAddress = {
+    val idx = address.lastIndexOf(':')
+    require(idx > 0 && idx < address.length - 1, s"Address must be in 'host:port' form, got '$address'")
+    val host = address.substring(0, idx)
+    val port = address.substring(idx + 1).toInt
+    new InetSocketAddress(host, port)
+  }
+
+  def createRpcClient(
+    config: YtClientConfiguration,
+    nThreads: Int,
+    rpcClientListener: Option[SpytRpcClientListener] = None): YtRpcClient = {
+    config.fixedProxyAddress match {
+      case Some(address) => createFixedProxyRpcClient(config, address, nThreads)
+      case None => createDynamicProxiesRpcClient(config, nThreads, rpcClientListener)
     }
   }
 

@@ -29,6 +29,6 @@ object YtQueueOffsetProvider extends YtQueueOffsetProvider {
   override def advance(consumerPath: String, newOffset: YtQueueOffset, lastCommittedOffset: YtQueueOffset,
     maxOffset: Option[YtQueueOffset], parentTransactionId: Option[String])
     (implicit client: CompoundClient): Option[YtQueueOffset] = {
-    YtQueueOffset.advance(consumerPath, newOffset, lastCommittedOffset, maxOffset)
+    YtQueueOffset.advance(consumerPath, newOffset, lastCommittedOffset, maxOffset, parentTransactionId)
   }
 }

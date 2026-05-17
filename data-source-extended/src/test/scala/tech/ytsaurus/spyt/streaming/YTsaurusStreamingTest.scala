@@ -239,7 +239,9 @@ class YTsaurusStreamingTest extends AnyFlatSpec with Matchers with LocalSpark wi
   }
 
   it should "one streaming launch with transaction" in {
-    testOneStreamingLaunch(transactional = true)
+    whenSparkVersionAtLeast("3.5.0") {
+      testOneStreamingLaunch(transactional = true)
+    }
   }
 
   it should "several streaming launches - at-least-once guarantee" in {
@@ -251,7 +253,9 @@ class YTsaurusStreamingTest extends AnyFlatSpec with Matchers with LocalSpark wi
   }
 
   it should "several streaming launches with transaction" in {
-    testSeveralStreamingLaunches(transactional = true)
+    whenSparkVersionAtLeast("3.5.0") {
+      testSeveralStreamingLaunches(transactional = true)
+    }
   }
 
   it should "fetch checkpoints location from consumer - at-least-once guarantee" in {
@@ -263,7 +267,9 @@ class YTsaurusStreamingTest extends AnyFlatSpec with Matchers with LocalSpark wi
   }
 
   it should "continue streaming after removing checkpoints with transaction" in {
-    testContinueStreamingAfterRemovingCheckpoints(transactional = true)
+    whenSparkVersionAtLeast("3.5.0") {
+      testContinueStreamingAfterRemovingCheckpoints(transactional = true)
+    }
   }
 
   it should "streaming with several sources-queues: check consumer and result synchronization" in {
@@ -474,7 +480,85 @@ class YTsaurusStreamingTest extends AnyFlatSpec with Matchers with LocalSpark wi
   }
 
   it should "streaming with several sources-queues with transaction" in {
-    testStreamingWithSeveralSourcesQueues(transactional = true)
+    whenSparkVersionAtLeast("3.5.0") {
+      testStreamingWithSeveralSourcesQueues(transactional = true)
+    }
+  }
+
+  it should "exactly-once with transaction when result table is unmounted while queue is being written" in {
+    whenSparkVersionAtLeast("3.5.0") {
+      import tech.ytsaurus.spyt.format.conf.SparkYtConfiguration.Streaming
+
+      val paths: StreamingObjectsPaths = prepareStreamingObjects(tmpPath = tmpPath, queueTabletCount = 1)
+      val queuePath = paths.queuePath
+      val resultPath = paths.resultPath
+      val consumerPath = paths.consumerPath
+      val checkpointLocation = paths.checkpointLocation
+
+      val totalRecords = 30
+
+      withConf(Streaming.Transactional, true) {
+      def startQuery(): org.apache.spark.sql.streaming.StreamingQuery = spark
+        .readStream
+        .format("yt")
+        .option("consumer_path", consumerPath)
+        .load(queuePath)
+        .writeStream
+        .option("checkpointLocation", checkpointLocation)
+        .format("yt")
+        .option("path", resultPath)
+        .start()
+
+      var query = startQuery()
+
+      try {
+        YtWrapper.unmountTable(resultPath)
+        YtWrapper.waitState(resultPath, YtWrapper.TabletState.Unmounted, Duration.ofSeconds(20))
+
+        var lowerIndex = 0
+        for (_ <- 0 until totalRecords / 10) {
+          val data = getTestData(lowerIndex, lowerIndex + 9)
+          appendChunksToTestTable(queuePath, Seq(data), sorted = false, remount = false)
+          lowerIndex += 10
+        }
+
+        val failureDeadline = System.currentTimeMillis() + Duration.ofSeconds(60).toMillis
+        while (query.exception.isEmpty && System.currentTimeMillis() < failureDeadline) {
+          Thread.sleep(1000)
+        }
+        assert(query.exception.isDefined,
+          "expected streaming query to fail because result table is unmounted, but it stayed alive")
+
+        YtWrapper.mountTable(resultPath)
+
+        query = startQuery()
+
+        val expectedRows = spark.createDataFrame(getTestData(0, totalRecords - 1)).collect()
+        val deadline = System.currentTimeMillis() + Duration.ofSeconds(180).toMillis
+        var totalRows = 0L
+        while (totalRows < totalRecords && System.currentTimeMillis() < deadline) {
+          Thread.sleep(2000)
+          totalRows = spark.read.option(InconsistentReadEnabled.name, "true").yt(resultPath).count()
+        }
+        totalRows shouldBe totalRecords.toLong
+
+        val actualRows = spark.read
+          .option(InconsistentReadEnabled.name, "true")
+          .yt(resultPath)
+          .select("a", "b", "c")
+          .orderBy("a")
+          .collect()
+        actualRows should contain theSameElementsAs expectedRows
+      } finally {
+        query.stop()
+      }
+    }
+
+      val cluster = YtWrapper.clusterName()
+      val currentOffset = YtQueueOffset.getCurrentOffset(cluster, consumerPath, queuePath)
+      val totalOffsetSum = currentOffset.partitions.values.map(_ + 1).sum
+      totalOffsetSum shouldBe totalRecords.toLong
+    }
   }
 
   it should "streaming after offsets desynchronization: checkpoints are behind on consumer" in {

@@ -1,14 +1,13 @@
 package tech.ytsaurus.spyt.wrapper.transaction
 
-import java.time.Duration
 import org.slf4j.LoggerFactory
-import tech.ytsaurus.spyt.wrapper.YtJavaConverters._
-import tech.ytsaurus.spyt.wrapper._
-import tech.ytsaurus.client.request.{ReadFile, ReadTable, StartOperation, StartTransaction, TransactionType, TransactionalOptions, TransactionalRequest, WriteFile}
+import tech.ytsaurus.client.request._
 import tech.ytsaurus.client.{ApiServiceTransaction, CompoundClient}
 import tech.ytsaurus.core.GUID
+import tech.ytsaurus.spyt.wrapper._
 import tech.ytsaurus.ysontree.YTree
 
+import java.time.Duration
 import java.util.Collections
 import scala.annotation.tailrec
 import scala.concurrent.{CancellationException, ExecutionContext, Future, Promise}
@@ -42,6 +41,18 @@ trait YtTransactionUtils {
     tr
   }
 
+  def attachTransaction(transactionId: String,
+    ping: Boolean = false,
+    pingPeriod: Option[Duration] = None)
+    (implicit yt: CompoundClient): ApiServiceTransaction = {
+    log.debugLazy(s"Attach transaction $transactionId, ping $ping, pingPeriod $pingPeriod")
+    val builder = AttachTransaction.builder()
+      .setTransactionId(GUID.valueOf(transactionId))
+      .setPing(ping)
+    pingPeriod.foreach(builder.setPingPeriod)
+    yt.attachTransaction(builder.build()).join()
+  }
+
   def abortTransaction(guid: String)(implicit yt: CompoundClient): Unit = {
     log.debugLazy(s"Abort transaction $guid")
     yt.abortTransaction(GUID.valueOf(guid)).join()
@@ -67,7 +78,7 @@ trait YtTransactionUtils {
   }
 
   def pingTransaction(tr: ApiServiceTransaction, interval: Duration)
-                     (implicit yt: CompoundClient, ec: ExecutionContext): Cancellable[Unit] = {
+    (implicit yt: CompoundClient, ec: ExecutionContext): Cancellable[Unit] = {
     @tailrec
     def ping(cancel: Future[Unit], retry: Int): Boolean = {
       try {

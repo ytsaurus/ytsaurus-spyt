@@ -1,4 +1,6 @@
 import requests
+import time
+from functools import reduce
 from spyt.dependency_utils import require_yt_client
 from spyt.enabler import SpytEnablers
 
@@ -26,6 +28,21 @@ def start_connect_server(client, enablers: SpytEnablers = None, prefer_ipv6: boo
     spec = build_spark_connect_server_spec(client, version_config, enablers, java_home,
                                            prefer_ipv6, pool, operation_alias, params)
     return run_operation(spec, sync=False, client=client)
+
+
+def wait_for_spark_connect_endpoint(client, operation_id: str, timeout: int = 60):
+    spark_connect_endpoint = None
+    remaining_timeout = timeout
+    while not spark_connect_endpoint and remaining_timeout > 0:
+        operation = client.get_operation(operation_id)
+        spark_connect_endpoint = (reduce(lambda map, key: map[key] if map and key in map else None,
+                                         ['runtime_parameters', 'annotations', 'spark_connect_endpoint'],
+                                         operation))
+        if spark_connect_endpoint:
+            return str(spark_connect_endpoint)
+        time.sleep(1)
+        remaining_timeout -= 1
+    raise TimeoutError(f"Spark connect endpoint not found in {timeout} seconds")
 
 
 def _spyt_connect_server_inner_cluster_endpoint(client, discovery_path: str):

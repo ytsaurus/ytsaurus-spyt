@@ -1,29 +1,16 @@
 from spyt.connect import start_connect_server, start_connect_server_inner_cluster, \
-    list_active_connect_servers_inner_cluster
+    list_active_connect_servers_inner_cluster, wait_for_spark_connect_endpoint
 
 from common.helpers import assert_items_equal, assert_sequences_equal, wait_for_operation
 from contextlib import contextmanager
 from hashlib import sha256
 from itertools import chain
 import time
-from functools import reduce
 from pyspark.sql import SparkSession
 import pyspark.sql.functions as f
 from pyspark.sql.types import Row
 from yt.wrapper.http_helpers import get_token
 import yt.yson as yt_yson
-
-
-def _wait_for_spark_connect_endpoint(yt_client, operation_id):
-    spark_connect_endpoint = None
-    while not spark_connect_endpoint:
-        operation = yt_client.get_operation(operation_id)
-        spark_connect_endpoint = (reduce(lambda map, key: map[key] if map and key in map else None,
-                                         ['runtime_parameters', 'annotations', 'spark_connect_endpoint'],
-                                         operation))
-        if spark_connect_endpoint:
-            return str(spark_connect_endpoint)
-        time.sleep(1)
 
 
 @contextmanager
@@ -41,7 +28,7 @@ def _spark_connect_session(spark_connect_endpoint):
 def _direct_spark_connect_session(yt_client, spark_conf={}):
     operation = start_connect_server(yt_client, spark_conf=spark_conf)
     try:
-        spark_connect_endpoint = _wait_for_spark_connect_endpoint(yt_client, operation.id)
+        spark_connect_endpoint = wait_for_spark_connect_endpoint(yt_client, operation.id)
         with _spark_connect_session(spark_connect_endpoint) as spark:
             yield spark
     finally:
@@ -63,11 +50,11 @@ def test_two_servers(yt_client):
     op1, op2 = None, None
     try:
         op1 = start_connect_server(yt_client, grpc_port_start=grpc_port)
-        endpoint_1 = _wait_for_spark_connect_endpoint(yt_client, op1.id)
+        endpoint_1 = wait_for_spark_connect_endpoint(yt_client, op1.id)
         assert endpoint_1 == f"localhost:{grpc_port}"
 
         op2 = start_connect_server(yt_client, grpc_port_start=grpc_port)
-        endpoint_2 = _wait_for_spark_connect_endpoint(yt_client, op2.id)
+        endpoint_2 = wait_for_spark_connect_endpoint(yt_client, op2.id)
         assert endpoint_2 == f"localhost:{grpc_port + 1}"
     finally:
         for op in [op1, op2]:

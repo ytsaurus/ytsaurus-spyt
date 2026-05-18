@@ -64,7 +64,7 @@ class ExtendedYtDynamicTableWriterTest extends AnyFlatSpec with TmpDir with Loca
         StructField("field1", IntegerType),
         StructField("field2", FloatType),
         StructField("field3", BooleanType))))
-      .add("yson", YsonType)
+      .add("yson", new YsonType())
 
     val data = Seq(
       Row(UInt64Long(1L),

@@ -58,18 +58,19 @@ abstract class AbstractYtOutputCommitProtocol(
   }
 
   protected def updateAttributes(path: YPathEnriched, options: YtTableSparkSettings, transaction: String): Unit = {
-    val attrsFromTable = YtWrapper.attributes(path.toStringPath, Some(transaction), options.optionsAny.keySet)
+    val attrsFromTable =
+      YtWrapper.attributes(path.toStringPath, Some(transaction), options.optionsAny.keySet.asScala.toSet)
       .map { case (k, v) => k -> v.toString.stripPrefix("\"").stripSuffix("\"")}
-    val attrsForUpdate = options.optionsAny.flatMap { case (k, v) =>
+    val attrsForUpdate = options.optionsAny.asScala.toMap.flatMap { case (k, v) =>
       val cleanedV = v.toString.stripPrefix("\"").stripSuffix("\"")
-      if (!attrsFromTable.get(k).getOrElse("").equals(cleanedV)) {
+      if (!attrsFromTable.getOrElse(k, "").equals(cleanedV)) {
         Some(k -> cleanedV)
       } else {
         None
       }
     }
 
-    if(!attrsForUpdate.isEmpty){
+    if(attrsForUpdate.nonEmpty){
       attrsForUpdate.foreach { case (k, v) =>
         YtWrapper.setAttribute(path.toStringPath, k, CustomAttribute.get(v), Some(transaction))}
     }

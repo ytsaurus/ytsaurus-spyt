@@ -4,27 +4,33 @@ plugins {
     id("tech.ytsaurus.spyt.common.plugin")
 }
 
+val scalaVersion: String? by extra
+
 dependencies {
-    api(project(":spark-adapter-api"))
+    api(project(":spark-adapter-api_$scalaVersion"))
     api(libs.ytsaurus.client) {
         exclude(group = "io.netty")
         exclude(group = "com.fasterxml.jackson.core")
         exclude(group = "org.apache.commons")
         exclude(group = "com.google.code.findbugs", module = "jsr305")
+        exclude(group = "org.lz4", module = "lz4-java")
     }
-    api(libs.bundles.circe)
+    api(libs.bundles.circe.scala(project))
     api(libs.jsonevent.layout)
-    api(libs.shapeless)
-    api(libs.sttp)
+    api(libs.shapeless.scala(project))
+    api(libs.sttp.scala(project))
 
-    testImplementation(libs.bundles.test)
+    testImplementation(libs.bundles.test.scala(project))
     testImplementation(libs.bundles.junit.platform)
-    testImplementation(libs.scala.collection.compat)
-    testImplementation(project(":spark-adapter-impl-322"))
-    testImplementation(project(":spark-adapter-impl-330"))
-    testImplementation(project(":spark-adapter-impl-340"))
-    testImplementation(project(":spark-adapter-impl-350"))
-    testImplementation(project(":spark-adapter-provider"))
+    testImplementation(project(":spark-adapter-impl-330_$scalaVersion"))
+    testImplementation(project(":spark-adapter-impl-340_$scalaVersion"))
+    testImplementation(project(":spark-adapter-impl-350_$scalaVersion"))
+    if (scalaVersion == "2.13") {
+        testImplementation(project(":spark-adapter-impl-400_$scalaVersion"))
+        testImplementation(project(":spark-adapter-impl-410_$scalaVersion"))
+        testImplementation(project(":spark-adapter-impl-420_$scalaVersion"))
+    }
+    testImplementation(project(":spark-adapter-provider_$scalaVersion"))
 }
 
 val generateBuildInfo = tasks.register<BuildInfoTask>("generateBuildInfo") {

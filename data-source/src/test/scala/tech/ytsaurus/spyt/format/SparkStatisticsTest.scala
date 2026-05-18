@@ -4,7 +4,7 @@ import org.apache.spark.scheduler.{SparkListener, SparkListenerTaskEnd}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import tech.ytsaurus.spyt.test.{LocalSpark, TestUtils, TmpDir}
-import tech.ytsaurus.spyt.{YtDistributedReadingTestUtils, YtReader, YtWriter}
+import tech.ytsaurus.spyt.{SparkAdapter, YtDistributedReadingTestUtils, YtReader, YtWriter}
 import tech.ytsaurus.spyt.format.conf.{SparkYtConfiguration => SparkSettings}
 
 class SparkStatisticsTest extends AnyFlatSpec with Matchers with LocalSpark with TmpDir with TestUtils
@@ -12,7 +12,8 @@ class SparkStatisticsTest extends AnyFlatSpec with Matchers with LocalSpark with
 
   behavior of "Spark statistics"
 
-  import spark.implicits._
+  private val sqlImplicits = SparkAdapter.instance.sparkImplicits(spark)
+  import sqlImplicits._
 
   object MetricsListener {
     class BytesMetricsListener extends SparkListener {

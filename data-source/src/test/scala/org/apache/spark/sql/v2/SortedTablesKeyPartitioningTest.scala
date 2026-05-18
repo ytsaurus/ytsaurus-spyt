@@ -9,6 +9,7 @@ import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import tech.ytsaurus.client.rows.{UnversionedRow, UnversionedValue}
 import tech.ytsaurus.core.tables.{ColumnValueType, TableSchema}
+import tech.ytsaurus.spyt.SparkAdapter
 import tech.ytsaurus.spyt.common.utils.{TuplePoint, TupleSegment}
 import tech.ytsaurus.spyt.format.conf.SparkYtConfiguration
 import tech.ytsaurus.spyt.test.{DynTableTestUtils, LocalSpark, TestUtils, TmpDir}
@@ -22,7 +23,8 @@ class SortedTablesKeyPartitioningTest extends AnyFlatSpec with Matchers with Loc
   with TmpDir with MockitoSugar with DynTableTestUtils with TestUtils {
   behavior of "YtScan"
 
-  import spark.implicits._
+  private val sqlImplicits = SparkAdapter.instance.sparkImplicits(spark)
+  import sqlImplicits._
   implicit val ytReadContext: YtReadContext = YtReadContext(yt, YtReadSettings.default)
 
   override def beforeAll(): Unit = {
@@ -52,7 +54,7 @@ class SortedTablesKeyPartitioningTest extends AnyFlatSpec with Matchers with Loc
     data.toDF(cols : _*).write.sortedBy("a", "b", "c").yt(tmpPath)
 
     // all subsets of columns
-    colIndexes.toIterator.flatMap(i => colIndexes.combinations(i)).foreach {
+    colIndexes.flatMap(i => colIndexes.combinations(i)).foreach {
       subColIndexes =>
         val subCols = subColIndexes.map(x => cols(x))
         val res = spark.read.yt(tmpPath).select(subCols.map(col) : _*).collect()

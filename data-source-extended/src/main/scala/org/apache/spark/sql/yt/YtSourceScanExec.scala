@@ -4,6 +4,7 @@ import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.catalyst.expressions.{Attribute, Expression, SortOrder}
 import org.apache.spark.sql.catalyst.plans.physical.Partitioning
 import org.apache.spark.sql.catalyst.{InternalRow, TableIdentifier}
+import org.apache.spark.sql.connector.read.streaming.SparkDataStream
 import org.apache.spark.sql.execution._
 import org.apache.spark.sql.execution.datasources._
 import org.apache.spark.sql.execution.metric.SQLMetric
@@ -17,14 +18,14 @@ import tech.ytsaurus.spyt.format.conf.{SparkYtInternalConfiguration, YtTableSpar
 import tech.ytsaurus.spyt.fs.YtHadoopPath
 import tech.ytsaurus.spyt.wrapper.table.OptimizeMode
 
-case class YtSourceScanExec(@transient relation: HadoopFsRelation,
+case class YtSourceScanExec(
+  @transient relation: HadoopFsRelation,
   output: Seq[Attribute],
   requiredSchema: StructType,
   partitionFilters: Seq[Expression],
   optionalBucketSet: Option[BitSet],
   dataFilters: Seq[Expression],
-  tableIdentifier: Option[TableIdentifier])
-  extends DataSourceScanExec {
+  tableIdentifier: Option[TableIdentifier]) extends DataSourceScanExec with DataSourceScanExecCompat {
 
   private lazy val optimizedForScan: Boolean = relation.fileFormat match {
     case _: YtFileFormat =>
@@ -56,15 +57,27 @@ case class YtSourceScanExec(@transient relation: HadoopFsRelation,
       (SparkYtInternalConfiguration.FullReadAllowed.name -> fullReadAllowed.toString)
   )(relation.sparkSession)
 
-  private val delegate = new FileSourceScanExecDelegate(
-    wrappedRelation, output, requiredSchema, partitionFilters, optionalBucketSet, dataFilters, tableIdentifier
+  private val delegate = SparkAdapter.instance.createFileSourceScanExecDelegate(
+    wrappedRelation,
+    output,
+    requiredSchema,
+    partitionFilters,
+    optionalBucketSet,
+    dataFilters,
+    tableIdentifier,
+    (relation: HadoopFsRelation) => relation.fileFormat match {
+      case _: YtFileFormat => YtReaderOptions.supportBatch(
+        SparkAdapter.instance.fromAttributes(output), relation.options, relation.sparkSession.sessionState.conf
+      )
+      case f => f.supportBatch(relation.sparkSession, SparkAdapter.instance.fromAttributes(output))
+    }
   )
 
   val maybeReadParallelism: Option[Int] = delegate.relation.options.get("readParallelism").map(_.toInt)
 
   override lazy val metadata: Map[String, String] = delegate.metadata
 
-  lazy val pushedDownFilters: Seq[Filter] = delegate.pushedDownFiltersInternal
+  lazy val pushedDownFilters: Seq[Filter] = delegate.pushedDownFiltersInternal()
 
   override def inputRDDs(): Seq[RDD[InternalRow]] = delegate.inputRDDs()
 
@@ -97,43 +110,14 @@ case class YtSourceScanExec(@transient relation: HadoopFsRelation,
   override val nodeNamePrefix: String = delegate.nodeNamePrefix
 
   override protected def doCanonicalize(): FileSourceScanExec = delegate.doCanonicalize()
+
+  override def getStream: Option[SparkDataStream] = SparkAdapter.instance.getFileSourceScanExecStream(delegate)
+}
+
+trait DataSourceScanExecCompat {
+  def getStream: Option[SparkDataStream]
 }
 
 object YtSourceScanExec {
   val currentThreadInstance: ThreadLocal[YtSourceScanExec] = new ThreadLocal[YtSourceScanExec]()
-}
-
-class FileSourceScanExecDelegate(relation: HadoopFsRelation,
-  output: Seq[Attribute],
-  requiredSchema: StructType,
-  partitionFilters: Seq[Expression],
-  optionalBucketSet: Option[BitSet],
-  dataFilters: Seq[Expression],
-  tableIdentifier: Option[TableIdentifier])
-  extends FileSourceScanExec(relation, output, requiredSchema, partitionFilters, optionalBucketSet,
-    None, dataFilters, tableIdentifier) {
-
-  override lazy val supportsColumnar: Boolean = {
-    relation.fileFormat match {
-      case _: YtFileFormat => YtReaderOptions.supportBatch(
-        SparkAdapter.instance.fromAttributes(output), relation.options, relation.sparkSession.sqlContext.conf
-      )
-      case f => f.supportBatch(relation.sparkSession, SparkAdapter.instance.fromAttributes(output))
-    }
-  }
-
-  @transient
-  private lazy val pushedDownFiltersMethod = {
-    val m = getClass.getSuperclass.getDeclaredMethod("pushedDownFilters")
-    m.setAccessible(true)
-    m
-  }
-
-  def pushedDownFiltersInternal: Seq[Filter] =
-    scala.util.Try {
-      pushedDownFiltersMethod.invoke(this).asInstanceOf[Seq[Filter]]
-    }.getOrElse(Seq.empty)
-
-  def doExecuteInternal(): RDD[InternalRow] = this.doExecute()
-  def doExecuteColumnarInternal(): RDD[ColumnarBatch] = this.doExecuteColumnar()
 }

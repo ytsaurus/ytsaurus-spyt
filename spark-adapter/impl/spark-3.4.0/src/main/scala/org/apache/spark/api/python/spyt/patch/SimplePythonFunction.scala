@@ -6,7 +6,7 @@ import org.apache.spark.broadcast.Broadcast
 import tech.ytsaurus.spyt.patch.annotations.{Applicability, OriginClass}
 
 @OriginClass("org.apache.spark.api.python.SimplePythonFunction")
-@Applicability(from = "3.4.0")
+@Applicability(from = "3.4.0", to = "4.0.0")
 private[spark] case class SimplePythonFunction(
     command: Seq[Byte],
     envVars: JMap[String, String],

@@ -3,12 +3,16 @@ import sys
 import types
 
 from pyspark.cloudpickle.cloudpickle import _extract_code_globals_cache, GLOBAL_OPS
-from pyspark.sql.column import _to_java_column
 from pyspark.sql.dataframe import DataFrame
 from pyspark.sql.types import StructType, StructField
 from pyspark.sql import SparkSession
 
 from .utils import check_spark_version
+
+if check_spark_version(less_than="4.0.0"):
+    from pyspark.sql.column import _to_java_column
+else:
+    from pyspark.sql.classic.column import _to_java_column
 
 
 # DataFrameReader extensions

@@ -9,7 +9,7 @@ import tech.ytsaurus.spyt.serializers.WriteSchemaConverter
 import tech.ytsaurus.spyt.test.{LocalSpark, TmpDir}
 import tech.ytsaurus.spyt.wrapper.YtWrapper
 import tech.ytsaurus.spyt.wrapper.table.{OptimizeMode, YtArrowInputStream, YtReadContext, YtReadSettings}
-import tech.ytsaurus.spyt.{SchemaTestUtils, YtDistributedReadingTestUtils, YtReader, YtWriter}
+import tech.ytsaurus.spyt.{SchemaTestUtils, SparkAdapter, YtDistributedReadingTestUtils, YtReader, YtWriter}
 
 import java.io.InputStream
 import scala.collection.mutable.ArrayBuffer
@@ -24,6 +24,9 @@ class ArrowBatchReaderTest extends AnyFlatSpec with Matchers with TmpDir with Sc
     structField("_1", DoubleType),
     structField("_2", DoubleType)
   ))
+
+  private val sqlImplicits = SparkAdapter.instance.sparkImplicits(spark)
+  import sqlImplicits._
 
   it should "read old arrow format (< 0.15.0)" in {
     val stream = new TestInputStream(getClass.getResourceAsStream("arrow_old"))
@@ -44,7 +47,6 @@ class ArrowBatchReaderTest extends AnyFlatSpec with Matchers with TmpDir with Sc
   }
 
   testWithDistributedReading("read empty stream") { distributedReadingEnabled =>
-    import spark.implicits._
     val schema = StructType(Seq(structField("a", IntegerType)))
     val data = Seq[Int]()
     val df = data.toDF("a")
@@ -65,8 +67,6 @@ class ArrowBatchReaderTest extends AnyFlatSpec with Matchers with TmpDir with Sc
   }
 
   testWithDistributedReading("count table") { distributedReadingEnabled =>
-    import spark.implicits._
-
     val count = 500
     val data = (0 until count).map(x => (x / 100, x / 10)).toDF("a", "b")
 
@@ -78,7 +78,6 @@ class ArrowBatchReaderTest extends AnyFlatSpec with Matchers with TmpDir with Sc
   }
 
   testWithDistributedReading("read arrow stream from yt") { distributedReadingEnabled =>
-    import spark.implicits._
     val schema = StructType(Seq(structField("a", IntegerType)))
 
     def testSlice(data: Seq[Int], batchSize: Int, lowerRowIndex: Int, upperRowIndex: Int): Unit = {
@@ -130,7 +129,7 @@ class ArrowBatchReaderTest extends AnyFlatSpec with Matchers with TmpDir with Sc
 
   private def readExpected(filename: String, schema: StructType): Seq[Row] = {
     val path = getClass.getResource(filename).getPath
-    spark.read.schema(schema).csv(s"file://$path").collect()
+    spark.read.schema(schema).csv(s"file://$path").collect().toSeq
   }
 
   private class TestInputStream(is: InputStream) extends YtArrowInputStream {

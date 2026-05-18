@@ -6,6 +6,7 @@ import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.analysis.NoSuchTableException
 import org.apache.spark.sql.types.StructType
 import tech.ytsaurus.client.CompoundClient
+import tech.ytsaurus.spyt.SparkAdapter
 import tech.ytsaurus.spyt.logging.Logging
 import tech.ytsaurus.spyt.wrapper.client.YtClientConfigurationConverter.ytClientConfiguration
 import tech.ytsaurus.spyt.fs.path.YPathEnriched
@@ -52,11 +53,11 @@ class YTsaurusExternalCatalog(conf: SparkConf, hadoopConf: Configuration)
 
   private val excludeKeys = Set("key_columns", "sort_orders", "unique_keys")
 
-  private def getSortOption(extraProperties: Map[String, YTreeNode]): SchemaConverter.SortOption = {
-    val keyColumns = extraProperties.get("key_columns").map(_.asList().asScala.map(_.stringValue())).getOrElse(Seq())
-    val sortOrders = extraProperties.get("sort_orders").map(_.asList().asScala.map(_.stringValue())).getOrElse(Seq())
+  private def getSortOption(extraProps: Map[String, YTreeNode]): SchemaConverter.SortOption = {
+    val keyColumns = extraProps.get("key_columns").map(_.asList().asScala.map(_.stringValue())).getOrElse(Seq()).toSeq
+    val sortOrders = extraProps.get("sort_orders").map(_.asList().asScala.map(_.stringValue())).getOrElse(Seq()).toSeq
     if (keyColumns.nonEmpty) {
-      Sorted.fromStringOrders(keyColumns, sortOrders, extraProperties.get("unique_keys").exists(_.boolValue()))
+      Sorted.fromStringOrders(keyColumns, sortOrders, extraProps.get("unique_keys").exists(_.boolValue()))
     } else {
       Unordered
     }
@@ -67,9 +68,10 @@ class YTsaurusExternalCatalog(conf: SparkConf, hadoopConf: Configuration)
       val path = YPathEnriched.fromString(tableDefinition.identifier.table)
       val yt = YtClientProvider.ytClientWithProxy(ytConf, path.cluster)
       if (!YtWrapper.exists(path.toStringYPath)(yt)) {
-        val extraProperties = tableDefinition.properties.mapValues(YTreeTextSerializer.deserialize)
+        val extraProperties = tableDefinition.properties.map(e => e._1 -> YTreeTextSerializer.deserialize(e._2))
+        val extraPropsFiltered = extraProperties.asInstanceOf[Map[String, Any]].filter(e => !excludeKeys.contains(e._1))
         val tableSchema = new WriteSchemaConverter().tableSchema(tableDefinition.schema, getSortOption(extraProperties))
-        val settings = new BaseYtTableSettings(tableSchema, extraProperties.filterKeys(!excludeKeys.contains(_)))
+        val settings = new BaseYtTableSettings(tableSchema, extraPropsFiltered.asJava)
         YtWrapper.createTable(path.toStringYPath, settings)(yt)
       } else {
         logWarning("Table is created twice. Ignoring new query")
@@ -122,11 +124,8 @@ class YTsaurusExternalCatalog(conf: SparkConf, hadoopConf: Configuration)
       val versionedPath: YPathEnriched = ensureVersionedPath(path, yt)
       val schemaTree = YtWrapper.attribute(versionedPath.toStringYPath, "schema")(yt)
       val schema = SchemaConverter.sparkSchema(schemaTree, parsingTypeV3 = config.parsingTypeV3)
-      val storage = CatalogStorageFormat(
-        locationUri = Some(versionedPath.toPath.toUri),
-        inputFormat = None, outputFormat = None, serde = None, compressed = false, properties = Map.empty
-      )
-      Some(CatalogTable(ident, CatalogTableType.MANAGED, storage, schema, provider = Some("yt")))
+      val storage = SparkAdapter.instance.createCatalogStorageFormat(Some(versionedPath.toPath.toUri))
+      Some(SparkAdapter.instance.createCatalogTable(ident, CatalogTableType.MANAGED, storage, schema, Some("yt")))
     } else {
       None
     }

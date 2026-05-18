@@ -6,7 +6,7 @@ import org.apache.spark.sql.functions._
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import tech.ytsaurus.core.tables.{ColumnSchema, ColumnValueType, TableSchema}
-import tech.ytsaurus.spyt.{YtReader, YtWriter}
+import tech.ytsaurus.spyt.{SparkAdapter, YtReader, YtWriter}
 import tech.ytsaurus.spyt.test.{LocalSpark, TestUtils, TmpDir}
 import tech.ytsaurus.spyt.wrapper.YtWrapper
 
@@ -28,7 +28,7 @@ class ExtendedYtDistributedWriterTest extends AnyFlatSpec with TmpDir with Local
 
     _spark.range(10).select(col("id"), concat(lit("it = "), col("id")).as("a")).write.yt(basePath)
 
-    val ysonSeq: Seq[String] = data.map { row =>
+    val ysonSeq: Seq[String] = data.toSeq.map { row =>
       val pairs = columns.zip(row).map { element =>
         s"${element._1.getName} = ${element._2}"
       }
@@ -50,8 +50,6 @@ class ExtendedYtDistributedWriterTest extends AnyFlatSpec with TmpDir with Local
   }
 
   it should "append table with different columns order" in withSparkSession() { _spark =>
-    import _spark.implicits._
-
     val columns: List[ColumnSchema] = List(ColumnSchema.builder("id", ColumnValueType.INT64).build(),
       ColumnSchema.builder("a", ColumnValueType.STRING).build)
 
@@ -64,8 +62,6 @@ class ExtendedYtDistributedWriterTest extends AnyFlatSpec with TmpDir with Local
   }
 
   it should "throw exception when append table with different columns names" in withSparkSession(){ _spark =>
-    import _spark.implicits._
-
     val columns: List[ColumnSchema] = List(ColumnSchema.builder("c", ColumnValueType.INT64).build(),
       ColumnSchema.builder("d", ColumnValueType.INT64).build)
 
@@ -78,8 +74,6 @@ class ExtendedYtDistributedWriterTest extends AnyFlatSpec with TmpDir with Local
   }
 
   it should "append table with smaller amount of columns" in withSparkSession(){ _spark =>
-    import _spark.implicits._
-
     val columns: List[ColumnSchema] = List(ColumnSchema.builder("id", ColumnValueType.INT64).build())
 
     val data: Array[Array[String]] =  Array(

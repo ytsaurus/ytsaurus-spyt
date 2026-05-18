@@ -17,7 +17,7 @@ class YTsaurusTypeSupport extends TypeSupport {
   override val uInt64CastToString: Any => Any = UInt64CastToString
   override val uInt64CastToStringCode: CastFunction = UInt64CastToStringCode
 
-  override val ysonDataType: DataType = YsonType
+  override val ysonDataType: DataType = new YsonType()
   override def ysonCast(from: DataType): Any => Any = YsonBinary.cast(from)
   override val ysonCastToBinary: Any => Any = YsonCastToBinary
   override val ysonCastToBinaryCode: CastFunction = YsonCastToBinaryCode

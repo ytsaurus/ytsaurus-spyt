@@ -60,8 +60,8 @@ private class YtSortedTableAggregationProperties extends YtSortedTableBaseProper
           beforeEach()
           val sortedData = writeSortedData(source, tmpPath)
           val expected = sortedData
-            .groupBy(s => s.take(groupColumns.length)).mapValues(_.length).toSeq
-            .map { case (key, v) => key :+ v }
+            .groupBy(s => s.take(groupColumns.length))
+            .map { case (key, v) => key :+ v.length }
           val query = spark.read.yt(tmpPath).groupBy(groupColumns.map(col): _*).count()
           val res = query.collect()
           isCorrectPlan(test, query.queryExecution.executedPlan) shouldBe true

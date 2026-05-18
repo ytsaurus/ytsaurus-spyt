@@ -3,10 +3,11 @@ package tech.ytsaurus.spyt.format
 import org.apache.spark.sql.catalyst.expressions.{AttributeReference, Expression, PredicateHelper, SubqueryExpression}
 import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
 import org.apache.spark.sql.execution.datasources.v2.DataSourceV2Implicits.TableHelper
-import org.apache.spark.sql.execution.datasources.v2.DataSourceV2Relation
+import org.apache.spark.sql.execution.datasources.v2.{DataSourceV2Relation, PushDownUtils}
 import org.apache.spark.sql.functions.col
 import org.apache.spark.sql.sources._
 import org.apache.spark.sql.Row
+import org.apache.spark.sql.v2.{Utils => TUtils}
 import tech.ytsaurus.spyt._
 import tech.ytsaurus.spyt.common.utils.ExpressionTransformer.expressionToSegmentSet
 import tech.ytsaurus.spyt.format.YtInputSplit.{getKeyFilterSegments, pushdownFiltersToYPath}
@@ -17,11 +18,12 @@ import tech.ytsaurus.spyt.common.utils.{MInfinity, PInfinity, RealValue, Segment
 import tech.ytsaurus.spyt.format.conf.FilterPushdownConfig
 import tech.ytsaurus.spyt.test.TestRow
 
-
+import java.util.{Map => JMap}
 import scala.util.Random
 
 class YtInputSplitTest extends YtInputSplitTestBase {
-  import spark.implicits._
+  private val sqlImplicits = SparkAdapter.instance.sparkImplicits(spark)
+  import sqlImplicits._
 
   it should "create SegmentSet from Filter" in {
     val a1 = LessThan("a", 5L)
@@ -39,9 +41,9 @@ class YtInputSplitTest extends YtInputSplitTestBase {
     union shouldBe SegmentSet()
     intercept shouldBe
       SegmentSet(
-        Map(
-          ("a", List(Segment(RealValue(3L), RealValue(5L)))),
-          ("b", List(Segment(RealValue(2L), PInfinity()))),
+        JMap.of(
+          "a", Seq(Segment(RealValue(3L), RealValue(5L))),
+          "b", Seq(Segment(RealValue(2L), PInfinity())),
         )
       )
   }
@@ -79,7 +81,7 @@ class YtInputSplitTest extends YtInputSplitTestBase {
       case (input, output) =>
         val query = df.filter(input)
 
-        val plan = query.queryExecution.logical
+        val plan = query.queryExecution.optimizedPlan
 
         checkPushedFilters(plan, output)
     }
@@ -275,13 +277,13 @@ class YtInputSplitTest extends YtInputSplitTestBase {
   private val segment10To30 = Segment(RealValue(10L), RealValue(30L))
   private val segment15ToPInf = Segment(RealValue(15L), PInfinity())
 
-  private val exampleSet1 = SegmentSet(Map(
-    ("a", List(segmentMInfTo5, segment15ToPInf)),
-    ("b", List(segment2To20))))
-  private val exampleSet2 = SegmentSet(Map(
-    ("a", List(segment2To20)),
-    ("b", List(segment10To30)),
-    ("c", List(segment10To30))))
+  private val exampleSet1 = SegmentSet(JMap.of(
+    "a", Seq(segmentMInfTo5, segment15ToPInf),
+    "b", Seq(segment2To20)))
+  private val exampleSet2 = SegmentSet(JMap.of(
+    "a", Seq(segment2To20),
+    "b", Seq(segment10To30),
+    "c", Seq(segment10To30)))
 
   it should "get key filter segments" in {
     val res1 = getKeyFilterSegments(exampleSet1, List("a", "b"), 5)
@@ -347,7 +349,7 @@ class YtInputSplitTest extends YtInputSplitTestBase {
 
     val query = df.filter(col("a") >= 2)
 
-    val plan = query.queryExecution.logical
+    val plan = query.queryExecution.optimizedPlan
 
     checkPushedFilters(plan, Seq(GreaterThanOrEqual("a", 2L)))
 
@@ -434,7 +436,11 @@ class YtInputSplitTest extends YtInputSplitTestBase {
         }
         val (_, normalizedFiltersWithoutSubquery) = normalizedFilters.partition(SubqueryExpression.hasSubquery)
 
-        SparkAdapter.instance.checkPushedFilters(scanBuilder, normalizedFiltersWithoutSubquery, expected)
+        val filtersOrPredicates = SparkAdapter.instance.pushFilters(scanBuilder, normalizedFiltersWithoutSubquery)
+        filtersOrPredicates match {
+          case Left(filters) => (filters, expected)
+          case Right(predicates) => (predicates, expected.map(TUtils.filterToPredicate))
+        }
     }).getOrElse(Nil -> Nil)
 
     actualFilters should contain theSameElementsAs expectedFilters

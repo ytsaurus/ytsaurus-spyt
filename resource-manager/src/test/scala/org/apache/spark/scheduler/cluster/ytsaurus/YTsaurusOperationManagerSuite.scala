@@ -28,6 +28,7 @@ class YTsaurusOperationManagerSuite extends SparkFunSuite with BeforeAndAfterEac
   private var opManagerStub: YTsaurusOperationManager = _
   override def beforeEach(): Unit = {
     super.beforeEach()
+    // TODO scala version
     opManagerStub = new YTsaurusOperationManager(
       ytClient = null,
       token = "testToken",
@@ -36,7 +37,8 @@ class YTsaurusOperationManagerSuite extends SparkFunSuite with BeforeAndAfterEac
       environment = YTree.mapBuilder().buildMap(),
       home = ".",
       prepareEnvCommand = "./setup-spyt-env.sh --some-key some-value",
-      sparkClassPath = "./*:/usr/lib/spyt/conf/:/usr/lib/spyt/jars/*:/usr/lib/spark/jars/*",
+      sparkClassPath =
+        "./*:/usr/lib/spyt/conf/:/usr/lib/spyt/jars/scala-2.13/*:/usr/lib/spyt/jars/common/*:/usr/lib/spark/jars/*",
       javaCommand = "/usr/bin/java",
       ytsaurusJavaOptionsBash = ""
     )
@@ -54,8 +56,9 @@ class YTsaurusOperationManagerSuite extends SparkFunSuite with BeforeAndAfterEac
   }
 
   private val expectedExecutorCommand = "./setup-spyt-env.sh --some-key some-value && " +
-    "'/usr/bin/java' '-cp' './*:/usr/lib/spyt/conf/:/usr/lib/spyt/jars/*:/usr/lib/spark/jars/*' '-Xmx1024m' " +
-    "'-Dspark.driver.port=12345'   " +
+    "'/usr/bin/java' '-cp' " +
+    "'./*:/usr/lib/spyt/conf/:/usr/lib/spyt/jars/scala-2.13/*:/usr/lib/spyt/jars/common/*:/usr/lib/spark/jars/*' " +
+    "'-Xmx1024m' '-Dspark.driver.port=12345'   " +
     "org.apache.spark.executor.YTsaurusCoarseGrainedExecutorBackend " +
     """--driver-url 'spark://CoarseGrainedScheduler@some-host:12345' --executor-id "$YT_TASK_JOB_INDEX" """ +
     """--cores '1' --app-id 'appId' --hostname "$HOSTNAME""""

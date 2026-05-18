@@ -22,7 +22,8 @@ class SparkSessionTransactionTest extends AnyFlatSpec with Matchers with LocalYt
       """{value = 2}"""
     ), tmpPath, longColumnSchema)
     val spark = prepareSparkSession(true)
-    import spark.implicits._
+    val sqlImplicits = SparkAdapter.instance.sparkImplicits(spark)
+    import sqlImplicits._
 
     val transaction = try {
       val tr = GlobalTransactionUtils.getGlobalTransactionId(spark).get

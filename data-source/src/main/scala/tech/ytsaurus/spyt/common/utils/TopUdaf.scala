@@ -65,6 +65,6 @@ object TopUdaf {
   def top(schema: StructType,
           topColumns: java.util.ArrayList[String],
           selectColumns: java.util.ArrayList[String]): Column = {
-    top(schema, topColumns.asScala, selectColumns.asScala)
+    top(schema, topColumns.asScala.toSeq, selectColumns.asScala.toSeq)
   }
 }

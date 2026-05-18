@@ -23,10 +23,12 @@ import tech.ytsaurus.typeinfo.TiType
 import tech.ytsaurus.yson.YsonParser
 import tech.ytsaurus.ysontree.{YTree, YTreeBuilder}
 
+import java.util.{List => JList}
 import scala.collection.mutable.ListBuffer
 
 class ComplexTypeV3Test extends AnyFlatSpec with Matchers with LocalSpark with TmpDir with TestUtils {
-  import spark.implicits._
+  private val sqlImplicits = SparkAdapter.instance.sparkImplicits(spark)
+  import sqlImplicits._
 
   override def beforeAll(): Unit = {
     super.beforeAll()
@@ -40,7 +42,6 @@ class ComplexTypeV3Test extends AnyFlatSpec with Matchers with LocalSpark with T
 
   // TODO put in TestUtils
   private def testEnabledAndDisabledArrow(f: DataFrameReader => Unit): Unit = {
-    import spark.implicits._
     f(spark.read.enableArrow)
     f(spark.read.disableArrow)
   }
@@ -175,7 +176,7 @@ class ComplexTypeV3Test extends AnyFlatSpec with Matchers with LocalSpark with T
   it should "read tuple from yt" in {
     val data: Seq[Array[Any]] = Seq(Array[Any](99L, 0.3), Array[Any](128L, 1.0))
     writeTableFromURow(
-      data.map { x => packToRow(codeList(x)) }, tmpPath, TableSchema.builder()
+      data.map { x => packToRow(codeList(x.toSeq)) }, tmpPath, TableSchema.builder()
         .setUniqueKeys(false)
         .addValue("tuple",
           TiType.tuple(
@@ -186,7 +187,7 @@ class ComplexTypeV3Test extends AnyFlatSpec with Matchers with LocalSpark with T
     )
 
     val res = spark.read.option(YtUtils.Options.PARSING_TYPE_V3, value = true).yt(tmpPath)
-    res.collect() should contain theSameElementsAs data.map(x => Row(Row(x: _*)))
+    res.collect() should contain theSameElementsAs data.map(x => Row(Row(x.toSeq: _*)))
   }
 
   it should "read tagged from yt" in {
@@ -213,8 +214,8 @@ class ComplexTypeV3Test extends AnyFlatSpec with Matchers with LocalSpark with T
   it should "read variant over tuple from yt" in {
     val data: Seq[Seq[Any]] = Seq(Seq(null, 0.3), Seq("s", null))
     writeTableFromURow(
-      Seq(packToRow(codeList(Array[Any](1L, data(0)(1))), ColumnValueType.COMPOSITE),
-        packToRow(codeList(Array[Any](0L, data(1)(0))), ColumnValueType.COMPOSITE)),
+      Seq(packToRow(codeList(Seq[Any](1L, data(0)(1))), ColumnValueType.COMPOSITE),
+        packToRow(codeList(Seq[Any](0L, data(1)(0))), ColumnValueType.COMPOSITE)),
       tmpPath, TableSchema.builder()
         .setUniqueKeys(false)
         .addValue("variant",
@@ -232,8 +233,8 @@ class ComplexTypeV3Test extends AnyFlatSpec with Matchers with LocalSpark with T
   it should "read variant over struct with positional view from yt" in {
     val data: Seq[Seq[Any]] = Seq(Seq(null, 0.3), Seq("t", null))
     writeTableFromURow(
-      Seq(packToRow(codeList(Array[Any](1L, data(0)(1))), ColumnValueType.COMPOSITE),
-        packToRow(codeList(Array[Any](0L, data(1)(0))), ColumnValueType.COMPOSITE)),
+      Seq(packToRow(codeList(Seq[Any](1L, data(0)(1))), ColumnValueType.COMPOSITE),
+        packToRow(codeList(Seq[Any](0L, data(1)(0))), ColumnValueType.COMPOSITE)),
       tmpPath, TableSchema.builder()
         .setUniqueKeys(false)
         .addValue("variant",
@@ -319,7 +320,6 @@ class ComplexTypeV3Test extends AnyFlatSpec with Matchers with LocalSpark with T
       )), nullable = false)
     )
 
-    import spark.implicits._
     val resultDf = df.select(
       $"plain_value_f",
       $"plain_value_d".cast(FloatType),
@@ -342,7 +342,6 @@ class ComplexTypeV3Test extends AnyFlatSpec with Matchers with LocalSpark with T
   }
 
   it should "write decimal to yt" in {
-    import spark.implicits._
     val data = Seq(BigDecimal("1.23"), BigDecimal("0.21"), BigDecimal("0"), BigDecimal("0.1"))
     data
       .toDF("a").coalesce(1)
@@ -362,7 +361,6 @@ class ComplexTypeV3Test extends AnyFlatSpec with Matchers with LocalSpark with T
   }
 
   it should "write array to yt" in {
-    import spark.implicits._
     val data = Seq(Seq(1, 2, 3), Seq(4, 5, 6))
     data
       .toDF("a").coalesce(1)
@@ -375,7 +373,6 @@ class ComplexTypeV3Test extends AnyFlatSpec with Matchers with LocalSpark with T
   }
 
   it should "write array of decimals to yt" in {
-    import spark.implicits._
     val data = Seq(Seq(BigDecimal("1.23")), Seq(BigDecimal("0.21"), BigDecimal("0")))
     data
       .toDF("a").coalesce(1)
@@ -392,7 +389,6 @@ class ComplexTypeV3Test extends AnyFlatSpec with Matchers with LocalSpark with T
   }
 
   it should "write map to yt" in {
-    import spark.implicits._
     val data = Seq(
       Map("spark" -> Map(0 -> 3.14, 1 -> 2.71), "over" -> Map(2 -> -1.0)),
       Map("yt" -> Map(5 -> 5.0)))
@@ -407,7 +403,6 @@ class ComplexTypeV3Test extends AnyFlatSpec with Matchers with LocalSpark with T
   }
 
   it should "write array of maps to yt" in {
-    import spark.implicits._
     val data = Seq(
       Seq(Map("spark" -> BigDecimal("1.23"), "over" -> BigDecimal("1.21"))),
       Seq(Map("yt" -> BigDecimal("0.123456")), Map("spyt" -> BigDecimal("0.7")))
@@ -418,7 +413,9 @@ class ComplexTypeV3Test extends AnyFlatSpec with Matchers with LocalSpark with T
 
     testEnabledAndDisabledArrow { reader =>
       val res = reader.option(YtUtils.Options.PARSING_TYPE_V3, value = true).yt(tmpPath)
-      val resLists = res.as[Seq[Map[String, java.math.BigDecimal]]].collect().map(_.map(_.mapValues(_.toPlainString)))
+      val resLists = res.as[Seq[Map[String, java.math.BigDecimal]]].collect().map(_.map(_.map {
+        case (key, value) => (key, value.toPlainString)
+      }))
 
       resLists should contain theSameElementsAs Seq(
         Seq(Map("spark" -> "1.230000000000000", "over" -> "1.210000000000000")),
@@ -443,7 +440,6 @@ class ComplexTypeV3Test extends AnyFlatSpec with Matchers with LocalSpark with T
   }
 
   it should "write struct to yt" in {
-    import spark.implicits._
     val data = Seq(TestStruct(1.0, "a"), TestStruct(3.2, "b"))
     data.map(Some(_))
       .toDF("a").coalesce(1)
@@ -456,7 +452,6 @@ class ComplexTypeV3Test extends AnyFlatSpec with Matchers with LocalSpark with T
   }
 
   it should "write tuple to yt" in {
-    import spark.implicits._
     val data = Seq((1, "a"), (3, "c"))
     data.map(Some(_))
       .toDF("a").coalesce(1)
@@ -474,7 +469,7 @@ class ComplexTypeV3Test extends AnyFlatSpec with Matchers with LocalSpark with T
     data.map(Some(_))
       .toDF("a").coalesce(1).write
       .schemaHint(Map("a" ->
-        YtLogicalType.VariantOverTuple(Seq(
+        YtLogicalType.VariantOverTuple(JList.of(
           (YtLogicalType.String, Metadata.empty), (YtLogicalType.Double, Metadata.empty)))))
       .option(YtTableSparkSettings.WriteTypeV3.name, value = true).yt(tmpPath)
 
@@ -488,7 +483,7 @@ class ComplexTypeV3Test extends AnyFlatSpec with Matchers with LocalSpark with T
     data.map(Some(_))
       .toDF("a").coalesce(1).write
       .schemaHint(Map("a" ->
-        YtLogicalType.VariantOverStruct(Seq(
+        YtLogicalType.VariantOverStruct(JList.of(
           ("i", YtLogicalType.Int32, Metadata.empty), ("s", YtLogicalType.String, Metadata.empty)))))
       .option(YtTableSparkSettings.WriteTypeV3.name, value = true).yt(tmpPath)
 
@@ -502,7 +497,7 @@ class ComplexTypeV3Test extends AnyFlatSpec with Matchers with LocalSpark with T
     data.map(Some(_))
       .toDF("a").coalesce(1).write
       .schemaHint(Map("a" ->
-        YtLogicalType.VariantOverStruct(Seq(
+        YtLogicalType.VariantOverStruct(JList.of(
           ("i", YtLogicalType.Int32, Metadata.empty), ("s", YtLogicalType.String, Metadata.empty)))))
       .option(YtTableSparkSettings.WriteTypeV3.name, value = true).yt(tmpPath)
 
@@ -571,8 +566,6 @@ class ComplexTypeV3Test extends AnyFlatSpec with Matchers with LocalSpark with T
   }
 
   it should "write dataset with struct with float" in {
-    import spark.implicits._
-
     List(Info("Test", Data(32, 100.0f)), Info("Test2", Data(30, 99.9f)))
       .toDF("name", "data")
       .write
@@ -628,7 +621,7 @@ class ComplexTypeV3Test extends AnyFlatSpec with Matchers with LocalSpark with T
       )))
       .build()
 
-    writeTableFromURow(data, tmpPath, schema)
+    writeTableFromURow(data.toSeq, tmpPath, schema)
 
     val df = spark.read
       .option(YtUtils.Options.PARSING_TYPE_V3, value = true)

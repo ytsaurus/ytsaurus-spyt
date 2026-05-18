@@ -7,18 +7,18 @@ import tech.ytsaurus.spyt.patch.annotations.{Applicability, Decorate, DecoratedM
 
 @Decorate
 @OriginClass("org.apache.spark.sql.catalyst.DeserializerBuildHelper$")
-@Applicability(from = "3.5.0")
+@Applicability(from = "3.5.0", to = "4.0.2")
 object DeserializerBuildHelperDecarators {
 
   @DecoratedMethod
-  private def createDeserializer(enc: AgnosticEncoder[_],
-                                 path: Expression,
-                                 walkedTypePath: WalkedTypePath): Expression = enc match {
+  private def createDeserializer(
+    enc: AgnosticEncoder[_],
+    path: Expression,
+    walkedTypePath: WalkedTypePath): Expression = enc match {
     case UInt64Encoder => ts.uInt64Deserializer(path)
     case _ => __createDeserializer(enc, path, walkedTypePath)
   }
 
-  private def __createDeserializer(enc: AgnosticEncoder[_],
-                                   path: Expression,
-                                   walkedTypePath: WalkedTypePath): Expression = ???
+  private def __createDeserializer(
+    enc: AgnosticEncoder[_], path: Expression, walkedTypePath: WalkedTypePath): Expression = ???
 }

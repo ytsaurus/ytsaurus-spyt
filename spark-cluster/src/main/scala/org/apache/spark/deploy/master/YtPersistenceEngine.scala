@@ -32,7 +32,7 @@ class YtPersistenceEngine(baseDir: String,
     paths.map(deserializeFromFile(_))
   }
 
-  private def serializeIntoFile(path: String, value: AnyRef) {
+  private def serializeIntoFile(path: String, value: AnyRef): Unit = {
     log.info(s"Create file $path")
     YtWrapper.createFile(path)
     log.info(s"Write to file $path")

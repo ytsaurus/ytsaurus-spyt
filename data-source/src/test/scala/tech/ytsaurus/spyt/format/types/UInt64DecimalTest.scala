@@ -13,7 +13,8 @@ import tech.ytsaurus.spyt.types.YTsaurusTypes
 class UInt64DecimalTest extends AnyFlatSpec with Matchers with LocalSpark with TmpDir with TestUtils {
   behavior of "YtDataSource"
 
-  import spark.implicits._
+  private val sqlImplicits = SparkAdapter.instance.sparkImplicits(spark)
+  import sqlImplicits._
 
   private def createSampleTable(): Unit = {
     val tableSchema = TableSchema.builder()

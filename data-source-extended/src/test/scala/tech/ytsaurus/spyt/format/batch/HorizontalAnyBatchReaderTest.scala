@@ -76,9 +76,9 @@ class HorizontalAnyBatchReaderTest extends AnyFlatSpec with Matchers with ReadBa
 
     // Ensure proper YSON Any representations.
 
-    resultRows(0).get(0, YsonType).asInstanceOf[Array[Byte]] should contain inOrder(0x2, 84)
-    resultRows(1).get(0, YsonType).asInstanceOf[Array[Byte]] should contain inOrder(0x1, 6, 120, 121, 122)
-    resultRows(2).get(0, YsonType).asInstanceOf[Array[Byte]] should contain inOrder(123, 125)
-    resultRows(3).get(0, YsonType) should be(null)
+    resultRows(0).get(0, new YsonType()).asInstanceOf[Array[Byte]] should contain inOrder(0x2, 84)
+    resultRows(1).get(0, new YsonType()).asInstanceOf[Array[Byte]] should contain inOrder(0x1, 6, 120, 121, 122)
+    resultRows(2).get(0, new YsonType()).asInstanceOf[Array[Byte]] should contain inOrder(123, 125)
+    resultRows(3).get(0, new YsonType()) should be(null)
   }
 }

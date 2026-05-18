@@ -313,6 +313,12 @@ def get_spark_home():
         raise RuntimeError("Unable to find SPARK_HOME automatically from {}".format(os.path.realpath(__file__)))
 
 
+def get_scala_version():
+    jars = os.listdir(os.path.join(get_spark_home(), 'jars'))
+    spark_core = next(filter(lambda name: name.startswith("spark-core"), jars))
+    return spark_core.replace("spark-core_", "")[:4]
+
+
 def call_get_proxy_address_url(**kwargs):
     # COMPAT(atokarew): replace this with get_proxy_address_url when compatibility with python wrapper <= 0.13.4 and spark cluster >= 1.73.0 is not important.
     import yt.wrapper.http_helpers

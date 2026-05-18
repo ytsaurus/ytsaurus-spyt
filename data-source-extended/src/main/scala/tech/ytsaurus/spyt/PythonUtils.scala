@@ -6,6 +6,7 @@ import org.apache.spark.sql.types.StructType
 import org.apache.spark.sql.spyt.types.YsonBinary
 import tech.ytsaurus.spyt.serialization.YsonEncoder
 import tech.ytsaurus.spyt.serializers.YtLogicalType
+import tech.ytsaurus.spyt.utils.CollectionUtils
 
 import scala.jdk.CollectionConverters._
 
@@ -16,7 +17,7 @@ object PythonUtils {
 
   def schemaHint[T](dataFrameWriter: DataFrameWriter[T],
                     schemaHint: java.util.HashMap[String, String]): DataFrameWriter[T] = {
-    dataFrameWriter.schemaHint(schemaHint.asScala.toMap.mapValues(YtLogicalType.fromName))
+    dataFrameWriter.schemaHint(CollectionUtils.mapValues(schemaHint, n => YtLogicalType.fromName(n)).asScala.toMap)
   }
 
   def withYsonColumn(dataFrame: DataFrame, name: String, column: Column): DataFrame = {

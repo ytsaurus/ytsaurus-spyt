@@ -52,7 +52,7 @@ abstract class DateTimeTypesTestBase extends AnyFlatSpec with Matchers with Loca
            |timestamp = ${zonedTimestampToLong(timestampArr(i))};
            |number = ${numbers(i)}}""".stripMargin
     }
-    writeTableFromYson(ysonData, path, tableSchema)
+    writeTableFromYson(ysonData.toSeq, path, tableSchema)
   }
 
   protected def readTestTemplate(dfTransformer: DataFrame => DataFrame): Unit = {
@@ -120,7 +120,7 @@ class DateTimeTypesTest extends DateTimeTypesTestBase {
       )
     }
 
-    val df = spark.createDataFrame(spark.sparkContext.parallelize(writtenBySparkData), schemaSpark)
+    val df = spark.createDataFrame(spark.sparkContext.parallelize(writtenBySparkData.toSeq), schemaSpark)
     df.write.yt(tmpPath)
 
     val schema = TableSchema.fromYTree(YtWrapper.attribute(tmpPath, "schema"))
@@ -200,7 +200,7 @@ class DateTimeTypesTest extends DateTimeTypesTestBase {
              |timestamp64 = ${rightYtDataForWideDatetimeTypesTests(i)._3.toLong};
              |interval64 = ${rightYtDataForWideDatetimeTypesTests(i)._4.toLong};}""".stripMargin
       }
-      writeTableFromYson(ysonData, tmpPath, rightYtSchemaForWideDatetimeTypesTests)
+      writeTableFromYson(ysonData.toSeq, tmpPath, rightYtSchemaForWideDatetimeTypesTests)
 
       val df_1 = spark.read
         .option(YtTableSparkSettings.NullTypeAllowed.name, value = false)

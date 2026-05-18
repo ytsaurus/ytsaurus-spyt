@@ -5,13 +5,14 @@ import tech.ytsaurus.spyt.wrapper.YtWrapper
 import tech.ytsaurus.spyt.wrapper.dyntable.ConsumerUtils
 
 import scala.annotation.tailrec
+import java.util.{Map => JMap}
 
 trait QueueTestUtils {
   self: LocalYtClient with DynTableTestUtils =>
 
   def prepareConsumer(consumerPath: String, queuePath: String): Unit = {
     if (!YtWrapper.exists(consumerPath)) {
-      YtWrapper.createDynTable(consumerPath, ConsumerUtils.CONSUMER_SCHEMA, Map("treat_as_queue_consumer" -> true))
+      YtWrapper.createDynTable(consumerPath, ConsumerUtils.CONSUMER_SCHEMA, JMap.of("treat_as_queue_consumer", true))
     }
     YtWrapper.registerQueueConsumer(YPath.simple(consumerPath), YPath.simple(queuePath))
     if (!YtWrapper.isMounted(consumerPath)) {

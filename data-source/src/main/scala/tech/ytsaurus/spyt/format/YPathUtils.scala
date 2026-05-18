@@ -65,11 +65,11 @@ object YPathUtils {
   def endKey(ypath: YPath): Seq[YTreeNode] = endKeyOption(ypath).getOrElse(Nil)
 
   def beginKeyOption(ypath: YPath): Option[Seq[YTreeNode]] = {
-    rangeOption(ypath).map(_.lower.key.asScala)
+    rangeOption(ypath).map(_.lower.key.asScala.toSeq)
   }
 
   def endKeyOption(ypath: YPath): Option[Seq[YTreeNode]] = {
-    rangeOption(ypath).map(_.upper.key.asScala)
+    rangeOption(ypath).map(_.upper.key.asScala.toSeq)
   }
 
   def beginRowOption(ypath: YPath): Option[Long] = rangeOption(ypath).map(_.lower.rowIndex)

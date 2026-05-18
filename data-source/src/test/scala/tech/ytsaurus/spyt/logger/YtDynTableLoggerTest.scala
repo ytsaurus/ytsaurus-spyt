@@ -3,11 +3,13 @@ package tech.ytsaurus.spyt.logger
 import org.apache.log4j.Level
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
+import tech.ytsaurus.spyt.SparkAdapter
 import tech.ytsaurus.spyt.format.conf.SparkYtConfiguration.Read.KeyColumnsFilterPushdown
 import tech.ytsaurus.spyt.test._
 import tech.ytsaurus.spyt.wrapper.YtWrapper
 import tech.ytsaurus.spyt.test.{DynTableTestUtils, TestTableSettings}
-import tech.ytsaurus.ysontree.YTreeMapNode
+import tech.ytsaurus.spyt.utils.CollectionUtils
+import tech.ytsaurus.ysontree.{YTreeMapNode, YTreeNode}
 
 import java.time.Duration
 import java.util.UUID
@@ -17,7 +19,8 @@ class YtDynTableLoggerTest extends AnyFlatSpec with Matchers with LocalSpark wit
 
   import SparkComponent._
   import tech.ytsaurus.spyt.wrapper.config._
-  import spark.implicits._
+  private val sqlImplicits = SparkAdapter.instance.sparkImplicits(spark)
+  import sqlImplicits._
 
   val tmpPathGlobal = s"$testDir/test-${UUID.randomUUID()}"
 
@@ -88,7 +91,7 @@ class YtDynTableLoggerTest extends AnyFlatSpec with Matchers with LocalSpark wit
 
     withConf(KeyColumnsFilterPushdown.Enabled, true) {
       withConf(FILES_OPEN_COST_IN_BYTES, "1") {
-        spark.read.option("readParallelism", "2").yt(tmpPath).filter('value > 50).collect()
+        spark.read.option("readParallelism", "2").yt(tmpPath).filter($"value" > 50).collect()
       }
     }
 
@@ -106,7 +109,7 @@ class YtDynTableLoggerTest extends AnyFlatSpec with Matchers with LocalSpark wit
     withConf("spark.yt.log.pushdown.maxPartitionId", "0") {
       withConf(KeyColumnsFilterPushdown.Enabled, true) {
         withConf(FILES_OPEN_COST_IN_BYTES, "1") {
-          spark.read.option("readParallelism", "2").yt(tmpPath).filter('value > 50).collect()
+          spark.read.option("readParallelism", "2").yt(tmpPath).filter($"value" > 50).collect()
         }
       }
     }
@@ -167,17 +170,19 @@ class YtDynTableLoggerTest extends AnyFlatSpec with Matchers with LocalSpark wit
   private def parseLogs(rawLogs: Seq[YTreeMapNode]): Seq[LogRow] = {
     import tech.ytsaurus.spyt.wrapper.YtJavaConverters._
 
-    rawLogs.map(row =>
+    rawLogs.map { row =>
+      val info = CollectionUtils.mapValues(
+        row.getMap("info").asMap(),
+        (node: YTreeNode) => if (node.isEntityNode) "#" else node.stringValue()
+      ).asScala.toMap
       LogRow(
         row.getString("logger_name"),
         row.getString("msg"),
         Level.toLevel(row.getString("level")),
         SparkComponent.fromName(row.getString("spark_component")),
         toOption(row.getIntO("partition_id")).map(_.toInt),
-        row.getMap("info")
-          .asMap().asScala.toMap
-          .mapValues(_.stringValue())
+        info
       )
-    )
+    }
   }
 }

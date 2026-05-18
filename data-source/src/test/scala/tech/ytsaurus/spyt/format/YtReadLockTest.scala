@@ -17,7 +17,8 @@ class YtReadLockTest extends AnyFlatSpec with Matchers with LocalSpark with Test
   behavior of "YtDataSource"
 
   import YtWrapper._
-  import spark.implicits._
+  private val sqlImplicits = SparkAdapter.instance.sparkImplicits(spark)
+  import sqlImplicits._
 
   it should "not fail if table was modified while reading" in {
     (1 to 10).toDF().write.yt(tmpPath)

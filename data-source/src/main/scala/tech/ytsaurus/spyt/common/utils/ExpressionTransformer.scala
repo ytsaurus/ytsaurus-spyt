@@ -9,6 +9,7 @@ import tech.ytsaurus.spyt.common.utils
 import tech.ytsaurus.spyt.types.UInt64Long
 import tech.ytsaurus.ysontree._
 
+import java.util.{Map => JMap}
 import scala.util.Try
 
 object ExpressionTransformer {
@@ -71,8 +72,8 @@ object ExpressionTransformer {
       case Or(left, right) =>
         val l = expressionToSegmentSet(left)
         val r = expressionToSegmentSet(right)
-        val lKeys = l.map.keys
-        val rKeys = r.map.keys
+        val lKeys = l.map.keySet()
+        val rKeys = r.map.keySet()
         if (lKeys.size == 1 && lKeys == rKeys) {
           SegmentSet.union(l, r)
         } else {
@@ -84,7 +85,7 @@ object ExpressionTransformer {
           expressionToSegmentSet(right))
       case In(varName, right) =>
         val valuesList = parseOrderedLiteralList(right.toList)
-        valuesList.map { vL => SegmentSet(Map(varName -> vL.map(Segment(_)))) }.getOrElse(SegmentSet())
+        valuesList.map { vL => SegmentSet(JMap.of(varName, vL.map(Segment(_)))) }.getOrElse(SegmentSet())
       case IsNull(varName) =>
         expressionToSegmentSet(EqualTo(varName, null))
       case _ => SegmentSet()

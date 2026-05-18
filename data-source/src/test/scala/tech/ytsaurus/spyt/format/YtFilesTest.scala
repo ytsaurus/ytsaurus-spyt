@@ -4,7 +4,7 @@ import org.apache.spark.sql.{Row, SparkSession}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import tech.ytsaurus.core.tables.{ColumnValueType, TableSchema}
-import tech.ytsaurus.spyt.YtReader
+import tech.ytsaurus.spyt.{SparkAdapter, YtReader}
 import tech.ytsaurus.spyt.test.{LocalSpark, TestUtils, TmpDir}
 import tech.ytsaurus.spyt.wrapper.YtWrapper
 
@@ -21,8 +21,9 @@ class YtFilesTest extends AnyFlatSpec with Matchers with LocalSpark with TmpDir 
   override def reinstantiateSparkSession: Boolean = true
 
   private def testWriteParquet(_spark: SparkSession): Unit = {
-    import _spark.implicits._
-    Seq(1, 2, 3).toDF.write.parquet(s"yt:/$tmpPath")
+    val sqlImplicits = SparkAdapter.instance.sparkImplicits(_spark)
+    import sqlImplicits._
+    Seq(1, 2, 3).toDF().write.parquet(s"yt:/$tmpPath")
 
     YtWrapper.isDir(tmpPath) shouldEqual true
     val files = YtWrapper.listDir(tmpPath)
@@ -30,7 +31,7 @@ class YtFilesTest extends AnyFlatSpec with Matchers with LocalSpark with TmpDir 
     files.foreach(name => name.endsWith(".parquet") shouldEqual true)
 
     val tmpLocalDir = Files.createTempDirectory("test_parquet")
-    files.par.foreach { name =>
+    files.foreach { name =>
       val localPath = new File(tmpLocalDir.toFile, name).getPath
       YtWrapper.downloadFile(s"$tmpPath/$name", localPath)
     }
@@ -48,8 +49,9 @@ class YtFilesTest extends AnyFlatSpec with Matchers with LocalSpark with TmpDir 
 
   // Ignored while YtFsInputStream's backward `seek` method is not implemented
   it should "read parquet files from yt" ignore withSparkSession() { _spark =>
-    import _spark.implicits._
-    Seq(1, 2, 3).toDF.write.parquet(s"yt:/$tmpPath")
+    val sqlImplicits = SparkAdapter.instance.sparkImplicits(_spark)
+    import sqlImplicits._
+    Seq(1, 2, 3).toDF().write.parquet(s"yt:/$tmpPath")
 
     _spark.read.parquet(s"yt:/$tmpPath").as[Int].collect() should contain theSameElementsAs Seq(1, 2, 3)
   }

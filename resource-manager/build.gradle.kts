@@ -2,9 +2,16 @@ plugins {
     id("tech.ytsaurus.spyt.common.plugin")
 }
 
-dependencies {
-    api(project(":yt-wrapper"))
+val scalaVersion: String? by extra
+val ytWrapper = ":yt-wrapper_$scalaVersion"
 
-    testImplementation(project(mapOf("path" to ":yt-wrapper", "configuration" to "testArtifacts")))
-    testImplementation("${libs.spark.coretest.get()}:tests")
+dependencies {
+    api(project(ytWrapper))
+
+    testImplementation(project(mapOf("path" to ytWrapper, "configuration" to "testArtifacts")))
+    if (scalaVersion == "2.12") {
+        testImplementation("${libs.spark.coretest212.get()}:tests")
+    } else {
+        testImplementation("${libs.spark.coretest.get()}:tests")
+    }
 }

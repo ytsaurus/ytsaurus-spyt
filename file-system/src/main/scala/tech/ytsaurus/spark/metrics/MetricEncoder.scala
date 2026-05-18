@@ -6,6 +6,7 @@ import MetricEncoder._
 
 import java.time.Instant
 import java.util
+import scala.jdk.CollectionConverters._
 
 private[metrics] trait MetricEncoder {
   def contentType: String
@@ -21,7 +22,6 @@ private[metrics] trait MetricEncoder {
              histograms: util.SortedMap[String, Histogram],
              meters: util.SortedMap[String, Meter],
              timers: util.SortedMap[String, Timer]): Array[Byte] = {
-    import collection.JavaConverters._
 
     val metrics = gauges.asScala.flatMap(g => fromGauge(g._1, g._2)).toSeq ++
       counters.asScala.flatMap(c => fromCounter(c._1, c._2)) ++
@@ -103,8 +103,8 @@ private[metrics] object MetricEncoder {
   private def fromSnapshot(name: String, snapshot: Snapshot): Seq[Metric] =
     Seq(
       DGauge(Map(SENSOR -> s"$name.mean"), snapshot.getMean),
-      DGauge(Map(SENSOR -> s"$name.max"), snapshot.getMax),
-      DGauge(Map(SENSOR -> s"$name.min"), snapshot.getMin),
+      DGauge(Map(SENSOR -> s"$name.max"), snapshot.getMax.toDouble),
+      DGauge(Map(SENSOR -> s"$name.min"), snapshot.getMin.toDouble),
       DGauge(Map(SENSOR -> s"$name.stddev"), snapshot.getStdDev),
       DGauge(Map(SENSOR -> s"$name.median"), snapshot.getMedian),
       DGauge(Map(SENSOR -> s"$name.p75"), snapshot.get75thPercentile()),

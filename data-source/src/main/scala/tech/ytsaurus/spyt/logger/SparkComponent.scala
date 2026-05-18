@@ -1,5 +1,6 @@
 package tech.ytsaurus.spyt.logger
 
+import org.apache.spark.{SparkContext, SparkEnv}
 import org.apache.spark.sql.SparkSession
 
 sealed abstract class SparkComponent(val name: String)
@@ -10,7 +11,7 @@ object SparkComponent {
   case object Executor extends SparkComponent("executor")
 
   def get(): SparkComponent = {
-    if (SparkSession.getDefaultSession.nonEmpty) Driver else Executor
+    if (SparkSession.getActiveSession.nonEmpty) Driver else Executor
   }
 
   def fromName(name: String): SparkComponent = {

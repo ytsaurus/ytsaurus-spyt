@@ -34,7 +34,8 @@ object DataFrameUtils {
     }
 
     def joinWithHotKey(right: DataFrame, key: String, hotKey: Option[String], joinType: String, andCondition: Column = lit(true)): DataFrame = {
-      import df.sparkSession.implicits._
+      val sqlImplicits = SparkAdapter.instance.sparkImplicits(df.sparkSession)
+      import sqlImplicits._
 
       val splitHotDf = (1 to 1000).map(i => hotKey -> s"#null$i").toDF(key, s"${key}_key")
 
@@ -66,11 +67,12 @@ object DataFrameUtils {
                      minBy: Seq[MinBy],
                      maxBy: Seq[MinBy],
                      outputSchema: StructType): DataFrame = {
-      import df.sparkSession.implicits._
+      val sqlImplicits = SparkAdapter.instance.sparkImplicits(df.sparkSession)
+      import sqlImplicits._
 
       df
         .groupByKey(_.getAs[String](groupBy))
-        .mapGroups { case (id, rows) =>
+        .mapGroups { (id, rows) =>
           val collected = rows.toList
 
           Row.fromSeq(
@@ -86,8 +88,9 @@ object DataFrameUtils {
     }
 
     def selectAs[T <: Product : TypeTag]: Dataset[T] = {
-      import df.sparkSession.implicits._
-      val fields = Encoders.product[T].schema.fieldNames
+      val sqlImplicits = SparkAdapter.instance.sparkImplicits(df.sparkSession)
+      import sqlImplicits._
+      val fields = Encoders.product[T].schema.fieldNames.toSeq
       df.select(fields.head, fields.tail: _*).as[T]
     }
   }
@@ -103,25 +106,27 @@ object DataFrameUtils {
   }
 
   def getDataFrameTop(df: DataFrame, groupBy: JList[String], topBy: JList[String], partitions: java.lang.Integer): DataFrame = {
-    df.top(groupBy.asScala, topBy.asScala, partitions)
+    df.top(groupBy.asScala.toSeq, topBy.asScala.toSeq, partitions)
   }
 
   def joinWithHotKeyNull(left: DataFrame, right: DataFrame, key: String, joinType: String, andCondition: Column): DataFrame = {
     left.joinWithHotKey(right, key, None, joinType, andCondition)
   }
 
-  def minByColumns(df: DataFrame, groupBy: String,
-                   minBy: JList[JList[String]],
-                   maxBy: JList[JList[String]]): DataFrame = {
+  def minByColumns(
+    df: DataFrame,
+    groupBy: String,
+    minBy: JList[JList[String]],
+    maxBy: JList[JList[String]]): DataFrame = {
     val minByScala = minBy.asScala.map { v =>
-      val asScala = v.asScala
+      val asScala = v.asScala.toSeq
       asScala.head -> asScala
     }
     val maxByScala = maxBy.asScala.map { v =>
-      val asScala = v.asScala
+      val asScala = v.asScala.toSeq
       asScala.head -> asScala
     }
-    df.minByColumns(groupBy, minByScala, maxByScala, df.schema)
+    df.minByColumns(groupBy, minByScala.toSeq, maxByScala.toSeq, df.schema)
   }
 
   def minByNoneLast[A, B](seq: Seq[A])(f: A => Option[B])(implicit ordering: Ordering[B]): A = {

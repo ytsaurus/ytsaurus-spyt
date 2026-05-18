@@ -3,7 +3,7 @@ package tech.ytsaurus.spyt.format
 import org.apache.spark.SparkConf
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.execution.PartialReducerPartitionSpec
-import org.apache.spark.sql.execution.adaptive.AQEShuffleReadExec
+import org.apache.spark.sql.execution.adaptive.{AQEShuffleReadExec, QueryStageExec}
 import org.apache.spark.sql.internal.SQLConf._
 import org.scalatest.prop.TableDrivenPropertyChecks
 import org.scalatest.flatspec.AnyFlatSpec
@@ -16,7 +16,8 @@ import tech.ytsaurus.spyt.test.{LocalSpark, TmpDir}
 class AdaptiveTest extends AnyFlatSpec with Matchers with LocalSpark with TmpDir with TableDrivenPropertyChecks
   with YtDistributedReadingTestUtils {
 
-  import spark.implicits._
+  private val sqlImplicits = SparkAdapter.instance.sparkImplicits(spark)
+  import sqlImplicits._
 
   it should "split skew partitions" in {
     withConf(AUTO_BROADCASTJOIN_THRESHOLD, "-1") {
@@ -26,7 +27,10 @@ class AdaptiveTest extends AnyFlatSpec with Matchers with LocalSpark with TmpDir
             val df1 = (Seq.fill(96)(1) ++ Seq(2, 3, 4, 5)).zip(11 to 110).toDF("key", "value1")
             val df2 = (1 to 10).zip(111 to 120).toDF("key", "value2")
             val join = df1.join(df2, Seq("key"))
-            val plan = adaptivePlan(join)
+            var plan = adaptivePlan(join)
+            if (SparkVersionUtils.greaterThanOrEqual("4.0.0")) {
+              plan = plan.asInstanceOf[QueryStageExec].plan
+            }
             val planShufflePartitionsSpec = nodes(plan).collectFirst {
               case AQEShuffleReadExec(_, partitionSpecs) => partitionSpecs
             }.get

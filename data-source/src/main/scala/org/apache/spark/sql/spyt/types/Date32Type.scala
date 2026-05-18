@@ -1,8 +1,8 @@
 package org.apache.spark.sql.spyt.types
 
-import org.apache.spark.sql.AnalysisException
 import org.apache.spark.sql.spyt.types.Date32.{MAX_DATE32, MIN_DATE32}
 import org.apache.spark.sql.types.{DataType, IntegerType, SQLUserDefinedType, UserDefinedType}
+import tech.ytsaurus.spyt.SparkAdapter
 import tech.ytsaurus.spyt.common.utils.DateTimeTypesConverter.dateToLong
 
 import java.time.LocalDate
@@ -23,7 +23,7 @@ class Date32Type extends UserDefinedType[Date32] {
         } else {
           throw new IllegalArgumentException(s"Number $v is out of range [$MIN_DATE32 to $MAX_DATE32]")
         }
-      case _ => throw new AnalysisException(
+      case _ => throw SparkAdapter.instance.createAnalysisException(
         "Date32 deserialization error: Expected java.lang.Integer but got datum of type "
           + datum.getClass
       )

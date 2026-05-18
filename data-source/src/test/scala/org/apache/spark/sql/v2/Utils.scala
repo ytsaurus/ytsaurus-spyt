@@ -1,9 +1,16 @@
 package org.apache.spark.sql.v2
 
+import org.apache.log4j.bridge.LogEventAdapter
+import org.apache.log4j.spi.LoggingEvent
+import org.apache.log4j.{Category, Level}
+import org.apache.logging.log4j.core.impl.Log4jLogEvent
+import org.apache.logging.log4j.message.SimpleMessage
+import org.apache.spark.sql.connector.expressions.filter.Predicate
 import org.apache.spark.sql.connector.read.Statistics
 import org.apache.spark.sql.execution.SparkPlan
 import org.apache.spark.sql.execution.datasources.PartitionedFile
 import org.apache.spark.sql.execution.datasources.v2.BatchScanExec
+import org.apache.spark.sql.sources.Filter
 import org.apache.spark.sql.{Column, DataFrame}
 import tech.ytsaurus.spyt.common.utils.TuplePoint
 import tech.ytsaurus.spyt.format.YtPartitionedFileDelegate.YtPartitionedFileExt
@@ -26,7 +33,7 @@ object Utils {
 
     val ytScan = extractYtScan(task.queryExecution.executedPlan)
     val partitions = ytScan.tryKeyPartitioning().getOrElse(ytScan)
-      .getPartitions.flatMap(f => extractRawKeys(f.files))
+      .getPartitions.flatMap(f => extractRawKeys(f.files.toSeq))
     partitions
   }
 
@@ -43,4 +50,21 @@ object Utils {
       case bse: BatchScanExec if bse.scan.isInstanceOf[YtScan] => bse.scan.asInstanceOf[YtScan]
     }.get
   }
+
+  def filterToPredicate(f: Filter): Predicate = f.toV2
+
+  def createLoggingEvent(fqnOfCategoryClass: String, logger: Category,
+    timeStamp: Long, level: Level,
+    message: String, throwable: Throwable): LoggingEvent = {
+    val logEvent = Log4jLogEvent.newBuilder()
+      .setLoggerFqcn(fqnOfCategoryClass)
+      .setLoggerName(logger.getName)
+      .setTimeMillis(timeStamp)
+      .setLevel(org.apache.logging.log4j.Level.toLevel(level.toString))
+      .setMessage(new SimpleMessage(message))
+      .setThrown(throwable)
+      .build()
+    new LogEventAdapter(logEvent)
+  }
+
 }

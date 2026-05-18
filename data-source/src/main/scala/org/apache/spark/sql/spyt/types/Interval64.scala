@@ -1,9 +1,9 @@
 package org.apache.spark.sql.spyt.types
 
-import org.apache.spark.sql.AnalysisException
 import org.apache.spark.sql.spyt.types.Interval64.{MAX_INTERVAL64, MIN_INTERVAL64}
 import org.apache.spark.sql.spyt.types.Timestamp64.{MAX_TIMESTAMP64, MIN_TIMESTAMP64}
 import org.apache.spark.sql.types.{DataType, LongType, SQLUserDefinedType, UserDefinedType}
+import tech.ytsaurus.spyt.SparkAdapter
 
 
 class Interval64Type extends UserDefinedType[Interval64] {
@@ -23,7 +23,7 @@ class Interval64Type extends UserDefinedType[Interval64] {
         } else {
           throw new IllegalArgumentException(s"Number $v is out of range ($MIN_INTERVAL64 to $MAX_INTERVAL64)")
         }
-      case _ => throw new AnalysisException(
+      case _ => throw SparkAdapter.instance.createAnalysisException(
         "Interval64 deserialization error: Expected java.lang.Long but got datum of type "
           + datum.getClass
       )

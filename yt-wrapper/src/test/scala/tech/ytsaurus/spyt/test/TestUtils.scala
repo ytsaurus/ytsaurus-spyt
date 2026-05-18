@@ -8,6 +8,7 @@ import tech.ytsaurus.client.rows.{UnversionedRow, UnversionedRowSerializer, Wire
 import tech.ytsaurus.core.cypress.{CypressNodeType, YPath}
 import tech.ytsaurus.core.rows.YTreeRowSerializer
 import tech.ytsaurus.core.tables.{ColumnValueType, TableSchema}
+import tech.ytsaurus.spyt.utils.CollectionUtils.concatMaps
 import tech.ytsaurus.spyt.wrapper.YtJavaConverters.RichJavaMap
 import tech.ytsaurus.typeinfo.TiType
 import tech.ytsaurus.yson.YsonConsumer
@@ -16,6 +17,7 @@ import tech.ytsaurus.ysontree.{YTreeBuilder, YTreeNode, YTreeNodeUtils, YTreeTex
 import java.io.{ByteArrayInputStream, InputStream}
 import java.nio.charset.StandardCharsets
 import java.time.Duration
+import java.util.{Map => JMap}
 import java.util.concurrent.{CompletableFuture, CompletionStage}
 import scala.annotation.tailrec
 import scala.jdk.CollectionConverters._
@@ -26,11 +28,12 @@ trait TestUtils {
     .addValue("value", ColumnValueType.INT64)
     .build()
 
-  private def ytSchema(path: String, fieldName: String)(implicit yt: CompoundClient): java.util.Map[String, YTreeNode] = {
+  private def ytSchema(path: String, fieldName: String)(implicit yt: CompoundClient): JMap[String, YTreeNode] = {
     val schema = YtWrapper.attribute(path, "schema")
     schema.asList()
-      .asScala
-      .find((t: YTreeNode) => t.asMap().getOrThrow("name").stringValue() == fieldName)
+      .stream()
+      .filter((t: YTreeNode) => t.asMap().getOrThrow("name").stringValue() == fieldName)
+      .findAny()
       .get.asMap()
   }
 
@@ -46,7 +49,7 @@ trait TestUtils {
 
   def createEmptyTable(path: String, schema: TableSchema)
                       (implicit yt: CompoundClient): Unit = {
-    yt.createNode(path, CypressNodeType.TABLE, Map("schema" -> schema.toYTree).asJava).join()
+    yt.createNode(path, CypressNodeType.TABLE, JMap.of("schema", schema.toYTree)).join()
   }
 
   def readTableAsYson(
@@ -108,7 +111,8 @@ trait TestUtils {
   def writeTableFromYson(rows: Seq[String], path: String, schema: YTreeNode, physicalSchema: TableSchema,
                          optimizeFor: OptimizeMode, options: Map[String, YTreeNode])
                         (implicit yt: CompoundClient): Unit = {
-    YtWrapper.createTable(path, options ++ Map("schema" -> schema, "optimize_for" -> optimizeFor.node), None, false)
+    val jOptions = concatMaps(options.asJava, JMap.of("schema", schema, "optimize_for", optimizeFor.node))
+    YtWrapper.createTable(path, jOptions, None, false)
     overwriteTableFromYson(rows, path, physicalSchema)
   }
 
@@ -159,8 +163,8 @@ trait TestUtils {
                          physicalSchema: TableSchema, optimizeFor: OptimizeMode = OptimizeMode.Scan,
                          options: Map[String, YTreeNode] = Map.empty)
                         (implicit yt: CompoundClient): Unit = {
-    YtWrapper.createTable(path, options ++ Map("schema" -> physicalSchema.toYTree,
-      "optimize_for" -> optimizeFor.node), None, false)
+    val jOpt = concatMaps(options.asJava, JMap.of("schema", physicalSchema.toYTree, "optimize_for", optimizeFor.node))
+    YtWrapper.createTable(path, jOpt, None, false)
 
     val req = WriteTable.builder[UnversionedRow]()
       .setPath(path)

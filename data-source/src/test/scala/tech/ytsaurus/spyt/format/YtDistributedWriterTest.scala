@@ -5,7 +5,7 @@ import org.apache.spark.sql.{Dataset, SaveMode, SparkSession}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import tech.ytsaurus.core.tables.{ColumnValueType, TableSchema}
-import tech.ytsaurus.spyt.YtWriter
+import tech.ytsaurus.spyt.{SparkAdapter, YtWriter}
 import tech.ytsaurus.spyt.format.YtDistributedWriterTest.{ExtendedSampleRow, SampleRow, extractId}
 import tech.ytsaurus.spyt.serializers.SchemaConverter.SortOrder
 import tech.ytsaurus.spyt.serializers.SchemaConverter.SortOrder.{Asc, Desc}
@@ -37,7 +37,8 @@ class YtDistributedWriterTest extends AnyFlatSpec with DescendingSortOrderSuppor
     transformDs: Dataset[SampleRow] => Dataset[SampleRow] = identity,
     sortOrder: Option[SortOrder] = None
   ): Unit = {
-    import _spark.implicits._
+    val sqlImplicits = SparkAdapter.instance.sparkImplicits(_spark)
+    import sqlImplicits._
     val data = (1 to 100).map(SampleRow.fromId)
     val df = transformDs(_spark.createDataset(transformData(data)).repartition(10))
     var dfWriter = df.write
@@ -125,7 +126,8 @@ class YtDistributedWriterTest extends AnyFlatSpec with DescendingSortOrderSuppor
   }
 
   it should "write desc sorted data to desc sorted table with leading sort column" in withSparkSession() { _spark =>
-    import spark.implicits._
+    val sqlImplicits = SparkAdapter.instance.sparkImplicits(_spark)
+    import sqlImplicits._
     withDescendingSortOrder {
       baseTest(
         _spark,
@@ -137,7 +139,8 @@ class YtDistributedWriterTest extends AnyFlatSpec with DescendingSortOrderSuppor
   }
 
   it should "write sorted data to sorted table with random sort column specified" in withSparkSession() { _spark =>
-    import _spark.implicits._
+    val sqlImplicits = SparkAdapter.instance.sparkImplicits(_spark)
+    import sqlImplicits._
     val data = (1 to 1000).map(id => ExtendedSampleRow(s"key_$id", id, s"Value of $id"))
     val df = _spark.createDataset(Random.shuffle(data)).repartition(10)
 
@@ -157,7 +160,8 @@ class YtDistributedWriterTest extends AnyFlatSpec with DescendingSortOrderSuppor
   }
 
   it should "write sorted data to sorted table when some partitions are empty" in withSparkSession() { _spark =>
-    import _spark.implicits._
+    val sqlImplicits = SparkAdapter.instance.sparkImplicits(_spark)
+    import sqlImplicits._
     val data = (1000 to 1 by -1).map(SampleRow.fromId)
     val df = _spark.createDataset(data).orderBy("id")
     val resultRdd = df.rdd.mapPartitionsWithIndex { case (index, iterator) =>
@@ -222,7 +226,8 @@ class YtDistributedWriterTest extends AnyFlatSpec with DescendingSortOrderSuppor
   )) { _spark =>
     val df = _spark.range(300)
 
-    import _spark.implicits._
+    val sqlImplicits = SparkAdapter.instance.sparkImplicits(_spark)
+    import sqlImplicits._
     df.groupBy(($"id" % 10).alias("id")).count().write.yt(tmpPath)
 
     val writtenData = readTableAsYson(tmpPath).map { node =>

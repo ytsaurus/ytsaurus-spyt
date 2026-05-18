@@ -17,10 +17,6 @@ object StreamingUtils {
     StructField(ROW_INDEX_WITH_PREFIX, LongType, nullable = true)
   ))
 
-  def createStreamingDataFrame(sqlContext: SQLContext, rdd: RDD[InternalRow], schema: StructType): DataFrame = {
-    sqlContext.internalCreateDataFrame(rdd, schema, isStreaming = true)
-  }
-
   def getStreamingSourceSchema(sparkSession: SparkSession, path: YPath, transaction: Option[String], proxy: Option[String],
                                parameters: Map[String, String]): StructType = {
     val valuesSchema = YtUtils.getSchemaByPath(sparkSession, path, transaction, proxy, parameters)

@@ -8,7 +8,10 @@ import org.scalatest.matchers.should.Matchers
 import AbstractSegment.SegmentSide
 import Segment._
 import tech.ytsaurus.spyt.test.TestUtils
+import tech.ytsaurus.spyt.utils.CollectionUtils
+import tech.ytsaurus.spyt.utils.CollectionUtils.concatMaps
 
+import java.util.{Map => JMap}
 
 
 class SegmentSetTest extends AnyFlatSpec with Matchers
@@ -22,22 +25,22 @@ class SegmentSetTest extends AnyFlatSpec with Matchers
   private val segment15ToPInf = Segment(RealValue(15), PInfinity())
   private val point7 = Segment(RealValue(7), RealValue(7))
 
-  private val exampleSet1 = SegmentSet(Map(("a", List(segmentMInfTo5, segment15ToPInf)), ("b", List(segment2To20))))
-  private val exampleSet2 = SegmentSet(Map(("a", List(segment2To20)), ("b", List(segment10To30)), ("c", List(segment10To30))))
-  private val exampleSet3 = SegmentSet(Map(("b", List(point7, segment15ToPInf))))
+  private val exampleSet1 = SegmentSet(JMap.of("a", Seq(segmentMInfTo5, segment15ToPInf), "b", Seq(segment2To20)))
+  private val exampleSet2 = SegmentSet(JMap.of("a", Seq(segment2To20), "b", Seq(segment10To30), "c", Seq(segment10To30)))
+  private val exampleSet3 = SegmentSet(JMap.of("b", Seq(point7, segment15ToPInf)))
 
   it should "create SegmentSet" in {
     val segment = segmentMInfTo5
     val res = SegmentSet(variableName, segment)
 
-    res shouldBe SegmentSet(Map((variableName, List(segment))))
+    res shouldBe SegmentSet(JMap.of(variableName, Seq(segment)))
   }
 
   it should "merge and union same segment sets" in {
     val segment1 = segmentMInfTo5
     val segment2 = segment2To20
     val segment3 = segment15ToPInf
-    val set = SegmentSet(Map(("a", List(segment1, segment3)), ("b", List(segment2))))
+    val set = SegmentSet(JMap.of("a", Seq(segment1, segment3), "b", Seq(segment2)))
 
     SegmentSet.union(set, set) shouldBe set
     SegmentSet.intercept(set, set) shouldBe set
@@ -80,39 +83,39 @@ class SegmentSetTest extends AnyFlatSpec with Matchers
   }
 
   it should "merge different variables" in {
-    val map1 = Map(("a", List(segmentMInfTo5)))
-    val map2 = Map(("b", List(segment2To20)))
-    val map3 = Map(("c", List(segment15ToPInf)))
+    val map1 = JMap.of("a", Seq(segmentMInfTo5))
+    val map2 = JMap.of("b", Seq(segment2To20))
+    val map3 = JMap.of("c", Seq(segment15ToPInf))
 
     val set1 = SegmentSet(map1)
     val set2 = SegmentSet(map2)
     val set3 = SegmentSet(map3)
 
-    SegmentSet.intercept(set1, set2) shouldBe SegmentSet(map1 ++ map2)
-    SegmentSet.intercept(set1, set3) shouldBe SegmentSet(map1 ++ map3)
-    SegmentSet.intercept(set2, set3) shouldBe SegmentSet(map2 ++ map3)
-    SegmentSet.intercept(set1, set2, set3) shouldBe SegmentSet(map1 ++ map2 ++ map3)
+    SegmentSet.intercept(set1, set2) shouldBe SegmentSet(concatMaps(map1, map2))
+    SegmentSet.intercept(set1, set3) shouldBe SegmentSet(concatMaps(map1, map3))
+    SegmentSet.intercept(set2, set3) shouldBe SegmentSet(concatMaps(map2, map3))
+    SegmentSet.intercept(set1, set2, set3) shouldBe SegmentSet(concatMaps(concatMaps(map1, map2), map3))
   }
 
   it should "merge hard cases" in {
-    SegmentSet.intercept(exampleSet1, exampleSet2) shouldBe SegmentSet(Map(
-      ("a", List(Segment(RealValue(2), RealValue(5)), Segment(RealValue(15), RealValue(20)))),
-      ("b", List(Segment(RealValue(10), RealValue(20)))),
-      ("c", List(segment10To30))
+    SegmentSet.intercept(exampleSet1, exampleSet2) shouldBe SegmentSet(JMap.of(
+      "a", Seq(Segment(RealValue(2), RealValue(5)), Segment(RealValue(15), RealValue(20))),
+      "b", Seq(Segment(RealValue(10), RealValue(20))),
+      "c", Seq(segment10To30)
     ))
-    SegmentSet.intercept(exampleSet1, exampleSet3) shouldBe SegmentSet(Map(
-      ("a", List(segmentMInfTo5, segment15ToPInf)),
-      ("b", List(point7, Segment(RealValue(15), RealValue(20))))
+    SegmentSet.intercept(exampleSet1, exampleSet3) shouldBe SegmentSet(JMap.of(
+      "a", Seq(segmentMInfTo5, segment15ToPInf),
+      "b", Seq(point7, Segment(RealValue(15), RealValue(20)))
     ))
-    SegmentSet.intercept(exampleSet2, exampleSet3) shouldBe SegmentSet(Map(
-      ("a", List(segment2To20)),
-      ("b", List(Segment(RealValue(15), RealValue(30)))),
-      ("c", List(segment10To30))
+    SegmentSet.intercept(exampleSet2, exampleSet3) shouldBe SegmentSet(JMap.of(
+      "a", Seq(segment2To20),
+      "b", Seq(Segment(RealValue(15), RealValue(30))),
+      "c", Seq(segment10To30)
     ))
-    SegmentSet.intercept(exampleSet1, exampleSet2, exampleSet3) shouldBe SegmentSet(Map(
-      ("a", List(Segment(RealValue(2), RealValue(5)), Segment(RealValue(15), RealValue(20)))),
-      ("b", List(Segment(RealValue(15), RealValue(20)))),
-      ("c", List(segment10To30))
+    SegmentSet.intercept(exampleSet1, exampleSet2, exampleSet3) shouldBe SegmentSet(JMap.of(
+      "a", Seq(Segment(RealValue(2), RealValue(5)), Segment(RealValue(15), RealValue(20))),
+      "b", Seq(Segment(RealValue(15), RealValue(20))),
+      "c", Seq(segment10To30)
     ))
   }
 
@@ -207,15 +210,15 @@ class SegmentSetTest extends AnyFlatSpec with Matchers
 
   it should "simplify segment set" in {
     exampleSet1.simplifySegments shouldBe SegmentSet(
-      Map(
-        ("a", List(Segment(MInfinity(), PInfinity()))),
-        ("b", List(segment2To20))
+      JMap.of(
+        "a", Seq(Segment(MInfinity(), PInfinity())),
+        "b", Seq(segment2To20)
       )
     )
     exampleSet2.simplifySegments shouldBe exampleSet2
     exampleSet3.simplifySegments shouldBe SegmentSet(
-      Map(
-        ("b", List(Segment(RealValue(7), PInfinity())))
+      JMap.of(
+        "b", Seq(Segment(RealValue(7), PInfinity()))
       )
     )
   }

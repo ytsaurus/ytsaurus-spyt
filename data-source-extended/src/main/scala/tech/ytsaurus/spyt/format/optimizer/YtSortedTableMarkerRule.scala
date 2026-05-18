@@ -31,21 +31,21 @@ class YtSortedTableMarkerRule(spark: SparkSession) extends Rule[LogicalPlan] {
     validatePlanOptimizationAvailability(spark)
 
     plan transformDown {
-      case agg@Aggregate(_, _, inner) =>
+      case agg: Aggregate =>
         val res = for {
           vars <- getVars(agg.groupingExpressions)
-          scan <- getYtScan(inner)
+          scan <- getYtScan(agg.child)
           newScan <- scan.tryKeyPartitioning(Some(vars))
         } yield {
-          agg.copy(child = LogicalSortedMarker(vars, replaceYtScan(inner, newScan)))
+          SparkAdapter.instance.copyAggregate(agg, LogicalSortedMarker(vars, replaceYtScan(agg.child, newScan)))
         }
         res.getOrElse(agg)
-      case join@Join(left, right, Inner, _, _) =>
+      case join: Join if join.joinType == Inner =>
         val res = for {
           condition <- join.condition
         } yield {
           val clauses = parseAndClauses(condition)
-          val checkedClauses = findAttributes(left.output, right.output, clauses)
+          val checkedClauses = findAttributes(join.left.output, join.right.output, clauses)
           if (checkedClauses.isEmpty) {
             join
           } else {

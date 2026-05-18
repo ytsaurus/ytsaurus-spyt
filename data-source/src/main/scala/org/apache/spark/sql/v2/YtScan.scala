@@ -4,7 +4,7 @@ import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
 import org.apache.spark.sql.catalyst.expressions.Expression
 import org.apache.spark.sql.catalyst.expressions.codegen.GenerateUnsafeProjection
-import org.apache.spark.sql.connector.read.partitioning.Partitioning
+import org.apache.spark.sql.connector.read.partitioning.{Partitioning, UnknownPartitioning}
 import org.apache.spark.sql.connector.read.{PartitionReaderFactory, Statistics, SupportsReportPartitioning}
 import org.apache.spark.sql.execution.datasources.v2.FileScan
 import org.apache.spark.sql.execution.datasources.{FilePartition, PartitionDirectory, PartitionedFile, PartitioningAwareFileIndex}
@@ -126,7 +126,7 @@ case class YtScan(sparkSession: SparkSession,
     val readPartitionAttributes = readPartitionSchema.map { readField =>
       attributeMap.getOrElse(
         normalizeName(readField.name),
-        throw new AnalysisException(s"Can't find required partition column ${readField.name} " +
+        throw SparkAdapter.instance.createAnalysisException(s"Can't find required partition column ${readField.name} " +
           s"in partition schema ${fileIndex.partitionSchema}")
       )
     }
@@ -155,7 +155,7 @@ case class YtScan(sparkSession: SparkSession,
 
   // This method is intended to support YTsaurus native partitioning and should help to avoid shuffle at spark side
   override def outputPartitioning(): Partitioning = {
-    SparkAdapter.instance.createYtScanOutputPartitioning(partitions.length)
+    new UnknownPartitioning(partitions.length)
   }
 
   override def estimateStatistics(): Statistics = new Statistics {

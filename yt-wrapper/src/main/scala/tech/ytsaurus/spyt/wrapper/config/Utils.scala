@@ -1,17 +1,20 @@
 package tech.ytsaurus.spyt.wrapper.config
 
-import tech.ytsaurus.spyt.wrapper.YtJavaConverters.RichJavaMap
 import tech.ytsaurus.spyt.wrapper.YtWrapper
 import tech.ytsaurus.client.CompoundClient
+import tech.ytsaurus.spyt.utils.CollectionUtils
+import tech.ytsaurus.ysontree.YTreeNode
 
-import scala.jdk.CollectionConverters.mapAsScalaMapConverter
+import java.util.{Map => JMap}
 
 object Utils {
-  def parseRemoteConfig(path: String, yt: CompoundClient, key: String = "spark_conf"): Map[String, String] = {
-    val remoteConfig = YtWrapper.readDocument(path)(yt).asMap().getOption(key)
-    remoteConfig.map { config =>
-      config.asMap().asScala.toMap.mapValues(_.stringValue())
-    }.getOrElse(Map.empty)
+  def parseRemoteConfig(path: String, yt: CompoundClient, key: String = "spark_conf"): JMap[String, String] = {
+    val remoteConfig = YtWrapper.readDocument(path)(yt).asMap()
+    if (remoteConfig.containsKey(key)) {
+      CollectionUtils.mapValues(remoteConfig.get(key).asMap(), (node: YTreeNode) => node.stringValue())
+    } else {
+      JMap.of()
+    }
   }
 
   def remoteGlobalConfigPath: String = "//home/spark/conf/global"

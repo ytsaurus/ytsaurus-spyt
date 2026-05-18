@@ -12,7 +12,7 @@ from subprocess import Popen, PIPE
 from py4j.protocol import Py4JJavaError
 from enum import Enum
 from datetime import timedelta
-from .utils import scala_buffer_to_list, get_spark_home, get_spyt_home, get_spyt_conf_dir
+from .utils import scala_buffer_to_list, get_spark_home, get_spyt_home, get_spyt_conf_dir, get_scala_version
 
 
 logger = logging.getLogger(__name__)
@@ -33,10 +33,8 @@ def launch_gateway(memory="512m",
     command += java_opts or []
     if prefer_ipv6:
         command.append('-Djava.net.preferIPv6Addresses=true')
-    spark_patch = [
-        os.path.join(spyt_home, 'jars', jar)
-        for jar in os.listdir(os.path.join(spyt_home, 'jars'))
-        if 'spyt-patch-agent' in jar][0]
+    jars_root = os.path.join(spyt_home, 'jars', f'scala-{get_scala_version()}')
+    spark_patch = [os.path.join(jars_root, jar) for jar in os.listdir(jars_root) if 'spyt-patch-agent' in jar][0]
     command += [
         f"-javaagent:{spark_patch}",
         "-XX:+IgnoreUnrecognizedVMOptions",
@@ -99,8 +97,12 @@ def launch_gateway(memory="512m",
 def _submit_classpath(spark_home=None):
     spark_home = spark_home or get_spark_home()
     spyt_home = get_spyt_home()
-    jars_cp = [os.path.join(home, "jars/*") for home in [spyt_home, spark_home]]
-    return [os.path.join(spyt_home, "conf")] + jars_cp
+    scala_version = get_scala_version()
+
+    return [os.path.join(spyt_home, "conf"),
+            os.path.join(spyt_home, f"jars/scala-{scala_version}/*"),
+            os.path.join(spyt_home, "jars/common/*"),
+            os.path.join(spark_home, "jars/*")]
 
 
 def shutdown_gateway(gateway):

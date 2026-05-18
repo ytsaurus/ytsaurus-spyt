@@ -10,6 +10,8 @@ import tech.ytsaurus.ysontree.{YTreeBinarySerializer, YTreeTextSerializer}
 
 import java.io.ByteArrayInputStream
 
+import scala.jdk.CollectionConverters._
+
 //noinspection ZeppelinScalaResUsageFilter
 class YtDynTableUtilsTest extends AnyFlatSpec with Matchers with LocalYtClient with DynTableTestUtils with TmpDir {
 
@@ -17,12 +19,12 @@ class YtDynTableUtilsTest extends AnyFlatSpec with Matchers with LocalYtClient w
 
   it should "get empty pivotKeys" in {
     prepareTestTable(tmpPath, testData, Nil)
-    YtWrapper.pivotKeys(tmpPath).map(str) should contain theSameElementsInOrderAs Seq("[]")
+    YtWrapper.pivotKeys(tmpPath).asScala.map(str) should contain theSameElementsInOrderAs Seq("[]")
   }
 
   it should "get non empty pivotKeys" in {
     prepareTestTable(tmpPath, testData, Seq(Seq(), Seq(3), Seq(6, 12)))
-    YtWrapper.pivotKeys(tmpPath).map(str) should contain theSameElementsInOrderAs Seq(
+    YtWrapper.pivotKeys(tmpPath).asScala.map(str) should contain theSameElementsInOrderAs Seq(
       "[]", """[3;]""", """[6;12;]"""
     )
   }

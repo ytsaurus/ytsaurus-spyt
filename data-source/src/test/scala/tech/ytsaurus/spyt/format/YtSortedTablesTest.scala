@@ -14,7 +14,8 @@ import scala.jdk.CollectionConverters._
 
 class YtSortedTablesTest extends AnyFlatSpec with Matchers with LocalSpark with TestUtils with TmpDir {
 
-  import spark.implicits._
+  private val sqlImplicits = SparkAdapter.instance.sparkImplicits(spark)
+  import sqlImplicits._
 
   override def beforeAll(): Unit = {
     super.beforeAll()
@@ -27,7 +28,7 @@ class YtSortedTablesTest extends AnyFlatSpec with Matchers with LocalSpark with 
   }
 
   it should "write sorted table" in {
-    val df = (1 to 9).toDF.coalesce(3)
+    val df = (1 to 9).toDF().coalesce(3)
 
     df.write.sortedBy("value").yt(tmpPath)
 
@@ -64,7 +65,7 @@ class YtSortedTablesTest extends AnyFlatSpec with Matchers with LocalSpark with 
     sortColumns(tmpPath) should contain theSameElementsAs Seq("value")
     uniqueKeys(tmpPath) shouldEqual false
     ytSchema(tmpPath) should contain theSameElementsAs Seq(
-      Map("name" -> "value", "type" -> "int32", "sort_order" -> "descending").mapValues(Some(_))
+      Map("name" -> Some("value"), "type" -> Some("int32"), "sort_order" -> Some("descending"))
     )
     val writtenData = readTableAsYson(tmpPath, readSettings = YtReadSettings.default.copy(unordered = false))
     val actual = writtenData.map(_.asMap().get("value").intValue())
@@ -72,19 +73,19 @@ class YtSortedTablesTest extends AnyFlatSpec with Matchers with LocalSpark with 
   }
 
   it should "write desc sorted table using option" in {
-    val df = (9 to 1 by -1).toDF.coalesce(3)
+    val df = (9 to 1 by -1).toDF().coalesce(3)
 
     df.write.sortedBy("value").option("sort_orders", """["desc"]""").yt(tmpPath)
 
     sortColumns(tmpPath) should contain theSameElementsAs Seq("value")
     uniqueKeys(tmpPath) shouldEqual false
     ytSchema(tmpPath) should contain theSameElementsAs Seq(
-      Map("name" -> "value", "type" -> "int32", "sort_order" -> "descending").mapValues(Some(_))
+      Map("name" -> Some("value"), "type" -> Some("int32"), "sort_order" -> Some("descending"))
     )
   }
 
   it should "throw exception for incorrect sort_orders" in {
-    val df = (9 to 1 by -1).toDF.coalesce(3)
+    val df = (9 to 1 by -1).toDF().coalesce(3)
 
     an[IllegalArgumentException] shouldBe thrownBy {
       df.write.sortedBy("value").option("sort_orders", """["descending"]""").yt(tmpPath)
@@ -134,9 +135,9 @@ class YtSortedTablesTest extends AnyFlatSpec with Matchers with LocalSpark with 
     sortColumns(tmpPath) shouldBe Seq("key", "timestamp", "value")
     uniqueKeys(tmpPath) shouldBe false
     ytSchema(tmpPath) should contain theSameElementsAs Seq(
-      Map("name" -> "key", "type" -> "int32", "sort_order" -> "ascending").mapValues(Some(_)),
-      Map("name" -> "timestamp", "type" -> "int32", "sort_order" -> "descending").mapValues(Some(_)),
-      Map("name" -> "value", "type" -> "int32", "sort_order" -> "ascending").mapValues(Some(_))
+      Map("name" -> Some("key"), "type" -> Some("int32"), "sort_order" -> Some("ascending")),
+      Map("name" -> Some("timestamp"), "type" -> Some("int32"), "sort_order" -> Some("descending")),
+      Map("name" -> Some("value"), "type" -> Some("int32"), "sort_order" -> Some("ascending"))
     )
     val writtenData = readTableAsYson(tmpPath, readSettings = YtReadSettings.default.copy(unordered = false))
     val actual = writtenData.map(node => (node.asMap().get("key").longValue(),
@@ -207,7 +208,7 @@ class YtSortedTablesTest extends AnyFlatSpec with Matchers with LocalSpark with 
   }
 
   def sortColumns(path: String): Seq[String] = {
-    YtWrapper.attribute(path, "sorted_by").asList().asScala.map(_.stringValue())
+    YtWrapper.attribute(path, "sorted_by").asList().asScala.map(_.stringValue()).toSeq
   }
 
   def uniqueKeys(path: String): Boolean = {
@@ -220,7 +221,7 @@ class YtSortedTablesTest extends AnyFlatSpec with Matchers with LocalSpark with 
     YtWrapper.attribute(path, "schema").asList().asScala.map { field =>
       val map = field.asMap()
       schemaFields.map(n => n -> map.getOption(n).map(_.stringValue())).toMap
-    }
+    }.toSeq
   }
 
 }

@@ -1,9 +1,10 @@
 package tech.ytsaurus.spyt.streaming
 
-import org.apache.spark.sql.execution.streaming.SerializedOffset
+import org.apache.spark.sql.connector.read.streaming.Offset
 import org.mockito.MockitoSugar
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
+import tech.ytsaurus.spyt.SparkVersionUtils
 import tech.ytsaurus.spyt.test.LocalYtClient
 import tech.ytsaurus.spyt.wrapper.YtWrapper
 
@@ -40,7 +41,7 @@ class YtQueueUtilsTest extends AnyFlatSpec with Matchers with MockitoSugar with 
   }
 
   it should "deserialize offset from json" in {
-    val jsonOffset = SerializedOffset("""{"cluster":"c","path":"p","partitions":{"0":2,"1":1,"2":7}}""")
+    val jsonOffset = createSerializedOffset("""{"cluster":"c","path":"p","partitions":{"0":2,"1":1,"2":7}}""")
     YtQueueOffset.apply(jsonOffset) shouldBe YtQueueOffset("c", "p", SortedMap(0 -> 2L, 1 -> 1L, 2 -> 7L))
   }
 
@@ -48,7 +49,7 @@ class YtQueueUtilsTest extends AnyFlatSpec with Matchers with MockitoSugar with 
     val offset1 = YtQueueOffset("c2", "p0", SortedMap(0 -> 100L, 1 -> 10L, 2 -> 75L, 3 -> 10L, 4 -> 200L))
     val offset2 = YtQueueOffset("cluster", "//home/path", SortedMap(0 -> 1L, 1 -> 5L, 2 -> 7L, 3 -> 0L, 4 -> 17L, 5 -> 0L))
     Seq(offset1, offset2).foreach(offset =>
-      YtQueueOffset.apply(SerializedOffset(offset.json())) shouldBe offset
+      YtQueueOffset.apply(createSerializedOffset(offset.json())) shouldBe offset
     )
   }
 
@@ -91,5 +92,21 @@ class YtQueueUtilsTest extends AnyFlatSpec with Matchers with MockitoSugar with 
     intercept[CompletionException] {
       YtQueueOffset.advance(consumerPath, newOffset, lastCommitted, timeout=Duration.ofNanos(1))
     }
+  }
+
+  private lazy val serializedOffsetModule = {
+    // This ad-hoc class creation is required to prevent compilation errors when testing against Spark versions
+    // less than 4.1.0
+    val clazz = if (SparkVersionUtils.lessThan("4.1.0")) {
+      Class.forName("org.apache.spark.sql.execution.streaming.SerializedOffset$")
+    } else {
+      Class.forName("org.apache.spark.sql.execution.streaming.runtime.SerializedOffset$")
+    }
+    clazz.getDeclaredField("MODULE$").get(null)
+  }
+
+  private def createSerializedOffset(payload: String): Offset = {
+    serializedOffsetModule.getClass.getMethod("apply", classOf[String])
+      .invoke(serializedOffsetModule, payload).asInstanceOf[Offset]
   }
 }

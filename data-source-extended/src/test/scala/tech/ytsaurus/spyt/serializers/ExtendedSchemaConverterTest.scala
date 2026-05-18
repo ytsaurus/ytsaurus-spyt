@@ -24,8 +24,8 @@ class ExtendedSchemaConverterTest extends AnyFlatSpec with Matchers
 
   private val extendedSparkSchema = sparkSchema
     .add(structField("UInt64", UInt64Type, nullable = false))
-    .add(structField("Yson", YsonType, nullable = false))
-    .add(structField("Struct_with_yson", StructType(Seq(StructField("a", StringType, nullable = false), StructField("b", YsonType, nullable = false))), nullable = false))
+    .add(structField("Yson", new YsonType(), nullable = false))
+    .add(structField("Struct_with_yson", StructType(Seq(StructField("a", StringType, nullable = false), StructField("b", new YsonType(), nullable = false))), nullable = false))
 
   it should "read schema without parsing type v3" in {
     // in sparkSchema.toYTree no type_v1 type names
@@ -50,8 +50,8 @@ class ExtendedSchemaConverterTest extends AnyFlatSpec with Matchers
       structField("bool", BooleanType, nullable = true),
       structField("STRING", StringType, nullable = true),
       structField("string_3", StringType, nullable = true),
-      structField("ANY", YsonType, nullable = true),
-      structField("yson", YsonType, nullable = true),
+      structField("ANY", new YsonType(), nullable = true),
+      structField("yson", new YsonType(), nullable = true),
       structField("int8", ByteType, nullable = true),
       structField("uint8", ShortType, nullable = true, ytLogicalTypeName="uint8"),
       structField("int16", ShortType, nullable = true),
@@ -64,12 +64,12 @@ class ExtendedSchemaConverterTest extends AnyFlatSpec with Matchers
       structField("datetime", new DatetimeType(), nullable = true, arrowSupported = false),
       structField("timestamp", TimestampType, nullable = true, arrowSupported = false),
       structField("interval", LongType, nullable = true, arrowSupported = false),
-      structField("list", YsonType, nullable = true),
-      structField("dict", YsonType, nullable = true),
-      structField("struct", YsonType, nullable = true),
-      structField("tuple", YsonType, nullable = true),
-      structField("variantOverStruct", YsonType, nullable = true),
-      structField("variantOverTuple", YsonType, nullable = true)
+      structField("list", new YsonType(), nullable = true),
+      structField("dict", new YsonType(), nullable = true),
+      structField("struct", new YsonType(), nullable = true),
+      structField("tuple", new YsonType(), nullable = true),
+      structField("variantOverStruct", new YsonType(), nullable = true),
+      structField("variantOverTuple", new YsonType(), nullable = true)
     ))
   }
 
@@ -88,8 +88,8 @@ class ExtendedSchemaConverterTest extends AnyFlatSpec with Matchers
       structField("bool", BooleanType, nullable = false),
       structField("STRING", StringType, nullable = true),
       structField("string_3", StringType, nullable = false),
-      structField("ANY", YsonType, nullable = true),
-      structField("yson", YsonType, nullable = true),
+      structField("ANY", new YsonType(), nullable = true),
+      structField("yson", new YsonType(), nullable = true),
       structField("int8", ByteType, nullable = false),
       structField("uint8", ShortType, nullable = false, ytLogicalTypeName="uint8"),
       structField("int16", ShortType, nullable = false),
@@ -104,7 +104,7 @@ class ExtendedSchemaConverterTest extends AnyFlatSpec with Matchers
       structField("interval", LongType, nullable = false, arrowSupported = false),
       structField("list", ArrayType(BooleanType, containsNull = false), nullable = false),
       structField("dict", MapType(DoubleType, StringType, valueContainsNull = false), nullable = false),
-      structField("struct", StructType(Seq(StructField("a", StringType, nullable = false), StructField("b", YsonType, nullable = true))), nullable = false),
+      structField("struct", StructType(Seq(StructField("a", StringType, nullable = false), StructField("b", new YsonType(), nullable = true))), nullable = false),
       structField("tuple", StructType(Seq(StructField("_1", BooleanType, nullable = false), StructField("_2", DateType, nullable = false))), nullable = false),
       structField("variantOverStruct", StructType(Seq(StructField("_vc", IntegerType, metadata = new MetadataBuilder().putBoolean("optional", false).build()),
         StructField("_vd", TimestampType, metadata = new MetadataBuilder().putBoolean("optional", false).build()))), nullable = false),

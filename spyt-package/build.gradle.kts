@@ -1,14 +1,20 @@
 import tech.ytsaurus.spyt.gradle.tasks.ProcessPythonFilesTask
 
+val projectIds = listOf(":spark-submit", ":shuffle-service", ":spyt-patch-agent", ":spark-adapter-impl-330",
+    ":spark-adapter-impl-340", ":spark-adapter-impl-350", ":spark-adapter-provider")
+val scalaVersions: List<String> by gradle.extra
+
 dependencies {
-    runtimeOnly(project(":spark-submit"))
-    runtimeOnly(project(":shuffle-service"))
-    runtimeOnly(project(":spyt-patch-agent"))
-    runtimeOnly(project(":spark-adapter-impl-322"))
-    runtimeOnly(project(":spark-adapter-impl-330"))
-    runtimeOnly(project(":spark-adapter-impl-340"))
-    runtimeOnly(project(":spark-adapter-impl-350"))
-    runtimeOnly(project(":spark-adapter-provider"))
+    projectIds.forEach { projectId ->
+        scalaVersions.forEach { scalaVersion ->
+            runtimeOnly(project("${projectId}_$scalaVersion"))
+        }
+    }
+    if (scalaVersions.contains("2.13")) {
+        runtimeOnly(project(":spark-adapter-impl-400_2.13"))
+        runtimeOnly(project(":spark-adapter-impl-410_2.13"))
+        runtimeOnly(project(":spark-adapter-impl-420_2.13"))
+    }
 }
 
 configurations.configureEach {
@@ -20,6 +26,7 @@ configurations.configureEach {
     exclude(group = "org.scala-lang.modules")
     exclude(group = "org.slf4j", module = "slf4j-api")
     exclude(group = "org.typelevel", module = "cats-kernel_2.12")
+    exclude(group = "org.typelevel", module = "cats-kernel_2.13")
 }
 
 tasks {
@@ -39,12 +46,15 @@ tasks {
 
         into(layout.buildDirectory.dir("intermediates/spyt-package"))
         from(configurations.runtimeClasspath) {
-            into("jars")
-
             eachFile {
                 val prefix = artifactPrefixMap.get()[this.file]
                 if (prefix != null) {
-                    this.name = "${prefix}-${this.sourceName}"
+                    val targetSubdirectory = when {
+                        this.sourceName.contains("_2.12") -> "scala-2.12"
+                        this.sourceName.contains("_2.13") -> "scala-2.13"
+                        else -> "common"
+                    }
+                    this.relativePath = RelativePath(true, "jars", targetSubdirectory, "${prefix}-${this.sourceName}")
                 }
             }
         }

@@ -4,16 +4,13 @@ import org.apache.spark.{SPARK_VERSION => sparkVersion, SparkConf}
 import org.apache.spark.rpc.RpcEndpointRef
 import tech.ytsaurus.spyt.launcher.DeployMessages
 
-import javax.servlet.http.{HttpServletRequest, HttpServletResponse}
-
 private[rest] class YtStatusRequestServlet(masterEndpoint: RpcEndpointRef, conf: SparkConf)
-  extends StandaloneStatusRequestServlet(masterEndpoint, conf) {
+  extends StandaloneStatusRequestServlet(masterEndpoint, conf) with RestServletCompat {
 
-  protected override def doGet(
-                                request: HttpServletRequest,
-                                response: HttpServletResponse): Unit = {
-    val submissionId = parseSubmissionId(request.getPathInfo)
-    val responseMessage = submissionId match {
+  override def processGet(
+    pathInfo: String,
+    getParameter: String => String): (SubmitRestProtocolResponse, Option[Int]) = {
+    val responseMessage = parseSubmissionId(pathInfo) match {
       case Some(value) =>
         log.debug("Status request for submission ID " + value)
         handleStatus(value)
@@ -21,7 +18,7 @@ private[rest] class YtStatusRequestServlet(masterEndpoint: RpcEndpointRef, conf:
         log.debug("No submission ID in status request.")
         handleStatuses
     }
-    sendResponse(responseMessage, response)
+    (responseMessage, None)
   }
 
   protected def handleStatuses: SubmissionStatusesResponse = {

@@ -85,7 +85,7 @@ trait SparkLauncher {
     val thread = runSparkThread(
       masterClass,
       config.memory,
-      positionalArgs = positionalArgs,
+      positionalArgs = positionalArgs.toSeq,
       namedArgs = Map("host" -> ytHostnameOrIpAddress),
       systemProperties = commonJavaOpts ++ reverseProxyUrlProp.toSeq
     )
@@ -112,7 +112,7 @@ trait SparkLauncher {
         "memory" -> memory,
         "host" -> ytHostnameOrIpAddress
       ) ++ (if (enableSquashfs) Map("work-dir" -> s"$home/work") else Map()),
-      positionalArgs = positionalArgs,
+      positionalArgs = positionalArgs.toSeq,
       systemProperties = commonJavaOpts,
       extraEnv = extraEnv
     )
@@ -226,7 +226,7 @@ trait SparkLauncher {
       processExtraEnv += ("JAVA_HOME" -> javaHome)
     }
     processExtraEnv ++= extraEnv.toList
-    Process(command, new File("."), processExtraEnv: _*).run(ProcessLogger(log.info(_)))
+    Process(command, new File("."), processExtraEnv.toSeq: _*).run(ProcessLogger(log.info(_)))
   }
 
   @tailrec

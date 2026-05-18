@@ -56,20 +56,21 @@ class YTsaurusShuffleTest extends AnyFlatSpec with Matchers with LocalSpark with
       s"for $numRows number of rows, Fail at process: $failAtProcess, Fail after commit: $failAfterCommit"
 
   private def readSourceData(_spark: SparkSession, path: String, failAtProcess: Boolean): Dataset[SourceRow] = {
-    import _spark.implicits._
-    _spark.read.yt(path).repartition(24).as[SourceRow].mapPartitions { iterator => new Iterator[SourceRow] {
+    val sqlImplicits = SparkAdapter.instance.sparkImplicits(_spark)
+    import sqlImplicits._
+    _spark.read.yt(path).repartition(24).as[SourceRow].mapPartitions { pIter => new Iterator[SourceRow] {
 
       override def hasNext: Boolean = {
-        if (!iterator.hasNext && failAtProcess && pseudoRandom.nextInt(10) == 0) {
+        if (!pIter.hasNext && failAtProcess && pseudoRandom.nextInt(10) == 0) {
           // Exploding at the end of a partition, thus writing some data to it, then failing a task and causing
           // to reprocess this data again
           throw new RuntimeException("BOOOM")
         } else {
-          iterator.hasNext
+          pIter.hasNext
         }
       }
 
-      override def next(): SourceRow = iterator.next()
+      override def next(): SourceRow = pIter.next()
     }}
   }
 
@@ -87,7 +88,8 @@ class YTsaurusShuffleTest extends AnyFlatSpec with Matchers with LocalSpark with
     Map("spark.shuffle.compress" -> useCompression.toString) ++
       (if (failAfterCommit) Map("spark.ytsaurus.test.failAfterCommit" -> "true") else Map.empty)
   ) { _spark =>
-    import _spark.implicits._
+    val sqlImplicits = SparkAdapter.instance.sparkImplicits(_spark)
+    import sqlImplicits._
     val numRowsX2 = numRows * 2
 
     YtWrapper.createDir(s"$tmpPath")
@@ -129,7 +131,8 @@ class YTsaurusShuffleTest extends AnyFlatSpec with Matchers with LocalSpark with
   forEvery(testParameters)(testTemplate)
 
   it should "sort a table using YTsaurus shuffle service" in withSparkSession() { _spark =>
-    import _spark.implicits._
+    val sqlImplicits = SparkAdapter.instance.sparkImplicits(_spark)
+    import sqlImplicits._
     // Create a large table with shuffled sort key
     val numRows = 300
     createShuffledTable(tmpPath, numRows, identity)
@@ -148,7 +151,8 @@ class YTsaurusShuffleTest extends AnyFlatSpec with Matchers with LocalSpark with
   it should "correctly coalesce shuffle partitions" in withSparkSession(
     Map("spark.sql.adaptive.coalescePartitions.enabled" -> "true")
   ) { _spark =>
-    import _spark.implicits._
+    val sqlImplicits = SparkAdapter.instance.sparkImplicits(_spark)
+    import sqlImplicits._
     val nRows = 100
     val df1 = (1 to nRows).zip((1 to nRows).map(x => x * x)).toDF("key", "square")
     val df2 = (1 to nRows).zip((1 to nRows).map(x => x * x * x)).toDF("key", "cube")
@@ -161,7 +165,8 @@ class YTsaurusShuffleTest extends AnyFlatSpec with Matchers with LocalSpark with
 
   private def generateKeyValueDataframe(_spark: SparkSession, nRows: Int,
                                         percentOfOnes: Int, numPartitions: Option[Int] = None): DataFrame = {
-    import _spark.implicits._
+    val sqlImplicits = SparkAdapter.instance.sparkImplicits(_spark)
+    import sqlImplicits._
     val nOnes = nRows * percentOfOnes / 100
     val nRest = nRows - nOnes + 1
     val seq = (Seq.fill(nOnes)(1) ++ (2 to nRest)).zip(1 to nRows)
@@ -174,7 +179,8 @@ class YTsaurusShuffleTest extends AnyFlatSpec with Matchers with LocalSpark with
   }
 
   it should "correctly work with skewed partitions in join scenario" in withSparkSession() {_spark =>
-    import _spark.implicits._
+    val sqlImplicits = SparkAdapter.instance.sparkImplicits(_spark)
+    import sqlImplicits._
     val df1 = generateKeyValueDataframe(_spark, 1000, 95)
     val df2 = (1 to 10).zip(111 to 120).toDF("key", "value2")
     val joinedDf = df1.join(df2, Seq("key"), "left")
@@ -187,7 +193,8 @@ class YTsaurusShuffleTest extends AnyFlatSpec with Matchers with LocalSpark with
   it should "correctly work with skewed partitions in rebalance scenario" in withSparkSession(
     Map("spark.shuffle.compress" -> "false")
   ) { _spark =>
-    import _spark.implicits._
+    val sqlImplicits = SparkAdapter.instance.sparkImplicits(_spark)
+    import sqlImplicits._
     val nRows = 1000
     val df = generateKeyValueDataframe(_spark, nRows, 90, Some(200))
 
@@ -202,7 +209,8 @@ class YTsaurusShuffleTest extends AnyFlatSpec with Matchers with LocalSpark with
     Map("spark.ytsaurus.client.provider.class" ->
       "org.apache.spark.shuffle.ytsaurus.YTsaurusShuffleTest$BogusYtClientProvider")
   ) { _spark =>
-    import _spark.implicits._
+    val sqlImplicits = SparkAdapter.instance.sparkImplicits(_spark)
+    import sqlImplicits._
     val df = (1 to 10000).toDF("id")
     val result = df.groupBy($"id" % 11).count().collect()
 

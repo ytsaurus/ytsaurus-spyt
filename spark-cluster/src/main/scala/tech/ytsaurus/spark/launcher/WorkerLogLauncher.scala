@@ -15,6 +15,8 @@ import java.nio.file.{Files, Path}
 import java.time.{Duration, ZoneOffset}
 import scala.collection.mutable
 
+import scala.jdk.CollectionConverters._
+
 object WorkerLogLauncher extends VanillaLauncher {
   private val log = LoggerFactory.getLogger(getClass)
 
@@ -107,7 +109,7 @@ class LogServiceRunnable(workerLogConfig: WorkerLogConfig)(implicit yt: Compound
   private[launcher] def init(): Unit = {
     YtWrapper.createDir(workerLogConfig.tablesPath, None, ignoreExisting = true)
     log.info(s"Creating meta table at ${getMetaPath(workerLogConfig.tablesPath)} with additionalTableOptions: ${workerLogConfig.additionalTableOptions}")
-    YtWrapper.createDynTableAndMount(getMetaPath(workerLogConfig.tablesPath), metaSchema, workerLogConfig.additionalTableOptions)
+    YtWrapper.createDynTableAndMount(getMetaPath(workerLogConfig.tablesPath), metaSchema, workerLogConfig.additionalTableOptions.asJava)
   }
 
   override def run(): Unit = {

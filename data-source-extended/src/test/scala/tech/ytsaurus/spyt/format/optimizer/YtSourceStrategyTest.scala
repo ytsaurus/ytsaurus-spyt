@@ -1,7 +1,7 @@
 package tech.ytsaurus.spyt.format.optimizer
 
 import org.apache.spark.sql.Row
-import org.apache.spark.sql.execution.adaptive.AdaptiveSparkPlanExec
+import org.apache.spark.sql.execution.adaptive.{AdaptiveSparkPlanExec, QueryStageExec}
 import org.apache.spark.sql.execution.{FileSourceScanExec, SparkPlan}
 import org.apache.spark.sql.yt.YtSourceScanExec
 import org.mockito.scalatest.MockitoSugar
@@ -35,7 +35,12 @@ class YtSourceStrategyTest extends AnyFlatSpec with Matchers with LocalSpark wit
   private def collectScanNodes(plan: SparkPlan): Seq[SparkPlan] = {
     val unwrapped = plan match {
       case adaptive: AdaptiveSparkPlanExec =>
-        adaptive.executedPlan
+        val resultPlan = adaptive.executedPlan
+        if (SparkVersionUtils.greaterThanOrEqual("4.0.0")) {
+          resultPlan.asInstanceOf[QueryStageExec].plan
+        } else {
+          resultPlan
+        }
       case other => other
     }
     unwrapped.collect {

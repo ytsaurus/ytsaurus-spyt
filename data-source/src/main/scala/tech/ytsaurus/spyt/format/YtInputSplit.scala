@@ -53,7 +53,7 @@ case class YtInputSplit(file: YtPartitionedFile, schema: StructType,
         ytLog.warn("YtInputSplit pushed filters with more than one key column", logMessageInfo ++
           Map("union" -> filterPushdownConfig.unionEnabled.toString, "ypath" -> res.toString))
       }
-      if (pushedFilters.map.nonEmpty) {
+      if (!pushedFilters.map.isEmpty) {
         ytLog.logYt("YtInputSplit pushed filters to ypath",
           logMessageInfo ++ Map("union" -> union.toString, "ypath" -> res.toString),
           level = if (file.delegate.isDynamic) Level.WARN else Level.INFO
@@ -86,10 +86,10 @@ object YtInputSplit {
             // Filters selects no data.
             Seq(emptyRange)
           } else {
-            val begin = TuplePoint(beginKey.map(ExpressionTransformer.nodeToPoint))
+            val begin = TuplePoint(beginKey.map(ExpressionTransformer.nodeToPoint).toSeq)
             // Otherwise, empty end key will be recognized like -infinity.
             val end = if (endKey.nonEmpty) {
-              TuplePoint(endKey.map(ExpressionTransformer.nodeToPoint))
+              TuplePoint(endKey.map(ExpressionTransformer.nodeToPoint).toSeq)
             } else {
               TuplePoint(Seq(PInfinity()))
             }
@@ -111,7 +111,7 @@ object YtInputSplit {
         }
     }
 
-    ypath.ranges(newRanges : _*)
+    ypath.ranges(newRanges.toSeq : _*)
   }
 
   private[format] def getCriteriaSeq(single: Boolean, pushedFilters: SegmentSet,
@@ -164,17 +164,17 @@ object YtInputSplit {
                                             (implicit ytLog: YtLogger = YtLogger.noop): List[List[(String, Segment)]] = {
     keys match {
       case headKey :: tailKeys =>
-        filterSegments.map.get(headKey) match {
-          case None =>
-            recursiveGetFilterSegmentsImpl(filterSegments, tailKeys, pathCountLimit, result)
-          case Some(segments) =>
-            if (segments.size * result.size > pathCountLimit) {
-              ytLog.debug(s"YtInputSplit got more than ${pathCountLimit} segments and stopped")
-              result.map(_.reverse)
-            } else {
-              recursiveGetFilterSegmentsImpl(filterSegments, tailKeys, pathCountLimit,
-                result.flatMap(res => segments.map((headKey, _) +: res)))
-            }
+        if (filterSegments.map.containsKey(headKey)) {
+          val segments = filterSegments.map.get(headKey)
+          if (segments.size * result.size > pathCountLimit) {
+            ytLog.debug(s"YtInputSplit got more than ${pathCountLimit} segments and stopped")
+            result.map(_.reverse)
+          } else {
+            recursiveGetFilterSegmentsImpl(filterSegments, tailKeys, pathCountLimit,
+              result.flatMap(res => segments.map((headKey, _) +: res)))
+          }
+        } else {
+          recursiveGetFilterSegmentsImpl(filterSegments, tailKeys, pathCountLimit, result)
         }
       case Nil =>
         result.map(_.reverse)

@@ -18,6 +18,7 @@ import org.apache.spark.sql.{SQLContext, SparkSession}
 import org.apache.spark.util.SerializableConfiguration
 import org.slf4j.LoggerFactory
 import tech.ytsaurus.client.CompoundClient
+import tech.ytsaurus.spyt.SparkAdapter
 import tech.ytsaurus.spyt.common.utils.{ExpressionTransformer, YtReadingUtils}
 import tech.ytsaurus.spyt.format.YtPartitionedFileDelegate.YtPartitionedFile
 import tech.ytsaurus.spyt.format._
@@ -52,7 +53,7 @@ class YtFileFormat extends FileFormat with DataSourceRegister with StreamSourceP
     import tech.ytsaurus.spyt.wrapper.config._
     val ytClientConf = ytClientConfiguration(hadoopConf)
 
-    val sqlConf = sparkSession.sqlContext.conf
+    val sqlConf = SparkAdapter.instance.getSQLConf(sparkSession.sqlContext)
     val arrowEnabledValue = YtReaderOptions.arrowEnabled(options, sqlConf)
     val optimizedForScanValue = YtReaderOptions.optimizedForScan(options)
     val fullReadAllowedValue = YtReaderOptions.fullReadAllowed(options)
@@ -141,7 +142,7 @@ class YtFileFormat extends FileFormat with DataSourceRegister with StreamSourceP
   }
 
   override def supportBatch(sparkSession: SparkSession, dataSchema: StructType): Boolean = {
-    YtReaderOptions.supportBatch(dataSchema, sparkSession.sqlContext.conf)
+    YtReaderOptions.supportBatch(dataSchema, SparkAdapter.instance.getSQLConf(sparkSession.sqlContext))
   }
 
   override def sourceSchema(sqlContext: SQLContext, schema: Option[StructType], providerName: String,

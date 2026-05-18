@@ -32,7 +32,7 @@ class YTsaurusDistributedWriteTest extends AnyFlatSpec with Matchers with LocalS
     20 -> "at the end"
   ).foreach { case (taskToKill, description) =>
     it should s"deal with final stage retries when stage fails $description" in withSparkSession() { _spark =>
-      failAfter(120 seconds) {
+      failAfter(120.seconds) {
         val df1 = _spark.range(1, 10000, 2)
         val df2 = _spark.range(1, 10000, 3)
 

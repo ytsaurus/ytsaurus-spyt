@@ -7,8 +7,7 @@ import org.apache.spark.ui.JettyUtils
 import org.apache.spark.util.{ShutdownHookManager, Utils}
 import org.apache.spark.{SecurityManager, SparkConf}
 import tech.ytsaurus.spark.launcher.AddressUtils
-
-import javax.servlet.http.HttpServletRequest
+import tech.ytsaurus.spyt.SparkAdapter
 
 class YtHistoryServer(conf: SparkConf,
                       provider: ApplicationHistoryProvider,
@@ -16,10 +15,11 @@ class YtHistoryServer(conf: SparkConf,
                       port: Int) extends HistoryServer(conf, provider, securityManager, port) {
 
   override def initialize(): Unit = {
-    val ytLogPage = new YtLogPage(conf)
-    attachPage(ytLogPage)
+    val ytLogPageDelegate = new YtLogPageDelegateImpl(conf)
+    attachPage(SparkAdapter.instance.createYtLogPage(ytLogPageDelegate))
 
-    val servletParams: JettyUtils.ServletParams[String] = (request: HttpServletRequest) => ytLogPage.renderLog(request)
+    val servletParams: JettyUtils.ServletParams[String] =
+      SparkAdapter.instance.createServletParams(ytLogPageDelegate).asInstanceOf[JettyUtils.ServletParams[String]]
 
     // This workaround via reflection is needed because jetty is shaded in Spark,
     // and we can't compile this class in SPYT using shaded classes
@@ -49,8 +49,7 @@ object YtHistoryServer extends Logging {
     initSecurity()
     val securityManager = createSecurityManager(conf)
 
-    val providerName = conf.get(History.PROVIDER)
-      .getOrElse(classOf[FsHistoryProvider].getName)
+    val providerName = SparkAdapter.instance.getHistoryProviderName(conf)
     val provider = Utils.classForName[ApplicationHistoryProvider](providerName)
       .getConstructor(classOf[SparkConf])
       .newInstance(conf)

@@ -1,6 +1,6 @@
 package tech.ytsaurus.spyt.format.types
 
-import org.apache.spark.sql.{DataFrame, Row, SparkSqlTestHelper}
+import org.apache.spark.sql.{DataFrame, Row}
 import org.apache.spark.sql.functions._
 import org.apache.spark.sql.types.{LongType, Metadata, StringType, StructField}
 import org.apache.spark.sql.spyt.types.UInt64Support.{fromStringUdf, toStringUdf}
@@ -17,7 +17,8 @@ import tech.ytsaurus.spyt.wrapper.YtWrapper
 class UInt64Test extends AnyFlatSpec with Matchers with LocalSpark with TmpDir with TestUtils {
   behavior of "YtDataSource"
 
-  import spark.implicits._
+  private val sqlImplicits = SparkAdapter.instance.sparkImplicits(spark)
+  import sqlImplicits._
 
   private def createSampleTable(): Unit = {
     val tableSchema = TableSchema.builder()
@@ -72,7 +73,7 @@ class UInt64Test extends AnyFlatSpec with Matchers with LocalSpark with TmpDir w
 
     val df = spark.read.yt(tmpPath)
 
-    val result = SparkSqlTestHelper.showString(df, 6)
+    val result = SparkAdapter.instance.dfShowString(df, 6, 20)
     val expected =
       """|+--------------------+-------+
          ||                  id|  value|
@@ -241,9 +242,9 @@ class UInt64Test extends AnyFlatSpec with Matchers with LocalSpark with TmpDir w
       .toDF("a")
 
     val res = df
-      .withColumn("a", 'a.cast(LongType))
-      .withColumn("a", 'a + 1)
-      .withColumn("a", 'a.cast(UInt64Type))
+      .withColumn("a", $"a".cast(LongType))
+      .withColumn("a", $"a" + 1)
+      .withColumn("a", $"a".cast(UInt64Type))
 
     res.collect() should contain theSameElementsAs Seq(
       Row(UInt64Long(2L)),
@@ -269,7 +270,7 @@ class UInt64Test extends AnyFlatSpec with Matchers with LocalSpark with TmpDir w
     val df2 = Seq(UInt64Long(1L) -> "a2", UInt64Long(2L) -> "b2", UInt64Long(3L) -> "c2").toDF("a", "c")
 
     val result = df2.join(df1, Seq("a"), "outer")
-    result.collect() should contain theSameElementsAs Seq(
+    result.select($"a".cast(StringType), $"c", $"b").collect() should contain theSameElementsAs Seq(
       Row("1", "a2", "a1"),
       Row("2", "b2", "b1"),
       Row("3", "c2", null)

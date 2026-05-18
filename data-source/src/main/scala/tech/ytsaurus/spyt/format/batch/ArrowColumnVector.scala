@@ -182,13 +182,13 @@ class ArrowColumnVector(dataType: IndexedDataType,
   }
 
   private abstract class BaseLongAccessor extends ArrowVectorAccessor {
-    override final def getBoolean(rowId: Int): Boolean = getLong(rowId) != 0L
+    override final def getBoolean(rowId: Int): Boolean = this.getLong(rowId) != 0L
 
-    override final def getFloat(rowId: Int): Float = getLong(rowId).toFloat
+    override final def getFloat(rowId: Int): Float = this.getLong(rowId).toFloat
 
-    override final def getDouble(rowId: Int): Double = getLong(rowId).toDouble
+    override final def getDouble(rowId: Int): Double = this.getLong(rowId).toDouble
 
-    override final def getUTF8String(rowId: Int): UTF8String = UTF8String.fromString(getLong(rowId).toString)
+    override final def getUTF8String(rowId: Int): UTF8String = UTF8String.fromString(this.getLong(rowId).toString)
   }
 
   private case class ByteAccessor(keys: Option[BaseIntVector], values: TinyIntVector) extends BaseLongAccessor {
@@ -242,11 +242,11 @@ class ArrowColumnVector(dataType: IndexedDataType,
   }
 
   private abstract class BaseDoubleAccessor extends ArrowVectorAccessor {
-    override final def getLong(rowId: Int): Long = getDouble(rowId).toLong
+    override final def getLong(rowId: Int): Long = this.getDouble(rowId).toLong
 
-    override final def getInt(rowId: Int): Int = getDouble(rowId).toInt
+    override final def getInt(rowId: Int): Int = this.getDouble(rowId).toInt
 
-    override final def getUTF8String(rowId: Int): UTF8String = UTF8String.fromString(getDouble(rowId).toString)
+    override final def getUTF8String(rowId: Int): UTF8String = UTF8String.fromString(this.getDouble(rowId).toString)
   }
 
   private case class FloatAccessor(keys: Option[BaseIntVector], values: Float4Vector) extends BaseDoubleAccessor {
@@ -261,7 +261,7 @@ class ArrowColumnVector(dataType: IndexedDataType,
 
   private case class DecimalAccessor(keys: Option[BaseIntVector], values: DecimalVector) extends ArrowVectorAccessor {
     override final def getDecimal(rowId: Int, precision: Int, scale: Int): Decimal = {
-      if (isNullAt(rowId)) {
+      if (this.isNullAt(rowId)) {
         null
       } else {
         Decimal.apply(values.getObject(id(rowId)), precision, scale)

@@ -17,6 +17,7 @@ import tech.ytsaurus.ysontree.{YTreeBuilder, YTreeNode, YTreeTextSerializer}
 import java.nio.ByteBuffer
 import java.nio.file.Paths
 import java.time.Duration
+import java.util.{Map => JMap}
 import scala.annotation.tailrec
 import scala.jdk.CollectionConverters._
 
@@ -44,7 +45,7 @@ trait YtTableUtils {
   }
 
   def createTable(path: String,
-    options: Map[String, YTreeNode],
+    options: JMap[String, YTreeNode],
     transaction: Option[String],
     ignoreExisting: Boolean)
     (implicit yt: CompoundClient): Unit = {
@@ -52,7 +53,7 @@ trait YtTableUtils {
     val request = CreateNode.builder()
       .setPath(YPath.simple(formatPath(path)))
       .setType(CypressNodeType.TABLE)
-      .setAttributes(options.asJava)
+      .setAttributes(options)
       .setIgnoreExisting(ignoreExisting)
       .optionalTransaction(transaction)
     yt.createNode(request).join()

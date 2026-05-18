@@ -1,7 +1,14 @@
-from pyspark.sql.column import _to_java_column, Column
+from pyspark.sql.column import Column
 from pyspark.sql import DataFrame
 from pyspark.sql.functions import lit
 from pyspark.sql import SparkSession
+
+from .utils import check_spark_version
+
+if check_spark_version(less_than="4.0.0"):
+    from pyspark.sql.column import _to_java_column
+else:
+    from pyspark.sql.classic.column import _to_java_column
 
 
 def join_with_hot_key_null(right, key, joinType, condition=None):

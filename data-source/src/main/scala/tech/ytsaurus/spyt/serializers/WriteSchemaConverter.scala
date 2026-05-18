@@ -12,6 +12,8 @@ import tech.ytsaurus.spyt.types.YTsaurusTypes
 import tech.ytsaurus.spyt.wrapper.config.{OptionsConf, SparkYtHadoopConfiguration}
 import tech.ytsaurus.ysontree.{YTree, YTreeNode}
 
+import java.util.stream.Collectors
+import java.util.{Arrays => JArrays, List => JList}
 import scala.jdk.CollectionConverters._
 
 class WriteSchemaConverter(
@@ -21,21 +23,29 @@ class WriteSchemaConverter(
                           ) {
   private def ytLogicalTypeV3Variant(struct: StructType): YtLogicalType = {
     if (isVariantOverTuple(struct)) {
-      YtLogicalType.VariantOverTuple {
-        struct.fields.map(tF =>
+      val fields: JList[(YtLogicalType, Metadata)] = JArrays.stream(struct.fields)
+        .map[(YtLogicalType, Metadata)](tF =>
           (wrapSparkAttributes(ytLogicalTypeV3(tF), tF.nullable, Some(tF.metadata)), tF.metadata))
-      }
+        .collect(Collectors.toList())
+      YtLogicalType.VariantOverTuple(fields)
     } else {
-      YtLogicalType.VariantOverStruct {
-        struct.fields.map(sf => (sf.name.drop(2),
-          wrapSparkAttributes(ytLogicalTypeV3(sf), sf.nullable, Some(sf.metadata)), sf.metadata))
-      }
+      val fields: JList[(String, YtLogicalType, Metadata)] = JArrays.stream(struct.fields)
+        .map[(String, YtLogicalType, Metadata)](sf => (
+          sf.name.drop(2),
+          wrapSparkAttributes(ytLogicalTypeV3(sf), sf.nullable, Some(sf.metadata)),
+          sf.metadata
+        ))
+        .collect(Collectors.toList())
+      YtLogicalType.VariantOverStruct(fields)
     }
   }
 
-  def ytLogicalTypeStruct(structType: StructType): YtLogicalType.Struct = YtLogicalType.Struct {
-    structType.fields.map(sf => (sf.name,
-      wrapSparkAttributes(ytLogicalTypeV3(sf), sf.nullable, Some(sf.metadata)), sf.metadata))
+  def ytLogicalTypeStruct(structType: StructType): YtLogicalType.Struct = {
+    val fields: JList[(String, YtLogicalType, Metadata)] = JArrays.stream(structType.fields)
+      .map[(String, YtLogicalType, Metadata)](sf =>
+        (sf.name, wrapSparkAttributes(ytLogicalTypeV3(sf), sf.nullable, Some(sf.metadata)), sf.metadata))
+      .collect(Collectors.toList())
+    YtLogicalType.Struct(fields)
   }
 
   def ytLogicalTypeV3(structField: StructField): YtLogicalType =
@@ -83,10 +93,11 @@ class WriteSchemaConverter(
     case aT: ArrayType =>
       YtLogicalType.Array(wrapSparkAttributes(ytLogicalTypeV3(aT.elementType), aT.containsNull))
     case sT: StructType if isTuple(sT) =>
-      YtLogicalType.Tuple {
-        sT.fields.map(tF =>
+      val fields: JList[(YtLogicalType, Metadata)] = JArrays.stream(sT.fields)
+        .map[(YtLogicalType, Metadata)](tF =>
           (wrapSparkAttributes(ytLogicalTypeV3(tF.dataType), tF.nullable, Some(tF.metadata)), tF.metadata))
-      }
+        .collect(Collectors.toList())
+      YtLogicalType.Tuple(fields)
     case sT: StructType if isVariant(sT) => ytLogicalTypeV3Variant(sT)
     case sT: StructType => ytLogicalTypeStruct(sT)
     case mT: MapType =>

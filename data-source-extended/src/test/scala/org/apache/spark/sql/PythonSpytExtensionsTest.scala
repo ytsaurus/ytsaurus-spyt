@@ -3,17 +3,18 @@ package org.apache.spark.sql
 import org.apache.spark.api.java.JavaRDD
 import org.apache.spark.api.python.SerDeUtil
 import org.apache.spark.sql.api.python.PythonSQLUtils
-import org.apache.spark.sql.types.{DataType, IntegerType, Metadata, StructField, StructType}
+import org.apache.spark.sql.types.{IntegerType, Metadata, StructField, StructType}
 import org.apache.spark.sql.spyt.types.UInt64Type
-import org.json4s.JsonAST.JString
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
+import tech.ytsaurus.spyt.SparkAdapter
 import tech.ytsaurus.spyt.test.LocalSpark
 import tech.ytsaurus.spyt.types.UInt64Long
 
 
 class PythonSpytExtensionsTest extends AnyFlatSpec with Matchers with LocalSpark {
-  import spark.implicits._
+  private val sqlImplicits = SparkAdapter.instance.sparkImplicits(spark)
+  import sqlImplicits._
 
   "PythonSQLUtils" should "parse dataframe schema from python API containing uint64 type" in {
     PythonSQLUtils.parseDataType("uint64") shouldBe UInt64Type
@@ -22,7 +23,7 @@ class PythonSpytExtensionsTest extends AnyFlatSpec with Matchers with LocalSpark
   }
 
   "DataType" should "parse uint64 data type" in {
-    DataType.parseDataType(JString("uint64")) shouldBe UInt64Type
+    SparkAdapter.instance.parseDataTypeJson("uint64") shouldBe UInt64Type
   }
 
   "SerDeUtil.pythonToJava" should "parse pickled uint64 data" in {
@@ -50,7 +51,7 @@ class PythonSpytExtensionsTest extends AnyFlatSpec with Matchers with LocalSpark
     val rddPickled = spark.sparkContext.parallelize(data).toJavaRDD()
     val javaObjectRdd = SerDeUtil.pythonToJava(rddPickled, batched = true)
     val jrdd = SerDeUtil.toJavaArray(javaObjectRdd).asInstanceOf[JavaRDD[Array[Any]]]
-    val df = spark.applySchemaToPythonRDD(jrdd.rdd, schemaJson)
+    val df = SparkAdapter.instance.applySchemaToPythonRDD(spark, jrdd.rdd, schemaJson)
 
     df.schema.fields.map(_.copy(metadata = Metadata.empty)) should contain theSameElementsInOrderAs Seq(
       StructField("id", IntegerType),

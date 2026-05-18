@@ -13,11 +13,28 @@ import tech.ytsaurus.spyt.patch.annotations.{Applicability, Decorate, DecoratedM
 class StandaloneSubmitRequestServletDecorators {
 
   @DecoratedMethod
+  @Applicability(to = "4.0.0")
   private def buildDriverDescription(request: CreateSubmissionRequest): DriverDescription = {
     val originalDescription = __buildDriverDescription(request)
     val javaOpts = originalDescription.command.javaOpts ++ JavaModuleOptions.defaultModuleOptions().split(" ")
     originalDescription.copy(command = originalDescription.command.copy(javaOpts = javaOpts))
   }
 
+  @DecoratedMethod
+  @Applicability(from = "4.0.0")
+  private[rest] def buildDriverDescription(
+    request: CreateSubmissionRequest,
+    masterUrl: String,
+    masterRestPort: Int): DriverDescription = {
+    val originalDescription = __buildDriverDescription(request, masterUrl, masterRestPort)
+    val javaOpts = originalDescription.command.javaOpts ++ JavaModuleOptions.defaultModuleOptions().split(" ")
+    originalDescription.copy(command = originalDescription.command.copy(javaOpts = javaOpts))
+  }
+
   private def __buildDriverDescription(request: CreateSubmissionRequest): DriverDescription = ???
+  private[rest] def __buildDriverDescription(
+    request: CreateSubmissionRequest,
+    masterUrl: String,
+    masterRestPort: Int): DriverDescription = ???
+
 }

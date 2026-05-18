@@ -8,6 +8,7 @@ import tech.ytsaurus.client.{ApiServiceTransaction, CompoundClient, RetryPolicy}
 import tech.ytsaurus.core.GUID
 import tech.ytsaurus.core.cypress.YPath
 import tech.ytsaurus.core.tables.TableSchema
+import tech.ytsaurus.spyt.utils.CollectionUtils
 import tech.ytsaurus.spyt.wrapper.YtWrapper.createTable
 import tech.ytsaurus.spyt.wrapper.cypress.{YtAttributes, YtCypressUtils}
 import tech.ytsaurus.spyt.wrapper.table.YtTableSettings
@@ -15,7 +16,9 @@ import tech.ytsaurus.ysontree.{YTreeBinarySerializer, YTreeBuilder, YTreeMapNode
 
 import java.io.ByteArrayOutputStream
 import java.time.Duration
+import java.util.{List => JList, Map => JMap}
 import java.util.concurrent.{CompletableFuture, Executors, ThreadFactory, TimeUnit}
+import java.util.stream.Collectors
 import scala.annotation.tailrec
 import scala.collection.mutable
 import scala.concurrent.TimeoutException
@@ -47,30 +50,26 @@ trait YtDynTableUtils {
     }
   }
 
-  def pivotKeysYson(path: YPath)(implicit yt: CompoundClient): Seq[YTreeNode] = {
+  def pivotKeysYson(path: YPath)(implicit yt: CompoundClient): JList[YTreeNode] = {
     log.debug(s"Get pivot keys for $path")
-    val res = yt.getTablePivotKeys(
-        GetTablePivotKeys.builder().setPath(path.justPath().toString).setRepresentKeyAsList(true).build()
-      )
-      .join()
-      .asScala
-    res
+    val req = GetTablePivotKeys.builder().setPath(path.justPath().toString).setRepresentKeyAsList(true).build()
+    yt.getTablePivotKeys(req).join()
   }
 
-  def pivotKeys(path: String)(implicit yt: CompoundClient): Seq[PivotKey] = {
+  def pivotKeys(path: String)(implicit yt: CompoundClient): JList[PivotKey] = {
     pivotKeys(YPath.simple(formatPath(path)))
   }
 
-  def pivotKeys(path: YPath)(implicit yt: CompoundClient): Seq[PivotKey] = {
-    pivotKeysYson(path).map(serialiseYson)
+  def pivotKeys(path: YPath)(implicit yt: CompoundClient): JList[PivotKey] = {
+    pivotKeysYson(path).stream().map[Array[Byte]](serialiseYson).collect(Collectors.toList())
   }
 
-  def keyColumns(path: YPath, transaction: Option[String] = None)(implicit yt: CompoundClient): Seq[String] = {
+  def keyColumns(path: YPath, transaction: Option[String] = None)(implicit yt: CompoundClient): JList[String] = {
     keyColumns(attribute(path, YtAttributes.keyColumns, transaction))
   }
 
-  def keyColumns(attr: YTreeNode): Seq[String] = {
-    attr.asList().asScala.map(_.stringValue())
+  def keyColumns(attr: YTreeNode): JList[String] = {
+    attr.asList().stream().map[String](_.stringValue()).collect(Collectors.toList())
   }
 
   def mountTable(path: String)(implicit yt: CompoundClient): Unit = {
@@ -124,7 +123,7 @@ trait YtDynTableUtils {
     isDynamicTable(path) && !attributes(path, None, Set.empty[String]).get("sorted").exists(_.boolValue())
   }
 
-  def createDynTableAndMountCached(path: String, schema: TableSchema, settings: Map[String, Any] = Map.empty,
+  def createDynTableAndMountCached(path: String, schema: TableSchema, settings: JMap[String, Any] = JMap.of(),
     ignoreExisting: Boolean = true)(implicit yt: CompoundClient): Unit = {
     if (!cachedCreatedTables.contains(path)) {
       createDynTableAndMount(path, schema, settings, ignoreExisting)
@@ -138,7 +137,7 @@ trait YtDynTableUtils {
   private val cachedCreatedTables = mutable.Queue.empty[String]
   private val cachedCreatedTablesMaxSize = 10
 
-  def createDynTableAndMount(path: String, schema: TableSchema, settings: Map[String, Any] = Map.empty,
+  def createDynTableAndMount(path: String, schema: TableSchema, settings: JMap[String, _ <: Any] = JMap.of(),
     ignoreExisting: Boolean = true)(implicit yt: CompoundClient): Unit = {
     val tableExists = exists(path)
     val tabletMounted = tableExists && isMounted(path)
@@ -151,11 +150,14 @@ trait YtDynTableUtils {
     if (!tabletMounted) mountTableSync(path)
   }
 
-  def createDynTable(path: String, schema: TableSchema, settings: Map[String, Any] = Map.empty)(implicit yt: CompoundClient): Unit = {
+  def createDynTable(
+    path: String,
+    schema: TableSchema,
+    settings: JMap[String, _ <: Any] = JMap.of())(implicit yt: CompoundClient): Unit = {
     createTable(path, new YtTableSettings {
       override def ytSchema: YTreeNode = schema.toYTree
 
-      override def optionsAny: Map[String, Any] = settings + ("dynamic" -> "true")
+      override def optionsAny: JMap[String, Any] = CollectionUtils.concatMaps(settings, JMap.of("dynamic", "true"))
     })
   }
 

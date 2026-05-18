@@ -44,7 +44,7 @@ trait VanillaLauncher {
 
 
     if (isProfilingEnabled) {
-      val code = "unzip profiler.zip" !
+      val code = "unzip profiler.zip".!
 
       if (code != 0) {
         throw new IllegalStateException("Failed to unzip profiler")

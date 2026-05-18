@@ -23,11 +23,9 @@ def _parse_version(version):
 
 
 def spark_download_urls(version):
-    minor = _parse_version(version)[1]
-    if minor <= 2:
-        return [f"{SPARK_BASE_URL}/spark-{version}/spark-{version}-bin-hadoop3.2.tgz"]
+    major, minor = _parse_version(version)[:2]
     urls = [f"{SPARK_BASE_URL}/spark-{version}/spark-{version}-bin-hadoop3.tgz"]
-    if minor >= 4:
+    if major == 3 and minor >= 4:
         connect_url = f"{MAVEN_CONNECT_URL}/{version}/spark-connect_2.12-{version}.jar"
         urls.append(connect_url)
     return urls
@@ -41,8 +39,8 @@ def validate_and_check_version(version, offline: bool = False):
     '''
     maj = _parse_version(version)[0]
 
-    if maj != 3:
-        msg = "Spark versions other than 3.X.X are not supported (yet)"
+    if maj != 3 and maj != 4:
+        msg = "Spark versions less than 3.X.X are not supported"
         logger.error(msg)
         raise RuntimeError(msg)
 

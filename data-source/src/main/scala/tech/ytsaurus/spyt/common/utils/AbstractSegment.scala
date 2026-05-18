@@ -1,5 +1,10 @@
 package tech.ytsaurus.spyt.common.utils
 
+import tech.ytsaurus.spyt.utils.CollectionUtils
+
+import java.util.{Map => JMap}
+import scala.jdk.CollectionConverters._
+
 case class AbstractSegment[T <: Ordered[T]](left: T, right: T)
 
 object AbstractSegment {
@@ -31,8 +36,13 @@ object AbstractSegment {
       case (points, segment) =>
         (segment.left, SegmentSide.Begin) +: (segment.right, SegmentSide.End) +: points
     }
-    duplicatedPoints.groupBy { case (point, _) => point }
-      .mapValues(singlePointList => singlePointList.groupBy { case (_, kind) => kind }.mapValues(_.length))
+    val groupedPoints: JMap[T, List[(T, SegmentSide)]] = duplicatedPoints.groupBy(_._1).asJava
+    CollectionUtils.mapValues(groupedPoints, groupSinglePointList[T]).asScala.toMap
+  }
+
+  private def groupSinglePointList[T <: Ordered[T]](singlePointList: List[(T, SegmentSide)]): Map[SegmentSide, Int] = {
+    val groupedByKind = singlePointList.groupBy(_._2).asJava
+    CollectionUtils.mapValues(groupedByKind, (values: List[(T, SegmentSide)]) => values.length).asScala.toMap
   }
 
   private[utils] def calculateCoverage[T <: Ordered[T]](array: Seq[Seq[AbstractSegment[T]]]): Seq[(AbstractSegment[T], Int)] = {

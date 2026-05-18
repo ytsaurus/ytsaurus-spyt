@@ -20,7 +20,8 @@ import java.util.UUID
 
 class YtSortedTableJoinTest extends AnyFlatSpec with Matchers with LocalSpark with TmpDir
   with MockitoSugar with DynTableTestUtils with TestUtils {
-  import spark.implicits._
+  private val sqlImplicits = SparkAdapter.instance.sparkImplicits(spark)
+  import sqlImplicits._
 
   // 1Kb ~ 60 rows with 2 long numbers
   private val conf = Map(

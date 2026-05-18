@@ -9,6 +9,7 @@ import org.apache.spark.sql.execution.streaming.{Offset, Source}
 import org.apache.spark.sql.types.StructType
 import org.apache.spark.sql.{DataFrame, SQLContext}
 import tech.ytsaurus.client.CompoundClient
+import tech.ytsaurus.spyt.SparkAdapter
 import tech.ytsaurus.spyt.format.conf.SparkYtConfiguration.Streaming
 import tech.ytsaurus.spyt.wrapper.YtWrapper
 import tech.ytsaurus.spyt.wrapper.client.{YtClientConfigurationConverter, YtClientProvider}
@@ -126,7 +127,7 @@ class YtStreamingSource(sqlContext: SQLContext, consumerPath: String, queuePath:
         new YtQueueRDD(sqlContext.sparkContext, schema, consumerPath, queuePath, ranges, includeServiceColumns).setName("yt")
       }
     }
-    StreamingUtils.createStreamingDataFrame(sqlContext, rdd, schema)
+    SparkAdapter.instance.createStreamingDataFrame(sqlContext, rdd, schema)
   }
 
   override def commit(end: Offset): Unit = {

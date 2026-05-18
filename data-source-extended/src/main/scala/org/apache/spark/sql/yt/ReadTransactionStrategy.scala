@@ -12,6 +12,7 @@ import org.apache.spark.sql.execution.ui.SparkListenerSQLExecutionEnd
 import org.apache.spark.sql.v2.YtTable
 import org.apache.spark.sql.yt.ReadTransactionStrategy._
 import tech.ytsaurus.client.{ApiServiceTransaction, CompoundClient}
+import tech.ytsaurus.spyt.SparkAdapter
 import tech.ytsaurus.spyt.format.GlobalTransactionUtils
 import tech.ytsaurus.spyt.format.conf.SparkYtConfiguration
 import tech.ytsaurus.spyt.fs.path.YPathEnriched
@@ -39,14 +40,17 @@ class ReadTransactionStrategy(sparkSession: SparkSession) extends Rule[LogicalPl
     plan.transform {
       case relation: DataSourceV2Relation if relation.table.isInstanceOf[YtTable] =>
         val table = relation.table.asInstanceOf[YtTable]
-        relation.copy(table = table.copy(providedDataSchema = Some(table.dataSchema), paths = table.paths.map(path => {
-          val yPathEnriched = ypathEnriched(path)
-          val proxy = yPathEnriched.cluster.getOrElse(configuration.proxy)
-          val transactionListener = listeners.getOrElseUpdate(proxy,
-            new TransactionListener(proxy, sparkSession.sparkContext, configuration, executionId)
-          )
-          transactionListener.lockPath(yPathEnriched).toStringPath
-        })))
+        SparkAdapter.instance.copyDataSourceV2Relation(relation, table.copy(
+          providedDataSchema = Some(table.dataSchema),
+          paths = table.paths.map(path => {
+            val yPathEnriched = ypathEnriched(path)
+            val proxy = yPathEnriched.cluster.getOrElse(configuration.proxy)
+            val transactionListener = listeners.getOrElseUpdate(proxy,
+              new TransactionListener(proxy, sparkSession.sparkContext, configuration, executionId)
+            )
+            transactionListener.lockPath(yPathEnriched).toStringPath
+          })
+        ))
     }
   }
 }

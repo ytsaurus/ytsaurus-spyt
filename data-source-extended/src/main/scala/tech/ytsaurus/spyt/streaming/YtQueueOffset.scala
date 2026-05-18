@@ -6,9 +6,10 @@ import io.circe.parser._
 import io.circe.syntax._
 import tech.ytsaurus.spyt.logging.Logging
 import org.apache.spark.sql.connector.read.streaming
-import org.apache.spark.sql.execution.streaming.{Offset, SerializedOffset}
+import org.apache.spark.sql.execution.streaming.Offset
 import tech.ytsaurus.client.CompoundClient
 import tech.ytsaurus.core.cypress.YPath
+import tech.ytsaurus.spyt.SparkAdapter
 import tech.ytsaurus.spyt.wrapper.Utils.runWithRetry
 import tech.ytsaurus.spyt.wrapper.YtWrapper
 import tech.ytsaurus.spyt.wrapper.dyntable.ConsumerUtils
@@ -38,13 +39,11 @@ object YtQueueOffset extends Logging {
   private implicit val offsetDecoder: Decoder[YtQueueOffset] = deriveDecoder[YtQueueOffset]
 
   def apply(offset: streaming.Offset): YtQueueOffset = offset match {
-    case v: YtQueueOffset => v
-    case sv: SerializedOffset =>
-      decode(sv.json) match {
-        case Left(error) => throw error
-        case Right(value) => value
-      }
-    case _ => throw new IllegalArgumentException("Unsupported offset format")
+    case ytQueueOffset: YtQueueOffset => ytQueueOffset
+    case otherOffset => decode(SparkAdapter.instance.offsetAsJson(otherOffset)) match {
+      case Left(error) => throw error
+      case Right(value) => value
+    }
   }
 
   def max(a: YtQueueOffset, b: YtQueueOffset): YtQueueOffset = if (a >= b) a else b
@@ -71,7 +70,7 @@ object YtQueueOffset extends Logging {
                 throw new IllegalStateException("Unknown error while parsing partition info")
               }
           }
-          YtQueueOffset(cluster, queuePath, SortedMap(partitionSeq: _*))
+          YtQueueOffset(cluster, queuePath, SortedMap(partitionSeq.toSeq: _*))
         },
         maxRetries = 5
       )

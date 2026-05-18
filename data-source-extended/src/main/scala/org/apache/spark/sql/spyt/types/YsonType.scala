@@ -28,8 +28,6 @@ class YsonType extends UserDefinedType[YsonBinary] {
   }
 }
 
-case object YsonType extends YsonType
-
 @SQLUserDefinedType(udt = classOf[YsonType])
 case class YsonBinary(bytes: Array[Byte])
 

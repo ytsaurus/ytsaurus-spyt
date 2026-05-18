@@ -18,14 +18,15 @@ class WireRowBatchReaderTest extends AnyFlatSpec with Matchers with ReadBatchRow
   with YtDistributedReadingTestUtils {
   behavior of "WireRowBatchReaderTest"
 
-  import spark.implicits._
+  private val sqlImplicits = SparkAdapter.instance.sparkImplicits(spark)
+  import sqlImplicits._
 
   testWithDistributedReading("read table in wire row format") { distributedReadingEnabled =>
     val rowCount = 100
     val batchMaxSize = 10
 
     val r = new Random()
-    val data = Seq.fill(rowCount)((r.nextInt, r.nextDouble))
+    val data = Seq.fill(rowCount)((r.nextInt(), r.nextDouble()))
     val df = data.toDF("a", "b")
     df.coalesce(1).write.yt(tmpPath)
 

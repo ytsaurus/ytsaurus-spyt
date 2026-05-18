@@ -4,7 +4,7 @@ import org.apache.spark.sql.internal.SQLConf.PARALLEL_PARTITION_DISCOVERY_THRESH
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.prop.TableDrivenPropertyChecks
-import tech.ytsaurus.spyt.YtDistributedReadingTestUtils
+import tech.ytsaurus.spyt.{SparkAdapter, YtDistributedReadingTestUtils}
 import tech.ytsaurus.spyt.format.conf.SparkYtConfiguration
 import tech.ytsaurus.spyt.test._
 import tech.ytsaurus.spyt.wrapper.YtWrapper.createTransaction
@@ -15,7 +15,8 @@ import java.time.Duration
 class DynamicTableReadTest extends AnyFlatSpec with Matchers with LocalSpark with TmpDir with TestUtils
   with TableDrivenPropertyChecks with DynTableTestUtils with YtDistributedReadingTestUtils {
 
-  import spark.implicits._
+  private val sqlImplicits = SparkAdapter.instance.sparkImplicits(spark)
+  import sqlImplicits._
   import tech.ytsaurus.spyt._
 
   testWithDistributedReading("read dynamic table") { _ =>
@@ -41,7 +42,7 @@ class DynamicTableReadTest extends AnyFlatSpec with Matchers with LocalSpark wit
     val tablesCount = 3
     val tablePaths = (1 to tablesCount).map(i => s"$tmpPath/$i")
     val startTs = yt.generateTimestamps().join().getValue
-    tablePaths.par.foreach(prepareTestTable(_, testData, Seq(Seq(), Seq(3))))
+    tablePaths.foreach(prepareTestTable(_, testData, Seq(Seq(), Seq(3))))
     val expectedResult = testData ++ testData ++ testData
 
     withConf(PARALLEL_PARTITION_DISCOVERY_THRESHOLD, "2") {

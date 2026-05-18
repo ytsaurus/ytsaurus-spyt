@@ -116,8 +116,8 @@ class UnversionedRowsetDeserializerTest extends AnyFlatSpec with Matchers {
     val result = deserialize(sparkSchema, rowset)
     val castedResult = result.map {
       case Seq(map: MapData, array: ArrayData) =>
-        val castedMap = map.keyArray.toSeq[UTF8String](StringType).map(_.toString.toInt)
-          .zip(map.valueArray.toSeq[String](StringType)).toMap
+        val castedMap = map.keyArray().toSeq[UTF8String](StringType).map(_.toString.toInt)
+          .zip(map.valueArray().toSeq[String](StringType)).toMap
         val castedArray = array.toSeq[Double](DoubleType)
         (castedMap, castedArray)
     }

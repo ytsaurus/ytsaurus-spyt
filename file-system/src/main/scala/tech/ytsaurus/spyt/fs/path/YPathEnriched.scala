@@ -6,12 +6,14 @@ import tech.ytsaurus.core.GUID
 import tech.ytsaurus.core.cypress.{RichYPath, YPath}
 import tech.ytsaurus.spyt.fs.path.YPathEnriched._
 import tech.ytsaurus.spyt.wrapper.YtWrapper
-import tech.ytsaurus.ysontree.YTreeBuilder
+import tech.ytsaurus.ysontree.{YTreeBuilder, YTreeNode}
 
 import java.util.concurrent.CompletableFuture
+import java.util.function.{Function => JFunction}
+import java.util.stream.Collectors
+import java.util.{Map => JMap}
 import scala.annotation.tailrec
 import scala.collection.immutable.ListMap
-import scala.collection.mutable
 import scala.jdk.CollectionConverters._
 
 case class YPathEnriched(path: Path, attributes: Map[String, String] = Map.empty) extends Serializable {
@@ -21,15 +23,26 @@ case class YPathEnriched(path: Path, attributes: Map[String, String] = Map.empty
     }
   }
 
-  def toPath: Path = attributes.foldLeft(path) { case (p, (k, v)) => p.child(s"@${k}_$v") }
+  def toPath: Path = {
+    var pathWithAttributes = path
+    attributes.foreach { case (k, v) => pathWithAttributes = pathWithAttributes.child(s"@${k}_$v") }
+    pathWithAttributes
+  }
 
   def toStringPath: String = toPath.toString
 
   def toYPath: YPath = {
     val yPath = node.map(n => YPath.objectRoot(GUID.valueOf(n))).getOrElse(YPath.simple(YtWrapper.formatPath(path.toString)))
     val tsYPath = timestamp.filter(_ != -1).map(yPath.withTimestamp).getOrElse(yPath)
-    val attrs = attributes.filterKeys(!RESERVED_ATTRIBUTES.contains(_)).mapValues(new YTreeBuilder().value(_).build())
-    tsYPath.withAdditionalAttributes(attrs.asJava)
+    val keyMapper: JFunction[JMap.Entry[String, String], String] = (e: JMap.Entry[String, String]) => e.getKey
+    val valueMapper: JFunction[JMap.Entry[String, String], YTreeNode] =
+      (e: JMap.Entry[String, String]) => new YTreeBuilder().value(e.getValue).build()
+    val ypathAttributes: JMap[String, YTreeNode] = attributes.asJava
+      .entrySet()
+      .stream()
+      .filter(e => !RESERVED_ATTRIBUTES.contains(e.getKey))
+      .collect(Collectors.toMap[JMap.Entry[String, String], String, YTreeNode](keyMapper, valueMapper))
+    tsYPath.withAdditionalAttributes(ypathAttributes)
   }
 
   def toStringYPath: String = toYPath.toStableString
@@ -88,7 +101,7 @@ object YPathEnriched {
   def fromPath(path: Path, attrs: Seq[(String, String)] = Seq.empty): YPathEnriched = {
     if (path.getName.startsWith("@")) {
       val attr = path.getName.drop(1).split("_", 2)
-      fromPath(path.getParent, attrs :+ (attr.head -> attr.last))
+      fromPath(path.getParent, attrs :+ (attr.head, attr.last))
     } else {
       // NB: It's important to save order of attributes
       YPathEnriched(path, ListMap(attrs.reverse: _*))
@@ -101,12 +114,13 @@ object YPathEnriched {
     val path = if (p.contains(":/")) p.split(":/", 2).last else p
     val richP = RichYPath.fromString(path)
     val strP = YtWrapper.correctSlashes(richP.justPath().toStableString, 1)
-    val attrs = mutable.ListMap[String, String]()
     val cluster = richP.getAdditionalAttribute("cluster")
-    if (cluster.isPresent) {
-      attrs("cluster") = cluster.get().stringValue()
+    val attrs: Map[String, String] = if (cluster.isPresent) {
+      Map("cluster" -> cluster.get().stringValue())
+    } else {
+      Map.empty
     }
-    YPathEnriched(new Path(scheme, null, strP), attrs.toMap)
+    YPathEnriched(new Path(scheme, null, strP), attrs)
   }
 }
 

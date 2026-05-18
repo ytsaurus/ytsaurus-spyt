@@ -3,8 +3,10 @@ package tech.ytsaurus.spyt.wrapper.table
 import tech.ytsaurus.core.tables.TableSchema
 import tech.ytsaurus.ysontree.YTreeNode
 
-class BaseYtTableSettings(schema: TableSchema, rawOptions: Map[String, Any] = Map.empty) extends YtTableSettings {
+import java.util.{Map => JMap}
+
+class BaseYtTableSettings(schema: TableSchema, rawOptions: JMap[String, Any] = JMap.of()) extends YtTableSettings {
   override def ytSchema: YTreeNode = schema.toYTree
 
-  override def optionsAny: Map[String, Any] = rawOptions
+  override def optionsAny: JMap[String, Any] = rawOptions
 }

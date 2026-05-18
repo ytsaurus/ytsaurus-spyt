@@ -2,8 +2,10 @@ plugins {
     id("tech.ytsaurus.spyt.common.plugin")
 }
 
-dependencies {
-    api(project(":yt-wrapper"))
+val ytWrapper = ":yt-wrapper_${extra["scalaVersion"]}"
 
-    testImplementation(project(mapOf("path" to ":yt-wrapper", "configuration" to "testArtifacts")))
+dependencies {
+    api(project(ytWrapper))
+
+    testImplementation(project(mapOf("path" to ytWrapper, "configuration" to "testArtifacts")))
 }

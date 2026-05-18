@@ -11,6 +11,7 @@ import tech.ytsaurus.spyt.patch.annotations.{Applicability, Decorate, DecoratedM
 object DataTypeProtoConverterDecorators {
 
   @DecoratedMethod
+  @Applicability(to = "4.1.0")
   def toConnectProtoType(t: DataType): proto.DataType = t match {
     case ts.uInt64DataType => ProtoDataTypes.LongType
     case ts.ysonDataType => ProtoDataTypes.BinaryType
@@ -19,4 +20,13 @@ object DataTypeProtoConverterDecorators {
 
   def __toConnectProtoType(t: DataType): proto.DataType = ???
 
+  @DecoratedMethod
+  @Applicability(from = "4.1.0")
+  private def toConnectProtoTypeInternal(t: DataType, bytesToBinary: Boolean): proto.DataType = t match {
+    case ts.uInt64DataType => ProtoDataTypes.LongType
+    case ts.ysonDataType => ProtoDataTypes.BinaryType
+    case _ => __toConnectProtoTypeInternal(t, bytesToBinary)
+  }
+
+  private def __toConnectProtoTypeInternal(t: DataType, bytesToBinary: Boolean): proto.DataType = ???
 }

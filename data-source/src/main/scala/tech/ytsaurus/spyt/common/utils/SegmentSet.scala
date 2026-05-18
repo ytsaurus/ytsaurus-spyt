@@ -2,6 +2,12 @@ package tech.ytsaurus.spyt.common.utils
 
 import org.apache.spark.sql.sources.{And, Filter, GreaterThanOrEqual, In, LessThanOrEqual, Or}
 import Segment.Segment
+import tech.ytsaurus.spyt.utils.CollectionUtils
+
+import java.util.function.{Function => JFunction}
+import java.util.stream.Collectors
+import java.util.{Map => JMap, Set => JSet}
+import scala.jdk.CollectionConverters._
 
 object Segment {
   type Segment = AbstractSegment[Point]
@@ -25,7 +31,7 @@ object Segment {
     pointFilters ++ segmentFilters
   }
 
-  private [utils]def segmentToFilter(varName: String, segment: Segment): Option[Filter] = segment match {
+  private[utils] def segmentToFilter(varName: String, segment: Segment): Option[Filter] = segment match {
     case Segment(MInfinity(), PInfinity()) => None
     case Segment(MInfinity(), rv: RealValue[_]) => Some(LessThanOrEqual(varName, rv.canonicalValue))
     case Segment(rv: RealValue[_], PInfinity()) => Some(GreaterThanOrEqual(varName, rv.canonicalValue))
@@ -35,14 +41,18 @@ object Segment {
   }
 }
 
-case class SegmentSet(map: Map[String, Seq[Segment]]) {
+case class SegmentSet(map: JMap[String, Seq[Segment]]) {
   def simplifySegments: SegmentSet = {
-    SegmentSet(map.mapValues(segments => List(Segment(segments.head.left, segments.last.right)))
-      .filter { case (_, segments) => segments != List(MInfinity(), PInfinity()) })
+    val mapped =
+      CollectionUtils.mapValues(map, (segments: Seq[Segment]) => Seq(Segment(segments.head.left, segments.last.right)))
+    val filtered = CollectionUtils.filterMap(mapped,
+      (entry: JMap.Entry[String, Seq[Segment]]) => entry.getValue != Seq(MInfinity(), PInfinity())
+    )
+    SegmentSet(filtered)
   }
 
   def toFilters: Array[Filter] = {
-    map.flatMap {
+    map.asScala.flatMap {
       case (varName, segments) =>
         Segment.toFilters(varName, segments).reduceOption(Or)
     }.toArray
@@ -50,22 +60,33 @@ case class SegmentSet(map: Map[String, Seq[Segment]]) {
 }
 
 object SegmentSet {
-  def apply(): SegmentSet = new SegmentSet(Map.empty[String, Seq[Segment]])
+  def apply(): SegmentSet = new SegmentSet(JMap.of())
 
-  def apply(columnName: String, segments: Segment*): SegmentSet = new SegmentSet(Map((columnName, segments)))
+  def apply(columnName: String, segments: Segment*): SegmentSet = new SegmentSet(JMap.of(columnName, segments.toSeq))
 
-  // .map(identity) https://stackoverflow.com/questions/32900862/map-can-not-be-serializable-in-scala
-  def union(array: SegmentSet*): SegmentSet = {
-    SegmentSet(mergeByColumn(array).mapValues(AbstractSegment.union).map(identity))
+  def union(array: SegmentSet*): SegmentSet = merge(array, AbstractSegment.union)
+
+  def intercept(array: SegmentSet*): SegmentSet = merge(array, AbstractSegment.intercept)
+
+  private def merge(array: Seq[SegmentSet], operation: Seq[Seq[Segment]] => Seq[Segment]): SegmentSet = {
+    val mergedMap = mergeByColumn(array)
+    val segmentMap: JMap[String, Seq[Segment]] =
+      CollectionUtils.mapValues(mergedMap, (values: Seq[Seq[Segment]]) => operation(values))
+    SegmentSet(segmentMap)
   }
 
-  def intercept(array: SegmentSet*): SegmentSet = {
-    SegmentSet(mergeByColumn(array).mapValues(AbstractSegment.intercept).map(identity))
-  }
+  private def mergeByColumn(array: Seq[SegmentSet]): JMap[String, Seq[Seq[Segment]]] = {
+    val arrayKeys = array.map(x => x.map.keySet).asJava
+    val keys: JSet[String] = arrayKeys.stream().flatMap(s => s.stream()).collect(Collectors.toSet())
+    val keyMapper: JFunction[String, String] = (key: String) => key
+    val valueMapper: JFunction[String, Seq[Seq[Segment]]] = (key: String) => array.asJava
+      .stream()
+      .filter(_.map.containsKey(key))
+      .map[Seq[Segment]](a => a.map.get(key))
+      .collect(Collectors.toList())
+      .asScala
+      .toSeq
 
-  private def mergeByColumn(array: Seq[SegmentSet]): Map[String, Seq[Seq[Segment]]] = {
-    val arrayKeys = array.map(x => x.map.keySet)
-    val keys = arrayKeys.reduceOption(_.union(_)).getOrElse(Set.empty[String])
-    keys.map(x => x -> array.flatMap(a => a.map.get(x))).toMap
+    keys.stream().collect(Collectors.toMap[String, String, Seq[Seq[Segment]]](keyMapper, valueMapper))
   }
 }

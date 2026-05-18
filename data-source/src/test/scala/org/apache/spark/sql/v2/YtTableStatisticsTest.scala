@@ -15,7 +15,8 @@ import tech.ytsaurus.spyt.{SparkAdapter, YtDistributedReadingTestUtils, YtReader
 class YtTableStatisticsTest extends AnyFlatSpec with Matchers with LocalSpark with TmpDir with MockitoSugar
    with YtDistributedReadingTestUtils {
 
-  import spark.implicits._
+  private val sqlImplicits = SparkAdapter.instance.sparkImplicits(spark)
+  import sqlImplicits._
 
   protected val conf = Map(
     WHOLESTAGE_CODEGEN_ENABLED.key -> "false",

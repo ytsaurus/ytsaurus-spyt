@@ -20,13 +20,12 @@ import tech.ytsaurus.spyt.wrapper.table.OptimizeMode
 import tech.ytsaurus.ysontree.YTree
 import tech.ytsaurus.spyt.format.conf.{SparkYtConfiguration => SparkSettings}
 
-import scala.collection.mutable
-
 
 class YtSparkSQLTest extends AnyFlatSpec with Matchers with LocalSpark with TmpDir with TestUtils with MockitoSugar
   with TableDrivenPropertyChecks with DynTableTestUtils with YtDistributedReadingTestUtils {
 
-  import spark.implicits._
+  private val sqlImplicits = SparkAdapter.instance.sparkImplicits(spark)
+  import sqlImplicits._
 
   private val atomicSchema = TableSchema.builder()
     .setUniqueKeys(false)
@@ -408,7 +407,7 @@ class YtSparkSQLTest extends AnyFlatSpec with Matchers with LocalSpark with TmpD
     val df = spark.sql("SELECT col1, col3, cast(array(NULL) as array<int>) FROM VALUES (1, 2, 3)")
     val result = df.collect()
 
-    result should contain theSameElementsAs Seq(Row(1, 3, mutable.WrappedArray.make(Array(null))))
+    result should contain theSameElementsAs Seq(Row(1, 3, Seq(null)))
   }
 
   testWithDistributedReading("create table") { _ =>
@@ -552,7 +551,7 @@ class YtSparkSQLTest extends AnyFlatSpec with Matchers with LocalSpark with TmpD
 
   testWithDistributedReading("count io statistics") { _ =>
     val customPath = "ytTable:/" + tmpPath
-    val data = Stream.from(1).take(1000)
+    val data = 1 to 1000
 
     val store = UtilsWrapper.appStatusStore(spark)
     val stagesBefore = store.stageList(null)

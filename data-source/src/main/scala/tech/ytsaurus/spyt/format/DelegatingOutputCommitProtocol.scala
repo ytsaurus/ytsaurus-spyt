@@ -3,7 +3,7 @@ package tech.ytsaurus.spyt.format
 import org.apache.hadoop.fs.{FileSystem, Path}
 import org.apache.hadoop.mapreduce.{JobContext, TaskAttemptContext}
 import org.apache.spark.{SparkConf, SparkEnv}
-import org.apache.spark.internal.io.FileCommitProtocol
+import org.apache.spark.internal.io.{FileCommitProtocol, FileNameSpec}
 import org.apache.spark.sql.execution.datasources.SQLHadoopMapReduceCommitProtocol
 import tech.ytsaurus.client.CompoundClient
 import tech.ytsaurus.spyt.format.conf.SparkYtConfiguration.Write
@@ -56,8 +56,14 @@ class DelegatingOutputCommitProtocol(jobId: String,
   override def newTaskTempFile(taskContext: TaskAttemptContext, dir: Option[String], ext: String): String =
     delegate.newTaskTempFile(taskContext, dir, ext)
 
+  override def newTaskTempFile(taskContext: TaskAttemptContext, dir: Option[String], spec: FileNameSpec): String =
+    delegate.newTaskTempFile(taskContext, dir, spec)
+
   override def newTaskTempFileAbsPath(taskContext: TaskAttemptContext, absoluteDir: String, ext: String): String =
     delegate.newTaskTempFileAbsPath(taskContext, absoluteDir, ext)
+
+  override def newTaskTempFileAbsPath(context: TaskAttemptContext, absoluteDir: String, spec: FileNameSpec): String =
+    delegate.newTaskTempFileAbsPath(context, absoluteDir, spec)
 
   override def commitTask(taskContext: TaskAttemptContext): FileCommitProtocol.TaskCommitMessage =
     delegate.commitTask(taskContext)

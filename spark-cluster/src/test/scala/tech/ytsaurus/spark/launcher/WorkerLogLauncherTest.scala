@@ -4,13 +4,13 @@ import net.logstash.log4j.JSONEventLayoutV1
 import org.apache.commons.io.FileUtils
 import org.apache.log4j.spi.{LoggingEvent, RootLogger}
 import org.apache.log4j.{FileAppender, Level}
+import org.apache.spark.sql.v2.Utils
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import tech.ytsaurus.client.CompoundClient
 import tech.ytsaurus.client.request.CreateObject
 import tech.ytsaurus.core.cypress.CypressNodeType
 import tech.ytsaurus.spark.launcher.WorkerLogLauncher.WorkerLogConfig
-import tech.ytsaurus.spyt.SparkAdapter
 import tech.ytsaurus.spyt.test.{LocalYtClient, TmpDir}
 import tech.ytsaurus.spyt.wrapper.YtWrapper
 import tech.ytsaurus.spyt.wrapper.model.WorkerLogSchema.getMetaPath
@@ -298,7 +298,7 @@ class WorkerLogLauncherTest extends AnyFlatSpec with LocalYtClient with Matchers
     message: String,
     throwable: Option[String] = None) {
     def toEvent: LoggingEvent = {
-      SparkAdapter.instance.createLoggingEvent(
+      Utils.createLoggingEvent(
         this.getClass.getName,
         new RootLogger(Level.ALL),
         timestamp,

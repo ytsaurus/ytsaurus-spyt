@@ -6,7 +6,7 @@ import org.apache.spark.deploy.ytsaurus.YTsaurusUtils.isShell
 import org.apache.spark.deploy.ytsaurus.{ApplicationArguments, Config, YTsaurusUtils}
 import tech.ytsaurus.spyt.logging.Logging
 import org.apache.spark.internal.config._
-import org.apache.spark.launcher.SparkLauncher
+import org.apache.spark.launcher.{JavaModuleOptions, SparkLauncher}
 import org.apache.spark.resource.ResourceProfile
 import org.apache.spark.rpc.RpcEndpointAddress
 import org.apache.spark.scheduler.cluster.CoarseGrainedSchedulerBackend
@@ -30,6 +30,7 @@ import java.time.Duration
 import java.util.{Locale, Properties}
 import scala.jdk.CollectionConverters._
 import scala.collection.mutable
+import scala.util.Properties.{versionNumberString => scalaVersion}
 import scala.util.Try
 
 
@@ -180,7 +181,7 @@ private[spark] class YTsaurusOperationManager(
       val pattern = conf.get(SECRET_REDACTION_PATTERN)
       key => pattern.findFirstIn(key).isEmpty
     }
-    val sparkJavaOpts = Utils.sparkJavaOpts(conf, filterKey)
+    val sparkJavaOpts = SparkAdapter.instance.sparkJavaOpts(conf, filterKey)
     val secrets = conf.getAll.filter { case (k, _) => !filterKey(k) }.map {
       case (k, v) => k.toUpperCase(Locale.ROOT).replace('.', '_') -> v
     }
@@ -190,7 +191,7 @@ private[spark] class YTsaurusOperationManager(
         + s" ${bashCommand(sparkJavaOpts: _*)}"
         + s""" "-D${Config.DRIVER_OPERATION_ID}=$$YT_OPERATION_ID""""
         + s" $netOptBash"
-        + s" $ytsaurusJavaOptionsBash ${bashCommand(driverOpts ++ splitCommandString(SparkAdapter.instance.defaultModuleOptions()): _*)}"
+        + s" $ytsaurusJavaOptionsBash ${bashCommand(driverOpts ++ splitCommandString(JavaModuleOptions.defaultModuleOptions()): _*)}"
         + s" org.apache.spark.deploy.ytsaurus.DriverWrapper ${bashCommand(appArgs.mainClass)}"
         + s" ${bashCommand(additionalArgs: _*)} ${bashCommand(appArgs.driverArgs: _*)}"
       )
@@ -205,8 +206,10 @@ private[spark] class YTsaurusOperationManager(
 
     val memoryOverheadMiB = conf
       .get(DRIVER_MEMORY_OVERHEAD)
-      .getOrElse(math.max((overheadFactor * driverMemoryMiB).toInt,
-        ResourceProfile.MEMORY_OVERHEAD_MIN_MIB))
+      .getOrElse(math.max(
+        (overheadFactor * driverMemoryMiB).toInt,
+        SparkAdapter.instance.driverMemoryOverheadMinMib(conf)
+      ))
 
     val memoryLimit = (driverMemoryMiB + memoryOverheadMiB) * MIB
 
@@ -249,15 +252,13 @@ private[spark] class YTsaurusOperationManager(
       conf.getInt(DRIVER_PORT.key, DEFAULT_DRIVER_PORT),
       CoarseGrainedSchedulerBackend.ENDPOINT_NAME).toString
 
-    val execResources = ResourceProfile.getResourcesForClusterManager(
-      resourceProfile.id,
-      resourceProfile.executorResources,
+    val execResources = SparkAdapter.instance.getResourcesForClusterManager(
+      resourceProfile,
       MEMORY_OVERHEAD_FACTOR,
       conf,
-      isPythonApp,
-      Map.empty)
+      isPythonApp).asInstanceOf[ResourceProfile.ExecutorResourcesOrDefaults]
 
-    val sparkJavaOpts = Utils.sparkJavaOpts(conf, SparkConf.isExecutorStartupConf)
+    val sparkJavaOpts = SparkAdapter.instance.sparkJavaOpts(conf, SparkConf.isExecutorStartupConf)
 
     val executorOpts = splitCommandString(conf.get(EXECUTOR_JAVA_OPTIONS).getOrElse(""))
 
@@ -435,7 +436,9 @@ private[spark] object YTsaurusOperationManager extends Logging {
       val home = "."
       val sparkHome = if (isSquashFs) "/usr/lib/spark" else s"$home/spark"
       val spytHome = if (isSquashFs) "/usr/lib/spyt" else s"$home/spyt-package"
-      val sparkClassPath = s"$home/*:$spytHome/conf/:$spytHome/jars/*:$sparkHome/jars/*"
+      val scalaBaseVersion = scalaVersion.substring(0, scalaVersion.lastIndexOf("."))
+      val sparkClassPath =
+        s"$home/*:$spytHome/conf/:$spytHome/jars/scala-$scalaBaseVersion/*:$spytHome/jars/common/*:$sparkHome/jars/*"
       environment.put("SPARK_HOME", YTree.stringNode(sparkHome))
       environment.put("SPYT_HOME", YTree.stringNode(spytHome))
 

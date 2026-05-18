@@ -1,37 +1,34 @@
 package org.apache.spark.deploy.rest
 
-import org.apache.spark.{SPARK_VERSION => sparkVersion, SparkConf}
+import org.apache.spark.{SparkConf, SPARK_VERSION => sparkVersion}
 import org.apache.spark.rpc.RpcEndpointRef
 import tech.ytsaurus.spyt.launcher.DeployMessages
 
 import java.util.Date
-import javax.servlet.http.{HttpServletRequest, HttpServletResponse}
 
 /**
  * A servlet for handling get application id requests passed to the [[RestSubmissionServer]].
  */
-private[rest] abstract class AppStatusRequestServlet extends RestServlet {
+private[rest] abstract class AppStatusRequestServlet extends RestServlet with RestServletCompat {
 
   /**
    * If a submission ID is specified in the URL, request the status of the corresponding
    * driver from the Master and include it in the response. Otherwise, return error.
    */
-  protected override def doGet(
-                                request: HttpServletRequest,
-                                response: HttpServletResponse): Unit = {
-    val responseMessage = parseSubmissionId(request.getPathInfo) match {
+  override def processGet(
+    pathInfo: String,
+    getParameter: String => String): (SubmitRestProtocolResponse, Option[Int]) = {
+    parseSubmissionId(pathInfo) match {
       case Some(appId) =>
-        handleGetAppStatus(appId, response)
+        handleGetAppStatus(appId) -> None
       case None =>
-        handleGetAllAppStatuses(response)
+        handleGetAllAppStatuses() -> None
     }
-    sendResponse(responseMessage, response)
   }
 
-  protected def handleGetAppStatus(appId: String,
-                                   responseServlet: HttpServletResponse): AppStatusRestResponse
+  protected def handleGetAppStatus(appId: String): AppStatusRestResponse
 
-  protected def handleGetAllAppStatuses(response: HttpServletResponse): AppStatusesRestResponse
+  protected def handleGetAllAppStatuses(): AppStatusesRestResponse
 
 }
 
@@ -62,14 +59,10 @@ private[spark] class AppStatusesRestResponse extends SubmitRestProtocolResponse 
   }
 }
 
-private[rest] class StandaloneAppStatusRequestServlet(
-                                                       masterEndpoint: RpcEndpointRef,
-                                                       conf: SparkConf)
+private[rest] class StandaloneAppStatusRequestServlet(masterEndpoint: RpcEndpointRef, conf: SparkConf)
   extends AppStatusRequestServlet {
-  override protected def handleGetAppStatus(
-                                             appId: String,
-                                             responseServlet: HttpServletResponse
-                                           ): AppStatusRestResponse = {
+
+  override protected def handleGetAppStatus(appId: String): AppStatusRestResponse = {
     val response = masterEndpoint.askSync[DeployMessages.ApplicationStatusResponse](
       DeployMessages.RequestApplicationStatus(appId))
     val appStatusResponse = new AppStatusRestResponse
@@ -82,8 +75,7 @@ private[rest] class StandaloneAppStatusRequestServlet(
     appStatusResponse
   }
 
-  override protected def handleGetAllAppStatuses(response: HttpServletResponse):
-  AppStatusesRestResponse = {
+  override protected def handleGetAllAppStatuses(): AppStatusesRestResponse = {
     val response = masterEndpoint.askSync[DeployMessages.ApplicationStatusesResponse](
       DeployMessages.RequestApplicationStatuses)
     val statusesRestResponse = new AppStatusesRestResponse

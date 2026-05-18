@@ -9,7 +9,7 @@ import tech.ytsaurus.spyt.common.utils.UuidUtils
 import tech.ytsaurus.spyt.serializers.YtLogicalType
 import tech.ytsaurus.spyt.test.{LocalSpark, TestUtils, TmpDir}
 import tech.ytsaurus.spyt.wrapper.YtWrapper
-import tech.ytsaurus.spyt.{YtReader, YtWriter}
+import tech.ytsaurus.spyt.{SparkAdapter, YtReader, YtWriter}
 import tech.ytsaurus.typeinfo.TiType
 
 class UuidTypeTest extends AnyFlatSpec with Matchers with LocalSpark with TmpDir with TestUtils {
@@ -22,7 +22,8 @@ class UuidTypeTest extends AnyFlatSpec with Matchers with LocalSpark with TmpDir
 
   private val ytUuids = uuids.map(UuidUtils.uuidToBytes)
 
-  import spark.implicits._
+  private val sqlImplicits = SparkAdapter.instance.sparkImplicits(spark)
+  import sqlImplicits._
 
   it should "read a table with uuid column to Uuid" in {
     val tableSchema = TableSchema.builder()

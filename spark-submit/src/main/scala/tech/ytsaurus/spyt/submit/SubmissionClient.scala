@@ -8,7 +8,6 @@ import org.slf4j.LoggerFactory
 import tech.ytsaurus.spyt.wrapper.client.{YtClientConfiguration, YtClientProvider}
 import tech.ytsaurus.spyt.wrapper.config.Utils.{parseRemoteConfig, remoteClusterConfigPath, remoteGlobalConfigPath, remoteVersionConfigPath}
 import tech.ytsaurus.spyt.wrapper.discovery.CypressDiscoveryService
-import tech.ytsaurus.core.cypress.YPath
 import tech.ytsaurus.spyt.SparkVersionUtils
 
 import java.io.File
@@ -17,6 +16,8 @@ import java.util.concurrent.atomic.AtomicReference
 import java.util.concurrent.{Executors, ThreadFactory}
 import scala.annotation.tailrec
 import scala.util.{Failure, Success, Try}
+
+import scala.jdk.CollectionConverters._
 
 class SubmissionClient(proxy: String,
                        baseDiscoveryPath: String,
@@ -51,9 +52,9 @@ class SubmissionClient(proxy: String,
   def submit(launcher: InProcessLauncher,
              retryConfig: RetryConfig): Try[String] = {
     val yt = YtClientProvider.ytClient(YtClientConfiguration.default(proxy, user, token))
-    val remoteGlobalConfig = parseRemoteConfig(remoteGlobalConfigPath, yt)
-    val remoteVersionConfig = parseRemoteConfig(remoteVersionConfigPath(cluster.get().version), yt)
-    val remoteClusterConfig = parseRemoteConfig(remoteClusterConfigPath(baseDiscoveryPath), yt)
+    val remoteGlobalConfig = parseRemoteConfig(remoteGlobalConfigPath, yt).asScala.toMap
+    val remoteVersionConfig = parseRemoteConfig(remoteVersionConfigPath(cluster.get().version), yt).asScala.toMap
+    val remoteClusterConfig = parseRemoteConfig(remoteClusterConfigPath(baseDiscoveryPath), yt).asScala.toMap
     val remoteConfig = remoteGlobalConfig ++ remoteVersionConfig ++ remoteClusterConfig
 
     launcher.setDeployMode("cluster")

@@ -19,7 +19,8 @@ import scala.collection.mutable
 class ComplexTypeTest extends AnyFlatSpec with Matchers with LocalSpark with TmpDir with TestUtils {
 
   import ComplexTypeTest._
-  import spark.implicits._
+  private val sqlImplicits = SparkAdapter.instance.sparkImplicits(spark)
+  import sqlImplicits._
 
   private val anySchema = TableSchema.builder()
     .setUniqueKeys(false)
@@ -159,8 +160,8 @@ class ComplexTypeTest extends AnyFlatSpec with Matchers with LocalSpark with Tmp
       .yt(tmpPath)
 
     res.columns should contain theSameElementsAs Seq("value")
-    val values = res.collect()
-      .map { case Row(m: Map[String, Array[Byte]]) => Row(m.mapValues(_.toList)) }
+    val values = res.collect().map(r => Row(r.getMap[String, Array[Byte]](0).map(e => e._1 -> e._2.toList) ))
+
     values should contain theSameElementsAs Seq(
       Row(Map(
         "a" -> YsonEncoder.encode(Long.MinValue, LongType, false).toList,
@@ -183,8 +184,7 @@ class ComplexTypeTest extends AnyFlatSpec with Matchers with LocalSpark with Tmp
       .yt(tmpPath)
 
     res.columns should contain theSameElementsAs Seq("value")
-    val values = res.collect()
-      .map { case Row(l: mutable.WrappedArray[Array[Byte]]) => Row(l.map(_.toList)) }
+    val values = res.collect().map(r => Row(r.getSeq[Array[Byte]](0).map(_.toList).toList))
 
     values should contain theSameElementsAs Seq(
       Row(List(
@@ -471,8 +471,6 @@ class ComplexTypeTest extends AnyFlatSpec with Matchers with LocalSpark with Tmp
   }
 
   it should "write dataset with complex types" in {
-    import spark.implicits._
-
     Seq(
       (Seq(1, 2, 3), A(1, Some("a")), Map("1" -> 0.1)),
       (Seq(4, 5, 6), A(2, None), Map("2" -> 0.3))
@@ -533,7 +531,7 @@ class ComplexTypeTest extends AnyFlatSpec with Matchers with LocalSpark with Tmp
 
     val res = spark.read
       .yt(tmpPath)
-      .select('map1.cast(BinaryType), 'map2.cast(BinaryType))
+      .select($"map1".cast(BinaryType), $"map2".cast(BinaryType))
       .as[(Option[Array[Byte]], Option[Array[Byte]])]
       .collect()
       .map { case (x, y) => x.map(_.toList) -> y.map(_.toList) }

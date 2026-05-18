@@ -7,11 +7,12 @@ import tech.ytsaurus.spyt._
 import tech.ytsaurus.spyt.test.{LocalSpark, TestUtils, TmpDir}
 
 class WriteStatisticsTest extends AnyFlatSpec with Matchers with LocalSpark with TmpDir with TestUtils {
-  import spark.implicits._
+  private val sqlImplicits = SparkAdapter.instance.sparkImplicits(spark)
+  import sqlImplicits._
 
   it should "count output statistics" in {
     val rowCount = 9000
-    val data = Stream.from(1).take(rowCount).map(a => (a, a + 1, 5)).toDF().repartition(100)
+    val data = (1 to rowCount).map(a => (a, a + 1, 5)).toDF().repartition(100)
     val rowSize = 3 * 8 // 3 x 64-bit numbers
     val dataSize = rowCount * rowSize
 

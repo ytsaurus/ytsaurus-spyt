@@ -20,7 +20,7 @@ set_default_vars() {
     yt_local_runner_path="$root_dir/../../docker/local/run_local_cluster.sh"
     proxy_port=8000
     spark_cache_path=""
-    spark_versions="3.2.2 3.2.4 3.3.4 3.4.4 3.5.8"
+    spark_versions="3.3.4 3.4.4 3.5.8 4.0.2 4.1.1"
     spark_versions_to_install=""
     versions_combinations=""
 }
@@ -28,7 +28,7 @@ set_default_vars() {
 print_usage() {
     script_name=$(basename "$0")
     cat <<EOF
-Runner for Python tests. It requires preinstalled Python 3.9, 3.11, 3.12, tox >= 4.0.0, docker.
+Runner for Python tests. It requires preinstalled Python 3.11, 3.12 or 3.13, tox >= 4.0.0, docker.
 
 Usage: $script_name [-h|--help]
                     [--no-rebuild]
@@ -91,7 +91,7 @@ main() {
             spark_cache_path="$2"
             shift 2
             ;;
-            -e) # ex: -e py311-spark322,py312-spark354,py312-spark355
+            -e)
             versions_combinations="$2"
             spark_versions_to_install=""
             extraspark_digits=""

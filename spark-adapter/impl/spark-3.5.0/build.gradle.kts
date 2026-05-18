@@ -1,4 +1,9 @@
+val scalaVersion: String? by extra
+
 dependencies {
-    compileOnly(project(":spark-adapter-impl-base"))
-    compileOnly(libs.bundles.spark350)
+    compileOnlyApi(project(":spark-adapter-api_$scalaVersion")) {
+        exclude(group = "org.apache.spark")
+    }
+    compileOnlyApi(project(":spyt-patch-agent_$scalaVersion"))
+    compileOnly(libs.bundles.spark350.scala(project))
 }

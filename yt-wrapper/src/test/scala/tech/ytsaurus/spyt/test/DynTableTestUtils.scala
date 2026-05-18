@@ -1,12 +1,14 @@
 package tech.ytsaurus.spyt.test
 
 import tech.ytsaurus.core.tables.{ColumnSchema, ColumnSortOrder, ColumnValueType, TableSchema}
+import tech.ytsaurus.spyt.utils.CollectionUtils
 import tech.ytsaurus.spyt.wrapper.YtWrapper.{createTable, insertRows, mountTableSync, reshardTable, unmountTableSync}
 import tech.ytsaurus.spyt.wrapper.table.YtTableSettings
 import tech.ytsaurus.ysontree.YTreeNode
 
 import java.time.Duration
-import scala.jdk.CollectionConverters._
+import java.util.stream.Collectors
+import java.util.{List => JList, Map => JMap}
 
 trait DynTableTestUtils {
   self: LocalYtClient =>
@@ -41,8 +43,8 @@ trait DynTableTestUtils {
 
   def prepareTestTable(path: String, data: Seq[TestRow], pivotKeys: Seq[Seq[Any]] = Nil,
                        schema: TableSchema = testSchema, enableDynamicStoreRead: Boolean = false): Unit = {
-    val sortColumns = schema.getColumns.asScala.filter(_.getSortOrder != null).map(_.getName)
-    val options = Map("enable_dynamic_store_read" -> enableDynamicStoreRead.toString)
+    val sortColumns = TestTableSettings.getKeyColumns(schema)
+    val options = JMap.of("enable_dynamic_store_read", enableDynamicStoreRead.toString.asInstanceOf[Any])
     createTable(path, TestTableSettings(schema.toYTree, isDynamic = true, sortColumns = sortColumns, options))
     mountTableSync(path, Duration.ofSeconds(10))
     insertRows(path, schema, data.map(r => r.productIterator.toList))
@@ -53,8 +55,8 @@ trait DynTableTestUtils {
 
   def prepareOrderedTestTable(path: String, schema: TableSchema = orderedTestSchema,
                               enableDynamicStoreRead: Boolean = false, tabletCount: Int = 3): Unit = {
-    val options = Map("enable_dynamic_store_read" -> enableDynamicStoreRead.toString, "tablet_count" -> tabletCount)
-    createTable(path, TestTableSettings(schema.toYTree, isDynamic = true, sortColumns = Nil, options))
+    val options = JMap.of("enable_dynamic_store_read", enableDynamicStoreRead.toString, "tablet_count", tabletCount)
+    createTable(path, TestTableSettings(schema.toYTree, isDynamic = true, sortColumns = JList.of(), options))
     mountTableSync(path)
   }
 
@@ -78,17 +80,22 @@ trait DynTableTestUtils {
   }
 }
 
-case class TestTableSettings(ytSchema: YTreeNode,
-                             isDynamic: Boolean = false,
-                             sortColumns: Seq[String] = Nil,
-                             otherOptions: Map[String, Any] = Map.empty) extends YtTableSettings {
-  override def optionsAny: Map[String, Any] = otherOptions + ("dynamic" -> isDynamic)
+case class TestTableSettings(
+  ytSchema: YTreeNode,
+  isDynamic: Boolean = false,
+  sortColumns: JList[String] = JList.of(),
+  otherOptions: JMap[String, Any] = JMap.of()) extends YtTableSettings {
+  override def optionsAny: JMap[String, Any] = CollectionUtils.concatMaps(otherOptions, JMap.of("dynamic", isDynamic))
 }
 
 object TestTableSettings {
   def apply(schema: TableSchema, isDynamic: Boolean): YtTableSettings = {
-    val keyColumns = schema.getColumns.asScala.filter(_.getSortOrder != null).map(_.getName)
-    TestTableSettings(schema.toYTree, isDynamic, sortColumns = keyColumns)
+    TestTableSettings(schema.toYTree, isDynamic, sortColumns = getKeyColumns(schema))
+  }
+
+  def getKeyColumns(schema: TableSchema): JList[String] = {
+    val keyColumnsStream = schema.getColumns.stream().filter(_.getSortOrder != null).map[String](_.getName)
+    keyColumnsStream.collect(Collectors.toList())
   }
 }
 

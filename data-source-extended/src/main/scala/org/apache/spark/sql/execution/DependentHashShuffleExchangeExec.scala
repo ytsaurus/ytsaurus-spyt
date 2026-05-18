@@ -31,7 +31,7 @@ class DependentHashShuffleExchangeExec(dependentPartitioning: Partitioning,
 
   def this(expressions: Seq[Expression],
            pivots: Seq[TuplePoint],
-           child: SparkPlan) {
+           child: SparkPlan) = {
     // We don't know num partitions when child is PlanLater, so here we get 0 anyway
     this(new DependentHashPartitioning(expressions, pivots), child)
   }
@@ -91,22 +91,22 @@ class DependentHashShuffleExchangeExec(dependentPartitioning: Partitioning,
     }
 
     val rddWithPartitionIds: RDD[Product2[Int, InternalRow]] = {
-      rdd.mapPartitionsWithIndexInternal((_, iter) => {
-        val getPartitionKey = getPartitionKeyExtractor()
-        val mutablePair = new MutablePair[Int, InternalRow]()
-        iter.map { row => mutablePair.update(part.getPartition(getPartitionKey(row)), row) }
-      }, isOrderSensitive = false)
+      SparkAdapter.instance.mapPartitionsWithIndexInternal(rdd,
+        (_, iter: Iterator[InternalRow]) => {
+          val getPartitionKey = getPartitionKeyExtractor()
+          val mutablePair = new MutablePair[Int, InternalRow]()
+          iter.map { row => mutablePair.update(part.getPartition(getPartitionKey(row)), row) }
+        }, isOrderSensitive = false)
     }
 
     // Now, we manually create a ShuffleDependency. Because pairs in rddWithPartitionIds
     // are in the form of (partitionId, row) and every partitionId is in the expected range
     // [0, part.numPartitions - 1]. The partitioner of this is a PartitionIdPassthrough.
-    val dependency =
-      new ShuffleDependency[Int, InternalRow, InternalRow](
-        rddWithPartitionIds,
-        SparkAdapter.instance.createShufflePartitioner(part.numPartitions),
-        serializer,
-        shuffleWriterProcessor = createShuffleWriteProcessor(writeMetrics))
+    val dependency = SparkAdapter.instance.createShuffleDependency[Int, InternalRow, InternalRow](
+      rddWithPartitionIds,
+      SparkAdapter.instance.createShufflePartitioner(part.numPartitions),
+      serializer,
+      writeMetrics)
 
     dependency
   }

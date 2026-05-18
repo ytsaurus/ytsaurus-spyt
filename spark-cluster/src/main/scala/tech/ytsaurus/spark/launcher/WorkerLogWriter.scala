@@ -111,7 +111,7 @@ class WorkerLogWriter(workerLogConfig: WorkerLogConfig)(implicit yt: CompoundCli
   private def upload(date: LocalDate, logArray: Seq[WorkerLogBlock], transaction: Option[ApiServiceTransaction]): Unit = {
     val tableSettings = Map("expiration_time" -> (System.currentTimeMillis() + workerLogConfig.tableTTL.toMillis)) ++ workerLogConfig.additionalTableOptions
     log.debugLazy(s"Creating worker log table at ${workerLogConfig.tablesPath}/$date with settings: $tableSettings")
-    YtWrapper.createDynTableAndMount(s"${workerLogConfig.tablesPath}/$date", schema, tableSettings)
+    YtWrapper.createDynTableAndMount(s"${workerLogConfig.tablesPath}/$date", schema, tableSettings.asJava)
     YtWrapper.insertRows(
       s"${workerLogConfig.tablesPath}/$date",
       schema,

@@ -12,8 +12,9 @@ object YTsaurusCoarseGrainedExecutorBackend {
       CoarseGrainedExecutorBackend = {
       case (rpcEnv, arguments, env, resourceProfile) =>
         val ytTaskJobIndex = System.getenv("YT_TASK_JOB_INDEX")
-        SparkAdapter.instance.executorBackendFactory
-          .createExecutorBackend(rpcEnv, arguments, env, resourceProfile, ytTaskJobIndex)
+        new CoarseGrainedExecutorBackend(rpcEnv, arguments.driverUrl,
+          ytTaskJobIndex, arguments.bindAddress, arguments.hostname, arguments.cores,
+          env, arguments.resourcesFileOpt, resourceProfile)
     }
     val backendArgs = CoarseGrainedExecutorBackend.parseArguments(args,
       this.getClass.getCanonicalName.stripSuffix("$"))

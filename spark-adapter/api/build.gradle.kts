@@ -1,3 +1,9 @@
+val scalaVersion: String? by extra
+
 dependencies {
-    compileOnlyApi(libs.bundles.spark)
+    if (scalaVersion == "2.12") {
+        compileOnlyApi(libs.bundles.spark212)
+    } else {
+        compileOnlyApi(libs.bundles.spark)
+    }
 }

@@ -1,6 +1,7 @@
 package org.apache.spark.deploy.master
 
 import org.apache.spark.deploy.master.Master.{ENDPOINT_NAME, SYSTEM_NAME}
+import org.apache.spark.deploy.master.{ApplicationInfo => MApplicationInfo}
 import org.apache.spark.deploy.master.ui.MasterWebUI
 import tech.ytsaurus.spyt.logging.Logging
 import org.apache.spark.internal.config.{MASTER_REST_SERVER_PORT, MASTER_UI_PORT}
@@ -27,6 +28,7 @@ class YtMaster(rpcEnv: RpcEnv,
 
   private val driverIdToApp = new mutable.HashMap[String, String]
   private val baseClass = this.getClass.getSuperclass
+  private val baseClassFieldNames = baseClass.getDeclaredFields.map(_.getName).toSet
   private val fieldsCache = new ConcurrentHashMap[String, Field]
   private val connectAppPromises = new mutable.HashMap[String, Promise[SpytConnectApplication]]
   private val connectAppsByUser = new mutable.HashMap[String, mutable.HashMap[String, SpytConnectApplication]]
@@ -34,7 +36,12 @@ class YtMaster(rpcEnv: RpcEnv,
 
   private def fieldOf(name: String): Field = {
     fieldsCache.computeIfAbsent(name, {fName =>
-      val baseClassField = baseClass.getDeclaredField(fName)
+      val normalizedFName = if (baseClassFieldNames.contains(fName)) {
+        fName
+      } else {
+        fName.substring(fName.indexOf("$$") + 2)
+      }
+      val baseClassField = baseClass.getDeclaredField(normalizedFName)
       baseClassField.setAccessible(true)
       baseClassField
     })
@@ -123,7 +130,7 @@ class YtMaster(rpcEnv: RpcEnv,
         val completedApps = getBaseClassFieldValue(CompletedAppsField)
         logInfo("Asked application status for application " + appId)
         idToApp.get(appId).orElse(completedApps.find(_.id == appId)) match {
-          case Some(app) =>
+          case Some(app: MApplicationInfo) =>
             val appInfo = ApplicationInfo(app.id, app.state.toString, app.startTime, app.submitDate)
             context.reply(ApplicationStatusResponse(found = true, Some(appInfo)))
           case None =>
@@ -155,7 +162,7 @@ class YtMaster(rpcEnv: RpcEnv,
       context.reply(FindSpytConnectAppsResponse(connectAppsByUser.getOrElse(user, Map.empty).values.toSeq))
   }
 
-  override def removeApplication(app: ApplicationInfo, state: ApplicationState.Value): Unit = {
+  override def removeApplication(app: MApplicationInfo, state: ApplicationState.Value): Unit = {
     super.removeApplication(app, state)
     connectAppById.get(app.id).foreach { connectApp =>
       connectAppsByUser.get(connectApp.user).foreach { userConnectApps =>

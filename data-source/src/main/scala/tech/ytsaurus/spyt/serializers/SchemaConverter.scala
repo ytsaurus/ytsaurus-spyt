@@ -17,8 +17,9 @@ import tech.ytsaurus.spyt.wrapper.config._
 import tech.ytsaurus.typeinfo.TiType
 import tech.ytsaurus.ysontree.YTreeNode
 
+import java.util.{List => JList}
+import java.util.stream.{IntStream, Collectors}
 import scala.annotation.tailrec
-import scala.jdk.CollectionConverters._
 
 object SchemaConverter {
   object MetadataFields {
@@ -116,8 +117,9 @@ object SchemaConverter {
 
   def sparkSchema(schemaTree: YTreeNode, schemaHint: Option[StructType] = None, parsingTypeV3: Boolean = true): StructType = {
     import tech.ytsaurus.spyt.wrapper.YtJavaConverters._
-
-    StructType(schemaTree.asList().asScala.zipWithIndex.map { case (fieldSchema, index) =>
+    val schemaList = schemaTree.asList()
+    val fields: JList[StructField] = IntStream.range(0, schemaList.size()).mapToObj { index =>
+      val fieldSchema = schemaList.get(index)
       val fieldMap = fieldSchema.asMap()
       val originalName = fieldMap.getOrThrow("name").stringValue()
       val fieldName = originalName.replace(".", "_")
@@ -128,7 +130,9 @@ object SchemaConverter {
       setYtLogicalTypeIfUnsignedType(ytType, metadata)
       metadata.putBoolean(MetadataFields.ARROW_SUPPORTED, ytType.arrowSupported)
       structField(fieldName, ytType, schemaHint, metadata.build())
-    })
+    }.collect(Collectors.toList())
+
+    StructType(fields)
   }
 
   @tailrec

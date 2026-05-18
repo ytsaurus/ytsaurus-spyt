@@ -66,12 +66,7 @@ object UInt64Support {
   }
 
   def createDeserializer(path: Expression): Expression = {
-    StaticInvoke(
-      UInt64Long.getClass,
-      ObjectType(classOf[UInt64Long]),
-      "apply",
-      path :: Nil,
-      returnNullable = false)
+    SparkAdapter.instance.createStaticInvoke(UInt64Long.getClass, ObjectType(classOf[UInt64Long]), "apply", path :: Nil)
   }
 
   def cast(from: DataType): Any => Any = from match {

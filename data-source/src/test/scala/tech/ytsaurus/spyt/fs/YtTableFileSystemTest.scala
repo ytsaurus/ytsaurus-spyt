@@ -17,6 +17,9 @@ class YtTableFileSystemTest extends AnyFlatSpec with Matchers with LocalSpark wi
   val fs = new YtTableFileSystem()
   fs.initialize(URI.create("ytTable:/"), fsConf)
 
+  private val sqlImplicits = SparkAdapter.instance.sparkImplicits(spark)
+  import sqlImplicits._
+
   private def setupData(filenames: Seq[String]): Unit = {
     YtWrapper.createDir(tmpPath)
     val schema = TableSchema.builder().addValue("a", ColumnValueType.STRING).build()
@@ -40,7 +43,6 @@ class YtTableFileSystemTest extends AnyFlatSpec with Matchers with LocalSpark wi
 
   it should "process a list of paths in a single request" in {
     setupData(oneTo100)
-    import spark.implicits._
     val paths = (30 to 45).map { n => s"$tmpPath/%04d".format(n)}
 
     val result = spark.read.yt(paths: _*).as[String].collect().map(_.toInt)
@@ -72,7 +74,6 @@ class YtTableFileSystemTest extends AnyFlatSpec with Matchers with LocalSpark wi
       "11650_16166_2025-07-23T00:00:00"
     )
     setupData(names)
-    import spark.implicits._
 
     (0 to 1).foreach { offset =>
       val namesSublist = names.slice(offset, offset + 2)
@@ -94,7 +95,6 @@ class YtTableFileSystemTest extends AnyFlatSpec with Matchers with LocalSpark wi
     setupData(files)
     val namesToRead = (1 to 10).map(n => s"parent_$n/child_$n")
     val paths = namesToRead.map(name => s"$tmpPath/$name")
-    import spark.implicits._
 
     val result = spark.read.yt(paths: _*).as[String].collect()
     result should contain theSameElementsAs namesToRead

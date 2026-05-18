@@ -5,10 +5,16 @@ import org.apache.spark.sql.types.StructType
 import tech.ytsaurus.spyt.serializers.SchemaConverter.SortOption
 import tech.ytsaurus.spyt.serializers.YtLogicalTypeSerializer.{deserializeTypeV3, serializeTypeV3}
 import tech.ytsaurus.spyt.serializers.{SchemaConverter, WriteSchemaConverter, YtLogicalType}
+import tech.ytsaurus.spyt.utils.CollectionUtils
 import tech.ytsaurus.spyt.wrapper.config.{ConfigEntry, _}
 import tech.ytsaurus.spyt.wrapper.table.YtTableSettings
 import tech.ytsaurus.yson.YsonError
 import tech.ytsaurus.ysontree.{YTreeNode, YTreeTextSerializer}
+
+import java.util.function.{Function => JFunction}
+import java.util.stream.Collectors
+import java.util.{Map => JMap}
+import scala.jdk.CollectionConverters._
 
 case class YtTableSparkSettings(configuration: Configuration) extends YtTableSettings {
 
@@ -22,13 +28,16 @@ case class YtTableSparkSettings(configuration: Configuration) extends YtTableSet
 
   override def ytSchema: YTreeNode = writeSchemaConverter.ytLogicalSchema(schema, sortOption)
 
-  override def optionsAny: Map[String, Any] = {
+  override def optionsAny: JMap[String, Any] = {
     val optionsKeys = configuration.ytConf(Options)
-    optionsKeys.map(key => (key, key.stripPrefix(CustomAttribute.name)))
-      .filter(key => !configuration.getYtConf(key._1).get.isBlank && key._2.nonEmpty)
-      .collect { case key if !Options.excludeOptions.contains(key._2) =>
-        key._2 -> Options.get(key._1, configuration)
-    }.toMap
+    val keyMapper: JFunction[(String, String), String] = (key: (String, String)) => key._2
+    val valueMapper: JFunction[(String, String), Any] = (key: (String, String)) => Options.get(key._1, configuration)
+    optionsKeys.asJava
+      .stream()
+      .map[(String, String)]((key: String) => key -> key.stripPrefix(CustomAttribute.name))
+      .filter((key: (String, String)) => !configuration.getYtConf(key._1).get.isBlank && key._2.nonEmpty)
+      .filter((key: (String, String)) => !Options.excludeOptions.contains(key._2))
+      .collect(Collectors.toMap[(String, String), String, Any](keyMapper, valueMapper))
   }
 }
 
@@ -36,7 +45,7 @@ object YtTableSparkSettings {
   import ConfigEntry.implicits._
   import ConfigEntry.{fromJsonTyped, toJsonTyped}
 
-  implicit val structTypeAdapter: ValueAdapter[YtLogicalType.Struct] = new ValueAdapter[YtLogicalType.Struct] {
+  private implicit val structTypeAdapter: ValueAdapter[YtLogicalType.Struct] = new ValueAdapter[YtLogicalType.Struct] {
     override def get(value: String): YtLogicalType.Struct =
       deserializeTypeV3(YTreeTextSerializer.deserialize(value)).asInstanceOf[YtLogicalType.Struct]
 
@@ -44,13 +53,19 @@ object YtTableSparkSettings {
       YTreeTextSerializer.serialize(serializeTypeV3(value, innerForm = true))
   }
 
-  implicit val logicalTypeMapAdapter: ValueAdapter[Map[String, YtLogicalType]] = new ValueAdapter[Map[String, YtLogicalType]] {
+  private implicit val logicalTypeMapAdapter: ValueAdapter[Map[String, YtLogicalType]] = new ValueAdapter[Map[String, YtLogicalType]] {
     override def get(value: String): Map[String, YtLogicalType] = {
-      fromJsonTyped[Map[String, String]](value).mapValues(t => deserializeTypeV3(YTreeTextSerializer.deserialize(t)))
+      val parsedMap = fromJsonTyped[Map[String, String]](value).asJava
+      CollectionUtils
+        .mapValues(parsedMap, (t: String) => deserializeTypeV3(YTreeTextSerializer.deserialize(t)))
+        .asScala
+        .toMap
     }
 
     override def set(value: Map[String, YtLogicalType]): String = {
-      toJsonTyped[Map[String, String]](value.mapValues(t => YTreeTextSerializer.serialize(serializeTypeV3(t))))
+      val mappedValue =
+        CollectionUtils.mapValues(value.asJava, (t: YtLogicalType) => YTreeTextSerializer.serialize(serializeTypeV3(t)))
+      toJsonTyped[Map[String, String]](mappedValue.asScala.toMap)
     }
   }
   

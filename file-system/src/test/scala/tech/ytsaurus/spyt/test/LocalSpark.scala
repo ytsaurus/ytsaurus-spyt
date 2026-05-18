@@ -163,13 +163,8 @@ object LocalSpark {
 
   def stop(): Unit = {
     SparkSession.getDefaultSession.foreach(_.stop())
+    SparkSession.clearActiveSession()
     SparkSession.clearDefaultSession()
-    // Clearing all cached and stopped spark sessions from SparkSession global object
-    val activeThreadSessionField =
-      SparkSession.getClass.getDeclaredField("org$apache$spark$sql$SparkSession$$activeThreadSession")
-    activeThreadSessionField.setAccessible(true)
-    activeThreadSessionField.set(SparkSession, new InheritableThreadLocal[SparkSession])
-    activeThreadSessionField.setAccessible(false)
     spark = null
   }
 
@@ -203,4 +198,5 @@ object LocalSpark {
     .set("spark.hadoop.fs.null.impl", "tech.ytsaurus.spyt.fs.YtTableFileSystem")
     .set("spark.sql.caseSensitive", "true")
     .set("spark.sql.session.timeZone", "UTC")
+    .set("spark.sql.ansi.enabled", "false")
 }

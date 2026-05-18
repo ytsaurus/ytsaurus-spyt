@@ -9,29 +9,23 @@ import tech.ytsaurus.spyt.launcher.DeployMessages
 import tech.ytsaurus.spyt.launcher.DeployMessages.SpytConnectApplication
 import tech.ytsaurus.spyt.wrapper.YtJavaConverters.toScalaDuration
 
+import java.io.InputStream
 import java.time.Duration
 import java.util.UUID
 import java.util.concurrent.{TimeUnit, TimeoutException}
-import javax.servlet.http.{HttpServletRequest, HttpServletResponse}
 import scala.concurrent.{Await, Future}
 import scala.io.Source
 
 class SpytConnectServerServlet(masterEndpoint: RpcEndpointRef, masterUrl: String, conf: SparkConf)
-  extends StandaloneSubmitRequestServlet(masterEndpoint, masterUrl, conf) {
+  extends StandaloneSubmitRequestServlet(masterEndpoint, masterUrl, conf) with RestServletCompat {
 
-  override def doGet(requestServlet: HttpServletRequest, responseServlet: HttpServletResponse): Unit = {
-    val user = requestServlet.getParameter("user")
+  override def processGet(
+    pathInfo: String,
+    getParameter: String => String): (SubmitRestProtocolResponse, Option[Int]) = {
+    val user = getParameter("user")
 
-    val response = handleGetExistingConnectApps(user, responseServlet)
-    sendResponse(response, responseServlet)
-  }
-
-  private def handleGetExistingConnectApps(
-    user: String,
-    responseServlet: HttpServletResponse): SubmitRestProtocolResponse = {
     if (user == null) {
-      responseServlet.setStatus(HttpServletResponse.SC_BAD_REQUEST)
-      return handleError("user must be set in query parameters")
+      return handleError("user must be set in query parameters") -> Some(400)
     }
 
     val appsResponse = masterEndpoint.askSync[DeployMessages.FindSpytConnectAppsResponse](
@@ -40,23 +34,21 @@ class SpytConnectServerServlet(masterEndpoint: RpcEndpointRef, masterUrl: String
     val response = new SpytConnectServerResponses()
     response.apps = appsResponse.apps.map(createSpytConnectServerResponse)
     setCommonResponseFields(response)
-    response
+    response -> None
   }
 
-  override def doPost(requestServlet: HttpServletRequest, responseServlet: HttpServletResponse): Unit = {
-    val requestMessageJson = Source.fromInputStream(requestServlet.getInputStream).mkString
+  override def processPost(getInputStream: () => InputStream): (SubmitRestProtocolResponse, Option[Int]) = {
+    val requestMessageJson = Source.fromInputStream(getInputStream()).mkString
     val requestMessage = SubmitRestProtocolMessage.fromJson(requestMessageJson)
     requestMessage.validate()
-    val response = requestMessage match {
+    requestMessage match {
       case request: StartConnectServerRequest =>
         val (requestToken, endpointFuture) = registerEndpointRequest()
         startSpytConnectServer(requestToken, request)
-        waitForResponse(endpointFuture, requestToken, responseServlet)
+        waitForResponse(endpointFuture, requestToken)
       case _ =>
-        responseServlet.setStatus(HttpServletResponse.SC_BAD_REQUEST)
-        handleError("Invalid request for start connect server endpoint")
+        handleError("Invalid request for start connect server endpoint") -> Some(400)
     }
-    sendResponse(response, responseServlet)
   }
 
   private def registerEndpointRequest(): (String, Future[SpytConnectApplication]) = {
@@ -91,17 +83,14 @@ class SpytConnectServerServlet(masterEndpoint: RpcEndpointRef, masterUrl: String
 
   private def waitForResponse(
     endpointFuture: Future[SpytConnectApplication],
-    requestToken: String,
-    responseServlet: HttpServletResponse
-  ): SubmitRestProtocolResponse = {
+    requestToken: String): (SubmitRestProtocolResponse, Option[Int]) = {
     val timeout = Duration.ofMillis(conf.get(YTSAURUS_CONNECT_STARTUP_TIMEOUT))
     try {
       val endpoint = Await.result(endpointFuture, toScalaDuration(timeout))
-      createSpytConnectServerResponse(endpoint)
+      createSpytConnectServerResponse(endpoint) -> None
     } catch {
       case _: TimeoutException =>
-        responseServlet.setStatus(HttpServletResponse.SC_GATEWAY_TIMEOUT)
-        handleError(s"Didn't get the connect gateway address within ${timeout.toSeconds} seconds")
+        handleError(s"Didn't get the connect gateway address within ${timeout.toSeconds} seconds") -> Some(400)
     } finally {
       masterEndpoint.send(DeployMessages.RemoveWaitSpytConnectEndpointToken(requestToken))
     }

@@ -1,9 +1,9 @@
 package org.apache.spark.sql.spyt.types
 
-import org.apache.spark.sql.AnalysisException
 import org.apache.spark.sql.catalyst.expressions.codegen.Block.BlockHelper
 import org.apache.spark.sql.catalyst.expressions.codegen.{Block, ExprValue}
 import org.apache.spark.sql.types.{DataType, LongType, SQLUserDefinedType, UserDefinedType}
+import tech.ytsaurus.spyt.SparkAdapter
 import tech.ytsaurus.spyt.common.utils.DateTimeTypesConverter.localDateTimeToSeconds
 
 import java.time.{LocalDateTime, ZoneOffset}
@@ -21,7 +21,7 @@ class DatetimeType extends UserDefinedType[Datetime] {
   override def deserialize(datum: Any): Datetime = {
     datum match {
       case t: java.lang.Long => new Datetime(LocalDateTime.ofEpochSecond(t, 0, ZoneOffset.UTC))
-      case _ => throw new AnalysisException(
+      case _ => throw SparkAdapter.instance.createAnalysisException(
         "Deserialization error: Expected java.lang.Long but got datum of type "
           + datum.getClass
       )

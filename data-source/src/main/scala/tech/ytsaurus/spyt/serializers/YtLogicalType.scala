@@ -7,8 +7,9 @@ import tech.ytsaurus.spyt.serializers.SchemaConverter.MetadataFields
 import tech.ytsaurus.typeinfo.StructType.Member
 import tech.ytsaurus.typeinfo.{TiType, TypeName}
 
+import java.util.stream.{Collectors, IntStream}
+import java.util.{List => JList}
 import scala.annotation.tailrec
-import scala.jdk.CollectionConverters._
 
 sealed trait SparkType {
   def topLevel: DataType
@@ -192,26 +193,36 @@ object YtLogicalType {
 
   case object Array extends CompositeYtLogicalTypeAlias(TypeName.List.getWireName)
 
-  case class Struct(fields: Seq[(String, YtLogicalType, Metadata)]) extends CompositeYtLogicalType {
-    override def sparkType: SparkType = SingleSparkType(StructType(fields
-      .map { case (name, ytType, meta) => getStructField(name, ytType, meta, topLevel = false) }))
+  case class Struct(fields: JList[(String, YtLogicalType, Metadata)]) extends CompositeYtLogicalType {
+    override def sparkType: SparkType = {
+      val structFields: JList[StructField] = fields.stream()
+        .map[StructField](f => getStructField(f._1, f._2, f._3, topLevel = false)).collect(Collectors.toList())
+      SingleSparkType(StructType(structFields))
+    }
 
-    override def tiType: TiType = TiType.struct(
-      fields.map{ case (name, ytType, _) => new Member(name, ytType.tiType)}.asJava
-    )
+    override def tiType: TiType = {
+      val members: JList[Member] = fields.stream()
+        .map[Member](f => new Member(f._1, f._2.tiType)).collect(Collectors.toList())
+      TiType.struct(members)
+    }
 
     override def alias: CompositeYtLogicalTypeAlias = Struct
   }
 
   case object Struct extends CompositeYtLogicalTypeAlias(TypeName.Struct.getWireName)
 
-  case class Tuple(elements: Seq[(YtLogicalType, Metadata)]) extends CompositeYtLogicalType {
-    override def sparkType: SparkType = SingleSparkType(StructType(elements.zipWithIndex
-      .map { case ((ytType, meta), index) => getStructField(s"_${1 + index}", ytType, meta, topLevel = false) }))
+  case class Tuple(elements: JList[(YtLogicalType, Metadata)]) extends CompositeYtLogicalType {
+    override def sparkType: SparkType = {
+      val structFields: JList[StructField] = IntStream.range(0, elements.size())
+        .mapToObj(i => getStructField(s"_${1 + i}", elements.get(i)._1, elements.get(i)._2, topLevel = false))
+        .collect(Collectors.toList())
+      SingleSparkType(StructType(structFields))
+    }
 
-    override def tiType: TiType = TiType.tuple(
-      elements.map { case (e, _) => e.tiType } .asJava
-    )
+    override def tiType: TiType = {
+      val tupleElements: JList[TiType] = elements.stream().map[TiType](_._1.tiType).collect(Collectors.toList())
+      TiType.tuple(tupleElements)
+    }
 
     override def alias: CompositeYtLogicalTypeAlias = Tuple
   }
@@ -228,26 +239,43 @@ object YtLogicalType {
 
   case object Tagged extends CompositeYtLogicalTypeAlias(TypeName.Tagged.getWireName)
 
-  case class VariantOverStruct(fields: Seq[(String, YtLogicalType, Metadata)]) extends CompositeYtLogicalType {
-    override def sparkType: SparkType = SingleSparkType(StructType(fields.map { case (name, ytType, meta) =>
-      getStructField(s"_v$name", ytType, meta, forcedNullability = Some(true), topLevel = false) }))
+  case class VariantOverStruct(fields: JList[(String, YtLogicalType, Metadata)]) extends CompositeYtLogicalType {
+    override def sparkType: SparkType = {
+      val structFields: JList[StructField] =
+        fields.stream()
+          .map[StructField](f =>
+            getStructField(s"_v${f._1}", f._2, f._3, forcedNullability = Some(true), topLevel = false))
+          .collect(Collectors.toList())
+      SingleSparkType(StructType(structFields))
+    }
 
-    override def tiType: TiType = TiType.variantOverStruct(
-      fields.map{ case (name, ytType, _) => new Member(name, ytType.tiType)}.asJava
-    )
+    override def tiType: TiType = {
+      val elements: JList[Member] = fields
+        .stream()
+        .map[Member](f => new Member(f._1, f._2.tiType))
+        .collect(Collectors.toList())
+      TiType.variantOverStruct(elements)
+    }
 
     override def alias: CompositeYtLogicalTypeAlias = Variant
   }
 
-  case class VariantOverTuple(fields: Seq[(YtLogicalType, Metadata)]) extends CompositeYtLogicalType {
-    override def sparkType: SparkType = SingleSparkType(
-      StructType(fields.zipWithIndex.map { case ((ytType, meta), index) =>
-        getStructField(s"_v_${1 + index}", ytType, meta, forcedNullability = Some(true), topLevel = false) })
-    )
+  case class VariantOverTuple(fields: JList[(YtLogicalType, Metadata)]) extends CompositeYtLogicalType {
+    override def sparkType: SparkType = {
+      val structFields: JList[StructField] = IntStream.range(0, fields.size()).mapToObj(i => getStructField(
+          s"_v_${1 + i}",
+          fields.get(i)._1,
+          fields.get(i)._2,
+          forcedNullability = Some(true),
+          topLevel = false))
+        .collect(Collectors.toList())
+      SingleSparkType(StructType(structFields))
+    }
 
-    override def tiType: TiType = TiType.variantOverTuple(
-      fields.map { case (e, _) => e.tiType }.asJava
-    )
+    override def tiType: TiType = {
+      val elements: JList[TiType] = fields.stream().map[TiType](_._1.tiType).collect(Collectors.toList())
+      TiType.variantOverTuple(elements)
+    }
 
     override def alias: CompositeYtLogicalTypeAlias = Variant
   }

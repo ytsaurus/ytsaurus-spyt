@@ -9,11 +9,11 @@ import tech.ytsaurus.spyt.patch.annotations.{Applicability, Decorate, DecoratedM
 
 @Decorate
 @OriginClass("org.apache.spark.sql.execution.PartitionedFileUtil$")
-@Applicability(from = "3.5.0")
+@Applicability(from = "3.5.0", to = "4.0.0")
 object PartitionedFileUtilDecorators350 {
 
   @DecoratedMethod
-  @Applicability(to = "3.5.4")
+  @Applicability(to = "3.5.5")
   def splitFiles(sparkSession: SparkSession,
                  file: FileStatusWithMetadata,
                  isSplitable: Boolean,

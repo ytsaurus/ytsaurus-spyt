@@ -3,6 +3,7 @@ package tech.ytsaurus.spyt
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.execution.datasources.FilePartition
 import org.apache.spark.sql.v2.Utils.extractYtScan
+import org.scalatest.Tag
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import tech.ytsaurus.spyt.format.YtPartitionedFileDelegate
@@ -18,12 +19,17 @@ trait YtDistributedReadingTestUtils extends AnyFlatSpec with Matchers with Local
     s"spark.yt.${SparkYtConfiguration.Read.PlanOptimizationEnabled.name}" -> {!distributedReadingEnabled}.toString,
   )
 
-  def testWithDistributedReading(testName: String)(testBody: Boolean => Unit): Unit = {
-    it should s"$testName: distributedReadingEnabled = false" in {
+  def testWithDistributedReading(testName: String, tag: Option[Tag] = None)(testBody: Boolean => Unit): Unit = {
+    val test1Base = it should s"$testName: distributedReadingEnabled = false"
+    val test2Base = it should s"$testName: distributedReadingEnabled = true"
+    val List(test1, test2) =
+      List(test1Base, test2Base).map(t => if (tag.isDefined) t.taggedAs(tag.get).in(_) else t.in(_))
+
+    test1 {
       testBody(false)
     }
 
-    it should s"$testName: distributedReadingEnabled = true" in {
+    test2 {
       withConfs(distributedReadingEnabledConf(true)) {
         testBody(true)
       }

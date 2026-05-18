@@ -166,7 +166,8 @@ class YtDynamicTableWriterTest extends AnyFlatSpec with TmpDir with LocalSpark w
     val sampleData = generateSampleData(dataSize)
 
     def writeDataLambda(): Unit = {
-      import spark.implicits._
+      val sqlImplicits = SparkAdapter.instance.sparkImplicits(spark)
+      import sqlImplicits._
 
       val df = spark.createDataset(sampleData)
 

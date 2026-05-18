@@ -1,9 +1,8 @@
 package tech.ytsaurus.spyt.format.optimizer
 
-import org.apache.spark.sql.Strategy
 import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
 import org.apache.spark.sql.execution.datasources.FileSourceStrategy
-import org.apache.spark.sql.execution.{FileSourceScanExec, SparkPlan}
+import org.apache.spark.sql.execution.{FileSourceScanExec, SparkPlan, SparkStrategy}
 import org.apache.spark.sql.yt.YtSourceScanExec
 
 /**
@@ -14,7 +13,7 @@ import org.apache.spark.sql.yt.YtSourceScanExec
  * optimizations (scan mode detection, read parallelism, columnar batch support) inside
  * [[YtSourceScanExec]].
  */
-class YtSourceStrategy extends Strategy {
+class YtSourceStrategy extends SparkStrategy {
 
   def apply(plan: LogicalPlan): Seq[SparkPlan] = {
     val basePlans = FileSourceStrategy.apply(plan)

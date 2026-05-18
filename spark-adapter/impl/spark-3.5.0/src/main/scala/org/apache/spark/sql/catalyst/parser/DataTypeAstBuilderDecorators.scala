@@ -7,8 +7,6 @@ import tech.ytsaurus.spyt.SparkAdapter
 import tech.ytsaurus.spyt.adapter.TypeSupport
 import tech.ytsaurus.spyt.patch.annotations.{Applicability, Decorate, DecoratedMethod, OriginClass}
 
-import java.util.Locale
-
 @Decorate
 @OriginClass("org.apache.spark.sql.catalyst.parser.DataTypeAstBuilder")
 @Applicability(from = "3.5.0")
@@ -30,13 +28,14 @@ class DataTypeAstBuilderDecorators {
 }
 
 object DataTypeAstBuilderDecorators {
-  def extractUint64Opt(ctx: SqlBaseParser.PrimitiveDataTypeContext): Option[DataType] =
-    SparkAdapter.instance.parserUtilsWithOrigin(ctx) {
-      if (
-        ctx.`type`.start.getType == SqlBaseParser.IDENTIFIER &&
-        ctx.INTEGER_VALUE().isEmpty &&
-        ctx.`type`.start.getText.toLowerCase(Locale.ROOT) == "uint64"
-      ) {
+  def extractUint64Opt(ctx: PrimitiveDataTypeContext): Option[DataType] =
+    ParserUtils.withOrigin(ctx) {
+      // We should dynamically load IDENTIFIER value here, otherwise it will be embedded on the compilation stage
+      // with the value from Spark 3.5.x
+      val identifierId = Class.forName("org.apache.spark.sql.catalyst.parser.SqlBaseParser")
+        .getDeclaredField("IDENTIFIER")
+        .getInt(null)
+      if (SparkAdapter.instance.isUint64DataTypeContext(ctx, identifierId)) {
         Some(TypeSupport.instance.uInt64DataType)
       } else {
         None

@@ -11,7 +11,8 @@ import tech.ytsaurus.spyt.wrapper.YtWrapper
 
 
 class HivePartitioningTest extends AnyFlatSpec with TmpDir with LocalSpark with Matchers with TestUtils {
-  import spark.implicits._
+  private val sqlImplicits = SparkAdapter.instance.sparkImplicits(spark)
+  import sqlImplicits._
 
   private val ytSchema = TableSchema.builder()
     .setUniqueKeys(false)

@@ -47,7 +47,8 @@ class JsonTypeTest extends AnyFlatSpec with Matchers with LocalSpark with TmpDir
     ))
   }
 
-  import spark.implicits._
+  private val sqlImplicits = SparkAdapter.instance.sparkImplicits(spark)
+  import sqlImplicits._
 
   it should "read yt Json type to spark StringType schema" in {
     val df = generateTestDataframe(jsonsAll)

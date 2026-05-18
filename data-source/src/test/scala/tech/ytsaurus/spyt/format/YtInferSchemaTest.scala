@@ -29,7 +29,8 @@ class YtInferSchemaTest extends AnyFlatSpec with Matchers with LocalSpark
   with TmpDir with SchemaTestUtils with MockitoSugar with TestUtils {
   behavior of "YtDataSource"
 
-  import spark.implicits._
+  private val sqlImplicits = SparkAdapter.instance.sparkImplicits(spark)
+  import sqlImplicits._
 
   private val atomicSchema = TableSchema.builder()
     .setUniqueKeys(false)

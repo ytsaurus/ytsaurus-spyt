@@ -4,6 +4,7 @@ import org.apache.spark.sql.Row
 import org.apache.spark.sql.functions.col
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
+import tech.ytsaurus.spyt.SparkAdapter
 import tech.ytsaurus.spyt.common.utils.CityHash.{cityHashUdf, registerFunction}
 import tech.ytsaurus.spyt.test.{LocalSpark, TmpDir}
 import tech.ytsaurus.spyt.types.UInt64Long
@@ -11,7 +12,8 @@ import tech.ytsaurus.spyt.types.UInt64Long
 class CityHashTest extends AnyFlatSpec with Matchers with LocalSpark with TmpDir {
   behavior of "CityHashTest"
 
-  import spark.implicits._
+  private val sqlImplicits = SparkAdapter.instance.sparkImplicits(spark)
+  import sqlImplicits._
 
   it should "compute hash like chyt" in {
     // random uuid

@@ -2,10 +2,12 @@ package tech.ytsaurus.spyt.format
 
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.catalyst.InternalRow
-import org.apache.spark.sql.catalyst.util.{ArrayData, MapData}
 import org.apache.spark.sql.types._
 import org.apache.spark.sql.v2.YtUtils
-import org.apache.spark.unsafe.types.{CalendarInterval, UTF8String}
+import org.apache.spark.unsafe.types.UTF8String
+import org.mockito.scalatest.MockitoSugar
+import org.mockito.Mockito.{when => mWhen}
+import org.mockito.ArgumentMatchers.{anyInt => mAnyInt}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import tech.ytsaurus.client.ApiServiceTransaction
@@ -24,10 +26,13 @@ import org.apache.spark.sql.SaveMode
 import java.time.temporal.ChronoUnit
 import java.time.{Duration, Instant, LocalDate}
 
-class YtOutputWriterTest extends AnyFlatSpec with TmpDir with LocalSpark with Matchers {
+class YtOutputWriterTest extends AnyFlatSpec with TmpDir with LocalSpark with Matchers with MockitoSugar {
   import YtOutputWriterTest._
   private val schema = StructType(Seq(StructField("a", IntegerType)))
   implicit val ytReadContext: YtReadContext = YtReadContext(yt, YtReadSettings.default)
+
+  private val sqlImplicits = SparkAdapter.instance.sparkImplicits(spark)
+  import sqlImplicits._
 
   it should "exception while writing several batches with relative in path" in {
     an[IllegalArgumentException] shouldBe thrownBy {
@@ -49,7 +54,6 @@ class YtOutputWriterTest extends AnyFlatSpec with TmpDir with LocalSpark with Ma
   }
 
   it should "use YtOutputWriter if used via spark.write.format(yt) for static tables" in {
-    import spark.implicits._
     val sampleData = (1 to 1000).map(n => SampleRow(n.longValue() * n, 1.0 + 1.7*n, s"$n-th row"))
 
     val df = spark.createDataset(sampleData)
@@ -64,7 +68,6 @@ class YtOutputWriterTest extends AnyFlatSpec with TmpDir with LocalSpark with Ma
   }
 
   it should "be able to configure table writer" in {
-    import spark.implicits._
     val sampleData = Seq(SampleRow(1, 1.0, "F" * (16 << 20)))
 
     val df = spark.createDataset(sampleData)
@@ -76,7 +79,6 @@ class YtOutputWriterTest extends AnyFlatSpec with TmpDir with LocalSpark with Ma
   }
 
   it should "correctly serialize time to YSON" in {
-    import spark.implicits._
     val sampleData = (1 to 1000).map(n => SampleRow2(Nested(
       java.sql.Timestamp.from(Instant.now().minusSeconds(n).truncatedTo(ChronoUnit.MICROS)),
       java.sql.Date.valueOf(LocalDate.now().minusDays(n)),
@@ -167,7 +169,7 @@ class YtOutputWriterTest extends AnyFlatSpec with TmpDir with LocalSpark with Ma
 
   def writeRows(rows: Seq[Row], writer: YtOutputWriter, transaction: ApiServiceTransaction): Unit = {
     try {
-      rows.foreach(r => writer.write(new TestInternalRow(r)))
+      rows.foreach(r => writer.write(mockInternalRow(r)))
     } finally {
       try {
         writer.close()
@@ -175,6 +177,15 @@ class YtOutputWriterTest extends AnyFlatSpec with TmpDir with LocalSpark with Ma
         transaction.commit().join()
       }
     }
+  }
+
+  def mockInternalRow(row: Row): InternalRow = {
+    val mockedRow = mock[InternalRow]
+    mWhen(mockedRow.numFields).thenReturn(row.length)
+    mWhen(mockedRow.copy()).thenReturn(mockedRow)
+    mWhen(mockedRow.isNullAt(mAnyInt())).thenAnswer(inv => row.isNullAt(inv.getArgument[Int](0)))
+    mWhen(mockedRow.getInt(mAnyInt())).thenAnswer(inv => row.getInt(inv.getArgument[Int](0)))
+    mockedRow
   }
 
   class MockYtOutputWriter(path: YPathEnriched, batchSize: Int, sortOption: SortOption)
@@ -188,49 +199,6 @@ class YtOutputWriterTest extends AnyFlatSpec with TmpDir with LocalSpark with Ma
     ) {
     override protected def initialize(): Unit = {}
   }
-
-  class TestInternalRow(row: Row) extends InternalRow {
-    override def numFields: Int = row.length
-
-    override def setNullAt(i: Int): Unit = ???
-
-    override def update(i: Int, value: Any): Unit = ???
-
-    override def copy(): InternalRow = new TestInternalRow(row.copy())
-
-    override def isNullAt(ordinal: Int): Boolean = row.isNullAt(ordinal)
-
-    override def getBoolean(ordinal: Int): Boolean = row.getBoolean(ordinal)
-
-    override def getByte(ordinal: Int): Byte = row.getByte(ordinal)
-
-    override def getShort(ordinal: Int): Short = row.getShort(ordinal)
-
-    override def getInt(ordinal: Int): Int = row.getInt(ordinal)
-
-    override def getLong(ordinal: Int): Long = row.getLong(ordinal)
-
-    override def getFloat(ordinal: Int): Float = row.getFloat(ordinal)
-
-    override def getDouble(ordinal: Int): Double = row.getDouble(ordinal)
-
-    override def getDecimal(ordinal: Int, precision: Int, scale: Int): Decimal = ???
-
-    override def getUTF8String(ordinal: Int): UTF8String = UTF8String.fromString(row.getString(ordinal))
-
-    override def getBinary(ordinal: Int): Array[Byte] = ???
-
-    override def getInterval(ordinal: Int): CalendarInterval = ???
-
-    override def getStruct(ordinal: Int, numFields: Int): InternalRow = ???
-
-    override def getArray(ordinal: Int): ArrayData = ???
-
-    override def getMap(ordinal: Int): MapData = ???
-
-    override def get(ordinal: Int, dataType: DataType): AnyRef = ???
-  }
-
 }
 
 object YtOutputWriterTest {

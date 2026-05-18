@@ -31,7 +31,7 @@ subprojects {
         add("testArtifacts", tasks["testJar"])
     }
 
-    val baseJdkVersion = 11
+    val baseJdkVersion = 17
 
     java {
         toolchain {
@@ -39,10 +39,13 @@ subprojects {
         }
     }
 
-    // This is a workaround for scala 2.12 compiler, which should target on 1.8 java class version
-    // Don't forget to move this to spark 3.x.x adapters when the main codebase will use Scala 2.13
-    tasks.withType<ScalaCompile>().configureEach {
-        scalaCompileOptions.additionalParameters = listOf("-target:jvm-1.8")
+    val scalaVersion: String? by extra
+    if (scalaVersion != null && scalaVersion == "2.12") {
+        // This is a workaround for scala 2.12 compiler, which should target on 1.8 java class version
+        // Don't forget to move this to spark 3.x.x adapters when the main codebase will use Scala 2.13
+        tasks.withType<ScalaCompile>().configureEach {
+            scalaCompileOptions.additionalParameters = listOf("-target:jvm-1.8")
+        }
     }
 
     val testJdkVersion = providers.gradleProperty("testJdkVersion")

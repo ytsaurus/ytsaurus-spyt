@@ -1,8 +1,8 @@
 package org.apache.spark.sql.spyt.types
 
-import org.apache.spark.sql.AnalysisException
 import org.apache.spark.sql.spyt.types.Timestamp64.{MAX_TIMESTAMP64, MIN_TIMESTAMP64}
 import org.apache.spark.sql.types.{DataType, LongType, SQLUserDefinedType, UserDefinedType}
+import tech.ytsaurus.spyt.SparkAdapter
 import tech.ytsaurus.spyt.common.utils.DateTimeTypesConverter.{convertUTCtoLocal, localDateTimeToMicros, longToZonedTimestamp, timestampToLong}
 
 import java.sql.Timestamp
@@ -26,7 +26,7 @@ class Timestamp64Type extends UserDefinedType[Timestamp64] {
         } else {
           throw new IllegalArgumentException(s"Number $v is out of range [$MIN_TIMESTAMP64 to $MAX_TIMESTAMP64]")
         }
-      case _ => throw new AnalysisException(
+      case _ => throw SparkAdapter.instance.createAnalysisException(
         "Timestamp64 deserialization error: Expected java.lang.Long but got datum of type "
           + datum.getClass
       )

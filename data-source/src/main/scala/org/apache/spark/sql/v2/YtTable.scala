@@ -62,8 +62,7 @@ case class YtTable(
   }
 
   override def newScanBuilder(options: CaseInsensitiveStringMap): ScanBuilder = {
-    val ytScanBuilderAdapter = YtScanBuilderAdapter(sparkSession, fileIndex, schema, dataSchema, options)
-    SparkAdapter.instance.createYtScanBuilder(ytScanBuilderAdapter)
+    new YtScanBuilder(sparkSession, fileIndex, schema, dataSchema, options)
   }
 
   override def inferSchema(files: Seq[FileStatus]): Option[StructType] =

@@ -9,7 +9,7 @@ import scala.util.control.NonFatal
 
 @Decorate
 @OriginClass("org.apache.spark.sql.execution.streaming.MicroBatchExecution")
-@Applicability(from = "3.5.0")
+@Applicability(from = "3.5.0", to = "4.0.0")
 class MicroBatchExecutionDecorators extends Logging {
 
   var availableOffsets: StreamProgress = ???

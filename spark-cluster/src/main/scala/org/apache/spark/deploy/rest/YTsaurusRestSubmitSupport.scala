@@ -2,6 +2,7 @@ package org.apache.spark.deploy.rest
 
 import org.apache.spark.SparkConf
 import org.apache.spark.rpc.RpcEndpointRef
+import tech.ytsaurus.spyt.SparkAdapter
 
 class YTsaurusRestSubmitSupport extends RestSubmitSupport {
 
@@ -18,26 +19,31 @@ class YTsaurusRestSubmitSupport extends RestSubmitSupport {
     client.createSubmission(submitRequest)
   }
 
-  override def statusRequestServlet(masterEndpoint: RpcEndpointRef, masterConf: SparkConf): StatusRequestServlet = {
-    new YtStatusRequestServlet(masterEndpoint, masterConf)
+  override def statusRequestServlet(masterEndpoint: RpcEndpointRef, masterConf: SparkConf): RestServlet = {
+    SparkAdapter.instance.wrapRestServlet(new YtStatusRequestServlet(masterEndpoint, masterConf))
+      .asInstanceOf[RestServlet]
   }
 
   override def masterStateRequestServlet(masterEndpoint: RpcEndpointRef, masterConf: SparkConf): RestServlet = {
-    new StandaloneMasterStateRequestServlet(masterEndpoint, masterConf)
+    SparkAdapter.instance.wrapRestServlet(new StandaloneMasterStateRequestServlet(masterEndpoint, masterConf))
+      .asInstanceOf[RestServlet]
   }
 
   override def appIdRequestServlet(masterEndpoint: RpcEndpointRef, masterConf: SparkConf): RestServlet = {
-    new StandaloneAppIdRequestServlet(masterEndpoint, masterConf)
+    SparkAdapter.instance.wrapRestServlet(new StandaloneAppIdRequestServlet(masterEndpoint, masterConf))
+      .asInstanceOf[RestServlet]
   }
 
   override def appStatusRequestServlet(masterEndpoint: RpcEndpointRef, masterConf: SparkConf): RestServlet = {
-    new StandaloneAppStatusRequestServlet(masterEndpoint, masterConf)
+    SparkAdapter.instance.wrapRestServlet(new StandaloneAppStatusRequestServlet(masterEndpoint, masterConf))
+      .asInstanceOf[RestServlet]
   }
 
   override def spytConnectServerServlet(
     masterEndpoint: RpcEndpointRef,
     masterUrl: String,
     masterConf: SparkConf): RestServlet = {
-    new SpytConnectServerServlet(masterEndpoint, masterUrl, masterConf)
+    SparkAdapter.instance.wrapRestServlet(new SpytConnectServerServlet(masterEndpoint, masterUrl, masterConf))
+      .asInstanceOf[RestServlet]
   }
 }

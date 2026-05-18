@@ -1,16 +1,16 @@
 package tech.ytsaurus.spyt.wrapper.client
 
-import io.netty.channel.MultithreadEventLoopGroup
+import io.netty.channel.EventLoopGroup
 import io.netty.channel.epoll.EpollEventLoopGroup
 import io.netty.channel.nio.NioEventLoopGroup
 import io.netty.channel.unix.DomainSocketAddress
 import org.slf4j.LoggerFactory
-import tech.ytsaurus.spyt.wrapper.YtJavaConverters._
 import tech.ytsaurus.spyt.wrapper.system.SystemUtils
-import tech.ytsaurus.client.{CompoundClient, DirectYTsaurusClient, DiscoveryClient, DiscoveryMethod, YTsaurusClient, YTsaurusClientConfig, YTsaurusCluster}
+import tech.ytsaurus.client.{DirectYTsaurusClient, DiscoveryClient, YTsaurusClient, YTsaurusClientConfig, YTsaurusCluster}
 import tech.ytsaurus.client.bus.DefaultBusConnector
 import tech.ytsaurus.client.discovery.StaticDiscoverer
 import tech.ytsaurus.client.rpc.RpcOptions
+import tech.ytsaurus.spyt.utils.NettyUtils
 
 import java.net.{InetSocketAddress, SocketAddress}
 import java.time.Duration
@@ -62,15 +62,8 @@ trait YtClientUtils {
     rpcClientListener: Option[SpytRpcClientListener]): YtRpcClient = {
     log.info(s"Create RPC YT Client, configuration ${config.copy(token = "*****")}")
     val maybeJobProxy = jobProxyEndpoint(config)
-    val group = if (maybeJobProxy.isDefined) {
-      new EpollEventLoopGroup(nThreads, daemonThreadFactory)
-    } else {
-      new NioEventLoopGroup(nThreads, daemonThreadFactory)
-    }
-
-    val connector = new DefaultBusConnector(group, true)
-      .setReadTimeout(config.timeout)
-      .setWriteTimeout(config.timeout)
+    val connector =
+      NettyUtils.createBusConnector(nThreads, maybeJobProxy.isDefined, config.timeout, daemonThreadFactory)
 
     try {
       val rpcOptions = new RpcOptions()

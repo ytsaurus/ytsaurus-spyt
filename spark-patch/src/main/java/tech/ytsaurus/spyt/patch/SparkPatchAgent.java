@@ -297,6 +297,6 @@ class SparkPatchClassTransformer implements ClassFileTransformer {
         String currentVersion = SparkVersionUtils.currentVersion();
 
         return (applicability.from().isEmpty() || ordering.gteq(currentVersion, applicability.from())) &&
-                (applicability.to().isEmpty() || ordering.lteq(currentVersion, applicability.to()));
+                (applicability.to().isEmpty() || ordering.lt(currentVersion, applicability.to()));
     }
 }

@@ -9,7 +9,8 @@ class PythonUtilsTest extends AnyFlatSpec with Matchers with LocalSpark with Tmp
 
   behavior of "PythonUtils"
 
-  import spark.implicits._
+  private val sqlImplicits = SparkAdapter.instance.sparkImplicits(spark)
+  import sqlImplicits._
 
   it should "serializeColumnToYson" in {
     val df = Seq(

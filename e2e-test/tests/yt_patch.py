@@ -24,7 +24,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="Patch for cypress conf")
     parser.add_argument('--proxy', type=str, default="localhost:8000", help='YTsaurus proxy')
     parser.add_argument("--python-path", type=str, default="python3", help="Path to python interpreter")
-    parser.add_argument("--java-home", type=str, default="/opt/jdk11", help="Path to java home")
+    parser.add_argument("--java-home", type=str, default="/opt/jdk17", help="Path to java home")
     args = parser.parse_args()
 
     main(args.proxy, args.python_path, args.java_home)

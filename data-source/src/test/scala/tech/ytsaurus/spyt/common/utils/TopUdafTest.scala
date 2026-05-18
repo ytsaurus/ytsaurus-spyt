@@ -3,10 +3,12 @@ package tech.ytsaurus.spyt.common.utils
 import org.apache.spark.sql.Row
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
+import tech.ytsaurus.spyt.SparkAdapter
 import tech.ytsaurus.spyt.test.LocalSpark
 
 class TopUdafTest extends AnyFlatSpec with Matchers with LocalSpark {
-  import spark.implicits._
+  private val sqlImplicits = SparkAdapter.instance.sparkImplicits(spark)
+  import sqlImplicits._
 
   "TopUdaf" should "work" in {
     val df = Seq(
@@ -17,7 +19,7 @@ class TopUdafTest extends AnyFlatSpec with Matchers with LocalSpark {
     ).toDF("a", "b", "c").repartition(4)
     val top = new TopUdaf(df.schema, Seq("b"))
 
-    val result = df.groupBy('a).agg(top('a, 'b, 'c) as "top").selectExpr("top.*")
+    val result = df.groupBy($"a").agg(top($"a", $"b", $"c") as "top").selectExpr("top.*")
     result.collect() should contain theSameElementsAs Seq(
       Row(1, "a", "A"),
       Row(2, "b", "B")
@@ -33,7 +35,7 @@ class TopUdafTest extends AnyFlatSpec with Matchers with LocalSpark {
       (2, "b", "B")
     ).toDF("a", "b", "c").repartition(4)
 
-    val result = df.groupBy('a)
+    val result = df.groupBy($"a")
       .agg(
         top(df.schema, Seq("b"), Seq("a", "b", "c")) as "top"
       )
@@ -55,7 +57,7 @@ class TopUdafTest extends AnyFlatSpec with Matchers with LocalSpark {
       (2, "b", "B", "15")
     ).toDF("a", "b", "c", "d").repartition(4)
 
-    val result = df.groupBy('a)
+    val result = df.groupBy($"a")
       .agg(
         top(df.schema, Seq("b", "c"), Seq("a", "b", "c", "d")) as "top"
       )

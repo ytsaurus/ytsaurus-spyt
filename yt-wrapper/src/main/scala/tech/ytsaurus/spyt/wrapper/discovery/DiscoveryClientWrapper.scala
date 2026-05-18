@@ -4,6 +4,7 @@ import org.slf4j.LoggerFactory
 import tech.ytsaurus.client.DiscoveryClient
 import tech.ytsaurus.client.discovery.{Heartbeat, ListMembers, ListMembersOptions, MemberInfo}
 
+import java.util.{List => JList}
 import scala.jdk.CollectionConverters._
 
 object DiscoveryClientWrapper {
@@ -19,13 +20,15 @@ object DiscoveryClientWrapper {
     client.heartbeat(heartbeatReq).join()
   }
 
-  def listMembers(groupId: String, limit: Int = 20, attrs: Seq[String] = Seq.empty)
-                 (implicit client: DiscoveryClient): Seq[MemberInfo] = {
+  def listMembers(
+    groupId: String,
+    limit: Int = 20,
+    attrs: Seq[String] = Seq.empty)(implicit client: DiscoveryClient): JList[MemberInfo] = {
     log.debug(s"List members: $groupId")
     val listMembersReq = ListMembers.builder()
       .setGroupId(groupId)
       .setOptions(new ListMembersOptions(limit, attrs.asJava))
       .build()
-    client.listMembers(listMembersReq).join().getMembers.asScala
+    client.listMembers(listMembersReq).join().getMembers
   }
 }

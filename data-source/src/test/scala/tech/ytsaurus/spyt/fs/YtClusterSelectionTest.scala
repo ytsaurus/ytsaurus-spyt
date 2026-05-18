@@ -7,7 +7,8 @@ import tech.ytsaurus.spyt._
 import tech.ytsaurus.spyt.test.{LocalSpark, LocalYt, TmpDir}
 
 class YtClusterSelectionTest extends AnyFlatSpec with Matchers with LocalSpark with TmpDir {
-  import spark.implicits._
+  private val sqlImplicits = SparkAdapter.instance.sparkImplicits(spark)
+  import sqlImplicits._
 
   it should "read with cluster specification" in {
     val df = Seq((1, "a"), (2, "d")).toDF("num", "str")

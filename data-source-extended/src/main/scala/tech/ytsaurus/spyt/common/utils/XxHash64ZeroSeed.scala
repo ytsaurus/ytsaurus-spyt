@@ -7,7 +7,9 @@ import org.apache.spark.sql.spyt.types.UInt64Type
 import org.apache.spark.sql.{Column, SparkSession}
 import tech.ytsaurus.spyt.SparkAdapter
 
-case class XxHash64ZeroSeed(children: Seq[Expression], seed: Long) extends HashExpression[Long] {
+case class XxHash64ZeroSeed(children: Seq[Expression], seed: Long)
+  extends HashExpression[Long] with HashExpressionCompat {
+
   def this(arguments: Seq[Expression]) = this(arguments, 0L)
 
   override def dataType: DataType = LongType
@@ -22,12 +24,14 @@ case class XxHash64ZeroSeed(children: Seq[Expression], seed: Long) extends HashE
 
   override protected def withNewChildrenInternal(newChildren: IndexedSeq[Expression]): XxHash64ZeroSeed =
     copy(children = newChildren)
+
+  override protected def isCollationAware: Boolean = false
 }
 
 object XxHash64ZeroSeed {
   @scala.annotation.varargs
   def xxHash64ZeroSeedUdf(source: Column*): Column = {
-    new Column(new XxHash64ZeroSeed(source.map(_.expr))).cast(UInt64Type)
+    SparkAdapter.instance.createColumn(source, new XxHash64ZeroSeed(_)).cast(UInt64Type)
   }
 
   def registerFunction(spark: SparkSession): Unit = {

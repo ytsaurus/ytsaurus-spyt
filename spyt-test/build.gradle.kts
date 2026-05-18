@@ -3,9 +3,11 @@ plugins {
     id("tech.ytsaurus.spyt.javaagent.plugin")
 }
 
-dependencies {
-    testImplementation(project(mapOf("path" to ":spark-cluster", "configuration" to "testArtifacts")))
-    testImplementation(project(":shuffle-service"))
+val scalaVersion: String? by extra
 
-    testWithJavaAgent(project(":spyt-patch-agent"))
+dependencies {
+    testImplementation(project(mapOf("path" to ":spark-cluster_$scalaVersion", "configuration" to "testArtifacts")))
+    testImplementation(project(":shuffle-service_$scalaVersion"))
+
+    testWithJavaAgent(project(":spyt-patch-agent_$scalaVersion"))
 }

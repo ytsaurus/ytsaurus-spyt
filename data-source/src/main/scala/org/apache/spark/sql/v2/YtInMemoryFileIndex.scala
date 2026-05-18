@@ -10,18 +10,20 @@ import org.apache.spark.metrics.source.HiveCatalogMetrics
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.util.CaseInsensitiveMap
 import org.apache.spark.sql.execution.datasources.{FileStatusCache, NoopCache, PartitionSpec, PartitioningAwareFileIndex}
-import org.apache.spark.sql.execution.streaming.FileStreamSink
 import org.apache.spark.sql.types.StructType
 import org.apache.spark.sql.v2.YtInMemoryFileIndex.bulkListLeafFiles
 import org.apache.spark.util.SerializableConfiguration
+import tech.ytsaurus.spyt.SparkAdapter
 import tech.ytsaurus.spyt.format.conf.SparkYtConfiguration.Read.ListParentDirectories
 import tech.ytsaurus.spyt.fs.YtTableFileSystem.DEFAULT_FILTER
 import tech.ytsaurus.spyt.fs.path.YPathEnriched
+import tech.ytsaurus.spyt.utils.CollectionUtils
 import tech.ytsaurus.spyt.wrapper.config._
 
 import java.io.FileNotFoundException
 import scala.annotation.tailrec
 import scala.collection.mutable
+import scala.jdk.CollectionConverters._
 
 /**
  * Copy-paste from org.apache.spark.sql.execution.datasources.InMemoryFileIndex and
@@ -43,8 +45,7 @@ class YtInMemoryFileIndex(
   // or "/.../_spark_metadata/0" (a file in the metadata dir). `rootPathsSpecified` might contain
   // such streaming metadata dir or files, e.g. when after globbing "basePath/*" where "basePath"
   // is the output of a streaming query.
-  override val rootPaths =
-    rootPathsSpecified.filterNot(FileStreamSink.ancestorIsMetadataDirectory(_, hadoopConf))
+  override val rootPaths: Seq[Path] = SparkAdapter.instance.filterRootPaths(rootPathsSpecified, hadoopConf)
 
   @volatile private var cachedLeafFiles: mutable.LinkedHashMap[Path, FileStatus] = _
   @volatile private var cachedLeafDirToChildrenFiles: Map[Path, Array[FileStatus]] = _
@@ -87,10 +88,13 @@ class YtInMemoryFileIndex(
   private def refresh0(): Unit = {
     val files = listLeafFiles(rootPaths)
     cachedLeafFiles = new mutable.LinkedHashMap[Path, FileStatus]() ++= files.map(f => f.getPath -> f)
-    cachedLeafDirToChildrenFiles = files.toArray
+    val groupedFiles = files.toArray
       .map(f => normalizedPath(f.getPath.getParent) -> f)
       .groupBy(_._1)
-      .mapValues(_.map(_._2).toSet.toArray)
+      .asJava
+    cachedLeafDirToChildrenFiles =
+      CollectionUtils.mapValues(groupedFiles, (f: Array[(Path, FileStatus)]) => f.map(_._2).distinct).asScala.toMap
+
     cachedPartitionSpec = null
   }
 
@@ -123,7 +127,7 @@ class YtInMemoryFileIndex(
       () // for some reasons scalac 2.12 needs this; return type doesn't matter
     }
     val filter = FileInputFormat.getInputPathFilter(new JobConf(hadoopConf, this.getClass))
-    val discovered = bulkListLeafFiles(pathsToFetch, hadoopConf, filter, sparkSession, areRootPaths = true)
+    val discovered = bulkListLeafFiles(pathsToFetch.toSeq, hadoopConf, filter, sparkSession, areRootPaths = true)
     discovered.foreach { case (path, leafFiles) =>
       HiveCatalogMetrics.incrementFilesDiscovered(leafFiles.size)
       fileStatusCache.putLeafFiles(path, leafFiles.toArray)
@@ -350,7 +354,7 @@ object YtInMemoryFileIndex extends Logging {
     }
 
     // turn SerializableFileStatus back to Status
-    statusMap.map { case (path, serializableStatuses) =>
+    statusMap.toSeq.map { case (path, serializableStatuses) =>
       val statuses = serializableStatuses.map { f =>
         val blockLocations = f.blockLocations.map { loc =>
           new BlockLocation(loc.names, loc.hosts, loc.offset, loc.length)
@@ -398,7 +402,7 @@ object YtInMemoryFileIndex extends Logging {
           val remoteIter = fs.listLocatedStatus(path)
           new Iterator[LocatedFileStatus]() {
             def next(): LocatedFileStatus = remoteIter.next
-            def hasNext(): Boolean = remoteIter.hasNext
+            def hasNext: Boolean = remoteIter.hasNext
           }.toArray
         case _ => fs.listStatus(path, childFilter)
       }
@@ -434,14 +438,14 @@ object YtInMemoryFileIndex extends Logging {
       val nestedFiles: Seq[FileStatus] = sessionOpt match {
         case Some(session) =>
           bulkListLeafFiles(
-            dirs.map(_.getPath),
+            dirs.toSeq.map(_.getPath),
             hadoopConf,
             filter,
             session,
             areRootPaths = false
           ).flatMap(_._2)
         case _ =>
-          dirs.flatMap { dir =>
+          dirs.toSeq.flatMap { dir =>
             listLeafFiles(
               dir.getPath,
               hadoopConf,
@@ -505,7 +509,7 @@ object YtInMemoryFileIndex extends Logging {
         s"the following files were missing during file scan:\n  ${missingFiles.mkString("\n  ")}")
     }
 
-    resolvedLeafStatuses
+    resolvedLeafStatuses.toSeq
   }
 
   /** Checks if we should filter out this path name. */

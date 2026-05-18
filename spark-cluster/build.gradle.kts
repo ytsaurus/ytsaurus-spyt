@@ -3,12 +3,20 @@ plugins {
     id("tech.ytsaurus.spyt.javaagent.plugin")
 }
 
+val scalaVersion: String? by extra
+val dataSourceExtended = ":data-source-extended_$scalaVersion"
+
 dependencies {
-    api(project(":data-source-extended"))
+    api(project(dataSourceExtended))
 
-    implementation(project(":spyt-connect"))
+    if (scalaVersion == "2.13") {
+        // Jetty library is shadowed in Spark. This leads to compilation errors and this dependency is needed to prevent it.
+        compileOnly(libs.jetty.servlet)
+    }
 
-    testImplementation(project(mapOf("path" to ":data-source-extended", "configuration" to "testArtifacts")))
+    implementation(project(":spyt-connect_$scalaVersion"))
 
-    testWithJavaAgent(project(":spyt-patch-agent"))
+    testImplementation(project(mapOf("path" to dataSourceExtended, "configuration" to "testArtifacts")))
+
+    testWithJavaAgent(project(":spyt-patch-agent_$scalaVersion"))
 }

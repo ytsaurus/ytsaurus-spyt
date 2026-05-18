@@ -20,7 +20,7 @@ class ExtendedYtsaurusTypes extends YTsaurusTypes {
 
   override def serializeValue(dataType: DataType, row: Row, i: Int, boxValue: BoxValue): UnversionedValue = {
     dataType match {
-      case YsonType => boxValue(i, row.getAs[YsonBinary](i).bytes)
+      case _ :YsonType => boxValue(i, row.getAs[YsonBinary](i).bytes)
       case UInt64Type => boxValue(i, row.getAs[UInt64Long](i).toLong)
       case _ => throw new IllegalArgumentException(s"Data type $dataType is not supported.")
     }
@@ -28,7 +28,7 @@ class ExtendedYtsaurusTypes extends YTsaurusTypes {
 
   override def wireDeserializeLong(dataType: DataType, value: Long, addValue: AddValue): Boolean = {
     dataType match {
-      case YsonType => addValue(toYsonBytes(value))
+      case _ :YsonType => addValue(toYsonBytes(value))
       case UInt64Type => addValue(value)
       case _ => return false
     }
@@ -37,7 +37,7 @@ class ExtendedYtsaurusTypes extends YTsaurusTypes {
 
   override def wireDeserializeBoolean(dataType: DataType, value: Boolean, addValue: AddValue): Boolean = {
     dataType match {
-      case YsonType => addValue(toYsonBytes(value))
+      case _ :YsonType => addValue(toYsonBytes(value))
       case _ => return false
     }
     true
@@ -45,7 +45,7 @@ class ExtendedYtsaurusTypes extends YTsaurusTypes {
 
   override def wireDeserializeDouble(dataType: DataType, value: Double, addValue: AddValue): Boolean = {
     dataType match {
-      case YsonType => addValue(toYsonBytes(value))
+      case _ :YsonType => addValue(toYsonBytes(value))
       case _ => false
     }
     true
@@ -54,7 +54,7 @@ class ExtendedYtsaurusTypes extends YTsaurusTypes {
   override def wireDeserializeBytes(
     dataType: DataType, bytes: Array[Byte], isString: Boolean, addValue: AddValue): Boolean = {
     dataType match {
-      case YsonType => if (isString) {
+      case _ :YsonType => if (isString) {
         addValue(toYsonBytes(bytes))
       } else {
         addValue(bytes)
@@ -73,7 +73,7 @@ class ExtendedYtsaurusTypes extends YTsaurusTypes {
     sparkIndex: Int,
     getColumnType: Int => ColumnValueType): Boolean = {
     dataType match {
-      case YsonType => writeBytes(writeable, idMapping, aggregate, tableIndex, row.getBinary(sparkIndex), getColumnType)
+      case _ :YsonType => writeBytes(writeable, idMapping, aggregate, tableIndex, row.getBinary(sparkIndex), getColumnType)
       case UInt64Type =>
         writeHeader(writeable, idMapping, aggregate, tableIndex, 0, getColumnType)
         writeable.onInteger(row.getLong(sparkIndex))
@@ -83,7 +83,7 @@ class ExtendedYtsaurusTypes extends YTsaurusTypes {
   }
 
   override def ytLogicalTypeV3(dataType: DataType): YtLogicalType = dataType match {
-    case YsonType => YtLogicalType.Any
+    case _ :YsonType => YtLogicalType.Any
     case UInt64Type => YtLogicalType.Uint64
   }
 
@@ -97,11 +97,11 @@ class ExtendedYtsaurusTypes extends YTsaurusTypes {
 
   override def sparkTypeFor(tiType: TiType): DataType = tiType.getTypeName match {
     case TypeName.Uint64 => UInt64Type
-    case TypeName.Yson => YsonType
+    case TypeName.Yson => new YsonType()
   }
 
   override def supportsInnerDataType(dataType: DataType): Option[Boolean] = dataType match {
-    case YsonType => Some(false)
+    case _ :YsonType => Some(false)
     case _ => None
   }
 

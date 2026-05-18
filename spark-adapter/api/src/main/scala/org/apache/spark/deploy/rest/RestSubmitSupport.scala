@@ -3,6 +3,7 @@ package org.apache.spark.deploy.rest
 import org.apache.spark.SparkConf
 import org.apache.spark.rpc.RpcEndpointRef
 
+import java.io.InputStream
 import java.util.ServiceLoader
 
 trait RestSubmitSupport {
@@ -12,7 +13,7 @@ trait RestSubmitSupport {
                        conf: SparkConf,
                        env: Map[String, String],
                        master: String): SubmitRestProtocolResponse
-  def statusRequestServlet(masterEndpoint: RpcEndpointRef, masterConf: SparkConf): StatusRequestServlet
+  def statusRequestServlet(masterEndpoint: RpcEndpointRef, masterConf: SparkConf): RestServlet
   def masterStateRequestServlet(masterEndpoint: RpcEndpointRef, masterConf: SparkConf): RestServlet
   def appIdRequestServlet(masterEndpoint: RpcEndpointRef, masterConf: SparkConf): RestServlet
   def appStatusRequestServlet(masterEndpoint: RpcEndpointRef, masterConf: SparkConf): RestServlet
@@ -21,4 +22,14 @@ trait RestSubmitSupport {
 
 object RestSubmitSupport {
   lazy val instance: RestSubmitSupport = ServiceLoader.load(classOf[RestSubmitSupport]).findFirst().get()
+}
+
+trait RestServletCompat { self: RestServlet =>
+  def processGet(pathInfo: String, getParameter: String => String): (SubmitRestProtocolResponse, Option[Int]) = {
+    throw new UnsupportedOperationException("GET handler is not implemented")
+  }
+
+  def processPost(getInputStream: () => InputStream): (SubmitRestProtocolResponse, Option[Int]) = {
+    throw new UnsupportedOperationException("POST handler is not implemented")
+  }
 }

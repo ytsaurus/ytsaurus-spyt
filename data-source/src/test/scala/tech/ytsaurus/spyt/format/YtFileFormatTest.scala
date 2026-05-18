@@ -28,6 +28,7 @@ import tech.ytsaurus.ysontree.YTree
 
 import java.sql.{Date, Timestamp}
 import java.time.{Duration, LocalDate}
+import java.util.{Map => JMap}
 import java.util.concurrent.TimeUnit
 import scala.jdk.CollectionConverters._
 import scala.util.Random
@@ -36,7 +37,8 @@ class YtFileFormatTest extends AnyFlatSpec with Matchers with LocalSpark
   with TmpDir with TestUtils with TableDrivenPropertyChecks with YtDistributedReadingTestUtils {
   behavior of "YtFileFormat"
 
-  import spark.implicits._
+  private val sqlImplicits = SparkAdapter.instance.sparkImplicits(spark)
+  import sqlImplicits._
 
   private val atomicSchema = TableSchema.builder()
     .setUniqueKeys(false)
@@ -202,17 +204,14 @@ class YtFileFormatTest extends AnyFlatSpec with Matchers with LocalSpark
   }
 
   testWithDistributedReading("write several partitions") { distributedReadingEnabled =>
-    import spark.implicits._
-    (1 to 100).toDF.repartition(10).write.yt(tmpPath)
+    (1 to 100).toDF().repartition(10).write.yt(tmpPath)
 
     spark.read.yt(tmpPath).as[Long].collect() should contain theSameElementsAs (1 to 100)
   }
 
   testWithDistributedReading("write several batches") { distributedReadingEnabled =>
-    import spark.implicits._
-
     spark.sqlContext.setConf("spark.yt.write.bufferSize", "2")
-    (1 to 80).toDF.repartition(2).write.yt(tmpPath)
+    (1 to 80).toDF().repartition(2).write.yt(tmpPath)
 
     spark.read.yt(tmpPath).as[Long].collect() should contain theSameElementsAs (1 to 80)
   }
@@ -245,8 +244,6 @@ class YtFileFormatTest extends AnyFlatSpec with Matchers with LocalSpark
   }
 
   testWithDistributedReading("clean all temporary files if job failed") { distributedReadingEnabled =>
-    import spark.implicits._
-
     Logger.getRootLogger.setLevel(Level.OFF)
 
     a[SparkException] shouldBe thrownBy {
@@ -260,32 +257,26 @@ class YtFileFormatTest extends AnyFlatSpec with Matchers with LocalSpark
   }
 
   testWithDistributedReading("fail if table already exists") { distributedReadingEnabled =>
-    import spark.implicits._
-
-    Seq(1, 2, 3).toDF.coalesce(1).write.yt(tmpPath)
+    Seq(1, 2, 3).toDF().coalesce(1).write.yt(tmpPath)
     an[AnalysisException] shouldBe thrownBy {
-      Seq(1, 2, 3).toDF.coalesce(1).write.yt(tmpPath)
+      Seq(1, 2, 3).toDF().coalesce(1).write.yt(tmpPath)
     }
   }
 
   testWithDistributedReading("overwrite table") { distributedReadingEnabled =>
-    import spark.implicits._
+    Seq(1, 2, 3).toDF().coalesce(1).write.yt(tmpPath)
 
-    Seq(1, 2, 3).toDF.coalesce(1).write.yt(tmpPath)
-
-    Seq(4, 5, 6).toDF.coalesce(1).write.mode(SaveMode.Overwrite).yt(tmpPath)
+    Seq(4, 5, 6).toDF().coalesce(1).write.mode(SaveMode.Overwrite).yt(tmpPath)
 
     val res = spark.read.yt(tmpPath)
     res.as[Long].collect() should contain theSameElementsAs Seq(4L, 5L, 6L)
   }
 
   testWithDistributedReading("not lose old table while overwriting by table with errors") { distributedReadingEnabled =>
-    import spark.implicits._
-
-    Seq(1, 2, 3).toDF.coalesce(1).write.yt(tmpPath)
+    Seq(1, 2, 3).toDF().coalesce(1).write.yt(tmpPath)
 
     a[SparkException] shouldBe thrownBy {
-      Seq(4, 5, 6).toDS.map(_ / 0).write.mode(SaveMode.Overwrite).yt(tmpPath)
+      Seq(4, 5, 6).toDS().map(_ / 0).write.mode(SaveMode.Overwrite).yt(tmpPath)
     }
 
     val res = spark.read.yt(tmpPath)
@@ -293,21 +284,17 @@ class YtFileFormatTest extends AnyFlatSpec with Matchers with LocalSpark
   }
 
   testWithDistributedReading("append rows to table") { distributedReadingEnabled =>
-    import spark.implicits._
-
-    Seq(1, 2, 3).toDF.coalesce(1).write.yt(tmpPath)
-    Seq(4, 5, 6).toDF.coalesce(1).write.mode(SaveMode.Append).yt(tmpPath)
+    Seq(1, 2, 3).toDF().coalesce(1).write.yt(tmpPath)
+    Seq(4, 5, 6).toDF().coalesce(1).write.mode(SaveMode.Append).yt(tmpPath)
 
     val res = spark.read.yt(tmpPath)
     res.as[Long].collect() should contain theSameElementsAs Seq(1L, 2L, 3L, 4L, 5L, 6L)
   }
 
   testWithDistributedReading("ignore write if table already exists") { distributedReadingEnabled =>
-    import spark.implicits._
+    Seq(1, 2, 3).toDF().coalesce(1).write.yt(tmpPath)
 
-    Seq(1, 2, 3).toDF.coalesce(1).write.yt(tmpPath)
-
-    Seq(4, 5, 6).toDF.coalesce(1).write.mode(SaveMode.Ignore).yt(tmpPath)
+    Seq(4, 5, 6).toDF().coalesce(1).write.mode(SaveMode.Ignore).yt(tmpPath)
 
     val res = spark.read.yt(tmpPath)
     res.as[Long].collect() should contain theSameElementsAs Seq(1L, 2L, 3L)
@@ -353,9 +340,7 @@ class YtFileFormatTest extends AnyFlatSpec with Matchers with LocalSpark
   }
 
   testWithDistributedReading("optimize table for scan") { distributedReadingEnabled =>
-    import spark.implicits._
-
-    Seq(1, 2, 3).toDF.coalesce(1).write.optimizeFor(OptimizeMode.Scan).yt(tmpPath)
+    Seq(1, 2, 3).toDF().coalesce(1).write.optimizeFor(OptimizeMode.Scan).yt(tmpPath)
 
     YtWrapper.attribute(tmpPath, "optimize_for").stringValue() shouldEqual "scan"
   }
@@ -416,14 +401,13 @@ class YtFileFormatTest extends AnyFlatSpec with Matchers with LocalSpark
   }
 
   testWithDistributedReading("kill transaction when failed because of timeout") { distributedReadingEnabled =>
-    import spark.implicits._
     spark.sqlContext.setConf("spark.yt.timeout", "5")
     spark.sqlContext.setConf("spark.yt.write.timeout", "0")
     Logger.getRootLogger.setLevel(Level.OFF)
 
     try {
       a[SparkException] shouldBe thrownBy {
-        Seq(1, 2, 3).toDS.coalesce(1).write.yt(tmpPath)
+        Seq(1, 2, 3).toDS().coalesce(1).write.yt(tmpPath)
       }
 
       YtWrapper.exists(s"$tmpPath-tmp") shouldEqual false
@@ -518,7 +502,7 @@ class YtFileFormatTest extends AnyFlatSpec with Matchers with LocalSpark
   testWithDistributedReading("set custom cypress attributes") { distributedReadingEnabled =>
     val expirationTime = "2025-06-30T20:44:09.000000Z"
     val myCustomAttribute = "elephant"
-    Seq(1, 2, 3).toDF
+    Seq(1, 2, 3).toDF()
       .coalesce(1)
       .write
       .option("expiration_time", expirationTime)
@@ -736,9 +720,9 @@ class YtFileFormatTest extends AnyFlatSpec with Matchers with LocalSpark
     ), s"$tmpPath/in", atomicSchema)
     YtWrapper.createTable(
       s"$tmpPath/out",
-      Map(
-        "schema" -> newSchema.toYTree,
-        "optimize_for" -> YTree.stringNode(OptimizeMode.Scan.name)
+      JMap.of(
+        "schema", newSchema.toYTree,
+        "optimize_for", YTree.stringNode(OptimizeMode.Scan.name)
       ),
       transaction = None,
       ignoreExisting = false
@@ -864,7 +848,7 @@ class YtFileFormatTest extends AnyFlatSpec with Matchers with LocalSpark
   testWithDistributedReading("count input statistics") { _ =>
     whenSparkVersionAtLeast("3.3.0") {
       val customPath = "ytTable:/" + tmpPath
-      val data = Stream.from(1).take(1000)
+      val data = 1 to 1000
 
       val store = UtilsWrapper.appStatusStore(spark)
       val totalInputBefore = store.stageList(null).map(_.inputBytes).sum

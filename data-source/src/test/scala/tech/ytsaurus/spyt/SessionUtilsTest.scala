@@ -5,6 +5,8 @@ import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import tech.ytsaurus.spyt.SessionUtils.mergeConfs
 
+import java.util.{Map => JMap}
+
 class SessionUtilsTest extends AnyFlatSpec with Matchers {
 
   private val someConf = "spark.hadoop.yt.conf.enabled"
@@ -13,7 +15,7 @@ class SessionUtilsTest extends AnyFlatSpec with Matchers {
   it should "block user conf by disabled enabler" in {
     val conf = new SparkConf(false)
     conf.set(someConf, "true")
-    val result = mergeConfs(conf, Map.empty, Map.empty, Map.empty, Map(someConf -> "false", someConf2 -> "false"))
+    val result = mergeConfs(conf, JMap.of(), JMap.of(), JMap.of(), JMap.of(someConf, "false", someConf2, "false"))
     result.get(someConf).toBoolean shouldBe false
     result.getOption(someConf2) shouldBe None
   }
@@ -22,16 +24,16 @@ class SessionUtilsTest extends AnyFlatSpec with Matchers {
     val conf = new SparkConf(false)
     conf.set(someConf, "true")
     conf.set(someConf2, "true")
-    val result = mergeConfs(conf, Map.empty, Map.empty, Map.empty, Map(someConf -> "true"))
+    val result = mergeConfs(conf, JMap.of(), JMap.of(), JMap.of(), JMap.of(someConf, "true"))
     result.get(someConf).toBoolean shouldBe true
     result.get(someConf2).toBoolean shouldBe true
   }
 
   it should "block cluster confs by disabled enabler" in {
     val conf = new SparkConf(false)
-    val globalConf = Map(someConf -> "true")
-    val clusterConf = Map(someConf2 -> "true")
-    val result = mergeConfs(conf, globalConf, Map.empty, clusterConf, Map(someConf -> "false", someConf2 -> "false"))
+    val globalConf = JMap.of(someConf, "true")
+    val clusterConf = JMap.of(someConf2, "true")
+    val result = mergeConfs(conf, globalConf, JMap.of(), clusterConf, JMap.of(someConf, "false", someConf2, "false"))
     result.get(someConf).toBoolean shouldBe false
     result.get(someConf2).toBoolean shouldBe false
   }
@@ -40,9 +42,9 @@ class SessionUtilsTest extends AnyFlatSpec with Matchers {
     val conf = new SparkConf(false)
     conf.set(someConf, "true")
     conf.set(someConf2, "true")
-    val globalConf = Map(someConf -> "false")
-    val clusterConf = Map(someConf2 -> "false")
-    val result = mergeConfs(conf, globalConf, Map.empty, clusterConf, Map(someConf -> "true", someConf2 -> "false"))
+    val globalConf = JMap.of(someConf, "false")
+    val clusterConf = JMap.of(someConf2, "false")
+    val result = mergeConfs(conf, globalConf, JMap.of(), clusterConf, JMap.of(someConf, "true", someConf2, "false"))
     result.get(someConf).toBoolean shouldBe true
     result.get(someConf2).toBoolean shouldBe false
   }

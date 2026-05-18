@@ -12,6 +12,7 @@ import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import tech.ytsaurus.client.request.ModifyRowsRequest
 import tech.ytsaurus.core.tables.{ColumnValueType, TableSchema}
+import tech.ytsaurus.spyt.SparkAdapter
 import tech.ytsaurus.spyt.format.conf.SparkYtConfiguration
 import tech.ytsaurus.spyt.format.conf.YtTableSparkSettings.{InconsistentReadEnabled, WriteTypeV3}
 import tech.ytsaurus.spyt.serializers.WriteSchemaConverter
@@ -32,7 +33,8 @@ import scala.concurrent.{Await, Future, Promise}
 class YTsaurusStreamingTest extends AnyFlatSpec with Matchers with LocalSpark with LocalYtClient
   with TmpDir with DynTableTestUtils with QueueTestUtils {
 
-  import spark.implicits._
+  private val sqlImplicits = SparkAdapter.instance.sparkImplicits(spark)
+  import sqlImplicits._
   import tech.ytsaurus.spyt._
 
   it should "work with native key-value storage and FileContext YTsaurus API" in {
@@ -128,7 +130,7 @@ class YTsaurusStreamingTest extends AnyFlatSpec with Matchers with LocalSpark wi
       .option("checkpointLocation", f"yt:/$tmpPath/stateStore")
       .foreachBatch { (frame: DataFrame, batchNum: Long) =>
         recordCount += frame.count()
-        if (recordCount >= recordCountLimit && !stopSignal.isCompleted) stopSignal.success()
+        if (recordCount >= recordCountLimit && !stopSignal.isCompleted) stopSignal.success(())
         ()
       }
 
@@ -218,7 +220,7 @@ class YTsaurusStreamingTest extends AnyFlatSpec with Matchers with LocalSpark wi
           ()
         }
         recordCount += frame.count()
-        if (recordCount >= recordCountLimit && !stopSignal.isCompleted) stopSignal.success()
+        if (recordCount >= recordCountLimit && !stopSignal.isCompleted) stopSignal.success(())
         ()
       }
 
@@ -336,7 +338,7 @@ class YTsaurusStreamingTest extends AnyFlatSpec with Matchers with LocalSpark wi
           .filter(col("__spyt_streaming_src_tablet_index") === partitionIndex)
 
         val totalRowsConsumed = currentOffsetPartitions(partitionIndex) + 1
-        val totalRowsFromPartition = partitionDataDf.count.toInt
+        val totalRowsFromPartition = partitionDataDf.count().toInt
         totalRowsFromQueue += totalRowsFromPartition
 
         assert(totalRowsFromPartition >= totalRowsConsumed)
@@ -465,7 +467,7 @@ class YTsaurusStreamingTest extends AnyFlatSpec with Matchers with LocalSpark wi
       )) {
       Thread.sleep(2000)
     }
-    queries.foreach(_.stop)
+    queries.foreach(_.stop())
 
     for (resultPath <- consumersAndResultPathsPairs.map(pair => pair._2)) {
       val resultDF = spark.read
@@ -799,7 +801,7 @@ class YTsaurusStreamingTest extends AnyFlatSpec with Matchers with LocalSpark wi
         intermediateSchema
       )
 
-      val expectedDF = tempDF.withColumn("yson", col("yson").cast(YsonType))
+      val expectedDF = tempDF.withColumn("yson", col("yson").cast(new YsonType()))
 
       resultDF.schema.fields.map(_.copy(metadata = Metadata.empty)) shouldEqual
         expectedDF.schema.fields.map(_.copy(metadata = Metadata.empty))
@@ -1006,7 +1008,7 @@ class YTsaurusStreamingTest extends AnyFlatSpec with Matchers with LocalSpark wi
             .filter(col("__spyt_streaming_src_tablet_index") === partitionIndex)
 
           val totalRowsConsumed = currentOffsetPartitions(partitionIndex) + 1
-          val totalRowsFromPartition = partitionDataDf.count.toInt
+          val totalRowsFromPartition = partitionDataDf.count().toInt
           totalRowsFromQueue += totalRowsFromPartition
 
           assert(totalRowsFromPartition >= totalRowsConsumed)
@@ -1086,7 +1088,7 @@ object YTsaurusStreamingTest {
     case yson: YsonBinary => yson.bytes.toList
     case seq: Iterable[_] => seq.map(normalizeRow).toList
     case javaList: java.util.List[_] => javaList.asScala.map(normalizeRow).toList
-    case javaMap: java.util.Map[_, _] => javaMap.asScala.mapValues(normalizeRow).toMap
+    case javaMap: java.util.Map[_, _] => javaMap.asScala.map(e => e._1 -> normalizeRow(e._2)).toMap
     case other => other
   }
 }

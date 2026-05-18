@@ -17,7 +17,8 @@ class YtSortedTableAggregationTest extends AnyFlatSpec with Matchers with LocalS
   with TmpDir with MockitoSugar with DynTableTestUtils with YtDistributedReadingTestUtils {
   behavior of "YtInputSplit"
 
-  import spark.implicits._
+  private val sqlImplicits = SparkAdapter.instance.sparkImplicits(spark)
+  import sqlImplicits._
 
   // 1Kb ~ 200 rows with 2 long numbers
   private val conf = Map(

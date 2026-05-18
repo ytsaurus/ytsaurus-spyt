@@ -7,6 +7,7 @@ import org.apache.spark.sql.util.CaseInsensitiveStringMap
 import org.apache.spark.sql.{SQLContext, SparkSession}
 import tech.ytsaurus.ysontree.{YTreeNode, YTreeTextSerializer}
 
+import java.util.{Map => JMap}
 import java.util.Properties
 import scala.annotation.tailrec
 import scala.jdk.CollectionConverters._
@@ -138,12 +139,9 @@ package object config {
       setYtConf(configEntry.name, configEntry.set(value))
     }
 
-    def getConfWithPrefix(prefix: String): Map[String, String] = {
+    def getConfWithPrefix(prefix: String): JMap[String, String] = {
       val fullPrefix = s"$configurationPrefix.$prefix."
-      configuration.asScala
-        .filter(_.getKey.startsWith(fullPrefix))
-        .map(entry => (entry.getKey.drop(fullPrefix.length), entry.getValue))
-        .toMap
+      configuration.getPropsWithPrefix(fullPrefix)
     }
 
     override def getAllKeys: Seq[String] = {

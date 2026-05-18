@@ -16,7 +16,7 @@ from yt.wrapper.spec_builders import VanillaSpecBuilder  # noqa: E402
 
 from .conf import get_spark_distributive  # noqa: E402
 from .conf import read_metrics_conf, read_spark_defaults_conf  # noqa: E402
-from .utils import SparkDiscovery, call_get_proxy_address_url, parse_memory  # noqa: E402
+from .utils import SparkDiscovery, call_get_proxy_address_url, parse_memory, get_scala_version  # noqa: E402
 from .enabler import SpytEnablers  # noqa: E402
 from .version import __version__  # noqa: E402
 
@@ -129,6 +129,7 @@ class HistoryServerConfig(NamedTuple):
 
 class CommonSpecParams(NamedTuple):
     spark_distributive: str
+    scala_version: str
     java_home: str
     extra_java_opts: List[str]
     environment: dict
@@ -180,7 +181,8 @@ def _launcher_command(component: str, common_params: CommonSpecParams, additiona
     if command := common_params.entrypoint:
         java_bin = f'{command} {java_bin}'
     classpath = (f'{common_params.config.spyt_home}/conf/:'
-                 f'{common_params.config.spyt_home}/jars/*:'
+                 f'{common_params.config.spyt_home}/jars/scala-{common_params.scala_version}/*:'
+                 f'{common_params.config.spyt_home}/jars/common/*:'
                  f'{common_params.config.spark_home}/jars/*')
     extra_java_opts_str = " ".join(extra_java_opts)
     run_launcher = "{} -Xmx{} -cp {} {}".format(java_bin, xmx, classpath, extra_java_opts_str)
@@ -479,7 +481,7 @@ def build_spark_operation_spec(config: dict, client: YtClient,
     if not isinstance(entrypoint, str):
         entrypoint = shlex.join(entrypoint)
     common_params = CommonSpecParams(
-        spark_distr, java_home, extra_java_opts, environment,
+        spark_distr, get_scala_version(), java_home, extra_java_opts, environment,
         spark_conf_common, common_task_spec, common_config, entrypoint,
     )
     builder = VanillaSpecBuilder()

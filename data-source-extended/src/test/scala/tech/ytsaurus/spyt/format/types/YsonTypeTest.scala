@@ -16,12 +16,13 @@ import tech.ytsaurus.spyt.wrapper.table.OptimizeMode
 
 class YsonTypeTest extends AnyFlatSpec with Matchers with LocalSpark with TmpDir with TestUtils {
 
-  import spark.implicits._
+  private val sqlImplicits = SparkAdapter.instance.sparkImplicits(spark)
+  import sqlImplicits._
 
   def collectBytes(path: String): Seq[Array[Byte]] = {
     spark.read.yt(path)
-      .withColumn("value", 'value.cast(BinaryType))
-      .as[Array[Byte]].collect()
+      .withColumn("value", $"value".cast(BinaryType))
+      .as[Array[Byte]].collect().toSeq
   }
 
   "YtFormat" should "read and write yson" in {
@@ -33,7 +34,7 @@ class YsonTypeTest extends AnyFlatSpec with Matchers with LocalSpark with TmpDir
     val dfWithHint = spark.read.schemaHint("value" -> ArrayType(LongType)).yt(s"$tmpPath/2")
     dfWithHint.write.yt(s"$tmpPath/3")
 
-    spark.read.yt(s"$tmpPath/1").schema.head.dataType shouldEqual YsonType
+    spark.read.yt(s"$tmpPath/1").schema.head.dataType shouldEqual new YsonType()
     collectBytes(s"$tmpPath/2") should contain theSameElementsAs expected
     collectBytes(s"$tmpPath/3") should contain theSameElementsAs expected
     dfWithHint.as[Array[Long]].collect() should contain theSameElementsAs initial
@@ -43,7 +44,7 @@ class YsonTypeTest extends AnyFlatSpec with Matchers with LocalSpark with TmpDir
     Seq(Seq(1, 2, 3), Seq(4, 5, 6)).toDF().coalesce(1).write.yt(tmpPath)
 
     val res = spark.read.yt(tmpPath)
-      .withColumn("value", 'value.cast(BinaryType))
+      .withColumn("value", $"value".cast(BinaryType))
       .as[Array[Byte]].collect()
 
     res should contain theSameElementsAs Seq(
@@ -58,7 +59,7 @@ class YsonTypeTest extends AnyFlatSpec with Matchers with LocalSpark with TmpDir
       Array[Byte](91, 2, 8, 59, 2, 10, 59, 2, 12, 93)
     ).toDF()
       .coalesce(1)
-      .withColumn("value", 'value.cast(YsonType))
+      .withColumn("value", $"value".cast(new YsonType()))
       .write.yt(tmpPath)
     val res = spark.read.schemaHint("value" -> ArrayType(LongType)).yt(tmpPath).as[Array[Long]]
 
@@ -85,12 +86,12 @@ class YsonTypeTest extends AnyFlatSpec with Matchers with LocalSpark with TmpDir
     val df1 = Seq("a", "b", "c")
       .toDF("value1")
       .withColumn("value2", lit(null).cast(StringType))
-      .withYsonColumn("info", struct('value1, 'value2))
+      .withYsonColumn("info", struct($"value1", $"value2"))
 
     val df2 = Seq("A", "B", "C")
       .toDF("value2")
       .withColumn("value1", lit(null).cast(StringType))
-      .withYsonColumn("info", struct('value1, 'value2))
+      .withYsonColumn("info", struct($"value1", $"value2"))
 
     df1.unionByName(df2).coalesce(1).write.yt(tmpPath)
 
@@ -104,7 +105,7 @@ class YsonTypeTest extends AnyFlatSpec with Matchers with LocalSpark with TmpDir
       )
       .yt(tmpPath)
 
-    rawSchema.find(_.name == "info").get.dataType shouldEqual YsonType
+    rawSchema.find(_.name == "info").get.dataType shouldEqual new YsonType()
     res.collect() should contain theSameElementsAs Seq(
       Row("a", null, Row("a", null)),
       Row("b", null, Row("b", null)),
@@ -120,7 +121,7 @@ class YsonTypeTest extends AnyFlatSpec with Matchers with LocalSpark with TmpDir
     val res = spark.read.yt(tmpPath)
 
     res.columns should contain theSameElementsAs Encoders.product[Test].schema.fieldNames
-    res.schema.map(_.dataType) should contain theSameElementsAs Encoders.product[Test].schema.map(_ => YsonType)
+    res.schema.map(_.dataType) should contain theSameElementsAs Encoders.product[Test].schema.map(_ => new YsonType())
     res.collect().length shouldEqual 1
   }
 
@@ -128,7 +129,7 @@ class YsonTypeTest extends AnyFlatSpec with Matchers with LocalSpark with TmpDir
     Seq(Seq(1, 2, 3), Seq(4, 5, 6)).toDF().coalesce(1).write.optimizeFor(OptimizeMode.Scan).yt(tmpPath)
 
     val res = spark.read.yt(tmpPath)
-      .withColumn("value", 'value.cast(BinaryType))
+      .withColumn("value", $"value".cast(BinaryType))
       .as[Array[Byte]].collect()
 
     res should contain theSameElementsAs Seq(
@@ -145,7 +146,7 @@ class YsonTypeTest extends AnyFlatSpec with Matchers with LocalSpark with TmpDir
         Array[Byte](7, 8, 9)
       ).toDF()
         .coalesce(1)
-        .withColumn("value", 'value.cast(YsonType))
+        .withColumn("value", $"value".cast(new YsonType()))
         .write.yt(tmpPath)
     }
     Logger.getRootLogger.setLevel(Level.WARN)
@@ -176,19 +177,19 @@ class YsonTypeTest extends AnyFlatSpec with Matchers with LocalSpark with TmpDir
     val baseDf = spark.read.yt(s"$tmpPath/1")
 
     var msg = intercept[IllegalArgumentException] {
-      baseDf.withColumn("value2", struct('key, 'value1)).write.yt(s"$tmpPath/2")
+      baseDf.withColumn("value2", struct($"key", $"value1")).write.yt(s"$tmpPath/2")
     }.getMessage
 
     msg should startWith("YT data source does not support struct<key:int,value1:yson>")
 
     msg = intercept[IllegalArgumentException] {
-      baseDf.withColumn("value2", map('key, 'value1)).write.yt(s"$tmpPath/2")
+      baseDf.withColumn("value2", map($"key", $"value1")).write.yt(s"$tmpPath/2")
     }.getMessage
 
     msg should startWith("YT data source does not support map<int,yson>")
 
     msg = intercept[IllegalArgumentException] {
-      baseDf.withColumn("value2", array('value1)).write.yt(s"$tmpPath/2")
+      baseDf.withColumn("value2", array($"value1")).write.yt(s"$tmpPath/2")
     }.getMessage
 
     msg should startWith("YT data source does not support array<yson>")
@@ -203,7 +204,7 @@ class YsonTypeTest extends AnyFlatSpec with Matchers with LocalSpark with TmpDir
       Seq(Seq(1, 2, 3), Seq(4, 5, 6)).toDF().coalesce(1).write.yt(tmpPath)
 
       val res = spark.read.yt(tmpPath)
-        .withColumn("value", 'value.cast(BinaryType))
+        .withColumn("value", $"value".cast(BinaryType))
         .as[Array[Byte]].collect()
 
       res should contain theSameElementsAs Seq(
@@ -228,7 +229,7 @@ class YsonTypeTest extends AnyFlatSpec with Matchers with LocalSpark with TmpDir
         Array[Byte](91, 2, 8, 59, 2, 10, 59, 2, 12, 93)
       ).toDF()
         .coalesce(1)
-        .withColumn("value", 'value.cast(YsonType))
+        .withColumn("value", $"value".cast(new YsonType()))
         .write.yt(tmpPath)
 
       sys.props -= "spark.testing"

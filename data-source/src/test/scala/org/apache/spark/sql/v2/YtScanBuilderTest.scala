@@ -15,7 +15,7 @@ class YtScanBuilderTest extends AnyFlatSpec with Matchers with SchemaTestUtils w
     val dataSchema = StructType(Seq(
       structField("a", DoubleType, nullable = false, metadata = new MetadataBuilder().putString("a", "b")),
       structField("b", IntegerType)))
-    val result = YtScanBuilderBase.pushStructMetadata(requiredSchema, dataSchema)
+    val result = YtScanBuilder.pushStructMetadata(requiredSchema, dataSchema)
     result shouldBe StructType(Seq(
       structField("a", DoubleType, nullable = false, metadata = new MetadataBuilder().putString("a", "b"))
     ))
@@ -33,7 +33,7 @@ class YtScanBuilderTest extends AnyFlatSpec with Matchers with SchemaTestUtils w
         StructField("c", BooleanType, nullable = false, metadata = new MetadataBuilder().putString("s", "t").build())
       )))
     ))
-    val result = YtScanBuilderBase.pushStructMetadata(requiredSchema, dataSchema)
+    val result = YtScanBuilder.pushStructMetadata(requiredSchema, dataSchema)
     result shouldBe StructType(Seq(
       structField("b", StructType(Seq(
         StructField("c", BooleanType, nullable = false, metadata = new MetadataBuilder().putString("s", "t").build())
@@ -46,7 +46,7 @@ class YtScanBuilderTest extends AnyFlatSpec with Matchers with SchemaTestUtils w
       structField("a", StringType, nullable = false)))
     val dataSchema = StructType(Seq(
       structField("a", StringType, nullable = true)))
-    val result = YtScanBuilderBase.pushStructMetadata(requiredSchema, dataSchema)
+    val result = YtScanBuilder.pushStructMetadata(requiredSchema, dataSchema)
     result shouldBe StructType(Seq(
       structField("a", StringType, nullable = true)
     ))
@@ -63,7 +63,7 @@ class YtScanBuilderTest extends AnyFlatSpec with Matchers with SchemaTestUtils w
         StructField("c", BooleanType, nullable = true)
       )), nullable = true)
     ))
-    val result = YtScanBuilderBase.pushStructMetadata(requiredSchema, dataSchema)
+    val result = YtScanBuilder.pushStructMetadata(requiredSchema, dataSchema)
     result shouldBe StructType(Seq(
       structField("b", StructType(Seq(
         StructField("c", BooleanType, nullable = true)
@@ -81,7 +81,7 @@ class YtScanBuilderTest extends AnyFlatSpec with Matchers with SchemaTestUtils w
         StructField("p", NullType, nullable = false, metadata = new MetadataBuilder().putString("0", "A").putString("1", "B").build())
       )), StringType), containsNull = false), nullable = false, metadata = new MetadataBuilder().putString("2", "C"))
     ))
-    val result = YtScanBuilderBase.pushStructMetadata(requiredSchema, dataSchema)
+    val result = YtScanBuilder.pushStructMetadata(requiredSchema, dataSchema)
     result shouldBe StructType(Seq(
       structField("b", ArrayType(MapType(StructType(Seq(
         StructField("p", NullType, nullable = false, metadata = new MetadataBuilder().putString("0", "A").putString("1", "B").build())

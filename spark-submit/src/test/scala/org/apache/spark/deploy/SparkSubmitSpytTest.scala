@@ -13,7 +13,7 @@ class SparkSubmitSpytTest extends AnyFlatSpec with Matchers {
   private val submit = new SparkSubmit()
 
   it should "submit applications to YTsaurus scheduler in client mode" in {
-    val appArgs = new SparkSubmitArguments(ytArgs("client"))
+    val appArgs = new SparkSubmitArguments(ytArgs("client").toSeq)
 
     val (childArgs, classpath, conf, mainClass) = submit.prepareSubmitEnvironment(appArgs)
 
@@ -28,7 +28,7 @@ class SparkSubmitSpytTest extends AnyFlatSpec with Matchers {
   }
 
   it should "submit applications to YTsaurus scheduler in cluster mode" in {
-    val appArgs = new SparkSubmitArguments(ytArgs("cluster"))
+    val appArgs = new SparkSubmitArguments(ytArgs("cluster").toSeq)
     appArgs.pyFiles shouldBe "yt:///path/to/my/super/lib.zip"
 
     val (childArgs, classpath, conf, mainClass) = submit.prepareSubmitEnvironment(appArgs)
@@ -47,7 +47,7 @@ class SparkSubmitSpytTest extends AnyFlatSpec with Matchers {
   }
 
   it should "submit python applications to Spark Standalone cluster in cluster mode" in {
-    val appArgs = new SparkSubmitArguments(standaloneArgs)
+    val appArgs = new SparkSubmitArguments(standaloneArgs.toSeq)
 
     val (childArgs, classpath, conf, mainClass) = submit.prepareSubmitEnvironment(appArgs)
 
@@ -75,7 +75,7 @@ class SparkSubmitSpytTest extends AnyFlatSpec with Matchers {
   }
 
   it should "fail dynamic allocation when YTsaurus shuffle service is disabled" in {
-    val appArgs = new SparkSubmitArguments(dynamicAllocationArgs(false))
+    val appArgs = new SparkSubmitArguments(dynamicAllocationArgs(false).toSeq)
     val ex = intercept[SparkException] {
       submit.prepareSubmitEnvironment(appArgs)
     }
@@ -83,7 +83,7 @@ class SparkSubmitSpytTest extends AnyFlatSpec with Matchers {
   }
 
   it should "fail dynamic allocation when executor instances are not specified" in {
-    val appArgs = new SparkSubmitArguments(dynamicAllocationArgs(true, 0))
+    val appArgs = new SparkSubmitArguments(dynamicAllocationArgs(true, 0).toSeq)
     val ex = intercept[SparkException] {
       submit.prepareSubmitEnvironment(appArgs)
     }
@@ -91,7 +91,7 @@ class SparkSubmitSpytTest extends AnyFlatSpec with Matchers {
   }
 
   it should "set proper parameters when dynamic allocation is enabled" in {
-    val appArgs = new SparkSubmitArguments(dynamicAllocationArgs(true))
+    val appArgs = new SparkSubmitArguments(dynamicAllocationArgs(true).toSeq)
 
     val (childArgs, classpath, conf, mainClass) = submit.prepareSubmitEnvironment(appArgs)
 

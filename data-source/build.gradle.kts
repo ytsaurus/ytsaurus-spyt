@@ -2,10 +2,12 @@ plugins {
     id("tech.ytsaurus.spyt.common.plugin")
 }
 
-dependencies {
-    api(project(":file-system"))
+val fileSystem = ":file-system_${extra["scalaVersion"]}"
 
-    testImplementation(project(mapOf("path" to ":file-system", "configuration" to "testArtifacts")))
+dependencies {
+    api(project(fileSystem))
+
+    testImplementation(project(mapOf("path" to fileSystem, "configuration" to "testArtifacts")))
 }
 
 sourceSets {

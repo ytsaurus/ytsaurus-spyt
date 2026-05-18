@@ -375,7 +375,7 @@ class SchemaConverterTest extends AnyFlatSpec with Matchers
       for (row <- rightYtDataForByteAndShortTests) {
         data += packToRow(buildRow(row._1, row._2, row._3))
       }
-      writeTableFromURow(data, tmpPath, rightYtSchemaForByteAndShortTests)
+      writeTableFromURow(data.toSeq, tmpPath, rightYtSchemaForByteAndShortTests)
 
       val df_1 = spark.read
         .option(YtTableSparkSettings.NullTypeAllowed.name, value = false)
@@ -410,7 +410,7 @@ class SchemaConverterTest extends AnyFlatSpec with Matchers
         .addValue("uint8", TiType.uint8())
         .build()
 
-      writeTableFromURow(data, tmpPath, simpleSchema)
+      writeTableFromURow(data.toSeq, tmpPath, simpleSchema)
 
       val df = spark.read
         .option(YtTableSparkSettings.NullTypeAllowed.name, value = false)

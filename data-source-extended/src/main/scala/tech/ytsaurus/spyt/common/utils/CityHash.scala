@@ -7,7 +7,7 @@ import org.apache.spark.sql.spyt.types.UInt64Type
 import org.apache.spark.sql.{Column, SparkSession}
 import tech.ytsaurus.spyt.SparkAdapter
 
-case class CityHash(children: Seq[Expression], seed: Long) extends HashExpression[Long] {
+case class CityHash(children: Seq[Expression], seed: Long) extends HashExpression[Long] with HashExpressionCompat {
   def this(arguments: Seq[Expression]) = this(arguments, 0L)
 
   override def dataType: DataType = LongType
@@ -22,6 +22,8 @@ case class CityHash(children: Seq[Expression], seed: Long) extends HashExpressio
 
   override protected def withNewChildrenInternal(newChildren: IndexedSeq[Expression]): CityHash =
     copy(children = newChildren)
+
+  override protected def isCollationAware: Boolean = false
 }
 
 object CityHashFunction extends InterpretedHashFunction {
@@ -37,7 +39,7 @@ object CityHashFunction extends InterpretedHashFunction {
 object CityHash {
   @scala.annotation.varargs
   def cityHashUdf(source: Column*): Column = {
-    new Column(new CityHash(source.map(_.expr))).cast(UInt64Type)
+    SparkAdapter.instance.createColumn(source, new CityHash(_)).cast(UInt64Type)
   }
 
   def registerFunction(spark: SparkSession): Unit = {

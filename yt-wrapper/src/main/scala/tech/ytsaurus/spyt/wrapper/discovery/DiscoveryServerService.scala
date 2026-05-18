@@ -76,7 +76,7 @@ class DiscoveryServerService(client: DiscoveryClient, groupId: String,
     Try {
       val attrs = Seq(urlAttr, webUiAttr, webUiUrlAttr, restAttr)
       val members = DiscoveryClientWrapper.listMembers(masterGroupId, attrs = attrs)(client)
-      val masterMember = members.find(_.getId == "master").get
+      val masterMember = members.stream().filter(_.getId == "master").findFirst().get
       Address(
         getMemberAddress(masterMember, urlAttr),
         getMemberAddress(masterMember, webUiAttr),

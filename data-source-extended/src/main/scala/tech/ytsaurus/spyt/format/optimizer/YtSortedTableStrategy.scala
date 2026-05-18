@@ -2,11 +2,11 @@ package tech.ytsaurus.spyt.format.optimizer
 
 import org.apache.spark.sql.catalyst.expressions.{Ascending, Attribute, AttributeReference, NullsFirst, SortOrder}
 import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
-import org.apache.spark.sql.execution.{DependentHashShuffleExchangeExec, FakeHashShuffleExchangeExec, FakeSortShuffleExchangeExec, SparkPlan}
-import org.apache.spark.sql.{SparkSession, Strategy}
+import org.apache.spark.sql.execution.{DependentHashShuffleExchangeExec, FakeHashShuffleExchangeExec, FakeSortShuffleExchangeExec, SparkPlan, SparkStrategy}
+import org.apache.spark.sql.SparkSession
 import YtSortedTableStrategy.getAttributes
 
-case class YtSortedTableStrategy(spark: SparkSession) extends Strategy {
+case class YtSortedTableStrategy(spark: SparkSession) extends SparkStrategy {
   override def apply(plan: LogicalPlan): Seq[SparkPlan] = plan match {
     case LogicalSortedMarker(keys, inner) =>
       // aggregation

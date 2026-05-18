@@ -6,33 +6,28 @@ import org.apache.spark.deploy.DeployMessages
 import org.apache.spark.deploy.master.WorkerInfo
 import org.apache.spark.rpc.RpcEndpointRef
 
-import javax.servlet.http.{HttpServletRequest, HttpServletResponse}
-
 /**
  * A servlet for handling master state requests passed to the [[RestSubmissionServer]].
  */
-private[rest] abstract class MasterStateRequestServlet extends RestServlet {
+private[rest] abstract class MasterStateRequestServlet extends RestServlet with RestServletCompat {
 
   /**
    * If a submission ID is specified in the URL, request the status of the corresponding
    * driver from the Master and include it in the response. Otherwise, return error.
    */
-  protected override def doGet(
-                                request: HttpServletRequest,
-                                response: HttpServletResponse): Unit = {
-    val responseMessage =
-      try {
-        handleMasterState(response)
-      } catch {
-        // The client failed to provide a valid JSON, so this is not our fault
-        case e @ (_: JsonProcessingException | _: SubmitRestProtocolException) =>
-          response.setStatus(HttpServletResponse.SC_BAD_REQUEST)
-          handleError("Malformed request: " + formatException(e))
-      }
-    sendResponse(responseMessage, response)
+  override def processGet(
+    pathInfo: String,
+    getParameter: String => String): (SubmitRestProtocolResponse, Option[Int]) = {
+    try {
+      handleMasterState() -> None
+    } catch {
+      // The client failed to provide a valid JSON, so this is not our fault
+      case e @ (_: JsonProcessingException | _: SubmitRestProtocolException) =>
+        handleError("Malformed request: " + formatException(e)) -> Some(400)
+    }
   }
 
-  protected def handleMasterState(responseServlet: HttpServletResponse): MasterStateResponse
+  protected def handleMasterState(): MasterStateResponse
 }
 
 /**
@@ -47,13 +42,10 @@ private[spark] class MasterStateResponse extends SubmitRestProtocolResponse {
   }
 }
 
-private[rest] class StandaloneMasterStateRequestServlet(
-                                                         masterEndpoint: RpcEndpointRef,
-                                                         conf: SparkConf)
+private[rest] class StandaloneMasterStateRequestServlet(masterEndpoint: RpcEndpointRef, conf: SparkConf)
   extends MasterStateRequestServlet {
-  override protected def handleMasterState(
-                                            responseServlet: HttpServletResponse
-                                          ): MasterStateResponse = {
+
+  override protected def handleMasterState(): MasterStateResponse = {
     val response = masterEndpoint.askSync[DeployMessages.MasterStateResponse](
       DeployMessages.RequestMasterState)
     val masterStateResponse = new MasterStateResponse

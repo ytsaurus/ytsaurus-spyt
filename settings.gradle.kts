@@ -11,55 +11,55 @@ if (isSnapshot) {
 }
 
 val testSparkVersion: String? by settings
-val adapterSparkVersions = listOf("3.2.2", "3.3.0", "3.4.0", "3.5.0").map { it to it.replace(".", "") }
+val testScalaVersion: String? by settings
+val adapterSparkVersions = listOf("3.3.0", "3.4.0", "3.5.0", "4.0.0", "4.1.0", "4.2.0").map {
+    it to it.replace(".", "")
+}
 val sparkBundle = listOf("spark-core", "spark-sql")
 
-include("spark-adapter-api")
-project(":spark-adapter-api").projectDir = file("spark-adapter/api")
+val subprojects = mapOf(
+    "spark-adapter-api" to "spark-adapter/api",
+    "spyt-patch-agent" to "spark-patch",
+    "spark-adapter-provider" to "spark-adapter/provider",
+    "data-source-base" to "data-source"
+) + adapterSparkVersions.map { (version, vShort) ->
+    "spark-adapter-impl-$vShort" to "spark-adapter/impl/spark-$version"
+} + listOf(
+    "yt-wrapper",
+    "file-system",
+    "data-source-extended",
+    "resource-manager",
+    "shuffle-service",
+    "spyt-connect",
+    "spark-cluster",
+    "spark-submit",
+    "spyt-test"
+).map { it to it }
 
-include("spyt-patch-agent")
-project(":spyt-patch-agent").projectDir = file("spark-patch")
+val scalaVersions = if (testScalaVersion != null) listOf(testScalaVersion!!) else listOf("2.13", "2.12")
+gradle.extra["scalaVersions"] = scalaVersions
 
-include("spark-adapter-impl-base")
-project(":spark-adapter-impl-base").projectDir = file("spark-adapter/impl/base")
-
-adapterSparkVersions.forEach { (version, vShort) ->
-    include("spark-adapter-impl-$vShort")
-    project(":spark-adapter-impl-$vShort").projectDir = file("spark-adapter/impl/spark-$version")
+scalaVersions.forEach { scalaVersion ->
+    subprojects.forEach { (baseName, projectPath) ->
+        if (scalaVersion == "2.13" || !baseName.startsWith("spark-adapter-impl-4")) {
+            val subprojectName = ":${baseName}_$scalaVersion"
+            include(subprojectName)
+            project(subprojectName).projectDir = file(projectPath)
+        }
+    }
 }
-
-include("spark-adapter-provider")
-project(":spark-adapter-provider").projectDir = file("spark-adapter/provider")
-
-include("yt-wrapper")
-
-include("file-system")
-
-include("data-source-base")
-project(":data-source-base").projectDir = file("data-source")
-
-include("data-source-extended")
-
-include("resource-manager")
-
-include("shuffle-service")
-
-include("spyt-connect")
-
-include("spark-cluster")
-
-include("spark-submit")
-
-include("spyt-test")
 
 include("spyt-package")
 
-val publishBlacklist = setOf("spark-adapter-impl-base", "spyt-test", "spyt-package")
+val publishBlacklist = setOf("spyt-test", "spyt-package")
 val excludeScalaList = setOf("ytsaurus-spyt", "spyt-package")
 
 gradle.allprojects {
-    val scalaProject = name !in excludeScalaList
-    val publishProject = name !in publishBlacklist
+    val scalaVersion = scalaVersions.find { name.endsWith("_$it") }
+    val baseName = if (scalaVersion != null) name.substringBefore("_$scalaVersion") else name
+
+    val scalaProject = baseName !in excludeScalaList
+    val publishProject = baseName !in publishBlacklist
     apply(plugin = "java-library")
     if (scalaProject) {
         apply(plugin = "scala")
@@ -72,6 +72,10 @@ gradle.allprojects {
     version = spytVersion
     extra["isSnapshot"] = isSnapshot
     extra["publishProject"] = publishProject
+    if (scalaVersion != null) {
+        extra["scalaVersion"] = scalaVersion
+        layout.buildDirectory = layout.buildDirectory.get().dir("scala-$scalaVersion")
+    }
 
     group = "tech.ytsaurus.spyt"
 }
@@ -79,30 +83,35 @@ gradle.allprojects {
 dependencyResolutionManagement {
     versionCatalogs {
         create("libs") {
-            fun createSparkBundle(suffix: String, versionRef: String): Unit {
+            fun createSparkBundle(suffix: String, versionRef: String, scalaVersion: String = "2.13"): Unit {
                 sparkBundle.forEach { libName ->
-                    library("$libName$suffix", "org.apache.spark", "${libName}_2.12").versionRef(versionRef)
+                    library("$libName$suffix", "org.apache.spark", "${libName}_${scalaVersion}").versionRef(versionRef)
                 }
                 bundle("spark$suffix", sparkBundle.map { "$it$suffix" })
             }
 
             createSparkBundle("", "spark-compile")
+            createSparkBundle("212", "spark-compile212", "2.12")
 
-            adapterSparkVersions.forEach { (version, vShort) ->
-                val versionRef = "spark$vShort"
-                version(versionRef, version)
-                createSparkBundle(vShort, versionRef)
+            adapterSparkVersions.forEach { (sparkVersion, sparkVersionShort) ->
+                val versionRef = "spark$sparkVersionShort"
+                // TODO: temporarily use 4.2.0-preview4, remove before merge
+                val updatedVersion = if (sparkVersion == "4.2.0") "4.2.0-preview4" else sparkVersion
+                version(versionRef, updatedVersion)
+                createSparkBundle(sparkVersionShort, versionRef)
             }
 
-            val testSparkVersionRef = if (testSparkVersion != null) {
+            val (testSparkVersionRef, testSparkVersionRef212) = if (testSparkVersion != null) {
                 version("spark-test") {
                     strictly(testSparkVersion!!)
                 }
-                "spark-test"
+                "spark-test" to "spark-test"
             } else {
-                "spark-compile"
+                "spark-compile" to "spark-compile212"
             }
+
             createSparkBundle("test", testSparkVersionRef)
+            createSparkBundle("test212", testSparkVersionRef212, "2.12")
         }
     }
 }

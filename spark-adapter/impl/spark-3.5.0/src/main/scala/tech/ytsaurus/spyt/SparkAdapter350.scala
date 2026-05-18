@@ -6,11 +6,14 @@ import org.apache.spark.sql.Row
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.encoders.ExpressionEncoder
 import org.apache.spark.sql.catalyst.expressions.{Attribute, AttributeReference}
+import org.apache.spark.sql.catalyst.parser.SqlBaseParser.PrimitiveDataTypeContext
 import org.apache.spark.sql.catalyst.types.{DataTypeUtils, PhysicalNumericType}
 import org.apache.spark.sql.execution.datasources.{PartitionDirectory, PartitionedFile}
 import org.apache.spark.sql.types.{NumericType, StructType}
 import tech.ytsaurus.spyt.format.YtPartitioningSupport.YtPartitionedFileBase
 import tech.ytsaurus.spyt.format.{YtPartitionedFile350, YtPartitioningDelegate}
+
+import java.util.Locale
 
 trait SparkAdapter350 extends SparkAdapter {
   override def createPartitionedFile(partitionValues: InternalRow, filePath: String,
@@ -37,5 +40,11 @@ trait SparkAdapter350 extends SparkAdapter {
 
   override def fromAttributes(attributes: Seq[Attribute]): StructType = {
     DataTypeUtils.fromAttributes(attributes)
+  }
+
+  override def isUint64DataTypeContext(ctx: PrimitiveDataTypeContext, identifierId: Int): Boolean = {
+    ctx.`type`.start.getType == identifierId &&
+      ctx.INTEGER_VALUE().isEmpty &&
+      ctx.`type`.start.getText.toLowerCase(Locale.ROOT) == "uint64"
   }
 }

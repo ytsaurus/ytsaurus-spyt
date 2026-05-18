@@ -47,7 +47,7 @@ def _build_configs(enable_tmpfs=False, alias = None):
                                           enable_tmpfs=enable_tmpfs, enablers=enablers, rpc_job_proxy_thread_pool_size=6,
                                           spark_discovery=discovery, enable_ytsaurus_shuffle=True)
     common_params = CommonSpecParams(
-        spark_distributive="spark-3.2.2-bin-hadoop3.2.tgz", java_home="/opt/jdk",
+        spark_distributive="spark-3.3.0-bin-hadoop3.tgz", scala_version="2.12", java_home="/opt/jdk",
         extra_java_opts=["-Dtest=true"], environment={"TEST_ENV": "True"}, spark_conf={"spark.yt.option": "2024"},
         task_spec={"file_paths": ["//home/job.jar"]}, config=common_config)
     resources = WorkerResources(cores=2, memory="8Gb", num=4, cores_overhead=1, timeout="1m", memory_overhead="1Gb")
@@ -89,9 +89,10 @@ def _build_operation_spec(yt_client, alias = None):
 def test_worker_spec_builder():
     spec = _build_worker_spec()
     expected_command = \
-        './setup-spyt-env.sh --spark-home ./spark --spark-distributive spark-3.2.2-bin-hadoop3.2.tgz && ' \
+        './setup-spyt-env.sh --spark-home ./spark --spark-distributive spark-3.3.0-bin-hadoop3.tgz && ' \
         '/opt/jdk/bin/java -Xmx2g ' \
-        '-cp $HOME/./spark/spyt-package/conf/:$HOME/./spark/spyt-package/jars/*:$HOME/./spark/spark/jars/* ' \
+        '-cp $HOME/./spark/spyt-package/conf/:$HOME/./spark/spyt-package/jars/scala-2.12/*:' \
+        '$HOME/./spark/spyt-package/jars/common/*:$HOME/./spark/spark/jars/* ' \
         '-Dtest=true -Dspark.yt.option=2024 -Dspark.workerLog.tablePath=yt:///home/cluster/logs/worker_log ' \
         '-Dspark.ui.prometheus.enabled=true -Dspark.worker.resource.gpu.amount=1 ' \
         '-Dspark.worker.resource.gpu.discoveryScript=$HOME/./spark/spyt-package/bin/getGpusResources.sh ' \
@@ -124,9 +125,10 @@ def test_worker_spec_builder():
 def test_worker_spec_builder_enable_tmpfs():
     spec = _build_worker_spec(enable_tmpfs=True)
     expected_command = \
-        './setup-spyt-env.sh --spark-home ./spark --spark-distributive spark-3.2.2-bin-hadoop3.2.tgz && ' \
+        './setup-spyt-env.sh --spark-home ./spark --spark-distributive spark-3.3.0-bin-hadoop3.tgz && ' \
         '/opt/jdk/bin/java -Xmx2g ' \
-        '-cp $HOME/./spark/spyt-package/conf/:$HOME/./spark/spyt-package/jars/*:$HOME/./spark/spark/jars/* ' \
+        '-cp $HOME/./spark/spyt-package/conf/:$HOME/./spark/spyt-package/jars/scala-2.12/*:' \
+        '$HOME/./spark/spyt-package/jars/common/*:$HOME/./spark/spark/jars/* ' \
         '-Dtest=true -Dspark.yt.option=2024 -Dspark.workerLog.tablePath=yt:///home/cluster/logs/worker_log ' \
         '-Dspark.ui.prometheus.enabled=true -Dspark.worker.resource.gpu.amount=1 ' \
         '-Dspark.worker.resource.gpu.discoveryScript=$HOME/./spark/spyt-package/bin/getGpusResources.sh ' \

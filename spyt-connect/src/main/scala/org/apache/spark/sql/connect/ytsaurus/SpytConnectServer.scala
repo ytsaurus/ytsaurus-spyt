@@ -9,6 +9,7 @@ import org.slf4j.LoggerFactory
 import tech.ytsaurus.client.CompoundClient
 import tech.ytsaurus.client.request.UpdateOperationParameters
 import tech.ytsaurus.core.GUID
+import tech.ytsaurus.spyt.SparkVersionUtils
 import tech.ytsaurus.spyt.wrapper.Utils
 import tech.ytsaurus.spyt.wrapper.client.YtClientConfigurationConverter.ytClientConfiguration
 import tech.ytsaurus.spyt.wrapper.client.YtClientProvider
@@ -136,7 +137,13 @@ object SpytConnectServer {
   }
 
   private def keepListening(idleTimeout: Long): Boolean = SparkConnectService.listActiveExecutions match {
-    case Left(lastExecutionFinishTime) => System.currentTimeMillis() - lastExecutionFinishTime <= idleTimeout
+    case Left(lastExecutionFinishTime) =>
+      val (currentTime, multiplier) = if (SparkVersionUtils.lessThan("4.0.0")) {
+        (System.currentTimeMillis(), 1L)
+      } else {
+        (System.nanoTime(), 1000000L)
+      }
+      currentTime - lastExecutionFinishTime <= idleTimeout * multiplier
     case _ => true
   }
 

@@ -20,7 +20,8 @@ class AutoPartitioningTest extends AnyFlatSpec with Matchers with LocalSpark wit
   behavior of "YtDataSource"
 
   import TestPartitionedFile._
-  import spark.implicits._
+  private val sqlImplicits = SparkAdapter.instance.sparkImplicits(spark)
+  import sqlImplicits._
 
   it should "split large chunks in reading plan for static table" in {
     val data = 1 to 10
@@ -34,7 +35,7 @@ class AutoPartitioningTest extends AnyFlatSpec with Matchers with LocalSpark wit
     }
 
     partitions.length shouldEqual 10
-    getPartitionsFiles(partitions) should contain theSameElementsAs (0 until 10).map( i =>
+    getPartitionsFiles(partitions.toSeq) should contain theSameElementsAs (0 until 10).map( i =>
       Seq(Static(tmpPath, i, i + 1)),
     )
     res should contain theSameElementsAs data
@@ -65,7 +66,7 @@ class AutoPartitioningTest extends AnyFlatSpec with Matchers with LocalSpark wit
     }
 
     partitions.length shouldEqual 1
-    getPartitionsFiles(partitions) should contain theSameElementsAs Seq(
+    getPartitionsFiles(partitions.toSeq) should contain theSameElementsAs Seq(
       Seq(Static(tmpPath, 0, 100))
     )
     res should contain theSameElementsAs data

@@ -3,9 +3,7 @@ package tech.ytsaurus.spyt.shuffle;
 import org.apache.commons.codec.binary.Hex;
 import org.apache.spark.shuffle.api.ShuffleMapOutputWriter;
 import org.apache.spark.shuffle.api.ShufflePartitionWriter;
-import org.apache.spark.shuffle.api.WritableByteChannelWrapper;
 import org.apache.spark.shuffle.api.metadata.MapOutputCommitMessage;
-import org.jetbrains.annotations.NotNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import tech.ytsaurus.client.AsyncWriter;
@@ -13,13 +11,11 @@ import tech.ytsaurus.client.rows.UnversionedRow;
 import tech.ytsaurus.client.rows.UnversionedValue;
 import tech.ytsaurus.core.tables.ColumnValueType;
 
-import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.ByteBuffer;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
-import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
 public class YTsaurusShuffleMapOutputWriter implements ShuffleMapOutputWriter {

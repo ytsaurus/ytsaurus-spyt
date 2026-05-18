@@ -7,6 +7,7 @@ import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.execution.datasources.{FilePartition, PartitionDirectory, PartitionedFile}
 import org.apache.spark.sql.types.StructType
 import org.slf4j.LoggerFactory
+
 import scala.jdk.CollectionConverters._
 import tech.ytsaurus.client.CompoundClient
 import tech.ytsaurus.core.cypress.{RangeLimit, YPath}
@@ -25,6 +26,9 @@ import tech.ytsaurus.spyt.wrapper.client.YtClientProvider
 import tech.ytsaurus.spyt.wrapper.config.{SparkYtSparkSession, YT_MIN_PARTITION_BYTES}
 import tech.ytsaurus.spyt.wrapper.table.{OptimizeMode, YtReadContext}
 import tech.ytsaurus.ysontree.YTreeNode
+
+import java.util.{List => JList}
+import java.util.stream.{Collectors, IntStream, LongStream, Stream => JStream}
 
 
 object YtFilePartition {
@@ -156,23 +160,31 @@ object YtFilePartition {
     }
   }
 
-  private def splitDynamicTableManual(path: YtHadoopPath, keyColumns: Seq[String], partitionValues: InternalRow)
+  private def splitDynamicTableManual(path: YtHadoopPath, hasNoKeyColumns: Boolean, partitionValues: InternalRow)
     (implicit yt: CompoundClient): Seq[PartitionedFile] = {
     // Limits could be merged when partitions are expected to be small.
-    val limits = if (keyColumns.isEmpty) {
-      val tabletCount = YtWrapper.tabletCount(path.toYPath.justPath().toStableString)
-      (0L until tabletCount).map(tabletIndex => RangeLimit.builder().setTabletIndex(tabletIndex).build())
+    val yPath = path.toYPath.justPath()
+    val limits: JStream[RangeLimit] = if (hasNoKeyColumns) {
+      val tabletCount = YtWrapper.tabletCount(yPath.toStableString)
+      LongStream.range(0, tabletCount).mapToObj(tabletIndex => RangeLimit.builder().setTabletIndex(tabletIndex).build())
     } else {
-      val pivotKeys = YtWrapper.pivotKeysYson(path.toYPath.justPath())
-      pivotKeys.map(key => RangeLimit.key(key.asList()))
+      val pivotKeys = YtWrapper.pivotKeysYson(yPath)
+      pivotKeys.stream().map(key => RangeLimit.key(key.asList()))
     }
-    val allLimits = limits :+ RangeLimit.builder().build()
-    val approximatePartitionLength = if (limits.nonEmpty) path.meta.size / limits.length else 0L
-    allLimits.sliding(2).map {
-      case Seq(lowerLimit, upperLimit) =>
-        val yPath = path.toYPath.withRange(lowerLimit, upperLimit)
-        YtPartitionedFileDelegate(yPath, approximatePartitionLength, partitionValues, path)
-    }.toSeq
+    val allLimits = JStream.concat(limits, JStream.of(Seq(RangeLimit.builder().build()): _*))
+      .collect(Collectors.toList())
+    val approximatePartitionLength = if (allLimits.size() > 1) {
+      path.meta.size / (allLimits.size() - 1)
+    } else {
+      0L
+    }
+    val partitionFilesList: JList[YtPartitionedFile] = IntStream.range(0, allLimits.size() - 1).mapToObj { i =>
+      val lowerLimit = allLimits.get(i)
+      val upperLimit = allLimits.get(i + 1)
+      val yPath = path.toYPath.withRange(lowerLimit, upperLimit)
+      YtPartitionedFileDelegate(yPath, approximatePartitionLength, partitionValues, path)
+    }.collect(Collectors.toList())
+    partitionFilesList.asScala.toSeq
   }
 
   def splitFiles(sparkSession: SparkSession,
@@ -195,7 +207,7 @@ object YtFilePartition {
           if (readContext.settings.distributedReadingEnabled || ytPartitioningAllowed) {
             splitTableYtPartitioning(sparkSession, yp, maxSplitBytes, partitionValues, readDataSchema, pushedFilterSegments)
           } else if (yp.meta.isDynamic) {
-            splitDynamicTableManual(yp, keyColumns, partitionValues)
+            splitDynamicTableManual(yp, keyColumns.isEmpty, partitionValues)
           } else {
             splitStaticTableManual(yp, maxSplitBytes, partitionValues)
           }
@@ -301,10 +313,10 @@ object YtFilePartition {
   private def getKeyPartitions(schema: StructType, currentKeys: Seq[String],
     splitFiles: Seq[YtPartitionedFile], keyPartitioningConfig: KeyPartitioningConfig)
     (implicit ctx: YtReadContext): Option[Seq[YtPartitionedFile]] = {
-    log.info(currentKeys.length + " columns try for key partitioning. Key set: " + currentKeys)
+    log.info(s"${currentKeys.length} columns try for key partitioning. Key set: $currentKeys")
     val keySchema = StructType(schema.fields.filter(f => currentKeys.contains(f.name)))
     if (keySchema.fields.map(_.name).toSeq != currentKeys) {
-      log.error("Key partitioning schema is " + keySchema + ", but other keys (" + currentKeys + ") required")
+      log.error(s"Key partitioning schema is $keySchema, but other keys ($currentKeys) required")
       None
     } else {
       if (keySchema.fields.forall(f => ExpressionTransformer.isSupportedDataType(f.dataType))) { // Always true

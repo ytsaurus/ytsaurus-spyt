@@ -4,8 +4,16 @@ from typing import Union
 
 import yt.yson as yt_yson
 from pyspark import SparkContext
-from pyspark.sql.column import _to_java_column, Column
+from pyspark.sql.column import Column
 from pyspark.sql.types import UserDefinedType, BinaryType, IntegralType, LongType, IntegerType
+
+from .utils import check_spark_version
+
+if check_spark_version(less_than="4.0.0"):
+    from pyspark.sql.column import _to_java_column
+else:
+    from pyspark.sql.classic.column import _to_java_column
+
 
 MIN_DATE32 = -53375809
 MAX_DATE32 = 53375807

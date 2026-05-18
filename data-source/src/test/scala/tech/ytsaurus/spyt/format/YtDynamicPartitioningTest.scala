@@ -18,7 +18,8 @@ class YtDynamicPartitioningTest extends AnyFlatSpec with Matchers with LocalSpar
 
   behavior of "YtDynamicPartitioningTest"
 
-  import spark.implicits._
+  private val sqlImplicits = SparkAdapter.instance.sparkImplicits(spark)
+  import sqlImplicits._
 
   private val atomicSchema = new TableSchema.Builder()
     .setUniqueKeys(false)

@@ -34,6 +34,8 @@ object UInt64Long {
     UInt64Long(decimal.longValue())
   }
 
+  def apply(ulong: UInt64Long): UInt64Long = ulong
+
   def fromString(number: String): Long = java.lang.Long.parseUnsignedLong(number)
 
   def toString(value: Long): String = java.lang.Long.toUnsignedString(value)

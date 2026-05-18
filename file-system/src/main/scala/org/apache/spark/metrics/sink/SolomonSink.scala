@@ -3,26 +3,30 @@ package org.apache.spark.metrics.sink
 import com.codahale.metrics.MetricRegistry
 import org.apache.spark.SecurityManager
 import org.slf4j.LoggerFactory
-import tech.ytsaurus.spark.metrics.ReporterConfig
 import tech.ytsaurus.spark.metrics.{ReporterConfig, SolomonConfig, SolomonReporter}
 
 import java.util.Properties
-import scala.util.{Failure, Success, Try}
 
 private[this] case class SolomonSink(props: Properties, registry: MetricRegistry, securityMgr: SecurityManager)
   extends Sink {
 
   private val log = LoggerFactory.getLogger(SolomonSink.getClass)
-  private val reporter: Try[SolomonReporter] = for {
-    solomonConfig <- Try(SolomonConfig.read(props))
-    reporterConfig <- Try(ReporterConfig.read(props))
-    reporter <- SolomonReporter.tryCreateSolomonReporter(registry, solomonConfig, reporterConfig)
+  private val reporter: Option[SolomonReporter] = for {
+    solomonConfig <- Some(SolomonConfig.read(props))
+    reporterConfig <- Some(ReporterConfig.read(props))
+    reporter <- try {
+      SolomonReporter.tryCreateSolomonReporter(registry, solomonConfig, reporterConfig, props)
+    } catch {
+      case ex: RuntimeException =>
+        log.error("Failed to start metrics reporting", ex)
+        None
+    }
   } yield reporter
 
   override def start(): Unit = reporter match {
-    case Failure(ex) =>
-      log.error("No Solomon metrics available", ex)
-    case Success(r) =>
+    case None =>
+      log.info("Solomon reporter is disabled")
+    case Some(r) =>
       r.start()
   }
 

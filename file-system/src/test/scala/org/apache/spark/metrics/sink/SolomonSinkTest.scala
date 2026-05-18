@@ -20,7 +20,8 @@ class SolomonSinkTest extends AnyFunSuite {
   def json(req: Request): Json = parser.parse(req.body).right.get
 
 
-  def checkSink(prepareMetrics: MetricRegistry => Unit, extraProps: Map[String, String] = Map(), appAlias: String = "")
+  def checkSink(prepareMetrics: MetricRegistry => Unit, extraProps: Map[String, String] = Map(),
+                appAlias: String = "", is_app: String = "false")
                (assert: Json => Unit): Assertion = {
     val server = TestHttpServer()
     val registry: MetricRegistry = new MetricRegistry()
@@ -36,6 +37,7 @@ class SolomonSinkTest extends AnyFunSuite {
       props.setProperty("solomon_port", port.toString)
       props.setProperty("reporter_enabled", true.toString)
       props.setProperty("app_alias", appAlias)
+      props.setProperty("is_app", is_app)
       extraProps.foreach(p => props.setProperty(p._1, p._2))
       val sink = SolomonSink(props, registry, null)
       sink.report()
@@ -55,7 +57,7 @@ class SolomonSinkTest extends AnyFunSuite {
   }
 
   test("test empty metric with app_alias label"){
-    checkSink(_ =>{}, appAlias = "alias"){json =>
+    checkSink(_ =>{}, appAlias = "alias", is_app = "true"){json =>
       json.hcursor.downField("commonLabels").downField("app_alias").as[String].right.get shouldBe "alias"
     }
   }

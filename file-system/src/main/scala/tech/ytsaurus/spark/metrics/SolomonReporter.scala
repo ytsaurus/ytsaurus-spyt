@@ -7,9 +7,9 @@ import tech.ytsaurus.spyt.wrapper.LogLazy
 
 import java.time.{Duration, Instant}
 import java.util
+import java.util.Properties
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
-import scala.util.{Failure, Success, Try}
 import scala.util.control.NonFatal
 
 case class SolomonReporter(registry: MetricRegistry, solomonConfig: SolomonConfig, reporterConfig: ReporterConfig)
@@ -67,18 +67,17 @@ object SolomonReporter {
   private val STARTUP_THRESHOLD: Duration = Duration.ofMinutes(1)
 
   def tryCreateSolomonReporter(registry: MetricRegistry, solomonConfig: SolomonConfig, reporterConfig: ReporterConfig,
-                               envAccessor: EnvAccessor = SystemEnvAccessor): Try[SolomonReporter] = {
+                               props: Properties): Option[SolomonReporter] = {
     if (reporterConfig.enabled) {
-      val isSparkApp = envAccessor.getEnv("YT_TASK_NAME") match { case Some("driver") | Some("executor") => true
-        case _ => false
-      }
-      if(isSparkApp && !solomonConfig.commonLabels.keySet.contains(SolomonSinkSettings.SolomonJobLabel.name)) {
-        Failure(new RuntimeException("Failed to start metrics reporting: app_alias option wasn't defined"))
+      val isSparkApp: Boolean = props.getProperty("is_app", "false").toBoolean
+
+      if(isSparkApp && !solomonConfig.commonLabels.contains(SolomonSinkSettings.SolomonJobLabel.name)) {
+        throw new RuntimeException("app_alias option wasn't defined")
       } else {
-        Success(SolomonReporter(registry, solomonConfig, reporterConfig))
+        Some(SolomonReporter(registry, solomonConfig, reporterConfig))
       }
     } else {
-      Failure(new RuntimeException("Solomon reporter is disabled"))
+      None
     }
   }
 }

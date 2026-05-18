@@ -2,7 +2,6 @@ package tech.ytsaurus.spark.metrics
 
 import org.slf4j.{Logger, LoggerFactory}
 import SolomonConfig.Encoding
-import org.apache.spark.SparkEnv
 import tech.ytsaurus.spyt.wrapper.config.PropertiesConf
 import tech.ytsaurus.spyt.HostAndPort
 
@@ -55,11 +54,11 @@ object SolomonConfig {
     )
   }
 
-  private def buildSolomonCommonLabels(props: Properties, envAccessor: EnvAccessor = SystemEnvAccessor): Map[String, String] = {
+  private def buildSolomonCommonLabels(props: Properties): Map[String, String] = {
     import SolomonSinkSettings._
+    val isSparkApp: Boolean = props.getProperty("is_app", "false").toBoolean
 
-    val taskName = envAccessor.getEnv("YT_TASK_NAME")
-    if(props.ytConf(SolomonJobLabel).isBlank || taskName.contains("workers") || taskName.contains("master")) {
+    if(props.ytConf(SolomonJobLabel).isBlank || !isSparkApp) {
       props.ytConf(SolomonCommonLabels)
     } else {
       props.ytConf(SolomonCommonLabels) ++

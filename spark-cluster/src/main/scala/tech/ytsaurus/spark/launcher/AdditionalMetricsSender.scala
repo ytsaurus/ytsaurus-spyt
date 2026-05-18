@@ -32,14 +32,20 @@ object AdditionalMetricsSender {
     val propsOpt = conf.subProperties(instProps, "^sink\\.(.+)\\.(.+)".r).get("solomon")
 
     val reporter = for {
-      props <- Try(propsOpt.get)
-      solomonConfig <- Try(SC.read(props))
-      reporterConfig <- Try(ReporterConfig.read(props))
-      reporter <- SolomonReporter.tryCreateSolomonReporter(registry, solomonConfig, reporterConfig)
+      props <- Some(propsOpt.get)
+      solomonConfig <- Some(SC.read(props))
+      reporterConfig <- Some(ReporterConfig.read(props))
+      reporter <- try {
+        SolomonReporter.tryCreateSolomonReporter(registry, solomonConfig, reporterConfig, props)
+      } catch {
+        case ex: RuntimeException =>
+          log.error("Failed to start metrics reporting", ex)
+          None
+      }
     } yield reporter
 
-    reporter.failed.foreach { ex =>
-      log.error(s"Failed to create solomon reporter: ${ex.getMessage}", ex)
+    if (reporter.isEmpty) {
+      log.info(s"Solomon reporter is disabled")
     }
 
     new AdditionalMetricsSender {

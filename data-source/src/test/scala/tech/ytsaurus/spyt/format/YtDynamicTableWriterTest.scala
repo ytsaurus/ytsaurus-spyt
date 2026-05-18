@@ -106,7 +106,7 @@ class YtDynamicTableWriterTest extends AnyFlatSpec with TmpDir with LocalSpark w
       .build()
 
     YtWrapper.createDynTable(tmpPath, tableSchema)
-    YtWrapper.mountTableSync(tmpPath, Duration.ofMinutes(1))
+    YtWrapper.mountTableSync(tmpPath, 1.minute)
 
     val schema = new StructType()
       .add("key", LongType, nullable = false)

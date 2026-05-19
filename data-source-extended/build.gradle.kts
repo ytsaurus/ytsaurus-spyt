@@ -4,12 +4,11 @@ plugins {
 }
 
 val dataSourceBase = ":data-source-base_${extra["scalaVersion"]}"
-val spytPatchAgent = ":spyt-patch-agent_${extra["scalaVersion"]}"
 
 dependencies {
     api(project(dataSourceBase))
 
     testImplementation(project(mapOf("path" to dataSourceBase, "configuration" to "testArtifacts")))
 
-    testWithJavaAgent(project(spytPatchAgent))
+    testWithJavaAgent(project(":spyt-patch-agent"))
 }

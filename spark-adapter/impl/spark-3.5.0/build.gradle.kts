@@ -4,6 +4,6 @@ dependencies {
     compileOnlyApi(project(":spark-adapter-api_$scalaVersion")) {
         exclude(group = "org.apache.spark")
     }
-    compileOnlyApi(project(":spyt-patch-agent_$scalaVersion"))
+    compileOnlyApi(project(":spyt-patch-agent"))
     compileOnly(libs.bundles.spark350.scala(project))
 }

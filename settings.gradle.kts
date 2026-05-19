@@ -19,7 +19,6 @@ val sparkBundle = listOf("spark-core", "spark-sql")
 
 val subprojects = mapOf(
     "spark-adapter-api" to "spark-adapter/api",
-    "spyt-patch-agent" to "spark-patch",
     "spark-adapter-provider" to "spark-adapter/provider",
     "data-source-base" to "data-source"
 ) + adapterSparkVersions.map { (version, vShort) ->
@@ -48,6 +47,9 @@ scalaVersions.forEach { scalaVersion ->
         }
     }
 }
+
+include("spyt-patch-agent")
+project(":spyt-patch-agent").projectDir = file("spark-patch")
 
 include("spyt-package")
 

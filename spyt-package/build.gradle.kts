@@ -1,10 +1,11 @@
 import tech.ytsaurus.spyt.gradle.tasks.ProcessPythonFilesTask
 
-val projectIds = listOf(":spark-submit", ":shuffle-service", ":spyt-patch-agent", ":spark-adapter-impl-330",
+val projectIds = listOf(":spark-submit", ":shuffle-service", ":spark-adapter-impl-330",
     ":spark-adapter-impl-340", ":spark-adapter-impl-350", ":spark-adapter-provider")
 val scalaVersions: List<String> by gradle.extra
 
 dependencies {
+    runtimeOnly(project(":spyt-patch-agent"))
     projectIds.forEach { projectId ->
         scalaVersions.forEach { scalaVersion ->
             runtimeOnly(project("${projectId}_$scalaVersion"))

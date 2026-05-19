@@ -9,5 +9,5 @@ dependencies {
     testImplementation(project(mapOf("path" to ":spark-cluster_$scalaVersion", "configuration" to "testArtifacts")))
     testImplementation(project(":shuffle-service_$scalaVersion"))
 
-    testWithJavaAgent(project(":spyt-patch-agent_$scalaVersion"))
+    testWithJavaAgent(project(":spyt-patch-agent"))
 }

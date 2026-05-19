@@ -48,8 +48,7 @@ if [ ! $use_squashfs ]; then
   done
 
   unzip -o spyt-package.zip -d "$spark_home"
-  scalaVersion=$(ls $spark_home/spark/jars/spark-core_*.jar | sed -E 's/.*spark-core_([0-9.]+)-.*/\1/')
-  javaagent_opt="-javaagent:$(ls $spyt_home/jars/scala-$scalaVersion/*spyt-patch-agent*)"
+  javaagent_opt="-javaagent:$(ls $spyt_home/jars/common/*spyt-patch-agent*)"
   echo "$javaagent_opt" > $spyt_home/conf/java-opts
 else
   spyt_home=$SPYT_HOME

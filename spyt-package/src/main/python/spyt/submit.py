@@ -33,7 +33,7 @@ def launch_gateway(memory="512m",
     command += java_opts or []
     if prefer_ipv6:
         command.append('-Djava.net.preferIPv6Addresses=true')
-    jars_root = os.path.join(spyt_home, 'jars', f'scala-{get_scala_version()}')
+    jars_root = os.path.join(spyt_home, 'jars', 'common')
     spark_patch = [os.path.join(jars_root, jar) for jar in os.listdir(jars_root) if 'spyt-patch-agent' in jar][0]
     command += [
         f"-javaagent:{spark_patch}",

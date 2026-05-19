@@ -5,7 +5,6 @@ plugins {
 
 val sparkCluster = ":spark-cluster_${extra["scalaVersion"]}"
 val resourceManager = ":resource-manager_${extra["scalaVersion"]}"
-val spytPatchAgent = ":spyt-patch-agent_${extra["scalaVersion"]}"
 
 dependencies {
     api(project(sparkCluster))
@@ -13,5 +12,5 @@ dependencies {
 
     testImplementation(project(mapOf("path" to sparkCluster, "configuration" to "testArtifacts")))
 
-    testWithJavaAgent(project(spytPatchAgent))
+    testWithJavaAgent(project(":spyt-patch-agent"))
 }

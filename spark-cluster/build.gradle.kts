@@ -18,5 +18,5 @@ dependencies {
 
     testImplementation(project(mapOf("path" to dataSourceExtended, "configuration" to "testArtifacts")))
 
-    testWithJavaAgent(project(":spyt-patch-agent_$scalaVersion"))
+    testWithJavaAgent(project(":spyt-patch-agent"))
 }

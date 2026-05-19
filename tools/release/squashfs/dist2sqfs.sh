@@ -112,8 +112,7 @@ case $kind in
     spyt)
       unzip $localfile -d $distroot
       mv "$distroot/spyt-package" "$distroot/$kind"
-      # TODO scala version
-      sparkpatchjar="$libroot/$kind/jars/$(basename $distroot/$kind/jars/*spyt-patch-agent*)"
+      sparkpatchjar="$libroot/$kind/jars/common/$(basename $distroot/$kind/jars/common/*spyt-patch-agent*)"
       javaagent_opt="-javaagent:$sparkpatchjar"
       echo "$javaagent_opt" > $distroot/$kind/conf/java-opts
       sqfsfilename=${filename/.zip/.squashfs}

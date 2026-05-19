@@ -10,12 +10,13 @@ fi
 if [ -z "$SPYT_CLASSPATH" ] && [ -n "$SPYT_ROOT" ]; then
   scalaVersion=$(ls ${SPARK_HOME}/jars/spark-core_*.jar | sed -E 's/.*spark-core_([0-9.]+)-.*/\1/')
   SPYT_JARS_PATH="$SPYT_ROOT/jars/scala-$scalaVersion/*"
-  SPYT_CLASSPATH="$SPYT_JARS_PATH:$SPYT_ROOT/jars/common/*"
-  export SPYT_JARS_PATH
+  SPYT_COMMON_CLASSPATH="$SPYT_ROOT/jars/common/*"
+  SPYT_CLASSPATH="$SPYT_JARS_PATH:$SPYT_COMMON_CLASSPATH"
+  export SPYT_COMMON_PATH
   export SPYT_CLASSPATH
 fi
 
-javaagent_parameter="-javaagent:$(ls ${SPYT_JARS_PATH}spyt-patch-agent*)"
+javaagent_parameter="-javaagent:$(ls ${SPYT_COMMON_CLASSPATH}spyt-patch-agent*)"
 
 if [ -n "$SPYT_CLASSPATH" ] && [ ! -f "$SPARK_CONF_DIR/java-opts" ]; then
   SPARK_SUBMIT_OPTS="$SPARK_SUBMIT_OPTS $javaagent_parameter"

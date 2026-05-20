@@ -1,61 +1,24 @@
 package tech.ytsaurus.spyt.format
 
-import org.apache.spark.scheduler.{SparkListener, SparkListenerTaskEnd}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
-import tech.ytsaurus.spyt.test.{LocalSpark, TestUtils, TmpDir}
+import tech.ytsaurus.spyt.test.{LocalSpark, SparkMetricsUtils, TestUtils, TmpDir}
 import tech.ytsaurus.spyt.{SparkAdapter, YtDistributedReadingTestUtils, YtReader, YtWriter}
 import tech.ytsaurus.spyt.format.conf.{SparkYtConfiguration => SparkSettings}
 
 class SparkStatisticsTest extends AnyFlatSpec with Matchers with LocalSpark with TmpDir with TestUtils
-  with YtDistributedReadingTestUtils {
+  with YtDistributedReadingTestUtils with SparkMetricsUtils {
 
   behavior of "Spark statistics"
 
   private val sqlImplicits = SparkAdapter.instance.sparkImplicits(spark)
   import sqlImplicits._
 
-  object MetricsListener {
-    class BytesMetricsListener extends SparkListener {
-      var bytesWritten: Long = 0L
-      var bytesRead: Long = 0L
-      var recordsWritten: Long = 0L
-      var recordsRead: Long = 0L
-
-      override def onTaskEnd(taskEnd: SparkListenerTaskEnd): Unit = {
-        if (taskEnd.taskMetrics != null) {
-          bytesWritten += taskEnd.taskMetrics.outputMetrics.bytesWritten
-          recordsWritten += taskEnd.taskMetrics.outputMetrics.recordsWritten
-          bytesRead += taskEnd.taskMetrics.inputMetrics.bytesRead
-          recordsRead += taskEnd.taskMetrics.inputMetrics.recordsRead
-        }
-      }
-
-      def reset(): Unit = {
-        bytesWritten = 0L
-        bytesRead = 0L
-        recordsWritten = 0L
-        recordsRead = 0L
-      }
-    }
-
-    def withMetrics[T](spark: org.apache.spark.sql.SparkSession)(action: BytesMetricsListener => T): T = {
-      val listener = new BytesMetricsListener()
-      spark.sparkContext.addSparkListener(listener)
-      try {
-        val result = action(listener)
-        result
-      } finally {
-        spark.sparkContext.removeSparkListener(listener)
-      }
-    }
-  }
-
   testWithDistributedReading("correctly calculate bytes written for simple write"){ _ =>
     val data = (0 until 100).map(x => (x, x * 2, x * 3))
     val df = data.toDF("col1", "col2", "col3")
 
-    MetricsListener.withMetrics(spark) { listener =>
+    withMetrics(spark) { listener =>
       df.write.yt(tmpPath)
 
       listener.bytesWritten should be > 0L
@@ -71,7 +34,7 @@ class SparkStatisticsTest extends AnyFlatSpec with Matchers with LocalSpark with
     val df = data.toDF("col1", "col2", "col3")
     df.write.yt(tmpPath)
 
-    MetricsListener.withMetrics(spark) { listener =>
+    withMetrics(spark) { listener =>
       val count = spark.read.yt(tmpPath).count()
 
       count shouldBe 100L
@@ -84,14 +47,14 @@ class SparkStatisticsTest extends AnyFlatSpec with Matchers with LocalSpark with
       val data = (0 until 1000).map(x => (x, x % 2 == 0))
       val df = data.toDF("id", "is_even")
 
-      MetricsListener.withMetrics(spark) { writeListener =>
+      withMetrics(spark) { writeListener =>
         df.write.yt(tmpPath)
 
         writeListener.bytesWritten should be > 0L
         writeListener.recordsWritten shouldBe 1000L
       }
 
-      MetricsListener.withMetrics(spark) { readListener =>
+      withMetrics(spark) { readListener =>
         val filteredDf = spark.read.yt(tmpPath).filter("is_even")
         val count = filteredDf.count()
 
@@ -108,7 +71,7 @@ class SparkStatisticsTest extends AnyFlatSpec with Matchers with LocalSpark with
       val sourceDf = sourceData.toDF("col1", "col2", "col3")
       sourceDf.write.yt(s"$tmpPath/source")
 
-      MetricsListener.withMetrics(spark) { listener =>
+      withMetrics(spark) { listener =>
         val transformedDf = spark.read.yt(s"$tmpPath/source")
           .filter($"col1" < 100)
 
@@ -130,14 +93,14 @@ class SparkStatisticsTest extends AnyFlatSpec with Matchers with LocalSpark with
 
       val bytes = Seq(false, true).map { pushdown =>
         withConfs(Map(s"spark.yt.${SparkSettings.Read.KeyColumnsFilterPushdown.Enabled.name}" -> pushdown.toString)) {
-          MetricsListener.withMetrics(spark)(l => {
+          withMetrics(spark)(l => {
             spark.read.yt(tmpPath).filter("a >= 100 AND a <= 200 AND b == 0").count()
             l.bytesRead
           })
         }
       }
 
-      bytes(1) should (be > 0L and be < bytes(0))
+      bytes(1) should (be > 0L and be < bytes.head)
     }
   }
 
@@ -149,7 +112,7 @@ class SparkStatisticsTest extends AnyFlatSpec with Matchers with LocalSpark with
       data1.write.yt(s"$tmpPath/table1")
       data2.write.yt(s"$tmpPath/table2")
 
-      MetricsListener.withMetrics(spark) { listener =>
+      withMetrics(spark) { listener =>
         val df1 = spark.read.yt(s"$tmpPath/table1")
         val df2 = spark.read.yt(s"$tmpPath/table2")
         val joinedDf = df1.join(df2, "id")
@@ -170,7 +133,7 @@ class SparkStatisticsTest extends AnyFlatSpec with Matchers with LocalSpark with
 
       df.write.yt(tmpPath)
 
-      MetricsListener.withMetrics(spark) { listener =>
+      withMetrics(spark) { listener =>
         val aggregatedDf = spark.read.yt(tmpPath)
           .groupBy("group_id")
           .count()

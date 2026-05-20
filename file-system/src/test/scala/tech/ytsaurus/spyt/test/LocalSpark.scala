@@ -71,7 +71,7 @@ trait LocalSpark extends LocalYtClient with BeforeAndAfterEach {
   }
 
   override protected def ytRpcClient: YtRpcClient = {
-    YtClientProvider.ytRpcClient(ytClientConfiguration(spark))
+    YtClientProvider.ytRpcClient(ytClientConfiguration(sparkConf))
   }
 
   def physicalPlan(df: DataFrame): SparkPlan = {

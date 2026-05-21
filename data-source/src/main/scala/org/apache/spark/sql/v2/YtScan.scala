@@ -5,40 +5,67 @@ import org.apache.hadoop.fs.Path
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.catalyst.expressions.Expression
 import org.apache.spark.sql.catalyst.expressions.codegen.GenerateUnsafeProjection
+import org.apache.spark.sql.connector.expressions.{FieldReference, NamedReference}
 import org.apache.spark.sql.connector.read.partitioning.Partitioning
-import org.apache.spark.sql.connector.read.{PartitionReaderFactory, Statistics, SupportsReportPartitioning}
+import org.apache.spark.sql.connector.read.{PartitionReaderFactory, Statistics, SupportsReportPartitioning, SupportsRuntimeFiltering}
 import org.apache.spark.sql.execution.datasources.v2.FileScan
 import org.apache.spark.sql.execution.datasources.{FilePartition, PartitionDirectory, PartitionedFile, PartitioningAwareFileIndex}
+import org.apache.spark.sql.sources.Filter
 import org.apache.spark.sql.types.StructType
 import org.apache.spark.sql.util.CaseInsensitiveStringMap
 import org.apache.spark.sql.v2.YtFilePartition.tryGetKeyPartitions
 import org.apache.spark.sql.{AnalysisException, SparkSession}
 import org.apache.spark.util.SerializableConfiguration
 import tech.ytsaurus.spyt.SparkAdapter
-import tech.ytsaurus.spyt.common.utils.SegmentSet
+import tech.ytsaurus.spyt.common.utils.{ExpressionTransformer, SegmentSet}
 import tech.ytsaurus.spyt.format.conf.SparkYtConfiguration.YtReadSettingsFactory
 import tech.ytsaurus.spyt.format.conf.{FilterPushdownConfig, KeyPartitioningConfig, YtTableSparkSettings}
 import tech.ytsaurus.spyt.fs.YtHadoopPath
-import tech.ytsaurus.spyt.logger.YtDynTableLoggerConfig
+import tech.ytsaurus.spyt.logger.{YtDynTableLoggerConfig, YtLogger}
+import tech.ytsaurus.spyt.serializers.SchemaConverter
 
 import java.util.{Locale, OptionalLong}
 import scala.jdk.CollectionConverters._
 
 case class YtScan(sparkSession: SparkSession,
-                  hadoopConf: Configuration,
-                  fileIndex: PartitioningAwareFileIndex,
-                  dataSchema: StructType,
-                  readDataSchema: StructType,
-                  readPartitionSchema: StructType,
-                  options: CaseInsensitiveStringMap,
-                  partitionFilters: Seq[Expression],
-                  dataFilters: Seq[Expression],
-                  pushedFilterSegments: SegmentSet = SegmentSet(),
-                  keyPartitionsHint: Option[Seq[FilePartition]] = None) extends FileScan
-  with SupportsReportPartitioning with Logging {
+  hadoopConf: Configuration,
+  fileIndex: PartitioningAwareFileIndex,
+  dataSchema: StructType,
+  readDataSchema: StructType,
+  readPartitionSchema: StructType,
+  options: CaseInsensitiveStringMap,
+  partitionFilters: Seq[Expression],
+  dataFilters: Seq[Expression],
+  pushedFilterSegments: SegmentSet = SegmentSet(),
+  keyPartitionsHint: Option[Seq[FilePartition]] = None) extends FileScan
+  with SupportsReportPartitioning
+  with SupportsRuntimeFiltering with Logging {
+
   private val filterPushdownConf = FilterPushdownConfig(sparkSession)
   private val keyPartitioningConf = KeyPartitioningConfig(sparkSession)
+
+  @transient private var runtimeFilterSegments: SegmentSet = SegmentSet()
+
+  @transient private var cachedPartitions: Option[Seq[FilePartition]] = None
+
+  private def effectiveFilterSegments: SegmentSet = {
+    SegmentSet.intercept(pushedFilterSegments, runtimeFilterSegments)
+  }
+
   private val pushedFiltersStr: String = pushedFilterSegments.toFilters.mkString("[", ", ", "]")
+
+  override def filterAttributes(): Array[NamedReference] = {
+    val keyColumns = SchemaConverter.keys(dataSchema).flatten
+    val result = keyColumns.map(name => FieldReference.column(name)).toArray
+    result
+  }
+
+  override def filter(filters: Array[Filter]): Unit = {
+    implicit val ytLog: YtLogger = YtLogger.noop
+    val newRuntimeSegments = ExpressionTransformer.filtersToSegmentSet(filters.toSeq)
+    runtimeFilterSegments = newRuntimeSegments
+    cachedPartitions = None
+  }
 
   def supportsKeyPartitioning: Boolean = {
     keyPartitionsHint.isDefined
@@ -54,7 +81,7 @@ case class YtScan(sparkSession: SparkSession,
     val adapter = YtPartitionReaderFactoryAdapter(sparkSession.sessionState.conf, broadcastedConf,
       dataSchema, readDataSchema, readPartitionSchema,
       options.asScala.toMap ++ keyPartitionedOptions,
-      pushedFilterSegments, filterPushdownConf, YtDynTableLoggerConfig.fromSpark(sparkSession),
+      effectiveFilterSegments, filterPushdownConf, YtDynTableLoggerConfig.fromSpark(sparkSession),
       YtReadSettingsFactory.fromSpark(sparkSession)
     )
     SparkAdapter.instance.createYtPartitionReaderFactory(adapter)
@@ -69,8 +96,14 @@ case class YtScan(sparkSession: SparkSession,
   override def hashCode(): Int = getClass.hashCode()
 
   override def description(): String = {
+    val runtimeFiltersStr = if (!runtimeFilterSegments.map.isEmpty) {
+      s", RuntimeFilters: ${runtimeFilterSegments.toFilters.mkString("[", ", ", "]")}"
+    } else {
+      ""
+    }
     super.description() +
       ", PushedFilters: " + pushedFiltersStr +
+      runtimeFiltersStr +
       ", filter pushdown enabled: " + filterPushdownConf.enabled +
       ", key partitioned: " + supportsKeyPartitioning
   }
@@ -108,10 +141,14 @@ case class YtScan(sparkSession: SparkSession,
     tryGetKeyPartitioning(columns).map(addKeyPartitioningHint)
   }
 
-  override protected lazy val partitions: Seq[FilePartition] = {
-    keyPartitionsHint.getOrElse {
-      val splitFiles = preparePartitioning()
-      YtFilePartition.getFilePartitions(splitFiles)
+  override protected def partitions: Seq[FilePartition] = {
+    cachedPartitions.getOrElse {
+      val computed = keyPartitionsHint.getOrElse {
+        val splitFiles = preparePartitioning()
+        YtFilePartition.getFilePartitions(splitFiles)
+      }
+      cachedPartitions = Some(computed)
+      computed
     }
   }
 
@@ -147,7 +184,7 @@ case class YtScan(sparkSession: SparkSession,
           filePath = filePath,
           maxSplitBytes = maxSplitBytes,
           partitionValues = partitionValues,
-          pushedFilterSegments = pushedFilterSegments,
+          pushedFilterSegments = effectiveFilterSegments,
           readDataSchema = Some(readDataSchema)
         )
       }.toArray.sorted(YtFilePartition.partitionedFilesOrdering)
@@ -182,7 +219,7 @@ object YtScan {
   type ScanDescription = (YtScan, Seq[String])
 
   def trySyncKeyPartitioning(leftScanDescO: Option[ScanDescription], rightScanDescO: Option[ScanDescription]
-                            ): (Option[ScanDescription], Option[ScanDescription]) = {
+  ): (Option[ScanDescription], Option[ScanDescription]) = {
     def singleKeyPartitioning(scanDescO: Option[ScanDescription]): Option[ScanDescription] = {
       scanDescO.flatMap { case (scan, vars) => scan.tryKeyPartitioning(Some(vars)).map((_, vars)) }
     }
@@ -196,7 +233,7 @@ object YtScan {
   }
 
   def trySyncKeyPartitioning(leftYtScanDesc: ScanDescription, rightYtScanDesc: ScanDescription
-                            ): (Option[ScanDescription], Option[ScanDescription]) = {
+  ): (Option[ScanDescription], Option[ScanDescription]) = {
     val (leftYtScan, leftVars) = leftYtScanDesc
     val (rightYtScan, rightVars) = rightYtScanDesc
     val leftPartitioningO = leftYtScan.tryGetKeyPartitioning(Some(leftVars))

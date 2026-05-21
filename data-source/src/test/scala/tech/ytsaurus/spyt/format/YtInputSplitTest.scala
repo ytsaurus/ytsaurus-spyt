@@ -46,6 +46,19 @@ class YtInputSplitTest extends YtInputSplitTestBase {
       )
   }
 
+  it should "not change pushed filter segments when runtime filter SegmentSet is default" in {
+    val pushedFilterSegments = SegmentSet(
+      Map(
+        ("a", Seq(Segment(RealValue(3L), RealValue(5L)))),
+        ("b", Seq(Segment(RealValue(2L), PInfinity())))
+      )
+    )
+
+    val runtimeFilterSegments = SegmentSet()
+
+    SegmentSet.intercept(pushedFilterSegments, runtimeFilterSegments) shouldBe pushedFilterSegments
+  }
+
   it should "push compatible filters" in {
     writeTableFromYson(Seq(
       """{c = 1; a = 1}"""

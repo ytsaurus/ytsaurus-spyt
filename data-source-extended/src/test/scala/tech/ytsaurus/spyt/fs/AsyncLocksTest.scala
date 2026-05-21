@@ -51,10 +51,10 @@ class AsyncLocksTest extends AnyFlatSpec with Matchers with LocalSpark with Test
     }.when(spyYt).lockNode(ArgumentMatchers.any(classOf[LockNode]))
 
     try {
-      YtClientProvider.getClients(s"${rpcClient.normalizedProxy};") = rpcClient.copy(yt = spyYt)
+      YtClientProvider.getClients(s"${rpcClient.normalizedProxy};;") = rpcClient.copy(yt = spyYt)
       body
     } finally {
-      YtClientProvider.getClients(s"${rpcClient.normalizedProxy};") = rpcClient
+      YtClientProvider.getClients(s"${rpcClient.normalizedProxy};;") = rpcClient
     }
 
     maxInFlight.get()

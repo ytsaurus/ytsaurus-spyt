@@ -33,13 +33,17 @@ object YtClientProvider extends YtClientProvider {
   def ytRpcClient(conf: YtClientConfiguration,
     rpcClientListener: Option[SpytRpcClientListener] = None): YtRpcClient = this.synchronized {
     val normalizedProxy = conf.normalizedProxy
-    val key = Seq(normalizedProxy, rpcClientListener.map(_.id).getOrElse("")).mkString(";")
+    val key = cacheKey(normalizedProxy, conf.fixedProxyAddress, rpcClientListener)
     clients.getOrElseUpdate(key, {
       val clientThreads = getClientThreads
       log.info(s"Create YtClient for proxy $normalizedProxy and $clientThreads clientThreads")
       YtWrapper.createRpcClient(conf, clientThreads, rpcClientListener)
     })
   }
+
+  private def cacheKey(normalizedProxy: String, fixedProxyAddress: Option[String],
+    rpcClientListener: Option[SpytRpcClientListener]): String =
+    Seq(normalizedProxy, fixedProxyAddress.getOrElse(""), rpcClientListener.map(_.id).getOrElse("")).mkString(";")
 
   def close(): Unit = this.synchronized {
     log.info(s"Close all YT Clients")

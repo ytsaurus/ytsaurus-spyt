@@ -234,14 +234,16 @@ class YtInferSchemaTest extends AnyFlatSpec with Matchers with LocalSpark
   }
 
   private def withSpyYt(body: CompoundClient => Unit): Unit = {
-    val rpcClient = YtClientProvider.ytRpcClient(ytClientConfiguration(spark))
+    val conf = ytClientConfiguration(spark)
+    val rpcClient = YtClientProvider.ytRpcClient(conf)
+    val cacheKey = s"${rpcClient.normalizedProxy};;"
     val spyYt: CompoundClient = Mockito.spy(rpcClient.yt)
     try {
-      YtClientProvider.getClients(s"${rpcClient.normalizedProxy};") = rpcClient.copy(yt = spyYt)
+      YtClientProvider.getClients(cacheKey) = rpcClient.copy(yt = spyYt)
       body(spyYt)
       Mockito.reset(spyYt)
     } finally {
-      YtClientProvider.getClients(s"${rpcClient.normalizedProxy};") = rpcClient
+      YtClientProvider.getClients(cacheKey) = rpcClient
     }
   }
 

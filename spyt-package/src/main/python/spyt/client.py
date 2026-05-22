@@ -3,10 +3,13 @@ import os
 import sys
 from contextlib import contextmanager
 
-from pyspark import SparkContext, SparkConf
+from pyspark import SparkConf
 from pyspark.sql import SparkSession
 
-from spyt.dependency_utils import require_yt_client
+from spyt.dependency_utils import require_yt_client, is_classic_pyspark
+
+if is_classic_pyspark():
+    from .jvm import spark_session_exists, shutdown_jvm
 require_yt_client()
 
 from yt.wrapper import YtClient  # noqa: E402
@@ -114,7 +117,7 @@ def direct_spark_session(yt_proxy, conf: SparkConf = None):
 
 @contextmanager
 def _create_spark_session(do_create_spark_session):
-    spark_session_already_existed = _spark_session_exists()
+    spark_session_already_existed = spark_session_exists()
     spark = do_create_spark_session()
     exception = None
     try:
@@ -320,7 +323,7 @@ def connect(num_executors=5,
         client=client,
         spyt_version=spyt_version,
     )
-    if _spark_session_exists():
+    if spark_session_exists():
         logger.warning("SparkSession already exists and will be reused. Some configurations may not be applied. "
                        "You can use spyt.stop(spark) method to close previous session")
 
@@ -391,7 +394,7 @@ def stop(spark, exception=None):
 
     def stop_fault_handler(e1):
         return _try_with_safe_finally(
-            lambda: _shutdown_jvm(spark) if is_client_mode else None,
+            lambda: shutdown_jvm(spark) if is_client_mode else None,
             lambda e2: shutdown_jfv_fault_handler(e1, e2)
         )
 
@@ -415,22 +418,10 @@ def stop(spark, exception=None):
         raise main_exception
 
 
-def is_stopped(spark):
-    spark._jsc.sc().isStopped()
-
-
 def yt_client(spark):
     yt_proxy = spark.conf.get("spark.hadoop.yt.proxy")
     yt_token = spark.conf.get("spark.hadoop.yt.token")
     return YtClient(proxy=yt_proxy, token=yt_token)
-
-
-def jvm_process_pid():
-    return SparkContext._gateway.proc.pid
-
-
-def _close_yt_client(spark):
-    spark._jvm.tech.ytsaurus.spyt.fs.YtClientProvider.close()
 
 
 def _try_with_safe_finally(try_func, finally_func):
@@ -449,22 +440,3 @@ def _raise_first(*exceptions):
         exception = exception or e
     if exception:
         raise exception
-
-
-def _shutdown_jvm(spark):
-    from subprocess import Popen
-    proc = SparkContext._gateway.proc
-    if not isinstance(proc, Popen):
-        logger.warning("SparkSession cannot be closed properly, please update ytsaurus-spyt and Spark cluster")
-        return
-    proc.stdin.close()
-    SparkContext._gateway.shutdown()
-    proc.wait(timeout=15)
-    SparkContext._gateway = None
-    SparkContext._jvm = None
-    spark._jvm = None
-    SparkSession.builder._options = {}
-
-
-def _spark_session_exists():
-    return SparkSession._instantiatedSession is not None

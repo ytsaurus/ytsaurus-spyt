@@ -3,16 +3,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Union
 
 import yt.yson as yt_yson
-from pyspark import SparkContext
-from pyspark.sql.column import Column
 from pyspark.sql.types import UserDefinedType, BinaryType, IntegralType, LongType, IntegerType
-
-from .utils import check_spark_version
-
-if check_spark_version(less_than="4.0.0"):
-    from pyspark.sql.column import _to_java_column
-else:
-    from pyspark.sql.classic.column import _to_java_column
 
 
 MIN_DATE32 = -53375809
@@ -374,52 +365,6 @@ def string_to_uint64(number):
         return None
     else:
         return int(number)
-
-
-def uint64_to_string_udf(s_col):
-    sc = SparkContext._active_spark_context
-    cols = sc._gateway.new_array(sc._jvm.Column, 1)
-    cols[0] = _to_java_column(s_col)
-    jc = sc._jvm.org.apache.spark.sql.spyt.types.UInt64Long.toStringUdf().apply(cols)
-    return Column(jc)
-
-
-def string_to_uint64_udf(s_col):
-    sc = SparkContext._active_spark_context
-    cols = sc._gateway.new_array(sc._jvm.Column, 1)
-    cols[0] = _to_java_column(s_col)
-    jc = sc._jvm.org.apache.spark.sql.spyt.types.UInt64Long.fromStringUdf().apply(cols)
-    return Column(jc)
-
-
-def xx_hash64_zero_seed_udf(*s_cols):
-    sc = SparkContext._active_spark_context
-    sz = len(s_cols)
-    cols = sc._gateway.new_array(sc._jvm.Column, sz)
-    for i in range(sz):
-        cols[i] = _to_java_column(s_cols[i])
-    jc = sc._jvm.tech.ytsaurus.spyt.common.utils.XxHash64ZeroSeed.xxHash64ZeroSeedUdf(cols)
-    return Column(jc)
-
-
-def register_xxHash64ZeroSeed(spark):
-    sc = SparkContext._active_spark_context
-    sc._jvm.tech.ytsaurus.spyt.common.utils.XxHash64ZeroSeed.registerFunction(spark._jsparkSession)
-
-
-def cityhash_udf(*s_cols):
-    sc = SparkContext._active_spark_context
-    sz = len(s_cols)
-    cols = sc._gateway.new_array(sc._jvm.Column, sz)
-    for i in range(sz):
-        cols[i] = _to_java_column(s_cols[i])
-    jc = sc._jvm.tech.ytsaurus.spyt.common.utils.CityHash.cityHashUdf(cols)
-    return Column(jc)
-
-
-def register_cityHash(spark):
-    sc = SparkContext._active_spark_context
-    sc._jvm.tech.ytsaurus.spyt.common.utils.CityHash.registerFunction(spark._jsparkSession)
 
 
 def tuple_type(element_types):

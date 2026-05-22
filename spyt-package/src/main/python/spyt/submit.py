@@ -360,14 +360,6 @@ class SparkLauncher(object):
         return self._jlauncher
 
 
-def create_base_spark_env(spark_home):
-    spark_env = os.environ.copy()
-    spark_env["SPARK_CONF_DIR"] = get_spyt_conf_dir()
-    if spark_home:
-        spark_env["SPARK_HOME"] = spark_home
-    return spark_env
-
-
 def direct_submit(yt_proxy, num_executors, main_file, deploy_mode="cluster", pool=None,
                   spark_base_args=[], job_args=[], spark_conf={}, java_home=None, prefer_ipv6=False,
                   timeout_sec=30, max_attempts=1, base_delay=10, max_delay=300):

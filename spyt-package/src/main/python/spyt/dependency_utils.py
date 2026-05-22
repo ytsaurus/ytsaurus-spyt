@@ -1,3 +1,20 @@
+from functools import lru_cache
+
+
+@lru_cache(maxsize=None)
+def is_classic_pyspark():
+    """Return True if the installed pyspark is the classic (JVM/Py4J-based) distribution.
+
+    Returns False when running under pyspark-client (the JVM-free Spark Connect
+    client), which does not ship SparkContext or the py4j bridge.
+    """
+    try:
+        from pyspark import SparkContext  # noqa: F401
+        return True
+    except ImportError:
+        return False
+
+
 def require_yt_client():
     try:
         import yt.wrapper  # noqa: F401

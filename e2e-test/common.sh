@@ -57,6 +57,7 @@ main() {
         local env_name="$1"
         local base_env="${env_name%%-extraspark*}"
         local raw="${base_env##*-spark}"
+        raw="${raw#connect}"
         echo "${raw:0:1}.${raw:1:1}.${raw:2:1}"
     }
 

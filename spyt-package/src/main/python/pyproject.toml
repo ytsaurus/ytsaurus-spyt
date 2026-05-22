@@ -28,6 +28,12 @@ all = [
     "ytsaurus-yson"
 ]
 
+connect = [
+    "pyspark-client<4.2.0",
+    "ytsaurus-client",
+    "ytsaurus-yson"
+]
+
 [project.urls]
 Homepage = "https://github.com/ytsaurus/ytsaurus/tree/main/yt/spark/spark-over-yt"
 

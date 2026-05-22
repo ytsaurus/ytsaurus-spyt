@@ -28,12 +28,11 @@ from .conf import read_remote_conf, validate_cluster_version, \
     worker_num_limit, validate_worker_num, read_cluster_conf, validate_ssd_config, cuda_toolkit_version  # noqa: E402
 from .task_proxy import TaskProxyInfo  # noqa: E402
 from .utils import get_spark_master, base_spark_conf, SparkDiscovery, SparkCluster, call_get_proxy_address_url, \
-    parse_bool, _add_conf, check_spark_version  # noqa: E402
+    parse_bool, _add_conf, check_spark_version, create_base_spark_env  # noqa: E402
 from .enabler import SpytEnablers  # noqa: E402
 from .spec import SparkDefaultArguments, CommonComponentConfig, MasterConfig, WorkerConfig, HistoryServerConfig, \
     build_spark_operation_spec, WorkerResources  # noqa: E402
 from .version import __scala_version__  # noqa: E402
-from .submit import create_base_spark_env  # noqa: E402
 
 logger = logging.getLogger(__name__)
 

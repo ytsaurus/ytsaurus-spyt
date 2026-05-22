@@ -629,6 +629,7 @@
   "spyt-package/src/main/python/spyt/dependency_utils.py":"yt/spark/spark-over-yt/spyt-package/src/main/python/spyt/dependency_utils.py",
   "spyt-package/src/main/python/spyt/enabler.py":"yt/spark/spark-over-yt/spyt-package/src/main/python/spyt/enabler.py",
   "spyt-package/src/main/python/spyt/extensions.py":"yt/spark/spark-over-yt/spyt-package/src/main/python/spyt/extensions.py",
+  "spyt-package/src/main/python/spyt/jvm.py":"yt/spark/spark-over-yt/spyt-package/src/main/python/spyt/jvm.py",
   "spyt-package/src/main/python/spyt/launch_utils.py":"yt/spark/spark-over-yt/spyt-package/src/main/python/spyt/launch_utils.py",
   "spyt-package/src/main/python/spyt/spec.py":"yt/spark/spark-over-yt/spyt-package/src/main/python/spyt/spec.py",
   "spyt-package/src/main/python/spyt/standalone.py":"yt/spark/spark-over-yt/spyt-package/src/main/python/spyt/standalone.py",

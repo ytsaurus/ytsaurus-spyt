@@ -2,17 +2,12 @@ import dis
 import sys
 import types
 
-from pyspark.cloudpickle.cloudpickle import _extract_code_globals_cache, GLOBAL_OPS
-from pyspark.sql.dataframe import DataFrame
-from pyspark.sql.types import StructType, StructField
-from pyspark.sql import SparkSession
+from .dependency_utils import is_classic_pyspark
+if is_classic_pyspark():
+    from .jvm import apply_read_schema_hint, apply_write_schema_hint, with_yson_column
+    from pyspark.cloudpickle.cloudpickle import _extract_code_globals_cache, GLOBAL_OPS
 
 from .utils import check_spark_version
-
-if check_spark_version(less_than="4.0.0"):
-    from pyspark.sql.column import _to_java_column
-else:
-    from pyspark.sql.classic.column import _to_java_column
 
 
 # DataFrameReader extensions
@@ -20,23 +15,8 @@ def read_yt(self, *paths):
     return self.format("yt").load(path=list(paths))
 
 
-def _dict_to_struct(dict_type):
-    return StructType([StructField(name, data_type) for (name, data_type) in dict_type.items()])
-
-
 def read_schema_hint(self, fields):
-    spark = SparkSession.builder.getOrCreate()
-    struct_fields = []
-    for name, data_type in fields.items():
-        if isinstance(data_type, dict):
-            data_type = _dict_to_struct(data_type)
-        field = StructField(name, data_type)
-        struct_fields.append(field)
-    schema = StructType(struct_fields)
-
-    jschema = spark._jsparkSession.parseDataType(schema.json())
-    self._jreader = spark._jvm.tech.ytsaurus.spyt.PythonUtils.schemaHint(self._jreader, jschema)
-    return self
+    return apply_read_schema_hint(self, fields)
 
 
 # DataFrameWriter extensions
@@ -59,22 +39,12 @@ def optimize_for(self, optimize_mode):
 
 
 def write_schema_hint(self, fields):
-    spark = SparkSession.builder.getOrCreate()
-
-    jschema = spark._jvm.java.util.HashMap()
-    for key, value in fields.items():
-        jschema.put(key, value)
-    self._jwrite = spark._jvm.tech.ytsaurus.spyt.PythonUtils.schemaHint(self._jwrite, jschema)
-    return self
+    return apply_write_schema_hint(self, fields)
 
 
 # DataFrame extensions
 def withYsonColumn(self, colName, col):
-    java_column = _to_java_column(col)
-    return DataFrame(
-        self._sc._jvm.tech.ytsaurus.spyt.PythonUtils.withYsonColumn(self._jdf, colName, java_column),
-        self.sql_ctx
-    )
+    return with_yson_column(self, colName, col)
 
 
 def transform(self, func):

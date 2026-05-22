@@ -314,6 +314,8 @@ def get_spark_home():
 
 
 def get_scala_version():
+    if spark_version.startswith("4."):
+        return "2.13"
     jars = os.listdir(os.path.join(get_spark_home(), 'jars'))
     spark_core = next(filter(lambda name: name.startswith("spark-core"), jars))
     return spark_core.replace("spark-core_", "")[:4]
@@ -355,3 +357,11 @@ def check_spark_version(less_than=None, greater_than_or_equal=None):
 
 def get_spyt_conf_dir():
     return os.path.join(get_spyt_home(), "conf")
+
+
+def create_base_spark_env(spark_home):
+    spark_env = os.environ.copy()
+    spark_env["SPARK_CONF_DIR"] = get_spyt_conf_dir()
+    if spark_home:
+        spark_env["SPARK_HOME"] = spark_home
+    return spark_env

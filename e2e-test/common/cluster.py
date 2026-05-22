@@ -3,7 +3,7 @@ import spyt
 from spyt.client import spark_session
 from spyt.enabler import SpytEnablers
 from spyt.standalone import start_spark_cluster, SparkDefaultArguments, find_spark_cluster, start_history_server
-from spyt.submit import java_gateway, SparkSubmissionClient, direct_submit
+from spyt.dependency_utils import is_classic_pyspark
 
 from .cluster_utils import DEFAULT_SPARK_CONF, default_conf, dump_debug_data, is_accessible
 from .version import VERSION
@@ -17,6 +17,9 @@ import shutil
 import tempfile
 import time
 import uuid
+
+if is_classic_pyspark():
+    from spyt.submit import java_gateway, SparkSubmissionClient, direct_submit
 
 
 logger = logging.getLogger(__name__)

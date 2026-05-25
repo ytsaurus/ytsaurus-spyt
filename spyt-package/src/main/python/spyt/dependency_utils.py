@@ -15,6 +15,15 @@ def is_classic_pyspark():
         return False
 
 
+@lru_cache(maxsize=None)
+def is_spark_connect_available():
+    try:
+        import pyspark.sql.connect.dataframe  # noqa: F401
+        return True
+    except ImportError:
+        return False
+
+
 def require_yt_client():
     try:
         import yt.wrapper  # noqa: F401

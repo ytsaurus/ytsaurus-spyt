@@ -1,7 +1,5 @@
 #!/usr/bin/env bash
 
-export ARROW_PRE_0_15_IPC_FORMAT=1
-
 if [ -z "$SPYT_ROOT" ] && [ -n "$SPARK_CONF_DIR" ]; then
   SPYT_ROOT=$(cd "$SPARK_CONF_DIR"/..; pwd)
   export SPYT_ROOT

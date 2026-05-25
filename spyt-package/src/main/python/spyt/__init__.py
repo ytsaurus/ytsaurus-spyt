@@ -7,7 +7,7 @@ from importlib.util import find_spec
 import logging
 from types import CodeType
 
-from .dependency_utils import require_pyspark, is_classic_pyspark
+from .dependency_utils import require_pyspark, is_classic_pyspark, is_spark_connect_available
 
 require_pyspark()
 
@@ -19,10 +19,15 @@ from .types import UInt64Type  # noqa: E402
 from .utils import check_spark_version  # noqa: E402
 import pyspark.sql.types  # noqa: E402
 import pyspark.sql.readwriter  # noqa: E402
+
 if is_classic_pyspark():
     from .jvm import register_whl_package_extension, jvm_process_pid, is_stopped  # noqa: E402
     import pyspark.cloudpickle.cloudpickle  # noqa: E402
     import pyspark.cloudpickle.cloudpickle_fast  # noqa: E402
+
+if is_spark_connect_available():
+    import pyspark.sql.connect.dataframe  # noqa: E402
+    import pyspark.sql.connect.readwriter  # noqa: E402
 
 __all__ = [
     'connect',
@@ -52,26 +57,36 @@ def configure_logging():
 
 
 def initialize():
-    # TODO support pyspark-connect for uint 64
-    if is_classic_pyspark():
-        pyspark.sql.types._atomic_types.append(UInt64Type)
-        if check_spark_version(less_than="4.0.0"):
-            # exact copy of the corresponding line in pyspark/sql/types.py
-            pyspark.sql.types._all_atomic_types = dict((t.typeName(), t) for t in pyspark.sql.types._atomic_types)
-        else:
-            pyspark.sql.types._all_mappable_types["uint64"] = UInt64Type
-        pyspark.sql.types._acceptable_types.update({UInt64Type: (int,)})
+    pyspark.sql.types._atomic_types.append(UInt64Type)
+    if check_spark_version(less_than="4.0.0"):
+        # exact copy of the corresponding line in pyspark/sql/types.py
+        pyspark.sql.types._all_atomic_types = dict((t.typeName(), t) for t in pyspark.sql.types._atomic_types)
+    else:
+        pyspark.sql.types._all_mappable_types["uint64"] = UInt64Type
+    pyspark.sql.types._acceptable_types.update({UInt64Type: (int,)})
 
-    pyspark.sql.readwriter.DataFrameReader.yt = read_yt
-    pyspark.sql.readwriter.DataFrameReader.schema_hint = read_schema_hint
+    df_classes = [(
+        pyspark.sql.dataframe.DataFrame,
+        pyspark.sql.readwriter.DataFrameReader,
+        pyspark.sql.readwriter.DataFrameWriter)]
 
-    pyspark.sql.readwriter.DataFrameWriter.yt = write_yt
-    pyspark.sql.readwriter.DataFrameWriter.schema_hint = write_schema_hint
-    pyspark.sql.readwriter.DataFrameWriter.sorted_by = sorted_by
-    pyspark.sql.readwriter.DataFrameWriter.optimize_for = optimize_for
+    if is_spark_connect_available():
+        df_classes.append((
+            pyspark.sql.connect.dataframe.DataFrame,
+            pyspark.sql.connect.readwriter.DataFrameReader,
+            pyspark.sql.connect.readwriter.DataFrameWriter))
 
-    pyspark.sql.dataframe.DataFrame.withYsonColumn = withYsonColumn
-    pyspark.sql.dataframe.DataFrame.transform = transform
+    for (df, df_reader, df_writer) in df_classes:
+        df_reader.yt = read_yt
+        df_reader.schema_hint = read_schema_hint
+
+        df_writer.yt = write_yt
+        df_writer.schema_hint = write_schema_hint
+        df_writer.sorted_by = sorted_by
+        df_writer.optimize_for = optimize_for
+
+        df.withYsonColumn = withYsonColumn
+        df.transform = transform
 
     if is_classic_pyspark():
         register_whl_package_extension()

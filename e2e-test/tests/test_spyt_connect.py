@@ -134,7 +134,7 @@ def test_custom_types(yt_client, tmp_dir):
     ]
 
     with _direct_spark_connect_session(yt_client) as spark:
-        df = spark.read.format("yt").load(f"yt:/{path}")
+        df = spark.read.yt(path)
         result = df.collect()
         assert_items_equal(result, expected_rows)
 
@@ -219,5 +219,5 @@ def test_string_as_binary(yt_client, tmp_dir):
 
     spark_conf = {"spark.ytsaurus.arrow.stringToBinary": "true"}
     with _direct_spark_connect_session(yt_client, spark_conf) as spark:
-        df = spark.read.format("yt").load(f"yt:/{path}")
+        df = spark.read.yt(path)
         assert type(df.collect()[0]["value"]) == bytes

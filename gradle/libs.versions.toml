@@ -4,7 +4,7 @@
 [versions]
 spark-compile = "4.2.0-preview4" # TODO: switch to 4.2.0 version when it will be released
 spark-compile212 = "3.5.8"
-ytsaurus-client = "1.2.15-SNAPSHOT"
+ytsaurus-client = "1.2.16"
 circe = "0.12.3"
 circe-yaml = "0.12.0"
 jsonevent-layout = "1.7"

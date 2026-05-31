@@ -1,18 +1,21 @@
 package tech.ytsaurus.spyt.streaming
 
 import org.apache.spark.sql.Row
+import org.apache.spark.sql.connector.read.streaming.ReadLimit
 import org.apache.spark.sql.types.StructType
 import org.mockito.ArgumentMatchersSugar.{any, eqTo}
 import org.mockito.MockitoSugar
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import tech.ytsaurus.client.{ApiServiceTransaction, CompoundClient}
+import tech.ytsaurus.spyt.format.conf.SparkYtConfiguration.Streaming
 import tech.ytsaurus.spyt.format.conf.YtTableSparkSettings.InconsistentReadEnabled
 import tech.ytsaurus.spyt.test._
 import tech.ytsaurus.spyt.wrapper.YtWrapper
 
 import java.time.Duration
 import scala.collection.SortedMap
+import scala.util.Success
 
 class YtTransactionalStreamingTest extends AnyFlatSpec with Matchers with MockitoSugar with LocalYtClient
   with LocalSpark with TmpDir with DynTableTestUtils with QueueTestUtils {
@@ -46,9 +49,7 @@ class YtTransactionalStreamingTest extends AnyFlatSpec with Matchers with Mockit
   }
 
   private def createStreamingSource(schema: StructType = new StructType(), offsetProvider: YtQueueOffsetProvider): YtStreamingSource = {
-    val source = new YtStreamingSource(spark.sqlContext, consumerPath, queuePath, schema, Map.empty, offsetProvider = offsetProvider)
-    source.getLastCommittedOffset
-    source
+    new YtStreamingSource(spark.sqlContext, consumerPath, queuePath, schema, Map.empty, offsetProvider = offsetProvider)
   }
 
   private def withTransactionContext[T](txId: String)(block: => T): T = {
@@ -176,6 +177,77 @@ class YtTransactionalStreamingTest extends AnyFlatSpec with Matchers with Mockit
         val expectedData = spark.createDataFrame(testData).collect()
         resultData should contain theSameElementsAs expectedData
       }
+    }
+  }
+
+  behavior of "YtStreamingSource transactional latestOffset"
+
+  it should "refresh lastCommittedOffset on every latestOffset call in transactional mode " +
+    "even without max_rows_per_partition" in {
+    val mockProvider = mock[YtQueueOffsetProvider]
+    val initialOffset = YtQueueOffset(cluster, queuePath, SortedMap(0 -> -1L))
+    val maxOffset = YtQueueOffset(cluster, queuePath, SortedMap(0 -> 50L))
+    when(mockProvider.getCurrentOffset(any[String], any[String], any[String])(any[CompoundClient]))
+      .thenReturn(initialOffset)
+    when(mockProvider.getMaxOffset(any[String], any[String])(any[CompoundClient]))
+      .thenReturn(Success(maxOffset))
+
+    withConf(Streaming.Transactional, true) {
+      val source = new YtStreamingSource(spark.sqlContext, consumerPath, queuePath,
+        new StructType(), Map.empty, offsetProvider = mockProvider)
+      reset(mockProvider)
+      when(mockProvider.getCurrentOffset(any[String], any[String], any[String])(any[CompoundClient]))
+        .thenReturn(initialOffset)
+      when(mockProvider.getMaxOffset(any[String], any[String])(any[CompoundClient]))
+        .thenReturn(Success(maxOffset))
+
+      val firstResult = source.latestOffset(null, ReadLimit.allAvailable())
+      val secondResult = source.latestOffset(null, ReadLimit.allAvailable())
+
+      firstResult shouldBe maxOffset
+      secondResult shouldBe maxOffset
+      verify(mockProvider, times(2)).getCurrentOffset(
+        eqTo(cluster), eqTo(consumerPath), eqTo(queuePath))(any[CompoundClient])
+    }
+  }
+
+  it should "still compute correct end offset when max_rows_per_partition is set " +
+    "(transactional, no regression)" in {
+    val mockProvider = mock[YtQueueOffsetProvider]
+    val initialOffset = YtQueueOffset(cluster, queuePath, SortedMap(0 -> 5L))
+    val maxOffset = YtQueueOffset(cluster, queuePath, SortedMap(0 -> 50L))
+    when(mockProvider.getCurrentOffset(any[String], any[String], any[String])(any[CompoundClient]))
+      .thenReturn(initialOffset)
+    when(mockProvider.getMaxOffset(any[String], any[String])(any[CompoundClient]))
+      .thenReturn(Success(maxOffset))
+
+    withConf(Streaming.Transactional, true) {
+      val source = new YtStreamingSource(spark.sqlContext, consumerPath, queuePath,
+        new StructType(), Map.empty, offsetProvider = mockProvider)
+
+      val result = source.latestOffset(null, ReadLimit.maxRows(10L)).asInstanceOf[YtQueueOffset]
+
+      result.partitions(0) shouldBe 15L
+    }
+  }
+
+  it should "not move lastCommittedOffset backwards when YT consumer returns a stale or empty value" in {
+    val mockProvider = mock[YtQueueOffsetProvider]
+    val initialOffset = YtQueueOffset(cluster, queuePath, SortedMap(0 -> 25L))
+    val staleOffset = YtQueueOffset(cluster, queuePath, SortedMap(0 -> -1L))
+    val maxOffset = YtQueueOffset(cluster, queuePath, SortedMap(0 -> 50L))
+    when(mockProvider.getCurrentOffset(any[String], any[String], any[String])(any[CompoundClient]))
+      .thenReturn(initialOffset, staleOffset)
+    when(mockProvider.getMaxOffset(any[String], any[String])(any[CompoundClient]))
+      .thenReturn(Success(maxOffset))
+
+    withConf(Streaming.Transactional, true) {
+      val source = new YtStreamingSource(spark.sqlContext, consumerPath, queuePath,
+        new StructType(), Map.empty, offsetProvider = mockProvider)
+
+      val result = source.latestOffset(null, ReadLimit.maxRows(10L)).asInstanceOf[YtQueueOffset]
+
+      result.partitions(0) shouldBe math.min(25L + 10L, 50L)
     }
   }
 

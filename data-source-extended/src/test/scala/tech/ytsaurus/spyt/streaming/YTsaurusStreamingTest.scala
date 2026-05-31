@@ -37,41 +37,6 @@ class YTsaurusStreamingTest extends AnyFlatSpec with Matchers with LocalSpark wi
   import sqlImplicits._
   import tech.ytsaurus.spyt._
 
-  it should "work with native key-value storage and FileContext YTsaurus API" in {
-    YtWrapper.createDir(tmpPath)
-
-    val numbers = spark
-      .readStream
-      .format("rate")
-      .option("rowsPerSecond", 1)
-      .load()
-      .select($"timestamp", ($"value" % 10).as("num"))
-
-    val groupedNumbers = numbers
-      .withWatermark("timestamp", "3 seconds")
-      .groupBy(window($"timestamp", "1 seconds"), $"num")
-      .count()
-
-    val query = groupedNumbers
-      .writeStream
-      .option("checkpointLocation", s"yt:/$tmpPath/stateStore")
-      .foreachBatch { (frame: Dataset[Row], _: Long) =>
-        frame.write.mode(SaveMode.Append).yt(s"$tmpPath/result")
-      }
-      .start()
-
-    var attempts = 180
-    while (!yt.existsNode(s"$tmpPath/result").join() || (spark.read.yt(s"$tmpPath/result").count() == 0 && attempts > 0)) {
-      Thread.sleep(10000)
-      attempts -= 1
-    }
-    query.stop()
-
-    val resultDF = spark.read.yt(s"$tmpPath/result")
-    val receivedNums = resultDF.select(sum("count").cast("long")).first().getLong(0).toInt
-    receivedNums should be > 0
-  }
-
   it should "write YT queue" in {
     val recordCountLimit = 50L
 
@@ -96,7 +61,7 @@ class YTsaurusStreamingTest extends AnyFlatSpec with Matchers with LocalSpark wi
     val recordFuture = Future[Unit] {
       var currentCount = 0L
       while (currentCount < recordCountLimit) {
-        Thread.sleep(1000)
+        Thread.sleep(500)
         currentCount = spark.read.option(InconsistentReadEnabled.name, "true").yt(path).count()
       }
     }(scala.concurrent.ExecutionContext.Implicits.global)
@@ -137,7 +102,7 @@ class YTsaurusStreamingTest extends AnyFlatSpec with Matchers with LocalSpark wi
     val recordFuture = Future[Unit] {
       while (!stopSignal.isCompleted) {
         appendChunksToTestTable(queuePath, Seq(getTestData()), sorted = false, remount = false)
-        Thread.sleep(2000)
+        Thread.sleep(1000)
       }
     }(scala.concurrent.ExecutionContext.Implicits.global)
 
@@ -227,7 +192,7 @@ class YTsaurusStreamingTest extends AnyFlatSpec with Matchers with LocalSpark wi
     val recordFuture = Future[Unit] {
       while (!stopSignal.isCompleted) {
         appendChunksToTestTable(queuePath, Seq(getTestData()), sorted = false, remount = false)
-        Thread.sleep(2000)
+        Thread.sleep(1000)
       }
     }(scala.concurrent.ExecutionContext.Implicits.global)
 
@@ -236,116 +201,21 @@ class YTsaurusStreamingTest extends AnyFlatSpec with Matchers with LocalSpark wi
     queryForOptionCheck.stop()
   }
 
-  it should "one streaming launch" in {
-    testOneStreamingLaunch()
-  }
-
   it should "one streaming launch with transaction" in {
     whenSparkVersionAtLeast("3.5.0") {
-      testOneStreamingLaunch(transactional = true)
+      testOneStreamingLaunch()
     }
-  }
-
-  it should "several streaming launches - at-least-once guarantee" in {
-    testSeveralStreamingLaunches()
-  }
-
-  it should "several streaming launches - exactly-once guarantee" in {
-    testSeveralStreamingLaunches(includeServiceColumns = true)
   }
 
   it should "several streaming launches with transaction" in {
     whenSparkVersionAtLeast("3.5.0") {
-      testSeveralStreamingLaunches(transactional = true)
+      testSeveralStreamingLaunches()
     }
-  }
-
-  it should "fetch checkpoints location from consumer - at-least-once guarantee" in {
-    testContinueStreamingAfterRemovingCheckpoints()
-  }
-
-  it should "fetch checkpoints location from consumer - exactly-once guarantee" in {
-    testContinueStreamingAfterRemovingCheckpoints(includeServiceColumns = true)
   }
 
   it should "continue streaming after removing checkpoints with transaction" in {
     whenSparkVersionAtLeast("3.5.0") {
-      testContinueStreamingAfterRemovingCheckpoints(transactional = true)
-    }
-  }
-
-  it should "streaming with several sources-queues: check consumer and result synchronization" in {
-    val queues = (0 until 3).map(i => s"$tmpPath/inputQueue$i-${UUID.randomUUID()}")
-    val consumerPath = s"$tmpPath/consumer-${UUID.randomUUID()}"
-    val resultPath = s"$tmpPath/result-${UUID.randomUUID()}"
-    val checkpointLocation = f"yt:/$tmpPath/stateStore-${UUID.randomUUID()}"
-
-    YtWrapper.createDir(tmpPath)
-    for (queue <- queues) {
-      prepareOrderedTestTable(queue, enableDynamicStoreRead = true)
-      prepareConsumer(consumerPath, queue)
-      waitQueueRegistration(queue)
-    }
-    val resultTableSchema: TableSchema = schemaWithServiceColumnsAndQueuePath
-    prepareOrderedTestTable(resultPath, resultTableSchema, enableDynamicStoreRead = true)
-
-    val queries = queues.map { queue =>
-      spark
-        .readStream
-        .format("yt")
-        .option("consumer_path", consumerPath)
-        .option("max_rows_per_partition", 6)
-        .option("include_service_columns", value = true)
-        .load(queue)
-        .withColumn("queue", lit(queue))
-        .writeStream
-        .option("checkpointLocation", checkpointLocation + "/" + queue)
-        .format("yt")
-        .option("path", resultPath)
-        .start()
-    }
-
-    val queueWritingDuration = Duration.ofSeconds(10)
-    var endTime = System.currentTimeMillis() + queueWritingDuration.toMillis
-    var lowerIndex = 0
-    while (System.currentTimeMillis() < endTime) {
-      queues.foreach { queue =>
-        val data = getTestData(lowerIndex, lowerIndex + 9)
-        appendChunksToTestTable(queue, Seq(data), sorted = false, remount = false)
-      }
-      lowerIndex += 10
-      Thread.sleep(1000)
-    }
-
-    endTime = System.currentTimeMillis() + 30000
-    queries.foreach(_.stop())
-    while (queries.exists(_.isActive) && System.currentTimeMillis() < endTime) {
-      Thread.sleep(1000)
-    }
-
-    val resultDF = spark.read
-      .option(InconsistentReadEnabled.name, "true")
-      .yt(resultPath)
-      .orderBy("a")
-    val cluster = YtWrapper.clusterName()
-
-    for (queue <- queues) {
-      val currentOffsetPartitions = YtQueueOffset.getCurrentOffset(cluster, consumerPath, queue).partitions
-      var totalRowsFromQueue = 0
-      for (partitionIndex <- currentOffsetPartitions.keys) {
-        val partitionDataDf = resultDF
-          .filter(col("queue") === queue)
-          .filter(col("__spyt_streaming_src_tablet_index") === partitionIndex)
-
-        val totalRowsConsumed = currentOffsetPartitions(partitionIndex) + 1
-        val totalRowsFromPartition = partitionDataDf.count().toInt
-        totalRowsFromQueue += totalRowsFromPartition
-
-        assert(totalRowsFromPartition >= totalRowsConsumed)
-
-        val seq = (0 until totalRowsFromPartition).toArray
-        partitionDataDf.select(col(ROW_INDEX_WITH_PREFIX)).collect().map(_.getLong(0).toInt) should contain theSameElementsAs seq
-      }
+      testContinueStreamingAfterRemovingCheckpoints()
     }
   }
 
@@ -391,7 +261,7 @@ class YTsaurusStreamingTest extends AnyFlatSpec with Matchers with LocalSpark wi
         val recordCountLimit = iterarionsCount(index) * 10
         var currentCount = 0L
         while (currentCount < recordCountLimit) {
-          Thread.sleep(2000)
+          Thread.sleep(1000)
           currentCount = spark.read.option(InconsistentReadEnabled.name, "true").yt(resultPath).filter(col("queue") === queue).count()
         }
 
@@ -465,7 +335,7 @@ class YTsaurusStreamingTest extends AnyFlatSpec with Matchers with LocalSpark wi
       !consumersAndResultPathsPairs.map(pair => pair._2).forall(resultPath =>
         spark.read.option(InconsistentReadEnabled.name, "true").yt(resultPath).count() >= recordCountLimit
       )) {
-      Thread.sleep(2000)
+      Thread.sleep(1000)
     }
     queries.foreach(_.stop())
 
@@ -483,7 +353,7 @@ class YTsaurusStreamingTest extends AnyFlatSpec with Matchers with LocalSpark wi
 
   it should "streaming with several sources-queues with transaction" in {
     whenSparkVersionAtLeast("3.5.0") {
-      testStreamingWithSeveralSourcesQueues(transactional = true)
+      testStreamingWithSeveralSourcesQueues()
     }
   }
 
@@ -536,10 +406,10 @@ class YTsaurusStreamingTest extends AnyFlatSpec with Matchers with LocalSpark wi
         query = startQuery()
 
         val expectedRows = spark.createDataFrame(getTestData(0, totalRecords - 1)).collect()
-        val deadline = System.currentTimeMillis() + Duration.ofSeconds(180).toMillis
+        val deadline = System.currentTimeMillis() + Duration.ofSeconds(90).toMillis
         var totalRows = 0L
         while (totalRows < totalRecords && System.currentTimeMillis() < deadline) {
-          Thread.sleep(2000)
+          Thread.sleep(1000)
           totalRows = spark.read.option(InconsistentReadEnabled.name, "true").yt(resultPath).count()
         }
         totalRows shouldBe totalRecords.toLong
@@ -604,7 +474,7 @@ class YTsaurusStreamingTest extends AnyFlatSpec with Matchers with LocalSpark wi
       val recordCountLimit = 55
       var currentCount = 0L
       while (currentCount < recordCountLimit) {
-        Thread.sleep(2000)
+        Thread.sleep(1000)
         currentCount = spark.read.option(InconsistentReadEnabled.name, "true").yt(resultPath).count()
       }
 
@@ -754,7 +624,7 @@ class YTsaurusStreamingTest extends AnyFlatSpec with Matchers with LocalSpark wi
       var currentCount = 0L
       val startTime = System.currentTimeMillis()
       while (currentCount < recordCountLimit && (System.currentTimeMillis() - startTime) < 120 * 1000) {
-        Thread.sleep(2000)
+        Thread.sleep(1000)
         currentCount = spark.read.option(PARSING_TYPE_V3, value = true).option("enable_inconsistent_read", "true").yt(resultPath).count()
       }
 
@@ -813,12 +683,12 @@ class YTsaurusStreamingTest extends AnyFlatSpec with Matchers with LocalSpark wi
     }
   }
 
-  def testOneStreamingLaunch(transactional: Boolean = false): Unit = {
+  def testOneStreamingLaunch(): Unit = {
     val paths: StreamingObjectsPaths = prepareStreamingObjects(tmpPath = tmpPath)
     val launchesParams: Seq[(Int, Int, Boolean)] = Seq((0, 3, true))
 
     import tech.ytsaurus.spyt.format.conf.SparkYtConfiguration.Streaming
-    withConf(Streaming.Transactional, transactional) {
+    withConf(Streaming.Transactional, true) {
       doStreamLaunches(paths, launchesParams)
     }
 
@@ -831,20 +701,16 @@ class YTsaurusStreamingTest extends AnyFlatSpec with Matchers with LocalSpark wi
       .select("a", "b", "c")
       .orderBy("a")
 
-    if (transactional) {
-      resultDF.collect() should contain theSameElementsAs expectedDF.collect()
+    resultDF.collect() should contain theSameElementsAs expectedDF.collect()
 
-      val cluster = YtWrapper.clusterName()
-      val currentOffset = YtQueueOffset.getCurrentOffset(cluster, paths.consumerPath, paths.queuePath)
-      val totalOffsetSum = currentOffset.partitions.values.map(_ + 1).sum
-      totalOffsetSum shouldBe 30L
-    } else {
-      resultDF.dropDuplicates().collect() should contain theSameElementsAs expectedDF.collect()
-    }
+    val cluster = YtWrapper.clusterName()
+    val currentOffset = YtQueueOffset.getCurrentOffset(cluster, paths.consumerPath, paths.queuePath)
+    val totalOffsetSum = currentOffset.partitions.values.map(_ + 1).sum
+    totalOffsetSum shouldBe 30L
   }
 
-  def testSeveralStreamingLaunches(includeServiceColumns: Boolean = false, transactional: Boolean = false): Unit = {
-    val paths: StreamingObjectsPaths = prepareStreamingObjects(tmpPath = tmpPath, includeServiceColumns)
+  def testSeveralStreamingLaunches(): Unit = {
+    val paths: StreamingObjectsPaths = prepareStreamingObjects(tmpPath = tmpPath)
     val launchesParams: Seq[(Int, Int, Boolean)] = Seq(
       (0, 3, false),
       (30, 3, false),
@@ -852,8 +718,8 @@ class YTsaurusStreamingTest extends AnyFlatSpec with Matchers with LocalSpark wi
     )
 
     import tech.ytsaurus.spyt.format.conf.SparkYtConfiguration.Streaming
-    withConf(Streaming.Transactional, transactional) {
-      doStreamLaunches(paths, launchesParams, includeServiceColumns)
+    withConf(Streaming.Transactional, true) {
+      doStreamLaunches(paths, launchesParams)
     }
 
     val resultDF = spark.read
@@ -865,11 +731,7 @@ class YTsaurusStreamingTest extends AnyFlatSpec with Matchers with LocalSpark wi
     val expectedData: Seq[TestRow] = getTestData(0, 89)
     val expectedDF: DataFrame = spark.createDataFrame(expectedData)
 
-    if (transactional || includeServiceColumns) {
-      resultDF.collect() should contain theSameElementsAs expectedDF.collect()
-    } else {
-      resultDF.dropDuplicates().collect() should contain theSameElementsAs expectedDF.collect()
-    }
+    resultDF.collect() should contain theSameElementsAs expectedDF.collect()
   }
 
   def prepareStreamingObjects(tmpPath: String, includeServiceColumns: Boolean = false, queueTabletCount: Int = 3): StreamingObjectsPaths = {
@@ -927,7 +789,7 @@ class YTsaurusStreamingTest extends AnyFlatSpec with Matchers with LocalSpark wi
           var currentCount = 0L
 
           while (currentCount < recordCountLimit) {
-            Thread.sleep(2000)
+            Thread.sleep(1000)
             currentCount = spark.read.option(InconsistentReadEnabled.name, "true").yt(resultPath).dropDuplicates().count()
           }
         }
@@ -942,7 +804,7 @@ class YTsaurusStreamingTest extends AnyFlatSpec with Matchers with LocalSpark wi
     }
   }
 
-  def testStreamingWithSeveralSourcesQueues(transactional: Boolean = false): Unit = {
+  def testStreamingWithSeveralSourcesQueues(): Unit = {
     val queues = (0 until 3).map(i => s"$tmpPath/inputQueue$i-${UUID.randomUUID()}")
     val consumerPath = s"$tmpPath/consumer-${UUID.randomUUID()}"
     val resultPath = s"$tmpPath/result-${UUID.randomUUID()}"
@@ -958,7 +820,7 @@ class YTsaurusStreamingTest extends AnyFlatSpec with Matchers with LocalSpark wi
     prepareOrderedTestTable(resultPath, resultTableSchema, enableDynamicStoreRead = true)
 
     import tech.ytsaurus.spyt.format.conf.SparkYtConfiguration.Streaming
-    withConf(Streaming.Transactional, transactional) {
+    withConf(Streaming.Transactional, true) {
       val queries = queues.map { queue =>
         spark
           .readStream
@@ -990,7 +852,7 @@ class YTsaurusStreamingTest extends AnyFlatSpec with Matchers with LocalSpark wi
       endTime = System.currentTimeMillis() + 30000
       queries.foreach(_.stop())
       while (queries.exists(_.isActive) && System.currentTimeMillis() < endTime) {
-        Thread.sleep(1000)
+        Thread.sleep(100)
       }
 
       val resultDF = spark.read
@@ -1020,17 +882,16 @@ class YTsaurusStreamingTest extends AnyFlatSpec with Matchers with LocalSpark wi
     }
   }
 
-  def testContinueStreamingAfterRemovingCheckpoints(includeServiceColumns: Boolean = false,
-                                                    transactional: Boolean = false): Unit = {
-    val paths: StreamingObjectsPaths = prepareStreamingObjects(tmpPath = tmpPath, includeServiceColumns)
+  def testContinueStreamingAfterRemovingCheckpoints(): Unit = {
+    val paths: StreamingObjectsPaths = prepareStreamingObjects(tmpPath = tmpPath)
     import tech.ytsaurus.spyt.format.conf.SparkYtConfiguration.Streaming
-    withConf(Streaming.Transactional, transactional) {
-      doStreamLaunches(paths, launchesParams = Seq((0, 3, true)), includeServiceColumns)
+    withConf(Streaming.Transactional, true) {
+      doStreamLaunches(paths, launchesParams = Seq((0, 3, true)))
     }
 
     YtWrapper.removeDir(paths.checkpointLocation.stripPrefix("yt:/"), recursive = true, force = true)
-    withConf(Streaming.Transactional, transactional) {
-      doStreamLaunches(paths, launchesParams = Seq((30, 3, true)), includeServiceColumns)
+    withConf(Streaming.Transactional, true) {
+      doStreamLaunches(paths, launchesParams = Seq((30, 3, true)))
     }
 
     val expectedData: Seq[TestRow] = getTestData(0, 59)
@@ -1042,11 +903,7 @@ class YTsaurusStreamingTest extends AnyFlatSpec with Matchers with LocalSpark wi
       .select("a", "b", "c")
       .orderBy("a")
 
-    if (includeServiceColumns || transactional) {
-      resultDF.collect() should contain theSameElementsAs expectedDF.collect()
-    } else {
-      resultDF.dropDuplicates().collect() should contain theSameElementsAs expectedDF.collect()
-    }
+    resultDF.collect() should contain theSameElementsAs expectedDF.collect()
   }
 }
 

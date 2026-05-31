@@ -21,7 +21,7 @@ trait QueueTestUtils {
   }
 
   @tailrec
-  final def waitQueueRegistration(queuePath: String, retries: Int = 10): Unit = {
+  final def waitQueueRegistration(queuePath: String, retries: Int = 40): Unit = {
     if (retries == 0) {
       throw new IllegalStateException("Queue is not registered after waiting")
     }
@@ -30,7 +30,7 @@ trait QueueTestUtils {
     } catch {
       case e: Throwable =>
         println("Waiting queue registration")
-        Thread.sleep(2000)
+        Thread.sleep(500)
         waitQueueRegistration(queuePath, retries - 1)
     }
   }

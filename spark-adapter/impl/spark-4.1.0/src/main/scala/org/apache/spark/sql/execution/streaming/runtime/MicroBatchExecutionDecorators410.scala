@@ -27,8 +27,7 @@ class MicroBatchExecutionDecorators410 extends Logging {
     }
 
     if (sts.isRecoveryNeeded) {
-      logWarning("Transactional streaming entering batch with recoveryNeeded flag set. " +
-        "Previous batch failed and the YTsaurus consumer state may diverge from the Spark commit log.")
+      MicroBatchExecutionDecorators410.warnRecoveryFlagSet()
     }
 
     val currentTransaction: StreamingTransactionHandle = sts.createTransaction(sparkSessionToRunBatch)
@@ -59,6 +58,11 @@ class MicroBatchExecutionDecorators410 extends Logging {
 }
 
 object MicroBatchExecutionDecorators410 extends Logging {
+  def warnRecoveryFlagSet(): Unit = logWarning(
+    "Transactional streaming entering batch with recoveryNeeded flag set. " +
+    "Previous batch failed and the YTsaurus consumer state may diverge from the Spark commit log."
+  )
+
   def commitOffsets(availableOffsets: StreamProgress): Unit = {
     for ((src, offset) <- availableOffsets.toList) {
       src match {

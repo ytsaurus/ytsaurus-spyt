@@ -24,7 +24,8 @@ class YtStreamingSource(sqlContext: SQLContext, consumerPath: String, queuePath:
   protected[streaming] lazy val cluster: String = YtWrapper.clusterName()
   private val includeServiceColumns = parameters.get("include_service_columns").exists(_.toBoolean)
 
-  private var lastCommittedOffset: YtQueueOffset = getLastCommittedOffset
+  private var lastCommittedOffset: YtQueueOffset =
+    offsetProvider.getCurrentOffset(cluster, consumerPath, queuePath)
   private var maxOffset: Option[YtQueueOffset] = None
 
   private def transactionalEnabled: Boolean =
@@ -51,9 +52,15 @@ class YtStreamingSource(sqlContext: SQLContext, consumerPath: String, queuePath:
     maxOffset
   }
 
-  protected[streaming] def getLastCommittedOffset: YtQueueOffset = {
+  protected[streaming] def refreshLastCommittedOffset(): YtQueueOffset = {
     logDebug(s"Get current offset for $consumerPath")
-    lastCommittedOffset = offsetProvider.getCurrentOffset(cluster, consumerPath, queuePath)
+    val fresh = offsetProvider.getCurrentOffset(cluster, consumerPath, queuePath)
+    if (lastCommittedOffset.partitions.forall { case (i, v) => fresh.partitions.get(i).exists(_ >= v) }) {
+      lastCommittedOffset = fresh
+    } else {
+      logWarning(s"YT consumer returned offset behind cached value. " +
+        s"fresh=${fresh.partitions}, cached=${lastCommittedOffset.partitions}. Keeping cached value.")
+    }
     lastCommittedOffset
   }
 
@@ -74,6 +81,10 @@ class YtStreamingSource(sqlContext: SQLContext, consumerPath: String, queuePath:
 
     val maxOffset = newMaxOffsetOpt.get
 
+    if (transactionalEnabled) {
+      refreshLastCommittedOffset()
+    }
+
     val maxRows = limit match {
       case c: CompositeReadLimit => c.getReadLimits.collectFirst { case r: ReadMaxRows => r.maxRows() }
       case r: ReadMaxRows => Some(r.maxRows())
@@ -85,11 +96,11 @@ class YtStreamingSource(sqlContext: SQLContext, consumerPath: String, queuePath:
     }
 
     val startOffsetParsed = if (transactionalEnabled) {
-      getLastCommittedOffset
+      lastCommittedOffset
     } else {
       val lastOffsetCachedBySpark: Option[YtQueueOffset] = Option(startOffset).map(YtQueueOffset.apply)
       if (lastOffsetCachedBySpark.isEmpty) {
-        getLastCommittedOffset
+        refreshLastCommittedOffset()
       } else if (lastOffsetCachedBySpark.get >= lastCommittedOffset) {
         lastOffsetCachedBySpark.get
       } else {

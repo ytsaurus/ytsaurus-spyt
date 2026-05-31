@@ -187,12 +187,11 @@ class YtStreamingSourceTest extends AnyFlatSpec with Matchers with MockitoSugar 
   it should "(transactional mode) use empty consumer offset in latestOffset (missing partitions read from -1 via maxOffset keys)" in {
     val mockOffsetProvider = mock[YtQueueOffsetProvider]
 
-    val staleConsumerOffset = YtQueueOffset(cluster, queuePath, SortedMap(0 -> 5L))
     val freshEmpty = YtQueueOffset(cluster, queuePath, SortedMap.empty[Int, Long])
     val maxOffset = YtQueueOffset(cluster, queuePath, SortedMap(0 -> 100L))
 
     when(mockOffsetProvider.getCurrentOffset(any[String], any[String], any[String])(any[CompoundClient]))
-      .thenReturn(staleConsumerOffset, freshEmpty)
+      .thenReturn(freshEmpty)
     when(mockOffsetProvider.getMaxOffset(any[String], any[String])(any[CompoundClient])).thenReturn(Success(maxOffset))
 
     val source = new YtStreamingSource(spark.sqlContext, consumerPath, queuePath, new StructType(),
@@ -269,14 +268,13 @@ class YtStreamingSourceTest extends AnyFlatSpec with Matchers with MockitoSugar 
 
   it should "call provider's advance on commit with last fetched offset" in {
     val mockOffsetProvider = mock[YtQueueOffsetProvider]
-    val source = new YtStreamingSource(spark.sqlContext, consumerPath, queuePath, new StructType(), Map.empty,
-      offsetProvider = mockOffsetProvider)
-
     val lastCommitted = YtQueueOffset(cluster, queuePath, SortedMap(0 -> 50L))
     val newCommit = YtQueueOffset(cluster, queuePath, SortedMap(0 -> 60L))
 
     when(mockOffsetProvider.getCurrentOffset(any[String], any[String], any[String])(any[CompoundClient])).thenReturn(lastCommitted)
-    source.getLastCommittedOffset
+
+    val source = new YtStreamingSource(spark.sqlContext, consumerPath, queuePath, new StructType(), Map.empty,
+      offsetProvider = mockOffsetProvider)
 
     source.commit(newCommit)
 

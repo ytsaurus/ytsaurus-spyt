@@ -3,6 +3,7 @@ from spyt.connect import start_connect_server, start_connect_server_inner_cluste
 
 from common.helpers import assert_items_equal, assert_sequences_equal, wait_for_operation
 from contextlib import contextmanager
+from functools import reduce
 from hashlib import sha256
 from itertools import chain
 import time
@@ -60,6 +61,23 @@ def test_two_servers(yt_client):
         for op in [op1, op2]:
             if op:
                 yt_client.complete_operation(op.id)
+
+
+def test_web_ui_endpoint(yt_client):
+    operation = start_connect_server(yt_client)
+    try:
+        web_ui_endpoint = None
+        timeout = 30
+        while not web_ui_endpoint and timeout > 0:
+            operation_data = yt_client.get_operation(operation.id)
+            web_ui_endpoint = (reduce(lambda map, key: map[key] if map and key in map else None,
+                                      ["runtime_parameters", "annotations", "description", "Web UI"], operation_data))
+            time.sleep(1)
+            timeout -= 1
+
+        assert web_ui_endpoint, "Web UI endpoint not set in Spark Connect driver operation"
+    finally:
+        yt_client.complete_operation(operation.id)
 
 
 def _test_base_request(spark):

@@ -3,7 +3,6 @@ package org.apache.spark.scheduler.cluster.ytsaurus
 
 import org.apache.spark.SparkContext
 import org.apache.spark.deploy.ytsaurus.Config._
-import org.apache.spark.internal.config.SUBMIT_DEPLOY_MODE
 import org.apache.spark.resource.ResourceProfile
 import org.apache.spark.scheduler.cluster.{CoarseGrainedSchedulerBackend, SchedulerBackendUtils}
 import org.apache.spark.scheduler.{ExecutorDecommissionInfo, TaskSchedulerImpl}
@@ -29,33 +28,31 @@ private[spark] class YTsaurusSchedulerBackend (
   private var executorMonitor: ScheduledExecutorService = _
   @volatile private var isShuttingDown = false
 
-  def initialize(): Unit = {
-    if (sc.conf.get(SUBMIT_DEPLOY_MODE) == "cluster" && sc.uiWebUrl.isDefined) {
-      val internalWebUiUrl = sc.uiWebUrl.get
-      sys.env.get("YT_OPERATION_ID").foreach { ytOperationId =>
-        val webUiUrl = if (sc.conf.get(TCP_PROXY_ENABLED)) {
-          implicit val ytClient: CompoundClient = operationManager.ytClient
-          val tcpRouterOpt = TcpProxyService(
-            sc.conf.get(TCP_PROXY_ENABLED),
-            sc.conf.get(TCP_PROXY_RANGE_START),
-            sc.conf.get(TCP_PROXY_RANGE_SIZE)
-          ).register("DRIVER")
+  def initialize(): Unit = for {
+    internalWebUiUrl <- sc.uiWebUrl
+    ytOperationId <- sys.env.get("YT_OPERATION_ID")
+  } {
+    val webUiUrl = if (sc.conf.get(TCP_PROXY_ENABLED)) {
+      implicit val ytClient: CompoundClient = operationManager.ytClient
+      val tcpRouterOpt = TcpProxyService(
+        sc.conf.get(TCP_PROXY_ENABLED),
+        sc.conf.get(TCP_PROXY_RANGE_START),
+        sc.conf.get(TCP_PROXY_RANGE_SIZE)
+      ).register("DRIVER")
 
-          tcpRouterOpt.foreach { tcpRouter =>
-            val address = internalWebUiUrl.replace("http://", "").replace("https://", "")
-            TcpProxyService.updateTcpAddress(address, tcpRouter.getPort("DRIVER"))
-          }
-
-          tcpRouterOpt.map { tcpRouter =>
-            "http://" + tcpRouter.getExternalAddress("DRIVER").toString
-          }.get
-        } else {
-          internalWebUiUrl
-        }
-        val operation = YTsaurusOperation(GUID.valueOf(ytOperationId))
-        operationManager.setOperationDescription(operation, Map(YTsaurusOperationManager.WEB_UI_KEY -> webUiUrl))
+      tcpRouterOpt.foreach { tcpRouter =>
+        val address = internalWebUiUrl.replace("http://", "").replace("https://", "")
+        TcpProxyService.updateTcpAddress(address, tcpRouter.getPort("DRIVER"))
       }
+
+      tcpRouterOpt.map { tcpRouter =>
+        "http://" + tcpRouter.getExternalAddress("DRIVER").toString
+      }.get
+    } else {
+      internalWebUiUrl
     }
+    val operation = YTsaurusOperation(GUID.valueOf(ytOperationId))
+    operationManager.setOperationDescription(operation, Map(YTsaurusOperationManager.WEB_UI_KEY -> webUiUrl))
   }
 
   override def start(): Unit = {

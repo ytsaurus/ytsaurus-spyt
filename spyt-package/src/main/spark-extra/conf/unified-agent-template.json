@@ -1,0 +1,29 @@
+{
+  "body" : {
+    "$resolver" : "message",
+    "stringified" : true
+  },
+  "level": {
+    "$resolver" : "level",
+    "field" : "name"
+  },
+  "error_type": {
+    "$resolver": "exception",
+    "field": "className"
+  },
+  "error_message" : {
+    "$resolver": "exception",
+    "field": "message"
+  },
+  "stack_trace" : {
+    "$resolver": "exception",
+    "field": "stackTrace",
+    "stackTrace": {
+      "stringified": true
+    }
+  },
+  "logger": {
+    "$resolver": "logger",
+    "field": "name"
+  }
+}

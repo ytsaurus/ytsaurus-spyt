@@ -1,34 +1,8 @@
-status:
-  port: !expr "{$env('YT_AGENT_METRICS_PULL_PORT')}"
-  host: '::'
-
-storages:
-- name: main-storage
-  plugin: fs
-  config:
-    directory: /tmp/unified_agent_storage
-    max_partition_size: 1gb
-
-channels:
-- name: main-metrics-channel
-  channel:
-    pipe:
-    - storage_ref:
-        name: main-storage
-    output:
-      plugin: metrics_pull
-      id: metrics-pull-output
-      config:
-        port: !expr "{$env('YT_METRICS_PULL_PORT')}"
-        host: '::'
-        max_memory_usage: 300mb
-
-routes:
 - input:
     plugin: metrics
     id: httpPush
     config:
-      port: !expr "{$env('YT_METRICS_SPARK_PUSH_PORT')}"
+      port: !expr "{$env('YT_METRICS_SPARK_PUSH_PORT')|27099}"
       host: '::'
       path: /
       metric_name_label: sensor
@@ -61,5 +35,12 @@ routes:
             service: spark
             format:
               solomon_json: { }
-    channel_ref:
-      name: main-metrics-channel
+      - storage_ref:
+          name: metrics-storage
+    output:
+      plugin: metrics_pull
+      id: metrics-pull-output
+      config:
+        port: !expr "{$env('YT_METRICS_PULL_PORT')|27100}"
+        host: '::'
+        max_memory_usage: 300mb

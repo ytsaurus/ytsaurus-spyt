@@ -66,8 +66,19 @@ for file in $(ls); do
   fi
 done
 
-if [[ -n "$YT_METRICS_SPARK_PUSH_PORT" ]]; then
+if [[ -n "$YT_AGENT_STATUS_PORT" ]] && [[ -f "$HOME/unified-agent-base.yaml" ]]; then
   export SPYT_BINS="$spyt_home/bin"
+
   CONFIG_PATH="$HOME/unified-agent.yaml"
+  cp "$HOME/unified-agent-base.yaml" "$CONFIG_PATH"
+
+  if [[ "${ENABLE_MONIUM_LOGS_EXPORT:-false}" == "true" ]]; then
+    sed -i '/^routes:$/d' "$CONFIG_PATH"
+    cat "$HOME/unified-agent-logs.yaml" >> "$CONFIG_PATH"
+  fi
+
+  if [[ "${SPARK_YT_METRICS_ENABLED:-false}" == "true" ]]; then
+    cat "$HOME/unified-agent-metrics.yaml" >> "$CONFIG_PATH"
+  fi
   unified_agent --config $CONFIG_PATH 1>&2 &
 fi

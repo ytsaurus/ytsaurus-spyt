@@ -75,6 +75,7 @@ class CommonComponentConfig():
     spark_discovery: SparkDiscovery = None
     group_id: str = None
     cluster_java_home: str = None
+    tvm_secret: str = None
     container_home: str = None
     spark_home: str = None
     spyt_home: str = None
@@ -396,6 +397,7 @@ def build_spark_operation_spec(config: dict, client: YtClient,
         "enablers": str(common_config.enablers),
         "job_types": job_types,
     }
+
     if common_config.spark_discovery is not None:
         description["discovery_path"] = common_config.spark_discovery.base_discovery_path
     _put_if_not_none(description, "discovery_group_id", common_config.group_id)
@@ -419,12 +421,23 @@ def build_spark_operation_spec(config: dict, client: YtClient,
     environment["SPYT_HOME"] = common_config.spyt_home
     environment["SPARK_CLUSTER_VERSION"] = config["cluster_version"]  # TODO Rename to SPYT_CLUSTER_VERSION
     environment["SPYT_CLUSTER_VERSION"] = config["cluster_version"]
-    environment["SPARK_YT_METRICS_ENABLED"] = str(common_config.enablers.enable_yt_metrics)
+    environment["SPARK_YT_METRICS_ENABLED"] = str(common_config.enablers.enable_yt_metrics).lower()
     environment["SPARK_YT_IPV6_PREFERENCE_ENABLED"] = \
         str(common_config.enablers.enable_preference_ipv6)  # COMPAT(alex-shishkin)
     environment["SPARK_YT_TCP_PROXY_ENABLED"] = str(common_config.enablers.enable_tcp_proxy)
     environment["SPARK_YT_PROFILING_ENABLED"] = str(common_config.enablers.enable_profiling)
     environment["SPARK_YT_RPC_JOB_PROXY_ENABLED"] = str(common_config.rpc_job_proxy)
+    if common_config.enablers.enable_monium_logs_export:
+        if not common_config.tvm_secret:
+            logger.error("Unable to start logs export: tvm secret is not set")
+        else:
+            environment["ENABLE_MONIUM_LOGS_EXPORT"] = str(common_config.enablers.enable_monium_logs_export).lower()
+            operation_spec["secure_vault"] = {"tvm_logs" : common_config.tvm_secret}
+            spark_defaults_conf = read_spark_defaults_conf()
+            agent_pull_port = spark_defaults_conf["spark.ytsaurus.metrics.agent.pull.port"]
+
+            environment["YT_AGENT_STATUS_PORT"] = agent_pull_port
+            environment["YT_APPENDER_TITLE"] = "file"
     if common_config.enablers.enable_yt_metrics:
         metrics_conf = read_metrics_conf()
         spark_defaults_conf = read_spark_defaults_conf()
@@ -433,7 +446,7 @@ def build_spark_operation_spec(config: dict, client: YtClient,
         metrics_pull_port = spark_defaults_conf["spark.ytsaurus.metrics.pull.port"]
         agent_pull_port = spark_defaults_conf["spark.ytsaurus.metrics.agent.pull.port"]
         environment["YT_METRICS_SPARK_PUSH_PORT"] = spark_push_port
-        environment["YT_AGENT_METRICS_PULL_PORT"] = agent_pull_port
+        environment["YT_AGENT_STATUS_PORT"] = agent_pull_port
         environment["YT_METRICS_PULL_PORT"] = metrics_pull_port
         operation_spec["annotations"]["solomon_resolver_tag"] = "spark"
         operation_spec["annotations"]["solomon_resolver_ports"] = [int(metrics_pull_port), int(agent_pull_port)]

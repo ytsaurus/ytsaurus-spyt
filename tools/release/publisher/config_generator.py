@@ -109,6 +109,7 @@ def prepare_launch_config(conf_local_dir: str, client: Client, versions: Version
     launch_config['file_paths'] = get_file_paths(conf_local_dir, client.root_path, versions)
     launch_config['enablers'] = {
         "spark.ytsaurus.metrics.enabled": not os_release if yandex_internal_tests is None else yandex_internal_tests,
+        "spark.ytsaurus.logs.export.enabled": not os_release if yandex_internal_tests is None else yandex_internal_tests,
         "spark.hadoop.yt.mtn.enabled": not os_release,
         "spark.hadoop.yt.tcpProxy.enabled": os_release,
         "spark.ytsaurus.taskProxy.enabled": os_release,

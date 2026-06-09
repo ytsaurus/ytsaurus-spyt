@@ -365,7 +365,7 @@ def start_spark_cluster(worker_cores, worker_memory, worker_num, worker_cores_ov
                         worker_log_table_ttl=SparkDefaultArguments.SPARK_WORKER_LOG_TABLE_TTL,
                         params=None, shs_location=None, spark_cluster_version=None, enablers=None,
                         enable_preference_ipv6=None, client=None,
-                        preemption_mode="normal", cluster_log_level="INFO", enable_multi_operation_mode=False,
+                        preemption_mode="normal", cluster_log_level="INFO", tvm_secret=None, enable_multi_operation_mode=False,
                         dedicated_operation_mode=False, driver_cores=None, driver_memory=None, driver_num=None,
                         driver_cores_overhead=None, driver_timeout=None, autoscaler_period=None,
                         autoscaler_metrics_port=None, autoscaler_sliding_window=None,
@@ -415,6 +415,7 @@ def start_spark_cluster(worker_cores, worker_memory, worker_num, worker_cores_ov
     :param client: YtClient
     :param preemption_mode: 'normal' or 'graceful' for graceful preemption
     :param cluster_log_level: level for cluster logs
+    :param tvm_secret: secret for logs export to Monium
     :param enable_multi_operation_mode: use several vanilla operations for one cluster
     :param dedicated_operation_mode: use dedicated operation for drivers
     :param driver_cores: number of cores that will be available on driver worker
@@ -525,7 +526,7 @@ def start_spark_cluster(worker_cores, worker_memory, worker_num, worker_cores_ov
         operation_title, operation_alias, pool, enable_tmpfs, network_project, enablers, preemption_mode,
         cluster_log_level, rpc_job_proxy, rpc_job_proxy_thread_pool_size, enable_ytsaurus_shuffle,
         tcp_proxy_range_start, tcp_proxy_range_size, enable_stderr_table, "spark", spark_discovery, group_id,
-        cluster_java_home
+        cluster_java_home, tvm_secret
     )
     master_config = MasterConfig(master_memory_limit, master_port)
     worker_config = WorkerConfig(

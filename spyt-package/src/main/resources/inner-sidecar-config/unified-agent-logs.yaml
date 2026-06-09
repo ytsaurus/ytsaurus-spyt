@@ -1,0 +1,94 @@
+channels:
+- name: main-logs-channel
+  channel:
+    pipe:
+      - filter:
+          plugin: parse_json
+          config:
+            rules:
+              - destination: level
+                paths: [ "level" ]
+              - destination: logger
+                paths: [ "logger" ]
+              - destination: stack_trace
+                paths: [ "stack_trace" ]
+              - destination: error_message
+                paths: [ "error_message" ]
+              - destination: error_type
+                paths: [ "error_type" ]
+              - destination: component
+                paths: [ "component" ]
+              - destination: operation_alias
+                paths: [ "operation_alias" ]
+              - destination: app_alias
+                paths: [ "app_alias" ]
+            payload:
+              paths: [ "body" ]
+              required: true
+      - filter:
+          plugin: format_otel_logs
+          config:
+            log_attributes:
+              - source: logger
+                destination: labels.logger
+              - source: stack_trace
+                destination: meta.stack_trace
+              - source: error_message
+                destination: meta.error_message
+              - source: error_type
+                destination: meta.error_type
+              - source: component
+                destination: labels.component
+              - source: operation_alias
+                destination: labels.operation_alias
+              - source: app_alias
+                destination: labels.app_alias
+            severity:
+              source: level
+      - storage_ref:
+          name: logs-storage
+    output:
+      plugin: otel_logs
+      id: logs_output
+      config:
+        url: "collector.logs.yandex-team.ru:443"
+        format: proto
+        project: "yt"
+        service: "spark"
+        tvm:
+          client_id: 2038851
+          destination_id: 2045111
+          secret:
+            env: "YT_SECURE_VAULT_tvm_logs"
+
+routes:
+- input:
+    plugin: file_input
+    id: filInputDefault
+    config:
+      path: logs/spark.log
+      state_directory: ./data/default/file_input_state
+      multi_file: true
+  channel:
+    channel_ref:
+      name: main-logs-channel
+- input:
+    plugin: file_input
+    id: fileInputDriver
+    config:
+      path: tmpfs/spark/work/*/logs/spark.log
+      state_directory: ./data/submit/file_input_driver_state
+      multi_file: true
+  channel:
+    channel_ref:
+      name: main-logs-channel
+- input:
+    plugin: file_input
+    id: fileInputExec
+    config:
+      path: tmpfs/spark/work/*/*/logs/spark.log
+      state_directory: ./data/submit/file_input_exec_state
+      multi_file: true
+  channel:
+    channel_ref:
+      name: main-logs-channel

@@ -1,0 +1,17 @@
+status:
+  port: !expr "{$env('YT_AGENT_STATUS_PORT')}"
+  host: '::'
+
+storages:
+  - name: metrics-storage
+    plugin: fs
+    config:
+      directory: /tmp/unified_agent_storage
+      max_partition_size: 1gb
+  - name: logs-storage
+    plugin: fs
+    config:
+      directory: /tmp/logs_storage
+      max_partition_size: 1gb
+
+routes:

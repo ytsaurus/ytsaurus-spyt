@@ -33,8 +33,11 @@ def yt_client():
 
 @pytest.fixture(scope="function")
 def spyt_cluster(request):
-    spark_conf = getattr(request, 'param', {})
-    with SpytCluster(proxy=YT_PROXY, dump_dir=test_directory(request), spark_conf=spark_conf) as cluster:
+    input_params = getattr(request, 'param', {})
+    tvm_secret = input_params.pop("tvm_secret", None)
+    enable_logs = input_params.pop("enable_monium_logs_export", False)
+    with SpytCluster(proxy=YT_PROXY, dump_dir=test_directory(request),
+                     spark_conf=input_params, tvm_secret=tvm_secret, enable_monium_logs_export=enable_logs) as cluster:
         yield cluster
 
 

@@ -206,7 +206,7 @@ trait SparkLauncher {
 
     log.info(s"Run command: $command")
 
-    val workerLog4j = s"-Dlog4j.configuration=file://$spytHome/conf/log4j.worker.properties"
+    val workerLog4j = s"-Dlog4j2.configurationFile=file://$spytHome/conf/log4j2.worker.properties"
     val sparkLocalDirs = env("SPARK_LOCAL_DIRS", "./tmpfs")
     val processExtraEnv = ArrayBuffer(
       "SPARK_HOME" -> sparkHome,

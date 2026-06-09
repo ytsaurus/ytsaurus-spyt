@@ -50,6 +50,8 @@ def main(raw_args=None):
     default_enablers = SpytEnablers()
     add_parser_group(parser, '--enable-yt-metrics', '--disable-yt-metrics', 'enable_yt_metrics',
                      default_enablers.enable_yt_metrics)
+    add_parser_group(parser, '--enable-monium-logs-export', '--disable-monium-logs-export', 'enable_monium_logs_export',
+                     default_enablers.enable_monium_logs_export)
     add_parser_group(parser, '--enable-ytsaurus-shuffle', '--disable-ytsaurus-shuffle', 'enable_ytsaurus_shuffle', False)
 
     parser.set_defaults(enable_tmpfs=True)
@@ -139,6 +141,7 @@ def main(raw_args=None):
                         enablers=SpytEnablers(
                             enable_mtn=args.enable_mtn,
                             enable_yt_metrics=args.enable_yt_metrics,
+                            enable_monium_logs_export=args.enable_monium_logs_export,
                             enable_tcp_proxy=args.enable_tcp_proxy,
                             enable_task_proxy=args.enable_task_proxy,
                             enable_squashfs=args.enable_squashfs
@@ -147,6 +150,7 @@ def main(raw_args=None):
                         client=yt_client,
                         preemption_mode=args.preemption_mode,
                         cluster_log_level=args.cluster_log_level,
+                        tvm_secret=args.tvm_secret,
                         enable_multi_operation_mode=args.enable_multi_operation_mode,
                         dedicated_operation_mode=args.dedicated_operation_mode,
                         driver_cores=args.driver_cores,

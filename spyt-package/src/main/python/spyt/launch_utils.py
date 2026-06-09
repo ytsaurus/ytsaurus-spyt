@@ -23,6 +23,7 @@ def add_default_launch_options(parser):
     parser.add_argument("--spyt-version", required=False)
     parser.add_argument("--preemption_mode", required=False, default="normal")
     parser.add_argument("--cluster-log-level", required=False, default="INFO")
+    parser.add_argument("--tvm-secret", required=False)
 
     default_enablers = SpytEnablers()
     add_parser_group(parser, '--enable-mtn', '--disable-mtn', 'enable_mtn', default_enablers.enable_mtn)

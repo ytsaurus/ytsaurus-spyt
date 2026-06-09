@@ -10,6 +10,7 @@ import org.apache.spark.launcher.{JavaModuleOptions, SparkLauncher}
 import org.apache.spark.resource.ResourceProfile
 import org.apache.spark.rpc.RpcEndpointAddress
 import org.apache.spark.scheduler.cluster.CoarseGrainedSchedulerBackend
+import org.apache.spark.scheduler.cluster.ytsaurus.YTsaurusOperationManager.{logDebug, logError}
 import org.apache.spark.util.Utils.splitCommandString
 import org.apache.spark.util.{Utils, VersionUtils}
 import org.apache.spark.{SparkConf, SparkContext, SparkException}
@@ -132,6 +133,15 @@ private[spark] class YTsaurusOperationManager(
     secureVaultMap.putIfAbsent("YT_TOKEN", YTree.stringNode(token))
     opParams.secrets.foreach { case (key, value) =>
       secureVaultMap.put(key, YTree.stringNode(value))
+    }
+
+    if(conf.get(Config.YTSAURUS_LOGS_EXPORT_ENABLED)) {
+      logDebug(s"Initializing YT logs environment")
+      if (!secureVaultMap.containsKey("tvm_logs")) {
+        logError(s"Unable to start logs export for $taskName: tvm secret is not set")
+      } else {
+        enrichLogsEnvironment(conf, environment)
+      }
     }
 
     additionalSpecParameters.getOrElseUpdate("max_failed_job_count", YTree.integerNode(opParams.maxFailedJobCount))
@@ -641,6 +651,20 @@ private[spark] object YTsaurusOperationManager extends Logging {
     (files ++ primaryResource).distinct
   }
 
+  private[ytsaurus] def enrichLogsEnvironment(conf: SparkConf, environment: YTreeMapNode): Unit = {
+    val appName = conf.get("spark.app.name")
+
+    val agentPullPort = conf.get(Config.YT_METRICS_AGENT_PULL_PORT).toString
+    val envVars = Map(
+      "YT_OPERATION_ALIAS" -> appName,
+      "ENABLE_MONIUM_LOGS_EXPORT" -> "true",
+      "YT_AGENT_STATUS_PORT" -> agentPullPort,
+      "YT_APPENDER_TITLE" -> "file"
+    )
+
+    envVars.foreach(kv => environment.put(kv._1, YTree.stringNode(kv._2)))
+  }
+
   private[ytsaurus] def enrichMetricsEnvironment(spytHome: String, conf: SparkConf, environment: YTreeMapNode): Unit = {
     logDebug(s"Initializing YT metrics environment")
     val sparkConfDir = Option(System.getenv("SPARK_CONF_DIR")).getOrElse(s"$spytHome/conf")
@@ -666,7 +690,7 @@ private[spark] object YTsaurusOperationManager extends Logging {
     val envVars = Map(
       "YT_METRICS_SPARK_PUSH_PORT" -> metricsSparkPushPort,
       "YT_METRICS_PULL_PORT" -> metricsPullPort,
-      "YT_AGENT_METRICS_PULL_PORT" -> metricsAgentPullPort,
+      "YT_AGENT_STATUS_PORT" -> metricsAgentPullPort,
       "YT_OPERATION_ALIAS" -> appName,
       "SPARK_YT_METRICS_ENABLED" -> "true"
     )

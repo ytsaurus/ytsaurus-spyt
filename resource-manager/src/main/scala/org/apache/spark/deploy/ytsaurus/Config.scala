@@ -218,4 +218,10 @@ object Config {
     .version("2.9.0")
     .stringConf
     .createOptional
+
+  val YTSAURUS_LOGS_EXPORT_ENABLED = ConfigBuilder("spark.ytsaurus.logs.export.enabled")
+    .doc("Enable or disable logs export to Monium")
+    .version("2.10.1")
+    .booleanConf
+    .createWithDefault(false)
 }

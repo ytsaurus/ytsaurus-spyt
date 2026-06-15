@@ -1,6 +1,6 @@
 from common.helpers import assert_items_equal
 import requests
-
+import pytest
 
 def test_spyt_root_existence(yt_client):
     assert_items_equal(yt_client.list("//home/spark"), ["conf", "distrib", "spyt"])
@@ -23,6 +23,7 @@ def test_reverse_proxy_cluster_startup(yt_client, reverse_proxy_spyt_cluster):
         "webui_url": "https://some-host/some-path/"
     }
 
+
 def test_prometheus_endpoint(yt_client, spyt_cluster):
     webui_endpoint = yt_client.list(spyt_cluster.discovery_path + "/discovery/webui")[0]
     master_metrics_endpoint = f'http://{webui_endpoint}/metrics/master/prometheus'
@@ -32,3 +33,41 @@ def test_prometheus_endpoint(yt_client, spyt_cluster):
     response_lines = response_body.splitlines()
     for line in response_lines:
         assert line.startswith('metrics_')
+
+
+@pytest.mark.parametrize("spyt_cluster", [{"enable_multi_operation_mode" : True}], indirect=True)
+def test_multi_operation_mode(yt_client, spyt_cluster):
+    assert_multi_operation_mode(yt_client, spyt_cluster)
+
+
+@pytest.mark.parametrize("spyt_cluster", [{"enable_multi_operation_mode" : True,
+                                           "operation_alias" : "*alias"}], indirect=True)
+def test_multi_operation_mode_with_alias(yt_client, spyt_cluster):
+    op_ids = assert_multi_operation_mode(yt_client, spyt_cluster)
+
+    operation_aliases = []
+
+    for op_id in op_ids:
+        operation = yt_client.get_operation(op_id)
+        operation_aliases.append(operation["brief_spec"]["alias"])
+
+    assert_items_equal(operation_aliases, ["*alias_workers", "*alias"])
+
+
+def assert_multi_operation_mode(yt_client, spyt_cluster):
+    assert_items_equal(yt_client.list(spyt_cluster.discovery_path + "/discovery"),
+                       ["conf", "operation", "rest", "spark_address",
+                        "version", "webui", "master_jobs", "children_operations"])
+    op_ids = yt_client.list(f"{spyt_cluster.discovery_path}/discovery/operation") + \
+            yt_client.list(f"{spyt_cluster.discovery_path}/discovery/children_operations")
+
+    job_types = []
+
+    for op_id in op_ids:
+        operation = yt_client.get_operation(op_id)
+        job_types.append(
+            operation["runtime_parameters"]["annotations"]["description"]["Spark over YT"]["job_types"][0]
+        )
+
+    assert_items_equal(job_types, ["worker", "master"])
+    return op_ids

@@ -88,20 +88,24 @@ class SpytCluster(ClusterBase):
         return params
 
     def __init__(self, proxy, discovery_path=None, group_id=None, java_home=None, yt_root_path=None, dump_dir=None,
-                 spark_conf=None, tvm_secret=None, enable_monium_logs_export=False):
+                 spark_conf=None, tvm_secret=None, enable_monium_logs_export=False, enable_multi_operation_mode=False,
+                 operation_alias=None):
         super().__init__(proxy, discovery_path, group_id, yt_root_path, dump_dir)
         self.java_home = java_home
         self.spark_conf = spark_conf or {}
         self.tvm_secret = tvm_secret
         self.enable_monium_logs_export = enable_monium_logs_export
+        self.enable_multi_operation_mode = enable_multi_operation_mode
+        self.operation_alias = operation_alias
 
     def __enter__(self):
         self.op = start_spark_cluster(
             worker_cores=2, worker_memory='3G', worker_num=1, worker_cores_overhead=None, worker_memory_overhead='512M',
             operation_title='spark_cluster', discovery_path=self.discovery_path,
-            master_memory_limit='3G', enable_history_server=False, params=self.get_params(self.spark_conf), enable_tmpfs=False,
-            enablers=self.get_enablers(self.enable_monium_logs_export), client=self.yt_client, spark_cluster_version=VERSION, group_id=self.group_id,
-            tvm_secret=self.tvm_secret)
+            master_memory_limit='3G', enable_history_server=False, params=self.get_params(self.spark_conf),
+            enable_tmpfs=False, enablers=self.get_enablers(self.enable_monium_logs_export), client=self.yt_client,
+            spark_cluster_version=VERSION, group_id=self.group_id, tvm_secret=self.tvm_secret,
+            enable_multi_operation_mode=self.enable_multi_operation_mode, operation_alias=self.operation_alias)
         if self.op is None:
             raise YtError("Cluster starting failed")
         cluster_info = find_spark_cluster(self.discovery_path, self.yt_client)
@@ -109,7 +113,10 @@ class SpytCluster(ClusterBase):
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        self.finish(exc_type, exc_val)
+        try:
+            self._wait_children_finished()
+        finally:
+            self.finish(exc_type, exc_val)
 
     @contextmanager
     def submission_client(self):
@@ -128,6 +135,34 @@ class SpytCluster(ClusterBase):
             app_id = client.submit(launcher)
             status = client.wait_final(app_id)
             return status
+
+    def _wait_children_finished(self, timeout=60):
+        if not self.enable_multi_operation_mode:
+            return
+        children_path = f"{self.discovery_path}/discovery/children_operations"
+        if self.yt_client.exists(children_path):
+            children_ids = self.yt_client.list(children_path)
+        else:
+            return
+
+        for child_id in children_ids:
+            try:
+                self.yt_client.complete_operation(child_id)
+            except YtError:
+                logger.warning(f"Child op {child_id} abort failed", exc_info=True)
+        deadline = time.monotonic() + timeout
+        for child_id in children_ids:
+            while time.monotonic() < deadline:
+                try:
+                    state = self.yt_client.get_operation_state(child_id)
+                    if state.is_finished():
+                        break
+                except YtError:
+                    logger.warning(f"Failed to get child operation {child_id} state")
+                    break
+                time.sleep(1)
+            else:
+                logger.warning(f"Child op {child_id} did not finish in {timeout}s")
 
     @contextmanager
     def spark_session(self, **kwargs):

@@ -1,3 +1,4 @@
+import dataclasses
 import logging
 import os
 import random
@@ -563,6 +564,11 @@ def start_spark_cluster(worker_cores, worker_memory, worker_num, worker_cores_ov
         if enable_multi_operation_mode:
             child_args = args.copy()
             child_args['job_types'] = ['worker']
+            if child_args['common_config'].operation_alias:
+                child_args['common_config'] = dataclasses.replace(
+                    common_config,
+                    operation_alias=common_config.operation_alias + "_workers"
+                )
             child_builder = build_spark_operation_spec(**child_args)
             op_child = run_operation(child_builder, sync=False, client=client)
             _wait_child_start(op_child, spark_discovery, client)

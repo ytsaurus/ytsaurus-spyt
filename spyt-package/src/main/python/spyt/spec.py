@@ -537,11 +537,9 @@ def build_spark_connect_server_spec(client: YtClient, config, enablers: SpytEnab
     ] + [f"--conf {key}={params.spark_conf[key]}" for key in params.spark_conf] + ["spark-internal"]
 
     operation_spec = {
-        "title": "Spark connect server"
-    }
-
-    secure_vault = {
-        "YT_TOKEN": get_token(client=client)
+        "title": "Spark connect server",
+        "issue_temporary_token": True,
+        "temporary_token_environment_variable_name": "YT_TOKEN",
     }
 
     file_paths, layer_paths = _create_file_and_layer_paths(config, enablers.enable_squashfs, spark_distr_paths)
@@ -572,5 +570,4 @@ def build_spark_connect_server_spec(client: YtClient, config, enablers: SpytEnab
     if alias:
         builder.alias(alias)
 
-    return builder.secure_vault(secure_vault) \
-        .spec(operation_spec)
+    return builder.spec(operation_spec)

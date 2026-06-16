@@ -11,12 +11,6 @@ object Config {
     .timeConf(TimeUnit.MILLISECONDS)
     .createWithDefaultString("10m")
 
-  val YTSAURUS_CONNECT_TOKEN_REFRESH_PERIOD = ConfigBuilder("spark.ytsaurus.connect.token.refresh.period")
-    .doc("Refresh period for temporary token specified in YT_TOKEN env variable")
-    .version("2.8.0")
-    .timeConf(TimeUnit.MILLISECONDS)
-    .createOptional
-
   val YTSAURUS_CONNECT_STARTUP_TIMEOUT = ConfigBuilder("spark.ytsaurus.connect.startup.timeout")
     .doc("Timeout for receiving GRPC endpoint from SPYT connect server")
     .version("2.9.0")

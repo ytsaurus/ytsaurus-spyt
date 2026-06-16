@@ -1,6 +1,5 @@
 package org.apache.spark.sql.connect.ytsaurus
 
-import org.apache.commons.codec.binary.Hex
 import org.apache.spark.rpc.RpcAddress
 import org.apache.spark.SparkEnv
 import org.apache.spark.sql.connect.config.Connect.CONNECT_GRPC_BINDING_PORT
@@ -16,8 +15,6 @@ import tech.ytsaurus.spyt.wrapper.client.YtClientProvider
 import tech.ytsaurus.ysontree.YTree
 
 import java.net.ServerSocket
-import java.security.MessageDigest
-import java.util.concurrent.{Executors, ScheduledExecutorService, TimeUnit}
 import scala.annotation.tailrec
 import scala.util.control.NonFatal
 
@@ -47,44 +44,30 @@ object SpytConnectServer {
 
     val sparkConf = SparkEnv.get.conf
     val client = YtClientProvider.ytClient(ytClientConfiguration(sparkConf))
-    var tokenRefreshExecutor: Option[ScheduledExecutorService] = None
 
-    try {
-      sparkConf.get(Config.YTSAURUS_CONNECT_TOKEN_REFRESH_PERIOD).foreach { period =>
-        val token = if (innerClusterOpt.isDefined) {
-          sparkConf.get("spark.hadoop.yt.token")
-        } else {
-          sys.env("YT_SECURE_VAULT_YT_TOKEN")
-        }
-        tokenRefreshExecutor = Some(scheduleTokenRefresh(period, client, token))
-      }
-
-      innerClusterOpt match {
-        case Some(innerClusterParams) => sendGrpcEndpointToMaster(
-          innerClusterParams,
-          sparkConf.get("spark.hadoop.yt.user"),
-          sparkConf.get("spark.driverId"),
-          sparkConf.getAppId,
-          sparkConf.get(Config.YTSAURUS_CONNECT_SETTINGS_HASH)
-        )
-        case None => addGrpcEndpointToAnnotation(client)
-      }
-
-      val idleTimeout = sparkConf.get(Config.YTSAURUS_CONNECT_IDLE_TIMEOUT)
-
-      while (keepListening(idleTimeout) && serverThread.isAlive) {
-        Thread.sleep(10000)
-      }
-
-      if (serverThread.isAlive) {
-        log.info(s"Idle timeout of ${idleTimeout}ms has passed, shutting down SPYT connect server")
-        SparkConnectService.stop()
-      }
-
-      serverThread.join()
-    } finally {
-      tokenRefreshExecutor.foreach(_.shutdownNow())
+    innerClusterOpt match {
+      case Some(innerClusterParams) => sendGrpcEndpointToMaster(
+        innerClusterParams,
+        sparkConf.get("spark.hadoop.yt.user"),
+        sparkConf.get("spark.driverId"),
+        sparkConf.getAppId,
+        sparkConf.get(Config.YTSAURUS_CONNECT_SETTINGS_HASH)
+      )
+      case None => addGrpcEndpointToAnnotation(client)
     }
+
+    val idleTimeout = sparkConf.get(Config.YTSAURUS_CONNECT_IDLE_TIMEOUT)
+
+    while (keepListening(idleTimeout) && serverThread.isAlive) {
+      Thread.sleep(10000)
+    }
+
+    if (serverThread.isAlive) {
+      log.info(s"Idle timeout of ${idleTimeout}ms has passed, shutting down SPYT connect server")
+      SparkConnectService.stop()
+    }
+
+    serverThread.join()
   }
 
   private def checkUserAndTokenExistence(): Unit = {
@@ -165,24 +148,6 @@ object SpytConnectServer {
 
       client.updateOperationParameters(req).join()
     }
-  }
-
-  private def scheduleTokenRefresh(period: Long, client: CompoundClient, token: String): ScheduledExecutorService = {
-    val tokenRefreshExecutor = Executors.newSingleThreadScheduledExecutor()
-    val digest = MessageDigest.getInstance("SHA-256")
-    val tokenHash = digest.digest(token.getBytes)
-    val tokenPath = s"//sys/cypress_tokens/${Hex.encodeHexString(tokenHash)}"
-    val refreshCommand: Runnable = { () =>
-      try {
-        client.getNode(tokenPath).join()
-        log.info("Temporary token has been refreshed")
-      } catch {
-        case t: Throwable =>
-          log.warn("An exception has occurred during temporary token refresh", t)
-      }
-    }
-    tokenRefreshExecutor.scheduleAtFixedRate(refreshCommand, 0, period, TimeUnit.MILLISECONDS)
-    tokenRefreshExecutor
   }
 
   private def sendGrpcEndpointToMaster(

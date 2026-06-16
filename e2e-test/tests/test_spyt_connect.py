@@ -103,20 +103,6 @@ def test_base_request_inner_cluster(yt_client, spyt_cluster):
         _test_base_request(spark)
 
 
-def test_refresh_token(yt_client):
-    token_hash = sha256(get_token(client=yt_client).encode()).hexdigest()
-    token_path = f"//sys/cypress_tokens/{token_hash}"
-    counter_before = yt_client.get(f"{token_path}/@access_counter")
-    spark_conf = {
-        "spark.ytsaurus.connect.idle.timeout": f"30s",
-        "spark.ytsaurus.connect.token.refresh.period": f"10s",
-    }
-    operation = start_connect_server(yt_client, spark_conf=spark_conf)
-    wait_for_operation(yt_client, operation.id)
-    counter_after = yt_client.get(f"{token_path}/@access_counter")
-    assert counter_after - counter_before >= 3, "Should be at least 3 pings to token"
-
-
 def test_custom_types(yt_client, tmp_dir):
     path = f"{tmp_dir}/table_with_custom_types"
     yt_client.create("table", path, attributes={"schema": [

@@ -15,6 +15,7 @@ import tech.ytsaurus.client.{AsyncReader, CompoundClient}
 import tech.ytsaurus.client.request.{CreateShuffleReader, CreateShuffleWriter, StartShuffle, ShuffleHandle => YTsaurusShuffleHandle}
 import tech.ytsaurus.client.rows.UnversionedRow
 import tech.ytsaurus.core.GUID
+import tech.ytsaurus.core.tables.{ColumnValueType, TableSchema}
 import tech.ytsaurus.spyt.wrapper.YtWrapper
 import tech.ytsaurus.spyt.wrapper.client.YtClientProvider
 import tech.ytsaurus.spyt.wrapper.client.YtClientConfigurationConverter.ytClientConfiguration
@@ -24,6 +25,12 @@ import java.time.Duration
 import java.util.concurrent.TimeUnit
 
 class YTsaurusShuffleManager(conf: SparkConf) extends ShuffleManager with Logging {
+
+  private final val SHUFFLE_SCHEMA = TableSchema.builder()
+    .setStrict(true)
+    .addValue("partition", ColumnValueType.INT64)
+    .addValue("data", ColumnValueType.STRING)
+    .build()
 
   private val ytClientProvider: YtClientProvider =
     conf.getOption("spark.ytsaurus.client.provider.class").map { className =>
@@ -35,11 +42,13 @@ class YTsaurusShuffleManager(conf: SparkConf) extends ShuffleManager with Loggin
   private val delegate = new SortShuffleManager(conf)
 
   private val readConfigOpt: Option[YTreeNode] = ShuffleUtils.parseConfig(conf, YTSAURUS_SHUFFLE_READ_CONFIG)
+  private val pushConfigOpt: Option[YTreeNode] = ShuffleUtils.parseConfig(conf, YTSAURUS_SHUFFLE_PUSH_CONFIG)
 
   override def registerShuffle[K, V, C](shuffleId: Int, dependency: ShuffleDependency[K, V, C]): ShuffleHandle = {
     // IS CALLED ON DRIVER
     val baseHandle = delegate.registerShuffle(shuffleId, dependency).asInstanceOf[BaseShuffleHandle[K, V, C]]
     val shuffleTransactionTimeout = Duration.ofMillis(conf.get(YTSAURUS_SHUFFLE_TRANSACTION_TIMEOUT))
+    val pushBasedEnabled = conf.get(YTSAURUS_SHUFFLE_PUSH_BASED_ENABLED)
     val shuffleTransaction = YtWrapper.createTransaction(None, shuffleTransactionTimeout)
     val partitionCount = dependency.partitioner.numPartitions
 
@@ -47,6 +56,10 @@ class YTsaurusShuffleManager(conf: SparkConf) extends ShuffleManager with Loggin
       .setAccount(conf.get(YTSAURUS_SHUFFLE_ACCOUNT))
       .setPartitionCount(partitionCount)
       .setParentTransactionId(shuffleTransaction.getId)
+      .setUsePushBasedShuffle(pushBasedEnabled)
+      .setSchema(SHUFFLE_SCHEMA)
+
+    pushConfigOpt.map(_.mapNode).foreach(reqBuilder.setPushConfig)
 
     conf.get(YTSAURUS_SHUFFLE_MEDIUM).foreach(reqBuilder.setMedium)
     conf.get(YTSAURUS_SHUFFLE_REPLICATION_FACTOR).foreach(rf => reqBuilder.setReplicationFactor(rf))

@@ -62,5 +62,17 @@ object Config {
     .stringConf
     .createOptional
 
+  val YTSAURUS_SHUFFLE_PUSH_BASED_ENABLED = ConfigBuilder("spark.ytsaurus.shuffle.push.enabled")
+    .doc("Enables push-based model for YTSaurus shuffle")
+    .version("2.11.0")
+    .booleanConf
+    .createWithDefault(false)
+
+  val YTSAURUS_SHUFFLE_PUSH_CONFIG = ConfigBuilder("spark.ytsaurus.shuffle.push.config")
+    .doc("YSON-serialized config for reading shuffle data from YTsaurus")
+    .version("2.11.0")
+    .stringConf
+    .createOptional
+
   def shuffleTransactionId(shuffleId: Int) = s"spark.ytsaurus.shuffle.internal.$shuffleId.transaction_id"
 }

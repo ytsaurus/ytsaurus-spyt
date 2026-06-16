@@ -1,5 +1,6 @@
 package org.apache.spark.shuffle.ytsaurus
 
+import org.apache.spark.shuffle.ytsaurus.Config.{YTSAURUS_SHUFFLE_PUSH_BASED_ENABLED, YTSAURUS_SHUFFLE_PUSH_CONFIG}
 import org.apache.spark.sql.{DataFrame, Dataset, SparkSession}
 import org.apache.spark.{SparkConf, SparkEnv}
 import org.mockito.ArgumentMatchers.any
@@ -106,7 +107,7 @@ class YTsaurusShuffleTest extends AnyFlatSpec with Matchers with LocalSpark with
     val df1 = readSourceData(_spark, inPathFirst, failAtProcess)
     val df2 = readSourceData(_spark, inPathSecond, failAtProcess)
 
-    val result = df2.join(df1, df2("id") === df1("id")*2, "left")
+    val result = df2.join(df1, df2("id") === df1("id") * 2, "left")
       .select(df2("id"), df2("value"), df1("id").as("joined_id"), df1("value").as("joined_value"))
     val resultData = result.as[JoinResult].collect()
     resultData.length shouldBe numRowsX2
@@ -114,7 +115,7 @@ class YTsaurusShuffleTest extends AnyFlatSpec with Matchers with LocalSpark with
     val sortedResultData = resultData.sortBy(_.id)
     val expectedResult = (1 to numRowsX2).map { n =>
       val joinedN = Some(n).filter(_ % 2 == 0).map(_.toLong / 2)
-      JoinResult(n, s"value ${n*n}".hashCode, joinedN, joinedN.map(i => s"value $i".hashCode))
+      JoinResult(n, s"value ${n * n}".hashCode, joinedN, joinedN.map(i => s"value $i".hashCode))
     }
 
     sortedResultData should contain theSameElementsInOrderAs expectedResult
@@ -130,8 +131,39 @@ class YTsaurusShuffleTest extends AnyFlatSpec with Matchers with LocalSpark with
   )
   forEvery(testParameters)(testTemplate)
 
-  it should "sort a table using YTsaurus shuffle service" in withSparkSession() { _spark =>
-    val sqlImplicits = SparkAdapter.instance.sparkImplicits(_spark)
+  def testWithPushBasedShuffle(testName: String, extraConf: Map[String, String] = Map.empty)(
+    testBody: SparkSession => Unit
+  ): Unit = {
+    Seq(false, true).foreach { enabled =>
+      it should s"$testName: pushBasedShuffleEnabled = $enabled" in {
+        withSparkSession(
+          extraConf + (YTSAURUS_SHUFFLE_PUSH_BASED_ENABLED.key -> enabled.toString)
+        ) { _spark =>
+          testBody(_spark)
+        }
+      }
+    }
+  }
+
+
+  testWithPushBasedShuffle("sort a table using YTsaurus shuffle service") {
+    checkSort
+  }
+
+  it should "pass a custom push config to the shuffle service when push-based shuffle is enabled" in {
+    val fakePushConfig = """{fake_option="fake_value";another_fake_option="42"}"""
+    withSparkSession(
+      Map(
+        YTSAURUS_SHUFFLE_PUSH_BASED_ENABLED.key -> "true",
+        YTSAURUS_SHUFFLE_PUSH_CONFIG.key -> fakePushConfig
+      )
+    ) {
+      checkSort
+    }
+  }
+
+  private def checkSort(_spark: SparkSession): Unit = {
+    val sqlImplicits = SparkAdapter.instance.sparkImplicits(spark)
     import sqlImplicits._
     // Create a large table with shuffled sort key
     val numRows = 300
@@ -148,7 +180,7 @@ class YTsaurusShuffleTest extends AnyFlatSpec with Matchers with LocalSpark with
     result should contain theSameElementsInOrderAs expectedResult
   }
 
-  it should "correctly coalesce shuffle partitions" in withSparkSession(
+  testWithPushBasedShuffle("correctly coalesce shuffle partitions",
     Map("spark.sql.adaptive.coalescePartitions.enabled" -> "true")
   ) { _spark =>
     val sqlImplicits = SparkAdapter.instance.sparkImplicits(_spark)
@@ -164,7 +196,7 @@ class YTsaurusShuffleTest extends AnyFlatSpec with Matchers with LocalSpark with
   }
 
   private def generateKeyValueDataframe(_spark: SparkSession, nRows: Int,
-                                        percentOfOnes: Int, numPartitions: Option[Int] = None): DataFrame = {
+    percentOfOnes: Int, numPartitions: Option[Int] = None): DataFrame = {
     val sqlImplicits = SparkAdapter.instance.sparkImplicits(_spark)
     import sqlImplicits._
     val nOnes = nRows * percentOfOnes / 100
@@ -178,7 +210,7 @@ class YTsaurusShuffleTest extends AnyFlatSpec with Matchers with LocalSpark with
     rdd.toDF("key", "value")
   }
 
-  it should "correctly work with skewed partitions in join scenario" in withSparkSession() {_spark =>
+  testWithPushBasedShuffle("correctly work with skewed partitions in join scenario") { _spark =>
     val sqlImplicits = SparkAdapter.instance.sparkImplicits(_spark)
     import sqlImplicits._
     val df1 = generateKeyValueDataframe(_spark, 1000, 95)
@@ -190,7 +222,7 @@ class YTsaurusShuffleTest extends AnyFlatSpec with Matchers with LocalSpark with
     result.length shouldBe 1000
   }
 
-  it should "correctly work with skewed partitions in rebalance scenario" in withSparkSession(
+  testWithPushBasedShuffle("correctly work with skewed partitions in rebalance scenario",
     Map("spark.shuffle.compress" -> "false")
   ) { _spark =>
     val sqlImplicits = SparkAdapter.instance.sparkImplicits(_spark)
@@ -205,7 +237,7 @@ class YTsaurusShuffleTest extends AnyFlatSpec with Matchers with LocalSpark with
     result.collect().length shouldBe nRows
   }
 
-  it should "deal with exceptions thrown by createShuffleReader method" in withSparkSession(
+  testWithPushBasedShuffle("deal with exceptions thrown by createShuffleReader method",
     Map("spark.ytsaurus.client.provider.class" ->
       "org.apache.spark.shuffle.ytsaurus.YTsaurusShuffleTest$BogusYtClientProvider")
   ) { _spark =>
@@ -238,7 +270,7 @@ object YTsaurusShuffleTest {
 
   class BogusYtClientProvider extends YtClientProvider {
     override def ytClient(conf: YtClientConfiguration,
-                          rpcClientListener: Option[SpytRpcClientListener]): CompoundClient = {
+      rpcClientListener: Option[SpytRpcClientListener]): CompoundClient = {
       val realClient = YtClientProvider.ytClient(conf)
       val spyClient = Mockito.spy(realClient)
 

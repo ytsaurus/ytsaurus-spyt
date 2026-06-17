@@ -3,7 +3,7 @@ package tech.ytsaurus.spyt.wrapper.config
 import io.circe._
 import io.circe.parser._
 import io.circe.syntax._
-import org.apache.log4j.Level
+import org.apache.logging.log4j.Level
 import tech.ytsaurus.spyt.wrapper.Utils.parseDuration
 import tech.ytsaurus.ysontree.{YTreeNode, YTreeTextSerializer}
 

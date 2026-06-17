@@ -33,12 +33,6 @@ abstract class ProcessPythonFilesTask : DefaultTask() {
 
         val versionJsonContent = """{"scala":"$spytScalaVersion","python":"$spytPythonVersion"}"""
         artifactsPath.get().file("conf/version.json").asFile.writeText(versionJsonContent)
-
-        val isSnapshot = spytScalaVersion.contains("-SNAPSHOT")
-        if (isSnapshot) {
-            val log4jProps = artifactsPath.get().file("conf/log4j.properties")
-            log4jProps.asFile.appendText("log4j.rootLogger=INFO, console\n")
-        }
     }
 
     private fun toPythonVersion(scalaVersion: String): String {

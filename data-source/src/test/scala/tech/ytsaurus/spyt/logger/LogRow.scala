@@ -1,6 +1,6 @@
 package tech.ytsaurus.spyt.logger
 
-import org.apache.log4j.Level
+import org.apache.logging.log4j.Level
 
 case class LogRow(name: String, msg: String, level: Level,
                   sparkComponent: SparkComponent,

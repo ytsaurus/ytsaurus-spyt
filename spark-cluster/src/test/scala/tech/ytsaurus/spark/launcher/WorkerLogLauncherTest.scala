@@ -1,10 +1,10 @@
 package tech.ytsaurus.spark.launcher
 
-import net.logstash.log4j.JSONEventLayoutV1
+import org.apache.logging.log4j.Level
+import org.apache.logging.log4j.core.{LogEvent, LoggerContext}
+import org.apache.logging.log4j.LogManager
 import org.apache.commons.io.FileUtils
-import org.apache.log4j.spi.{LoggingEvent, RootLogger}
-import org.apache.log4j.{FileAppender, Level}
-import org.apache.spark.sql.v2.Utils
+import org.apache.logging.log4j.layout.template.json.JsonTemplateLayout
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import tech.ytsaurus.client.CompoundClient
@@ -44,6 +44,12 @@ class WorkerLogLauncherTest extends AnyFlatSpec with LocalYtClient with Matchers
     tableTTL = Duration.ofSeconds(20),
     additionalTableOptions = Map[String, Any]("enable_dynamic_store_read" -> true)
   )
+
+  private lazy val jsonLayout: JsonTemplateLayout =
+    JsonTemplateLayout.newBuilder()
+      .setConfiguration(LoggerContext.getContext(false).getConfiguration)
+      .setEventTemplateUri("classpath:JsonTemplateLayout.json")
+      .build()
 
   private def createLocalDir(path: String): Unit = {
     FileUtils.forceMkdir(new File(path))
@@ -173,11 +179,11 @@ class WorkerLogLauncherTest extends AnyFlatSpec with LocalYtClient with Matchers
   }
 
   private def writeToLog(filePath: String, events: Seq[TestEventHolder]): Unit = {
-    val stream = new FileAppender(new JSONEventLayoutV1(false), filePath)
+    val fw = new FileWriter(filePath, true)
     try {
-      events.foreach(e => stream.append(e.toEvent))
+      events.foreach(e => fw.write(jsonLayout.toSerializable(e.toEvent)))
     } finally {
-      stream.close()
+      fw.close()
     }
   }
 
@@ -297,16 +303,19 @@ class WorkerLogLauncherTest extends AnyFlatSpec with LocalYtClient with Matchers
     level: Option[String],
     message: String,
     throwable: Option[String] = None) {
-    def toEvent: LoggingEvent = {
-      Utils.createLoggingEvent(
-        this.getClass.getName,
-        new RootLogger(Level.ALL),
-        timestamp,
-        level.map(Level.toLevel)
-          .getOrElse(throw new RuntimeException("Cannot write event with null level")),
-        message,
-        throwable.map(new Throwable(_)).orNull
-      )
+    def toEvent: LogEvent = {
+      val logger = LogManager.getLogger(this.getClass)
+      val logLevel = level.map(l => Level.valueOf(l)).getOrElse(Level.INFO)
+
+      val builder = org.apache.logging.log4j.core.impl.Log4jLogEvent.newBuilder()
+        .setLoggerName(logger.getName)
+        .setLevel(logLevel)
+        .setMessage(new org.apache.logging.log4j.message.SimpleMessage(message))
+        .setTimeMillis(timestamp)
+
+      throwable.foreach(t => builder.setThrown(new Throwable(t)))
+
+      builder.build()
     }
   }
 
@@ -404,7 +413,7 @@ class WorkerLogLauncherTest extends AnyFlatSpec with LocalYtClient with Matchers
 
   it should "not parse json when option disabled" in {
     val nonJsonLog = "{Test}"
-    val simpleLogEventJson = new JSONEventLayoutV1(false).format(simpleInfoEvent.toEvent).strip()
+    val simpleLogEventJson = jsonLayout.toSerializable(simpleInfoEvent.toEvent).strip()
 
     val app = "example"
     createApp(app)
@@ -492,7 +501,7 @@ class WorkerLogLauncherTest extends AnyFlatSpec with LocalYtClient with Matchers
     workerLogService.uploadLogs()
     val allLogsBefore = getAllLogs
 
-    val (sL1, sL2) = new JSONEventLayoutV1(false).format(simpleInfoEvent2.toEvent).splitAt(2)
+    val (sL1, sL2) = jsonLayout.toSerializable(simpleInfoEvent2.toEvent).splitAt(2)
     rawWriteToLog(getDriverFileLog(driver, STDOUT), sL1)
     (0 until attemptCnt).foreach(_ => workerLogService.uploadLogs())
     val allLogsAfterReadAttempts = getAllLogs

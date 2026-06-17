@@ -1,6 +1,7 @@
 package tech.ytsaurus.spyt.format.types
 
-import org.apache.log4j.{Level, Logger}
+import org.apache.logging.log4j.Level
+import org.apache.logging.log4j.core.config.Configurator
 import org.apache.spark.SparkException
 import org.apache.spark.sql.types._
 import org.apache.spark.sql.{Encoders, Row, SaveMode}
@@ -281,14 +282,14 @@ class ComplexTypeTest extends AnyFlatSpec with Matchers with LocalSpark with Tmp
       """{value = [[1;1];[#;2];[3;3]]}""",
     ), tmpPath, anySchema)
 
-    Logger.getRootLogger.setLevel(Level.OFF)
+    Configurator.setRootLevel(Level.OFF)
     a[SparkException] shouldBe thrownBy {
       spark.read
         .schemaHint("value" -> MapType(LongType, LongType))
         .yt(tmpPath)
         .collect()
     }
-    Logger.getRootLogger.setLevel(Level.WARN)
+    Configurator.setRootLevel(Level.WARN)
   }
 
   it should "read dataset with tuples" in {

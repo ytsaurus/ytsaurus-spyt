@@ -1,6 +1,6 @@
 package tech.ytsaurus.spyt.logger
 
-import org.apache.log4j.Level
+import org.apache.logging.log4j.Level
 import org.slf4j.{Logger, LoggerFactory}
 import tech.ytsaurus.spyt.wrapper.YtWrapper.RichLogger
 

@@ -1,6 +1,6 @@
 package tech.ytsaurus.spyt.logger
 
-import org.apache.log4j.Level
+import org.apache.logging.log4j.Level
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import tech.ytsaurus.spyt.SparkAdapter

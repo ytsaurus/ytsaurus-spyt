@@ -1,6 +1,6 @@
 package tech.ytsaurus.spyt.logger
 
-import org.apache.log4j.Level
+import org.apache.logging.log4j.Level
 import org.apache.spark.sql.SparkSession
 import tech.ytsaurus.spyt.wrapper.client.YtClientConfigurationConverter.ytClientConfiguration
 import tech.ytsaurus.spyt.wrapper.YtWrapper

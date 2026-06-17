@@ -1,8 +1,7 @@
 package org.apache.spark.sql.v2
 
-import org.apache.log4j.bridge.LogEventAdapter
-import org.apache.log4j.spi.LoggingEvent
-import org.apache.log4j.{Category, Level}
+import org.apache.logging.log4j.Level
+import org.apache.logging.log4j.core.LogEvent
 import org.apache.logging.log4j.core.impl.Log4jLogEvent
 import org.apache.logging.log4j.message.SimpleMessage
 import org.apache.spark.sql.connector.expressions.filter.Predicate
@@ -53,18 +52,18 @@ object Utils {
 
   def filterToPredicate(f: Filter): Predicate = f.toV2
 
-  def createLoggingEvent(fqnOfCategoryClass: String, logger: Category,
+  def createLoggingEvent(fqnOfCategoryClass: String, loggerName: String,
     timeStamp: Long, level: Level,
-    message: String, throwable: Throwable): LoggingEvent = {
-    val logEvent = Log4jLogEvent.newBuilder()
+    message: String, throwable: Throwable): LogEvent = {
+    Log4jLogEvent.newBuilder()
       .setLoggerFqcn(fqnOfCategoryClass)
-      .setLoggerName(logger.getName)
+      .setLoggerName(loggerName)
       .setTimeMillis(timeStamp)
-      .setLevel(org.apache.logging.log4j.Level.toLevel(level.toString))
+      .setLevel(level)
       .setMessage(new SimpleMessage(message))
       .setThrown(throwable)
+      .setThreadName(Thread.currentThread().getName)
       .build()
-    new LogEventAdapter(logEvent)
   }
 
 }

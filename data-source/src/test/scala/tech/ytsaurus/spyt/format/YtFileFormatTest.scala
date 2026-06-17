@@ -1,6 +1,7 @@
 package tech.ytsaurus.spyt.format
 
-import org.apache.log4j.{Level, Logger}
+import org.apache.logging.log4j.Level
+import org.apache.logging.log4j.core.config.Configurator
 import org.apache.spark.SparkException
 import org.apache.spark.sql._
 import org.apache.spark.sql.execution.InputAdapter
@@ -244,13 +245,13 @@ class YtFileFormatTest extends AnyFlatSpec with Matchers with LocalSpark
   }
 
   testWithDistributedReading("clean all temporary files if job failed") { distributedReadingEnabled =>
-    Logger.getRootLogger.setLevel(Level.OFF)
+    Configurator.setRootLevel(Level.OFF)
 
     a[SparkException] shouldBe thrownBy {
       Seq(1, 2, 3).toDF().coalesce(1).map { _ => throw new RuntimeException("Fail job"); 1 }.write.yt(tmpPath)
     }
 
-    Logger.getRootLogger.setLevel(Level.WARN)
+    Configurator.setRootLevel(Level.WARN)
 
     YtWrapper.exists(tmpPath) shouldEqual false
     YtWrapper.exists(s"$tmpPath-tmp") shouldEqual false
@@ -403,7 +404,7 @@ class YtFileFormatTest extends AnyFlatSpec with Matchers with LocalSpark
   testWithDistributedReading("kill transaction when failed because of timeout") { distributedReadingEnabled =>
     spark.sqlContext.setConf("spark.yt.timeout", "5")
     spark.sqlContext.setConf("spark.yt.write.timeout", "0")
-    Logger.getRootLogger.setLevel(Level.OFF)
+    Configurator.setRootLevel(Level.OFF)
 
     try {
       a[SparkException] shouldBe thrownBy {
@@ -414,7 +415,7 @@ class YtFileFormatTest extends AnyFlatSpec with Matchers with LocalSpark
     } finally {
       spark.sqlContext.setConf("spark.yt.timeout", "300")
       spark.sqlContext.setConf("spark.yt.write.timeout", "120")
-      Logger.getRootLogger.setLevel(Level.WARN)
+      Configurator.setRootLevel(Level.WARN)
     }
   }
 

@@ -1,6 +1,7 @@
 package tech.ytsaurus.spyt.format.types
 
-import org.apache.log4j.{Level, Logger}
+import org.apache.logging.log4j.Level
+import org.apache.logging.log4j.core.config.Configurator
 import org.apache.spark.sql.catalyst.expressions.CodegenObjectFactoryMode
 import org.apache.spark.sql.functions._
 import org.apache.spark.sql.internal.SQLConf.{CODEGEN_FACTORY_MODE, WHOLESTAGE_CODEGEN_ENABLED}
@@ -139,7 +140,7 @@ class YsonTypeTest extends AnyFlatSpec with Matchers with LocalSpark with TmpDir
   }
 
   it should "validate binary cast to yson" in {
-    Logger.getRootLogger.setLevel(Level.OFF)
+    Configurator.setRootLevel(Level.OFF)
     an[Exception] should be thrownBy {
       Seq(
         Array[Byte](4, 5, 6),
@@ -149,7 +150,7 @@ class YsonTypeTest extends AnyFlatSpec with Matchers with LocalSpark with TmpDir
         .withColumn("value", $"value".cast(new YsonType()))
         .write.yt(tmpPath)
     }
-    Logger.getRootLogger.setLevel(Level.WARN)
+    Configurator.setRootLevel(Level.WARN)
   }
 
   it should "broadcast dataframe with yson" in {

@@ -1,7 +1,7 @@
 package tech.ytsaurus.spyt.format
 
 import org.apache.hadoop.mapreduce.InputSplit
-import org.apache.log4j.Level
+import org.apache.logging.log4j.Level
 import org.apache.spark.sql.types.StructType
 import tech.ytsaurus.spyt.common.utils.Segment.Segment
 import tech.ytsaurus.spyt.common.utils.TupleSegment.TupleSegment

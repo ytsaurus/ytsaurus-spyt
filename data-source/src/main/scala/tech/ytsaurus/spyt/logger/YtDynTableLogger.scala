@@ -1,6 +1,6 @@
 package tech.ytsaurus.spyt.logger
 
-import org.apache.log4j.Level
+import org.apache.logging.log4j.Level
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.types.{MapType, StringType}
 import org.slf4j.{Logger, LoggerFactory}
@@ -23,7 +23,7 @@ class YtDynTableLogger(name: String,
   override def logYt(msg: => String, info: Map[String, String] = Map.empty, level: Level): Unit = {
     try {
       val newLevel = forceLevel.getOrElse(level)
-      if (newLevel.isGreaterOrEqual(config.logLevels(name))) {
+      if (newLevel.isMoreSpecificThan(config.logLevels(name))) {
         val row = Seq(
           name,
           LocalDateTime.now().toString,

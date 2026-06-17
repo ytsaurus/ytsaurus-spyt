@@ -16,7 +16,6 @@ dependencies {
         exclude(group = "org.lz4", module = "lz4-java")
     }
     api(libs.bundles.circe.scala(project))
-    api(libs.jsonevent.layout)
     api(libs.log4j.layout.template.json)
     api(libs.shapeless.scala(project))
     api(libs.sttp.scala(project))

@@ -18,19 +18,25 @@ class SparkConfDecorators {
 
 private[spark] object SparkConfExtensions {
   private[spark] def loadFromEnvironment(conf: SparkConf, silent: Boolean): SparkConf = {
+    val existingEnvNames = conf.getAll.iterator.map { case (k, _) => confToEnvName(k) }.toSet
     for ((key, value) <- sys.env if isSparkEnv(key)) {
-      conf.set(SparkConfExtensions.envToConfName(key), value, silent)
+      if (!existingEnvNames.contains(sparkEnvName(key))) {
+        conf.set(envToConfName(key), value, silent)
+      }
     }
     conf
   }
 
   private[spark] def envToConfName(envName: String): String = {
-    val canonicEnvName = if (envName.startsWith(SECURE_VAULT_ENV_PREFIX)) {
+    sparkEnvName(envName).toLowerCase().replace("_", ".")
+  }
+
+  private def sparkEnvName(envName: String): String = {
+    if (envName.startsWith(SECURE_VAULT_ENV_PREFIX)) {
       envName.substring(SECURE_VAULT_CUT_LENGTH)
     } else {
       envName
     }
-    canonicEnvName.toLowerCase().replace("_", ".")
   }
 
   private def isSparkEnv(key: String): Boolean = {

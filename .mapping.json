@@ -599,6 +599,7 @@
   "spark-submit/src/main/scala/tech/ytsaurus/spyt/submit/SubmissionClient.scala":"yt/spark/spark-over-yt/spark-submit/src/main/scala/tech/ytsaurus/spyt/submit/SubmissionClient.scala",
   "spark-submit/src/test/scala/org/apache/spark/deploy/SparkSubmitSpytTest.scala":"yt/spark/spark-over-yt/spark-submit/src/test/scala/org/apache/spark/deploy/SparkSubmitSpytTest.scala",
   "spark-submit/src/test/scala/org/apache/spark/deploy/rest/MasterClientTest.scala":"yt/spark/spark-over-yt/spark-submit/src/test/scala/org/apache/spark/deploy/rest/MasterClientTest.scala",
+  "spark-submit/src/test/scala/org/apache/spark/deploy/rest/RestSubmissionClientAppSpytTest.scala":"yt/spark/spark-over-yt/spark-submit/src/test/scala/org/apache/spark/deploy/rest/RestSubmissionClientAppSpytTest.scala",
   "spyt-connect":"yt/spark/spark-over-yt/spyt-connect",
   "spyt-connect/build.gradle.kts":"yt/spark/spark-over-yt/spyt-connect/build.gradle.kts",
   "spyt-connect/src/main/scala/org/apache/spark/sql/connect/common/DataTypeProtoConverterDecorators.scala":"yt/spark/spark-over-yt/spyt-connect/src/main/scala/org/apache/spark/sql/connect/common/DataTypeProtoConverterDecorators.scala",

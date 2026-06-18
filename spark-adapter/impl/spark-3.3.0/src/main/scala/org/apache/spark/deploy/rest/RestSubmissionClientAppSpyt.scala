@@ -3,7 +3,7 @@ package org.apache.spark.deploy.rest
 import org.apache.commons.io.FileUtils
 import org.apache.hadoop.fs.FileSystem
 import org.apache.spark.deploy.SparkHadoopUtil
-import org.apache.spark.{SparkConf, SparkException}
+import org.apache.spark.{SparkConf, SparkConfExtensions, SparkException}
 import tech.ytsaurus.spyt.SparkAdapter
 import tech.ytsaurus.spyt.logging.Logging
 import tech.ytsaurus.spyt.patch.annotations.{OriginClass, Subclass}
@@ -104,11 +104,7 @@ class RestSubmissionClientAppSpyt extends RestSubmissionClientApp with Logging {
       val appResource = args(0)
       val mainClass = args(1)
       val appArgs = args.slice(2, args.length)
-      val confEnv = conf.getAll.filter {
-        case (key, _) => key.startsWith("spark.yt") || key.startsWith("spark.hadoop.yt")
-      }.map {
-        case (key, value) => key.toUpperCase().replace(".", "_") -> value
-      }.toMap
+      val confEnv = RestSubmissionClientAppSpyt.buildConfEnv(conf)
       val env = RestSubmissionClient.filterSystemEnvironment(sys.env) ++ confEnv
 
       val submissionId = try {
@@ -133,4 +129,12 @@ class RestSubmissionClientAppSpyt extends RestSubmissionClientApp with Logging {
         throw e
     }
   }
+}
+
+object RestSubmissionClientAppSpyt {
+  private[rest] def buildConfEnv(conf: SparkConf): Map[String, String] =
+    conf.getAll.collect {
+      case (key, value) if key.startsWith("spark.yt") || key.startsWith("spark.hadoop.yt") =>
+        SparkConfExtensions.confToEnvName(key) -> value
+    }.toMap
 }

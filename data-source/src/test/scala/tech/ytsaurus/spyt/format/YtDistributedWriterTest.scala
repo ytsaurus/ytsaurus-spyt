@@ -2,6 +2,7 @@ package tech.ytsaurus.spyt.format
 
 import org.apache.spark.{SparkConf, SparkException}
 import org.apache.spark.sql.{Dataset, SaveMode, SparkSession}
+import org.mockito.{ArgumentMatchers, Mockito}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import tech.ytsaurus.core.tables.{ColumnValueType, TableSchema}
@@ -14,6 +15,7 @@ import tech.ytsaurus.spyt.wrapper.YtWrapper
 import tech.ytsaurus.spyt.wrapper.table.YtReadSettings
 import tech.ytsaurus.ysontree.YTreeNode
 
+import java.util.concurrent.{ExecutionException, Executors, TimeUnit, TimeoutException}
 import scala.util.Random
 
 class YtDistributedWriterTest extends AnyFlatSpec with DescendingSortOrderSupport with TmpDir with LocalSpark
@@ -238,6 +240,27 @@ class YtDistributedWriterTest extends AnyFlatSpec with DescendingSortOrderSuppor
       )
     }
     writtenData should contain theSameElementsAs (0L to 9L).map(_ -> 30L)
+  }
+
+  it should "deal with failures of startDistributedWriteSession method" in withSparkSession() { _spark =>
+    withSpyYt(_spark) { spytYt =>
+      Mockito.doThrow(new RuntimeException("BOOOM!")).when(spytYt).startDistributedWriteSession(ArgumentMatchers.any())
+
+      val jobExecutor = Executors.newSingleThreadExecutor()
+      val jobRunnable: Runnable = {() => _spark.range(1, 10).write.yt(s"$tmpPath/table3")}
+      val jobFuture = jobExecutor.submit(jobRunnable)
+
+      try {
+        jobFuture.get(30, TimeUnit.SECONDS)
+      } catch {
+        case _: TimeoutException =>
+          fail("It seems that Spark hung after failure in startDistributedWriteSession method")
+        case e: ExecutionException =>
+          e.getCause.getCause.getMessage shouldEqual "Failed to start distributed write task because cookies are empty."
+      } finally {
+        jobExecutor.shutdown()
+      }
+    }
   }
 }
 

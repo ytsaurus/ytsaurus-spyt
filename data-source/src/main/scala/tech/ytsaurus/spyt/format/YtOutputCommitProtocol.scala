@@ -8,7 +8,7 @@ import org.apache.spark.internal.io.FileCommitProtocol
 import org.apache.spark.scheduler.{DAGSchedulerUtils, SparkListener, SparkListenerJobEnd, SparkListenerJobStart, SparkListenerStageCompleted, SparkListenerStageSubmitted}
 import org.apache.spark.sql.types.StructType
 import org.apache.spark.sql.{SaveMode, SparkSession}
-import org.apache.spark.{SparkEnv, TaskContext}
+import org.apache.spark.{SparkEnv, SparkException, TaskContext}
 import org.slf4j.LoggerFactory
 import tech.ytsaurus.client.request.{DistributedWriteCookie, StartDistributedWriteSession, TransactionalOptions, WriteFragmentResult}
 import tech.ytsaurus.client.{ApiServiceTransaction, CompoundClient, DistributedWriteHandle}
@@ -390,8 +390,13 @@ class DistributedWriteOutputCommitProtocol(
               .setCookieCount(cookieCount)
               .setTransactionalOptions(new TransactionalOptions(GUID.valueOf(transactionId)))
               .build()
-            val dwHandle = client.startDistributedWriteSession(distributedWriteRequest).join()
-            dwHandleOpt = Some(dwHandle)
+            try {
+              val dwHandle = client.startDistributedWriteSession(distributedWriteRequest).join()
+              dwHandleOpt = Some(dwHandle)
+            } catch {
+              case e: Exception => logError(s"Failed to start distributed write session " +
+                s"(path: ${outputPath.toYPath}, transaction: $transactionId, cookieCount: $cookieCount)", e)
+            }
           }
         }
       }
@@ -399,7 +404,9 @@ class DistributedWriteOutputCommitProtocol(
       override def onStageSubmitted(stageSubmitted: SparkListenerStageSubmitted): Unit = {
         if (DAGSchedulerUtils.isResultStageForJobId(sc, sparkJobId, stageSubmitted.stageInfo.stageId)) {
           stopCookiesBroadcast()
-          cookiesBroadcast = sc.broadcast(dwHandleOpt.get.getCookies)
+          if (dwHandleOpt.isDefined) {
+            cookiesBroadcast = sc.broadcast(dwHandleOpt.get.getCookies)
+          }
           cookiesSemaphore.release()
         }
       }
@@ -434,6 +441,11 @@ class DistributedWriteOutputCommitProtocol(
 
   override def setupTask(taskContext: TaskAttemptContext): Unit = {
     val partitionId = TaskContext.get().partitionId()
+    if (cookiesBroadcast == null) {
+      logError("Failed to start distributed write task because cookies are empty. Probably there was an error on " +
+        "the driver during retrieving them. Check driver logs for more information.")
+      throw new SparkException("Failed to start distributed write task because cookies are empty.")
+    }
     val cookie = cookiesBroadcast.value.get(partitionId)
     setCookieForTask(taskContext, cookie)
   }

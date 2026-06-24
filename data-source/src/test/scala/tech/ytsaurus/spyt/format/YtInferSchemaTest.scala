@@ -233,20 +233,6 @@ class YtInferSchemaTest extends AnyFlatSpec with Matchers with LocalSpark
     }
   }
 
-  private def withSpyYt(body: CompoundClient => Unit): Unit = {
-    val conf = ytClientConfiguration(spark)
-    val rpcClient = YtClientProvider.ytRpcClient(conf)
-    val cacheKey = s"${rpcClient.normalizedProxy};;"
-    val spyYt: CompoundClient = Mockito.spy(rpcClient.yt)
-    try {
-      YtClientProvider.getClients(cacheKey) = rpcClient.copy(yt = spyYt)
-      body(spyYt)
-      Mockito.reset(spyYt)
-    } finally {
-      YtClientProvider.getClients(cacheKey) = rpcClient
-    }
-  }
-
   it should "infer table's schema one time" in {
     YtWrapper.createDir(tmpPath)
     val filesCount = 3
@@ -261,7 +247,7 @@ class YtInferSchemaTest extends AnyFlatSpec with Matchers with LocalSpark
 
     val filesStatus = tables.flatMap(x => fs.listStatus(new Path(s"ytTable:/$x")))
 
-    withSpyYt { spyYt =>
+    withSpyYt(spark) { spyYt =>
       YtUtils.inferSchema(spark, Map.empty, filesStatus)
       // getNode invoked in YtWrapper.attribute(path, "schema"), that might be invoked for every chunk in inferSchema
       // schema should be asked exactly 1 time because all files have the same schema
@@ -292,7 +278,7 @@ class YtInferSchemaTest extends AnyFlatSpec with Matchers with LocalSpark
     val schemaId1 = YtWrapper.attribute(s"$tmpPath/table_1", "schema_id").stringValue()
     val schemaId2 = YtWrapper.attribute(s"$tmpPath/table_11", "schema_id").stringValue()
 
-    withSpyYt { spyYt =>
+    withSpyYt(spark) { spyYt =>
       val df = spark.read.option("mergeSchema", "true").yt(tmpPath)
 
       df.collect() should contain theSameElementsAs (1 to 20).map { i =>

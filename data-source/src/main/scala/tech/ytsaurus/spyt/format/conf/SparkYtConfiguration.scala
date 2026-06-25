@@ -84,6 +84,14 @@ object SparkYtConfiguration {
     case object ListParentDirectories extends ConfigEntry[Boolean](s"$prefix.listParentDirectories", Some(true))
   }
 
+  object Throttling {
+    private val prefix = "throttling"
+
+    case object MaxConcurrency extends ConfigEntry[Int](s"$prefix.maxConcurrency", Some(0))
+  }
+
+  case object MinPartitionBytes extends ConfigEntry[String]("minPartitionBytes", Some("1G"))
+
   object Streaming {
     case object Transactional extends ConfigEntry[Boolean]("streaming.transactional", Some(false))
   }
@@ -120,7 +128,8 @@ object SparkYtConfiguration {
       val omitRows = spark.ytConf(YtOmitInaccessibleRowsEnabled)
       val distributedReading = spark.ytConf(YtDistributedReadingEnabled)
       val useCompressedSizeForPartitioning = spark.ytConf(YtPartitioningCompressedSizeEnabled)
-      YtReadSettings(omitColumns, omitRows, distributedReading, useCompressedSizeForPartitioning, unordered = true)
+      YtReadSettings(omitColumns, omitRows, distributedReading, useCompressedSizeForPartitioning,
+        unordered = true)
     }
   }
 

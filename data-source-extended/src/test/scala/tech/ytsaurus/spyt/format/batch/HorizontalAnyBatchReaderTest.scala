@@ -64,9 +64,9 @@ class HorizontalAnyBatchReaderTest extends AnyFlatSpec with Matchers with ReadBa
       YtReadContext(yt, YtReadSettings.default.copy(distributedReadingEnabled = distributedReadingEnabled))
 
     val iter = if (distributedReadingEnabled) {
-      val cookie = YtWrapper.partitionTables(YPath.simple(tmpPath), spark.sessionState.conf.filesMaxPartitionBytes,
+      val cookie = YtWrapper.partitionTablesAsync(YPath.simple(tmpPath), spark.sessionState.conf.filesMaxPartitionBytes,
         enableCookies = true,
-      ).map(mtp => mtp.getCookie).head
+      ).join().map(mtp => mtp.getCookie).head
       YtWrapper.createTablePartitionReader(cookie, InternalRowDeserializer.getOrCreate(sparkSchema))
     } else {
       YtWrapper.readTable(path, InternalRowDeserializer.getOrCreate(sparkSchema))

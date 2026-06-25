@@ -8,8 +8,10 @@ import org.apache.spark.sql.execution.datasources.{FilePartition, PartitionDirec
 import org.apache.spark.sql.types.StructType
 import org.slf4j.LoggerFactory
 
+import java.util.concurrent.CompletableFuture
 import scala.jdk.CollectionConverters._
 import tech.ytsaurus.client.CompoundClient
+import tech.ytsaurus.client.request.MultiTablePartition
 import tech.ytsaurus.core.cypress.{RangeLimit, YPath}
 import tech.ytsaurus.spyt.SparkAdapter
 import tech.ytsaurus.spyt.common.utils.{ExpressionTransformer, MInfinity, PInfinity, SegmentSet, TuplePoint}
@@ -23,7 +25,7 @@ import tech.ytsaurus.spyt.serializers.{InternalRowDeserializer, PivotKeysConvert
 import tech.ytsaurus.spyt.wrapper.YtWrapper
 import tech.ytsaurus.spyt.wrapper.client.YtClientConfigurationConverter.ytClientConfiguration
 import tech.ytsaurus.spyt.wrapper.client.YtClientProvider
-import tech.ytsaurus.spyt.wrapper.config.{SparkYtSparkSession, YT_MIN_PARTITION_BYTES}
+import tech.ytsaurus.spyt.wrapper.config.SparkYtSparkSession
 import tech.ytsaurus.spyt.wrapper.table.{OptimizeMode, YtReadContext}
 import tech.ytsaurus.ysontree.YTreeNode
 
@@ -72,22 +74,12 @@ object YtFilePartition {
     maxSplitBytes
   }
 
-  private def splitTableYtPartitioning(sparkSession: SparkSession,
+  private def buildPartitionedFiles(
+    multiTablePartitions: Seq[MultiTablePartition],
     path: YtHadoopPath,
     maxSplitBytes: Long,
     partitionValues: InternalRow,
-    readDataSchema: Option[StructType] = None,
-    pushedFilterSegments: SegmentSet = SegmentSet())
-    (implicit ytReadContext: YtReadContext): Seq[PartitionedFile] = {
-    val richYPath = buildOptimizedYPath(sparkSession, path, maxSplitBytes, partitionValues,
-      readDataSchema, pushedFilterSegments)
-
-    log.info(s"richYPath passed to partitionTables: ${richYPath.toStableString}")
-
-    val distributedReading = ytReadContext.settings.distributedReadingEnabled
-
-    val multiTablePartitions = YtWrapper.partitionTables(richYPath, maxSplitBytes, enableCookies = distributedReading)
-
+    distributedReading: Boolean): Seq[PartitionedFile] = {
     if (distributedReading) {
       multiTablePartitions.map { multiTablePartition =>
         val allRanges = multiTablePartition.getTableRanges.asScala
@@ -114,6 +106,26 @@ object YtFilePartition {
         }
       }
     }
+  }
+
+  private def splitTableYtPartitioningAsync(sparkSession: SparkSession,
+    path: YtHadoopPath,
+    maxSplitBytes: Long,
+    partitionValues: InternalRow,
+    readDataSchema: Option[StructType] = None,
+    pushedFilterSegments: SegmentSet = SegmentSet())
+    (implicit ytReadContext: YtReadContext): CompletableFuture[Seq[PartitionedFile]] = {
+    val richYPath = buildOptimizedYPath(sparkSession, path, maxSplitBytes, partitionValues,
+      readDataSchema, pushedFilterSegments)
+
+    log.info(s"richYPath passed to partitionTables: ${richYPath.toStableString}")
+
+    val distributedReading = ytReadContext.settings.distributedReadingEnabled
+
+    YtWrapper.partitionTablesAsync(richYPath, maxSplitBytes, enableCookies = distributedReading)
+      .thenApply[Seq[PartitionedFile]](multiTablePartitions =>
+        buildPartitionedFiles(multiTablePartitions, path, maxSplitBytes, partitionValues, distributedReading)
+      )
   }
 
   private def buildOptimizedYPath(sparkSession: SparkSession, path: YtHadoopPath,
@@ -187,13 +199,13 @@ object YtFilePartition {
     partitionFilesList.asScala.toSeq
   }
 
-  def splitFiles(sparkSession: SparkSession,
+  def splitFilesAsync(sparkSession: SparkSession,
     file: FileStatus,
     filePath: Path,
     maxSplitBytes: Long,
     partitionValues: InternalRow,
     pushedFilterSegments: SegmentSet = SegmentSet(),
-    readDataSchema: Option[StructType] = None): Seq[PartitionedFile] = {
+    readDataSchema: Option[StructType] = None): CompletableFuture[Seq[PartitionedFile]] = {
     YtHadoopPath.fromPath(file.getPath) match {
       case yp: YtHadoopPath =>
         implicit val yt: CompoundClient = YtClientProvider.ytClientWithProxy(
@@ -205,16 +217,28 @@ object YtFilePartition {
             !(yp.meta.isDynamic && keyColumns.isEmpty)
 
           if (readContext.settings.distributedReadingEnabled || ytPartitioningAllowed) {
-            splitTableYtPartitioning(sparkSession, yp, maxSplitBytes, partitionValues, readDataSchema, pushedFilterSegments)
+            splitTableYtPartitioningAsync(sparkSession, yp, maxSplitBytes, partitionValues, readDataSchema, pushedFilterSegments)
           } else if (yp.meta.isDynamic) {
-            splitDynamicTableManual(yp, keyColumns.isEmpty, partitionValues)
+            CompletableFuture.completedFuture(splitDynamicTableManual(yp, keyColumns.isEmpty, partitionValues))
           } else {
-            splitStaticTableManual(yp, maxSplitBytes, partitionValues)
+            CompletableFuture.completedFuture(splitStaticTableManual(yp, maxSplitBytes, partitionValues))
           }
         }
       case _ =>
-        Seq(SparkAdapter.instance.createPartitionedFile(partitionValues, filePath.toUri.toString, 0, file.getLen))
+        CompletableFuture.completedFuture(
+          Seq(SparkAdapter.instance.createPartitionedFile(partitionValues, filePath.toUri.toString, 0, file.getLen)))
     }
+  }
+
+  def splitFiles(sparkSession: SparkSession,
+    file: FileStatus,
+    filePath: Path,
+    maxSplitBytes: Long,
+    partitionValues: InternalRow,
+    pushedFilterSegments: SegmentSet = SegmentSet(),
+    readDataSchema: Option[StructType] = None): Seq[PartitionedFile] = {
+    splitFilesAsync(sparkSession, file, filePath, maxSplitBytes, partitionValues,
+      pushedFilterSegments, readDataSchema).join()
   }
 
   val partitionedFilesOrdering: Ordering[PartitionedFile] = {
@@ -460,7 +484,7 @@ object YtFilePartition {
   object PartitioningConfig {
     def fromSparkSession(sparkSession: SparkSession): PartitioningConfig = {
       val minSplitBytes = org.apache.spark.network.util.JavaUtils.byteStringAs(
-        sparkSession.sessionState.conf.getConfString(YT_MIN_PARTITION_BYTES, "1G"),
+        sparkSession.ytConf(SparkYtConfiguration.MinPartitionBytes),
         ByteUnit.BYTE
       )
 

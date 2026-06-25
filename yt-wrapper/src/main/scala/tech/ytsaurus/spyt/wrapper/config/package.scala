@@ -14,7 +14,6 @@ import scala.jdk.CollectionConverters._
 import scala.util.Try
 
 package object config {
-  val YT_MIN_PARTITION_BYTES = "spark.yt.minPartitionBytes"
 
   trait ConfProvider {
     def getYtConf(name: String): Option[String]
@@ -43,84 +42,75 @@ package object config {
   }
 
   private def dropPrefix(seq: Seq[String], prefix: String): Seq[String] = {
+    val fullPrefix = s"$prefix."
     seq.collect {
-      case str if str.startsWith(prefix) => str.drop(prefix.length + 1)
+      case str if str.startsWith(fullPrefix) => str.drop(fullPrefix.length)
     }
   }
 
-  implicit class SparkYtSqlContext(sqlContext: SQLContext) extends ConfProvider {
-    private val configurationPrefix = "spark.yt"
+  // Resolves a config by trying each prefix in order; spark.ytsaurus is preferred, spark.yt kept as a fallback alias.
+  trait PrefixedConfProvider extends ConfProvider {
+    protected def configurationPrefixes: Seq[String]
+    protected def rawGet(key: String): Option[String]
+    protected def rawKeys: Seq[String]
 
-    override def getYtConf(name: String): Option[String] = {
-      Try(sqlContext.getConf(s"$configurationPrefix.$name")).toOption
-    }
+    override def getYtConf(name: String): Option[String] =
+      configurationPrefixes.flatMap(prefix => rawGet(s"$prefix.$name")).headOption
 
-    override def getAllKeys: Seq[String] = {
-      dropPrefix(sqlContext.sparkSession.conf.getAll.keys.toList, configurationPrefix)
-    }
+    override def getAllKeys: Seq[String] =
+      configurationPrefixes.flatMap(prefix => dropPrefix(rawKeys, prefix)).distinct
   }
 
-  implicit class SparkYtSqlConf(sqlConf: SQLConf) extends ConfProvider {
-    private val configurationPrefix = "spark.hadoop.yt"
+  // Writes go to the primary prefix (configurationPrefixes.head).
+  trait WritableConfProvider extends PrefixedConfProvider {
+    protected def rawSet(key: String, value: String): Unit
 
-    override def getYtConf(name: String): Option[String] = {
-      val confName = s"$configurationPrefix.$name"
-      if (sqlConf.contains(confName)) {
-        Some(sqlConf.getConfString(confName))
-      } else None
-    }
+    def setYtConf(name: String, value: Any): Unit =
+      rawSet(s"${configurationPrefixes.head}.$name", value.toString)
 
-    override def getAllKeys: Seq[String] = {
-      dropPrefix(sqlConf.getAllDefinedConfs.map(_._1), configurationPrefix)
-    }
+    def setYtConf[T](configEntry: ConfigEntry[T], value: T): Unit =
+      setYtConf(configEntry.name, configEntry.set(value))
   }
 
-  implicit class SparkYtSparkConf(sparkConf: SparkConf) extends ConfProvider {
-    private val configurationPrefix = "spark.yt"
+  implicit class SparkYtSqlContext(sqlContext: SQLContext) extends PrefixedConfProvider {
+    override protected val configurationPrefixes = Seq("spark.ytsaurus", "spark.yt")
+    override protected def rawGet(key: String): Option[String] = Try(sqlContext.getConf(key)).toOption
+    override protected def rawKeys: Seq[String] = sqlContext.sparkSession.conf.getAll.keys.toList
+  }
 
-    override def getYtConf(name: String): Option[String] = {
-      sparkConf.getOption(s"$configurationPrefix.$name")
-    }
+  implicit class SparkYtSqlConf(sqlConf: SQLConf) extends PrefixedConfProvider {
+    override protected val configurationPrefixes = Seq("spark.hadoop.yt")
+    override protected def rawGet(key: String): Option[String] =
+      if (sqlConf.contains(key)) Some(sqlConf.getConfString(key)) else None
+    override protected def rawKeys: Seq[String] = sqlConf.getAllDefinedConfs.map(_._1).toSeq
+  }
+
+  implicit class SparkYtSparkConf(sparkConf: SparkConf) extends PrefixedConfProvider {
+    override protected val configurationPrefixes = Seq("spark.ytsaurus", "spark.yt")
+    override protected def rawGet(key: String): Option[String] = sparkConf.getOption(key)
+    override protected def rawKeys: Seq[String] = sparkConf.getAll.map(_._1).toSeq
 
     def setYtConf(name: String, value: Any): SparkConf = {
-      sparkConf.set(s"$configurationPrefix.$name", value.toString)
+      sparkConf.set(s"${configurationPrefixes.head}.$name", value.toString)
     }
 
     def setYtConf[T](configEntry: ConfigEntry[T], value: T): SparkConf = {
       setYtConf(configEntry.name, configEntry.set(value))
     }
-
-    override def getAllKeys: Seq[String] = {
-      dropPrefix(sparkConf.getAll.map(_._1), configurationPrefix)
-    }
   }
 
-  implicit class SparkYtSparkSession(spark: SparkSession) extends ConfProvider {
-    private val configurationPrefix = "spark.yt"
-
-    override def getYtConf(name: String): Option[String] = {
-      spark.conf.getOption(s"$configurationPrefix.$name")
-    }
-
-    def setYtConf(name: String, value: Any): Unit = {
-      spark.conf.set(s"$configurationPrefix.$name", value.toString)
-    }
-
-    def setYtConf[T](configEntry: ConfigEntry[T], value: T): Unit = {
-      setYtConf(configEntry.name, configEntry.set(value))
-    }
-
-    override def getAllKeys: Seq[String] = {
-      dropPrefix(spark.conf.getAll.keys.toList, configurationPrefix)
-    }
+  implicit class SparkYtSparkSession(spark: SparkSession) extends WritableConfProvider {
+    override protected val configurationPrefixes = Seq("spark.ytsaurus", "spark.yt")
+    override protected def rawGet(key: String): Option[String] = spark.conf.getOption(key)
+    override protected def rawKeys: Seq[String] = spark.conf.getAll.keys.toList
+    override protected def rawSet(key: String, value: String): Unit = spark.conf.set(key, value)
   }
 
-  implicit class SparkYtHadoopConfiguration(configuration: Configuration) extends ConfProvider {
-    private val configurationPrefix = "yt"
-
-    override def getYtConf(name: String): Option[String] = {
-      Option(configuration.get(s"$configurationPrefix.$name"))
-    }
+  implicit class SparkYtHadoopConfiguration(configuration: Configuration) extends WritableConfProvider {
+    override protected val configurationPrefixes = Seq("yt")
+    override protected def rawGet(key: String): Option[String] = Option(configuration.get(key))
+    override protected def rawKeys: Seq[String] = configuration.asScala.map(_.getKey).toList
+    override protected def rawSet(key: String, value: String): Unit = configuration.set(key, value)
 
     def getYtSpecConf(name: String): Map[String, YTreeNode] = {
       configuration.asScala.collect {
@@ -131,21 +121,9 @@ package object config {
       }.toMap
     }
 
-    def setYtConf(name: String, value: Any): Unit = {
-      configuration.set(s"$configurationPrefix.$name", value.toString)
-    }
-
-    def setYtConf[T](configEntry: ConfigEntry[T], value: T): Unit = {
-      setYtConf(configEntry.name, configEntry.set(value))
-    }
-
     def getConfWithPrefix(prefix: String): JMap[String, String] = {
-      val fullPrefix = s"$configurationPrefix.$prefix."
+      val fullPrefix = s"${configurationPrefixes.head}.$prefix."
       configuration.getPropsWithPrefix(fullPrefix)
-    }
-
-    override def getAllKeys: Seq[String] = {
-      dropPrefix(configuration.asScala.map(_.getKey).toList, configurationPrefix)
     }
   }
 

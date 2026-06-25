@@ -17,6 +17,7 @@ import tech.ytsaurus.ysontree.{YTreeBuilder, YTreeNode, YTreeTextSerializer}
 import java.nio.ByteBuffer
 import java.nio.file.Paths
 import java.time.Duration
+import java.util.concurrent.CompletableFuture
 import java.util.{Map => JMap}
 import scala.annotation.tailrec
 import scala.jdk.CollectionConverters._
@@ -167,8 +168,8 @@ trait YtTableUtils {
     }
   }
 
-  def partitionTables(path: YPath, splitBytes: Long, enableCookies: Boolean = false)
-    (implicit ytReadContext: YtReadContext): Seq[MultiTablePartition] = {
+  def partitionTablesAsync(path: YPath, splitBytes: Long, enableCookies: Boolean = false)
+    (implicit ytReadContext: YtReadContext): CompletableFuture[Seq[MultiTablePartition]] = {
 
     val partitionSize = DataSize.fromBytes(splitBytes)
 
@@ -185,8 +186,8 @@ trait YtTableUtils {
     }
 
     val request = builder.build()
-    val result = ytReadContext.yt.partitionTables(request).join()
-    result.asScala.toList
+    ytReadContext.yt.partitionTables(request)
+      .thenApply[Seq[MultiTablePartition]](result => result.asScala.toList)
   }
 
   def createTablePartitionReader[T](cookie: TablePartitionCookie, deserializer: WireRowDeserializer[T])

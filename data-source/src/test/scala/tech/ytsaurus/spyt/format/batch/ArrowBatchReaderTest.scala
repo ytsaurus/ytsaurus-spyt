@@ -84,11 +84,11 @@ class ArrowBatchReaderTest extends AnyFlatSpec with Matchers with TmpDir with Sc
       val ytReadSettings = YtReadSettings.default.copy(distributedReadingEnabled = distributedReadingEnabled)
       implicit val ytReadContext: YtReadContext = YtReadContext(yt, ytReadSettings)
       if (distributedReadingEnabled) {
-        val mtps = YtWrapper.partitionTables(
+        val mtps = YtWrapper.partitionTablesAsync(
           YPath.simple(tmpPath),
           spark.sessionState.conf.filesMaxPartitionBytes,
           enableCookies = true
-        )
+        ).join()
         val cookies = mtps.map(mtp => mtp.getCookie)
         val allRows: ArrayBuffer[Row] = ArrayBuffer.empty[Row]
         for (cookie <- cookies) {

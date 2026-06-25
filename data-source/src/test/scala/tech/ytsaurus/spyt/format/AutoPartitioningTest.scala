@@ -9,7 +9,6 @@ import org.apache.spark.{Partition, Partitioner}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import tech.ytsaurus.spyt._
-import tech.ytsaurus.spyt.wrapper.config.YT_MIN_PARTITION_BYTES
 import tech.ytsaurus.spyt.test.{LocalSpark, TmpDir}
 import tech.ytsaurus.spyt.wrapper.YtWrapper
 import tech.ytsaurus.spyt.test.{DynTableTestUtils, TestRow}
@@ -22,6 +21,8 @@ class AutoPartitioningTest extends AnyFlatSpec with Matchers with LocalSpark wit
   import TestPartitionedFile._
   private val sqlImplicits = SparkAdapter.instance.sparkImplicits(spark)
   import sqlImplicits._
+
+  private val YT_MIN_PARTITION_BYTES = "spark.ytsaurus.minPartitionBytes"
 
   it should "split large chunks in reading plan for static table" in {
     val data = 1 to 10

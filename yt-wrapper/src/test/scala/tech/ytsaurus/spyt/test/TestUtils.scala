@@ -13,7 +13,7 @@ import tech.ytsaurus.core.tables.{ColumnValueType, TableSchema}
 import tech.ytsaurus.spyt.utils.CollectionUtils.concatMaps
 import tech.ytsaurus.spyt.wrapper.YtJavaConverters.RichJavaMap
 import tech.ytsaurus.spyt.wrapper.client.YtClientConfigurationConverter.ytClientConfiguration
-import tech.ytsaurus.spyt.wrapper.client.YtClientProvider
+import tech.ytsaurus.spyt.wrapper.client.{SpytRpcClientListener, YtClientProvider}
 import tech.ytsaurus.typeinfo.TiType
 import tech.ytsaurus.yson.YsonConsumer
 import tech.ytsaurus.ysontree.{YTreeBuilder, YTreeNode, YTreeNodeUtils, YTreeTextSerializer}
@@ -248,10 +248,11 @@ trait TestUtils {
     ), path, ytSchema)
   }
 
-  def withSpyYt(spark: SparkSession)(body: CompoundClient => Unit): Unit = {
+  def withSpyYt(spark: SparkSession, rpcClientListener: Option[SpytRpcClientListener] = None)
+               (body: CompoundClient => Unit): Unit = {
     val conf = ytClientConfiguration(spark)
-    val rpcClient = YtClientProvider.ytRpcClient(conf)
-    val cacheKey = s"${rpcClient.normalizedProxy};;"
+    val rpcClient = YtClientProvider.ytRpcClient(conf, rpcClientListener)
+    val (cacheKey, _) = YtClientProvider.getClients.find { case (_, client) => client eq rpcClient }.get
     val spyYt: CompoundClient = Mockito.spy(rpcClient.yt)
     try {
       YtClientProvider.getClients(cacheKey) = rpcClient.copy(yt = spyYt)

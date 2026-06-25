@@ -18,11 +18,14 @@ import org.apache.spark.util.SerializableConfiguration
 import tech.ytsaurus.spyt.SparkAdapter
 import tech.ytsaurus.spyt.common.utils.{ExpressionTransformer, SegmentSet}
 import tech.ytsaurus.spyt.format.conf.SparkYtConfiguration.YtReadSettingsFactory
-import tech.ytsaurus.spyt.format.conf.{FilterPushdownConfig, KeyPartitioningConfig, YtTableSparkSettings}
+import tech.ytsaurus.spyt.format.conf.{FilterPushdownConfig, KeyPartitioningConfig, SparkYtConfiguration, YtTableSparkSettings}
 import tech.ytsaurus.spyt.fs.YtHadoopPath
 import tech.ytsaurus.spyt.logger.{YtDynTableLoggerConfig, YtLogger}
 import tech.ytsaurus.spyt.serializers.SchemaConverter
+import tech.ytsaurus.spyt.wrapper.client.YtThrottle
+import tech.ytsaurus.spyt.wrapper.config.SparkYtSparkSession
 
+import java.util.concurrent.CompletableFuture
 import java.util.{Locale, OptionalLong}
 import scala.jdk.CollectionConverters._
 
@@ -168,26 +171,36 @@ case class YtScan(sparkSession: SparkSession,
       )
     }
     lazy val partitionValueProject = GenerateUnsafeProjection.generate(readPartitionAttributes, partitionAttributes)
-    selectedPartitions.flatMap { partition =>
+    val throttle = YtThrottle(sparkSession.ytConf(SparkYtConfiguration.Throttling.MaxConcurrency))
+    val splitFilesFutures = selectedPartitions.map { partition =>
       // Prune partition values if part of the partition columns are not required.
       val partitionValues = if (readPartitionAttributes != partitionAttributes) {
         partitionValueProject(partition.values).copy()
       } else {
         partition.values
       }
-      SparkAdapter.instance.getPartitionFileStatuses(partition).flatMap { file =>
-        val filePath = file.getPath
-        YtFilePartition.splitFiles(
-          sparkSession = sparkSession,
-          file = file,
-          filePath = filePath,
-          maxSplitBytes = maxSplitBytes,
-          partitionValues = partitionValues,
-          pushedFilterSegments = effectiveFilterSegments,
-          readDataSchema = Some(readDataSchema)
-        )
-      }.toArray.sorted(YtFilePartition.partitionedFilesOrdering)
+      val fileFutures = SparkAdapter.instance.getPartitionFileStatuses(partition).map { file =>
+        throttle.gate {
+          YtFilePartition.splitFilesAsync(
+            sparkSession = sparkSession,
+            file = file,
+            filePath = file.getPath,
+            maxSplitBytes = maxSplitBytes,
+            partitionValues = partitionValues,
+            pushedFilterSegments = effectiveFilterSegments,
+            readDataSchema = Some(readDataSchema)
+          )
+        }
+      }
+
+      fileFutures.foldLeft(CompletableFuture.completedFuture(Seq.empty[PartitionedFile])) { (acc, fileFuture) =>
+        acc.thenCombine[Seq[PartitionedFile], Seq[PartitionedFile]](
+          fileFuture, (accFiles: Seq[PartitionedFile], files: Seq[PartitionedFile]) => accFiles ++ files)
+      }
     }
+
+    CompletableFuture.allOf(splitFilesFutures: _*).join()
+    splitFilesFutures.flatMap(_.get())
   }
 
   // This method is intended to support YTsaurus native partitioning and should help to avoid shuffle at spark side

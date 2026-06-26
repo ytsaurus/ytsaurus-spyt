@@ -89,7 +89,7 @@ class SpytCluster(ClusterBase):
 
     def __init__(self, proxy, discovery_path=None, group_id=None, java_home=None, yt_root_path=None, dump_dir=None,
                  spark_conf=None, tvm_secret=None, enable_monium_logs_export=False, enable_multi_operation_mode=False,
-                 operation_alias=None):
+                 operation_alias=None, enable_ytsaurus_shuffle=False, rpc_job_proxy=False):
         super().__init__(proxy, discovery_path, group_id, yt_root_path, dump_dir)
         self.java_home = java_home
         self.spark_conf = spark_conf or {}
@@ -97,6 +97,8 @@ class SpytCluster(ClusterBase):
         self.enable_monium_logs_export = enable_monium_logs_export
         self.enable_multi_operation_mode = enable_multi_operation_mode
         self.operation_alias = operation_alias
+        self.enable_ytsaurus_shuffle = enable_ytsaurus_shuffle
+        self.rpc_job_proxy = rpc_job_proxy
 
     def __enter__(self):
         self.op = start_spark_cluster(
@@ -105,7 +107,8 @@ class SpytCluster(ClusterBase):
             master_memory_limit='3G', enable_history_server=False, params=self.get_params(self.spark_conf),
             enable_tmpfs=False, enablers=self.get_enablers(self.enable_monium_logs_export), client=self.yt_client,
             spark_cluster_version=VERSION, group_id=self.group_id, tvm_secret=self.tvm_secret,
-            enable_multi_operation_mode=self.enable_multi_operation_mode, operation_alias=self.operation_alias)
+            enable_multi_operation_mode=self.enable_multi_operation_mode, operation_alias=self.operation_alias,
+            enable_ytsaurus_shuffle=self.enable_ytsaurus_shuffle, rpc_job_proxy=self.rpc_job_proxy)
         if self.op is None:
             raise YtError("Cluster starting failed")
         cluster_info = find_spark_cluster(self.discovery_path, self.yt_client)

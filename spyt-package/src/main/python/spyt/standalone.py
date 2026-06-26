@@ -373,7 +373,8 @@ def start_spark_cluster(worker_cores, worker_memory, worker_num, worker_cores_ov
                         autoscaler_max_free_workers=None, autoscaler_slot_increment_step=None,
                         rpc_job_proxy=False, rpc_job_proxy_thread_pool_size=4, tcp_proxy_range_start=30000,
                         tcp_proxy_range_size=100, enable_stderr_table=False, group_id=None,
-                        worker_gpu_limit=0, cluster_java_home=None, enable_ytsaurus_shuffle=False):
+                        worker_gpu_limit=0, cluster_java_home=None, enable_ytsaurus_shuffle=False,
+                        enable_spark_shuffle=True):
     """Start Spark cluster
     :param operation_title: title for the underlying YT operation
     :param operation_alias: alias for the underlying YT operation
@@ -437,7 +438,8 @@ def start_spark_cluster(worker_cores, worker_memory, worker_num, worker_cores_ov
     :param group_id: discovery group id
     :param worker_gpu_limit: number of gpu for each worker
     :param cluster_java_home: custom java home for cluster vanilla operation
-    :param enable_ytsaurus_shuffle: use YTsaurus shuffle service
+    :param enable_ytsaurus_shuffle: make YTsaurus shuffle service available in worker job proxies (per-app opt-in)
+    :param enable_spark_shuffle: run the Spark external shuffle service on the cluster (enabled by default)
     :return:
     """
     worker_res = WorkerResources(worker_cores, worker_memory, worker_num, worker_cores_overhead, worker_timeout,
@@ -494,12 +496,7 @@ def start_spark_cluster(worker_cores, worker_memory, worker_num, worker_cores_ov
     _process_ipv6_preference(dynamic_config, enable_preference_ipv6, enablers)
 
     dynamic_config['spark_conf']['spark.dedicated_operation_mode'] = dedicated_operation_mode
-    if enable_ytsaurus_shuffle:
-        dynamic_config['spark_conf']['spark.shuffle.manager'] = \
-            'org.apache.spark.shuffle.ytsaurus.YTsaurusShuffleManager'
-        dynamic_config['spark_conf']['spark.shuffle.sort.io.plugin.class'] = \
-            'tech.ytsaurus.spyt.shuffle.YTsaurusShuffleDataIO'
-    else:
+    if enable_spark_shuffle:
         dynamic_config['spark_conf']['spark.shuffle.service.enabled'] = 'true'
         set_random_shuffle_service_port(dynamic_config['spark_conf'])
     if autoscaler_period:

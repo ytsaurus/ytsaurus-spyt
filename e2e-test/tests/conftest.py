@@ -38,10 +38,13 @@ def spyt_cluster(request):
     enable_logs = input_params.pop("enable_monium_logs_export", False)
     enable_multi_operation_mode = input_params.pop("enable_multi_operation_mode", False)
     operation_alias = input_params.pop("operation_alias", None)
+    enable_ytsaurus_shuffle = input_params.pop("enable_ytsaurus_shuffle", False)
+    rpc_job_proxy = input_params.pop("rpc_job_proxy", False)
     with SpytCluster(proxy=YT_PROXY, dump_dir=test_directory(request),
                      spark_conf=input_params, tvm_secret=tvm_secret,
                      enable_monium_logs_export=enable_logs, enable_multi_operation_mode=enable_multi_operation_mode,
-                     operation_alias=operation_alias) as cluster:
+                     operation_alias=operation_alias, enable_ytsaurus_shuffle=enable_ytsaurus_shuffle,
+                     rpc_job_proxy=rpc_job_proxy) as cluster:
         yield cluster
 
 

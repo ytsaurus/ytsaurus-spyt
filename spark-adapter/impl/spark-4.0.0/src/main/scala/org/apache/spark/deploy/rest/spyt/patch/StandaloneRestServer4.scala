@@ -32,6 +32,7 @@ private[deploy] class StandaloneRestServer4(
   private val appIdRequestServlet = rss.appIdRequestServlet(masterEndpoint, masterConf)
   private val appStatusRequestServlet = rss.appStatusRequestServlet(masterEndpoint, masterConf)
   private val spytConnectServerServlet = rss.spytConnectServerServlet(masterEndpoint, masterUrl, masterConf)
+  private val spytSubmitRequestServlet = rss.spytSubmitRequestServlet(masterEndpoint, masterUrl, masterConf)
 
   protected override lazy val contextToServlet: Map[String, RestServlet] = Map(
     s"$baseContext/create/*" -> submitRequestServlet,
@@ -44,6 +45,7 @@ private[deploy] class StandaloneRestServer4(
     s"$baseContext/getAppId/*" -> appIdRequestServlet,
     s"$baseContext/getAppStatus/*" -> appStatusRequestServlet,
     s"$baseContext/spytConnectServer/*" -> spytConnectServerServlet,
+    s"$baseContext/submit/*" -> spytSubmitRequestServlet,
     "/*" -> new ErrorServlet // default handler
   )
 }

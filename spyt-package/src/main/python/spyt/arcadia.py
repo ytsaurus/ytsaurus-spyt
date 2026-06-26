@@ -12,13 +12,15 @@ require_yt_client()
 
 from yt.wrapper.common import is_arcadia_python  # noqa: E402
 
+from ._variant import PACKAGE_VARIANT  # noqa: E402
+
 
 logger = logging.getLogger(__name__)
 
 extracted_spyt_dir: Optional[TemporaryDirectory] = None
 extracted_spark_dir: Optional[TemporaryDirectory] = None
 
-spark_distrib_dir = "yt/spark/spark-over-yt/spyt-package/src/main/spark/"
+spark_distrib_dir = f"yt/spark/spark-over-yt/spyt-package/src/{PACKAGE_VARIANT}/spark/"
 
 
 def _make_executables(directory):
@@ -88,7 +90,7 @@ def _extract_spark():
 def _extract_spyt():
     temp_dir = _create_tmpdir_with_pid("spyt_yamake_")
     logger.info(f"Created Spyt temp dir {temp_dir}")
-    spyt_original_dir = "yt/spark/spark-over-yt/spyt-package/src/main/spyt_cluster/"
+    spyt_original_dir = f"yt/spark/spark-over-yt/spyt-package/src/{PACKAGE_VARIANT}/spyt_cluster/"
     build_dir = temp_dir.name
     files = _extract_resources(spyt_original_dir, spyt_original_dir, build_dir)
     with zipfile.ZipFile(files[0], 'r') as zip_ref:

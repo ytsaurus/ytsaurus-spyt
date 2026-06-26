@@ -16,7 +16,7 @@ from yt.wrapper import YtClient  # noqa: E402
 from yt.wrapper.http_helpers import get_token, get_user_name, get_proxy_address_netloc  # noqa: E402
 
 from .arcadia import checked_extract_spark  # noqa: E402
-from .utils import default_token, default_discovery_dir, get_spark_master, set_conf, \
+from .utils import default_token, default_proxy, default_discovery_dir, get_spark_master, set_conf, \
     SparkDiscovery, parse_memory, format_memory, base_spark_conf, parse_bool, get_spyt_conf_dir, \
     check_spark_version  # noqa: E402
 from .conf import read_remote_conf, read_global_conf, validate_versions_compatibility, \
@@ -144,8 +144,10 @@ def create_yt_client(yt_proxy, conf):
 
 
 def create_yt_client_spark_conf(yt_proxy, spark_conf):
-    yt_proxy = yt_proxy or spark_conf.get("spark.hadoop.yt.proxy") or os.getenv("SPARK_YT_PROXY") or os.getenv("SPARK_HADOOP_YT_PROXY")
-    yt_token = spark_conf.get("spark.hadoop.yt.token") or os.getenv("SPARK_YT_TOKEN") or os.getenv("SPARK_HADOOP_YT_TOKEN")
+    yt_proxy = yt_proxy or spark_conf.get("spark.hadoop.yt.proxy") or os.getenv("SPARK_YT_PROXY") \
+        or os.getenv("SPARK_HADOOP_YT_PROXY") or default_proxy()
+    yt_token = spark_conf.get("spark.hadoop.yt.token") or os.getenv("SPARK_YT_TOKEN") \
+        or os.getenv("SPARK_HADOOP_YT_TOKEN") or default_token()
     return YtClient(proxy=yt_proxy, token=yt_token)
 
 

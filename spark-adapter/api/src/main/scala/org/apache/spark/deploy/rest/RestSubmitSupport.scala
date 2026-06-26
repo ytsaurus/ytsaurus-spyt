@@ -18,6 +18,7 @@ trait RestSubmitSupport {
   def appIdRequestServlet(masterEndpoint: RpcEndpointRef, masterConf: SparkConf): RestServlet
   def appStatusRequestServlet(masterEndpoint: RpcEndpointRef, masterConf: SparkConf): RestServlet
   def spytConnectServerServlet(masterEndpoint: RpcEndpointRef, masterUrl: String, masterConf: SparkConf): RestServlet
+  def spytSubmitRequestServlet(masterEndpoint: RpcEndpointRef, masterUrl: String, masterConf: SparkConf): RestServlet
 }
 
 object RestSubmitSupport {

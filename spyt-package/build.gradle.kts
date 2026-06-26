@@ -63,6 +63,10 @@ tasks {
         from(file("src/main/spark-extra"))
         from(file("src/main/python/spyt")) {
             into("python/spyt")
+            exclude("submit.py", "_variant.py")
+        }
+        from(file("src/main-2-11/python/spyt")) {
+            into("python/spyt")
         }
     }
 

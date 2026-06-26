@@ -27,7 +27,7 @@ class YtMaster(rpcEnv: RpcEnv,
   import YtMaster._
 
   private val driverIdToApp = new mutable.HashMap[String, String]
-  private val baseClass = this.getClass.getSuperclass
+  private val baseClass: Class[_] = this.getClass.getSuperclass
   private val baseClassFieldNames = baseClass.getDeclaredFields.map(_.getName).toSet
   private val fieldsCache = new ConcurrentHashMap[String, Field]
   private val connectAppPromises = new mutable.HashMap[String, Promise[SpytConnectApplication]]

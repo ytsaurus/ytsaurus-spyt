@@ -1,0 +1,7 @@
+{
+    "spyt_cluster": {
+        "resource_type": "SPYT_CLUSTER_FILES",
+        "owner": "SPYT-DEV-TEAM",
+        "manual": true
+    }
+}

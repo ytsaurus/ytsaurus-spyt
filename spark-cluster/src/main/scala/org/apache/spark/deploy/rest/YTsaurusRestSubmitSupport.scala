@@ -46,4 +46,12 @@ class YTsaurusRestSubmitSupport extends RestSubmitSupport {
     SparkAdapter.instance.wrapRestServlet(new SpytConnectServerServlet(masterEndpoint, masterUrl, masterConf))
       .asInstanceOf[RestServlet]
   }
+
+  override def spytSubmitRequestServlet(
+    masterEndpoint: RpcEndpointRef,
+    masterUrl: String,
+    masterConf: SparkConf): RestServlet = {
+    SparkAdapter.instance.wrapRestServlet(new SpytSubmitRequestServlet(masterEndpoint, masterUrl, masterConf))
+      .asInstanceOf[RestServlet]
+  }
 }

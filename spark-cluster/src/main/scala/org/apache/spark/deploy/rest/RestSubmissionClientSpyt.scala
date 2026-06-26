@@ -13,7 +13,7 @@ class RestSubmissionClientSpyt(master: String) extends RestSubmissionClient(mast
   }
   import HandledResponse._
 
-  private val baseClass = this.getClass.getSuperclass
+  private val baseClass: Class[_] = this.getClass.getSuperclass
 
   // Stubs for methods declared private in base class
   private def invokeBaseMethod[T](args: AnyRef*): T = {

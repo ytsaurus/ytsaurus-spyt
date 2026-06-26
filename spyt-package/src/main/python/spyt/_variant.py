@@ -1,0 +1,1 @@
+PACKAGE_VARIANT = "main"

@@ -128,7 +128,8 @@ class YTsaurusOperationManagerSuite extends SparkFunSuite with BeforeAndAfterEac
     val result = YTsaurusOperationManager.applicationFiles(conf, uploader)
 
     result should contain theSameElementsAs Seq(
-      ApplicationFile("uploaded-dep.py", Some("dep.py")), ApplicationFile("uploaded-my-job.py", Some("my-job.py"))
+      ApplicationFile("uploaded-dep.py", Some("dep.py"), originName = Some("dep.py")),
+      ApplicationFile("uploaded-my-job.py", Some("my-job.py"), originName = Some("my-job.py"))
     )
   }
 
@@ -360,5 +361,31 @@ class YTsaurusOperationManagerSuite extends SparkFunSuite with BeforeAndAfterEac
     secureVault.get("SPARK_SOME_SECRET_KEY").stringValue() shouldEqual "aKeyToHide"
     secureVault.get("SPARK_SOME_PASSWORD").stringValue() shouldEqual "p@ssw0rd"
     secureVault.get("SPARK_EXTERNAL_SERVICE_TOKEN").stringValue() shouldEqual "t0k3n"
+  }
+
+  test("rewriteFileConfigs rewrites local files and aliases to ./downloadName, leaving yt:/ and temp paths untouched") {
+    val conf = new SparkConf()
+    val tmpJar = s"${System.getProperty("java.io.tmpdir")}/spark/some-uuid/cached.jar"
+    conf.set(JARS, Seq("file:/home/user/lib.jar", "yt:/path/to/cached.jar", tmpJar))
+    conf.set(FILES, Seq("data.json", "file:/home/user/conf.json#alias.json"))
+    conf.set(SUBMIT_PYTHON_FILES, Seq("dep.py", "yt:///path/to/util.py#renamed.py"))
+    conf.set(ARCHIVES, Seq("file:/home/user/deps.tar#arc", "data.zip", "yt:/path/to/cached.tgz#u"))
+
+    YTsaurusOperationManager.rewriteFileConfigs(conf)
+
+    conf.get(JARS) shouldBe Seq("./lib.jar", "yt:/path/to/cached.jar", tmpJar)
+    conf.get(FILES) shouldBe Seq("./data.json", "./alias.json")
+    conf.get(SUBMIT_PYTHON_FILES) shouldBe Seq("./dep.py", "yt:///path/to/util.py#renamed.py")
+    conf.get(ARCHIVES) shouldBe Seq("./arc-arc-dep.tar#arc", "./data.zip-arc-dep.zip#data.zip", "yt:/path/to/cached.tgz#u")
+  }
+
+  test("rewriteFileConfigs is a no-op when file configs are unset") {
+    val conf = new SparkConf()
+
+    YTsaurusOperationManager.rewriteFileConfigs(conf)
+
+    conf.get(JARS) shouldBe Seq.empty
+    conf.get(FILES) shouldBe Seq.empty
+    conf.get(SUBMIT_PYTHON_FILES) shouldBe Seq.empty
   }
 }

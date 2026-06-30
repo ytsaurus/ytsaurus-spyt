@@ -1,5 +1,6 @@
 import spyt
 
+import json
 import os
 import pytest
 import time
@@ -10,7 +11,7 @@ from pyspark.sql.types import IntegerType, StringType, StructType, StructField, 
 from pyspark.sql.functions import col, udf
 import requests
 from yt.wrapper import YtClient
-from utils import SPARK_CONF, YT_PROXY, upload_file, get_executors_operation_id
+from utils import SPARK_CONF, YT_PROXY, upload_file, get_executors_operation_id, job_path
 
 
 def test_client_mode(yt_client, tmp_dir, direct_session):
@@ -125,18 +126,25 @@ def test_cluster_mode_broken_spark_conf(yt_client, tmp_dir, direct_submitter):
         assert "Failed to submit Spark job" in str(e)
 
 
-def test_cluster_mode_with_dependencies(yt_client, tmp_dir, direct_submitter):
+@pytest.mark.parametrize("local_files", [False, True], ids=["yt_paths", "local_files"])
+def test_cluster_mode_with_dependencies(yt_client, tmp_dir, direct_submitter, local_files):
     table_in = f"{tmp_dir}/t_dep_in"
     table_out = f"{tmp_dir}/t_dep_out"
     yt_client.create("table", table_in, attributes={"schema": [{"name": "num", "type": "int64"}]})
     rows = [{"num": i} for i in range(3)]
     yt_client.write_table(table_in, rows)
 
-    for script in ['spark_job_with_dependencies.py', 'dependencies.py']:
-        upload_file(yt_client, f'jobs/{script}', f'{tmp_dir}/{script}')
+    if local_files:
+        main_file = job_path('jobs/spark_job_with_dependencies.py')
+        py_files = job_path('jobs/dependencies.py')
+    else:
+        for script in ['spark_job_with_dependencies.py', 'dependencies.py']:
+            upload_file(yt_client, f'jobs/{script}', f'{tmp_dir}/{script}')
+        main_file = f'yt:/{tmp_dir}/spark_job_with_dependencies.py'
+        py_files = f'yt:/{tmp_dir}/dependencies.py'
 
-    operation_id = direct_submitter.submit(f'yt:/{tmp_dir}/spark_job_with_dependencies.py',
-                                           spark_base_args=['--py-files', f'yt:/{tmp_dir}/dependencies.py'],
+    operation_id = direct_submitter.submit(main_file,
+                                           spark_base_args=['--py-files', py_files],
                                            job_args=[table_in, table_out])
 
     assert operation_id is not None
@@ -245,21 +253,61 @@ def test_driver_auto_shutdown(yt_client: YtClient, tmp_dir, direct_submitter):
     assert wait_for_operation(yt_client, driver_operation_id) == "failed"
 
 
-def test_archives(yt_client, tmp_dir, direct_submitter):
+@pytest.mark.parametrize("local_files", [False, True], ids=["yt_paths", "local_files"])
+def test_archives(yt_client, tmp_dir, direct_submitter, local_files):
     table_out = f"{tmp_dir}/t_arc_out"
 
-    for script in ['spark_job_archives.py', 'deps.tar', 'deps2.zip']:
-        upload_file(yt_client, f'jobs/{script}', f'{tmp_dir}/{script}')
+    if local_files:
+        main_file = job_path('jobs/spark_job_archives.py')
+        archives = f"{job_path('jobs/deps.tar')}#arcdep,{job_path('jobs/deps2.zip')}"
+    else:
+        for script in ['spark_job_archives.py', 'deps.tar', 'deps2.zip']:
+            upload_file(yt_client, f'jobs/{script}', f'{tmp_dir}/{script}')
+        main_file = f'yt:/{tmp_dir}/spark_job_archives.py'
+        archives = f'yt:/{tmp_dir}/deps.tar#arcdep,yt:/{tmp_dir}/deps2.zip'
 
-    operation_id = direct_submitter.submit(f'yt:/{tmp_dir}/spark_job_archives.py',
-                                           spark_base_args=['--archives',
-                                                            f'yt:/{tmp_dir}/deps.tar#arcdep,yt:/{tmp_dir}/deps2.zip'],
+    operation_id = direct_submitter.submit(main_file,
+                                           spark_base_args=['--archives', archives],
                                            job_args=[table_out])
     assert operation_id is not None
     wait_for_operation(yt_client, operation_id)
 
     result_rows = [{"_1": "Sp4rK", "_2": "YTsaaaurus"}]
     assert_items_equal(yt_client.read_table(table_out), result_rows)
+
+
+@pytest.mark.parametrize("local_files", [False, True], ids=["yt_paths", "local_files"])
+def test_cluster_mode_with_files_and_jars(yt_client, tmp_dir, direct_submitter, local_files):
+    out_path = f"{tmp_dir}/t_fj_out"
+
+    if local_files:
+        main_file = job_path('jobs/spark_job_files_and_jars.py')
+        files = job_path('jobs/id.py')
+        jars = job_path('jobs/deps.jar')
+    else:
+        for script in ['spark_job_files_and_jars.py', 'id.py', 'deps.jar']:
+            upload_file(yt_client, f'jobs/{script}', f'{tmp_dir}/{script}')
+        main_file = f'yt:/{tmp_dir}/spark_job_files_and_jars.py'
+        files = f'yt:/{tmp_dir}/id.py'
+        jars = f'yt:/{tmp_dir}/deps.jar'
+
+    operation_id = direct_submitter.submit(main_file,
+                                           spark_base_args=['--files', files, '--jars', jars],
+                                           job_args=[out_path])
+    assert operation_id is not None
+    wait_for_operation(yt_client, operation_id)
+
+    result = json.loads(yt_client.read_file(out_path).read())
+    assert result == {"file_present": True, "jar_value": "jar-dep-loaded"}
+
+
+@pytest.mark.parametrize("direct_session",
+                         [{"spark.jars": job_path('jobs/deps.jar'), "spark.files": job_path('jobs/id.py')}],
+                         indirect=True)
+def test_client_mode_with_files_and_jars(direct_session):
+    jar_value = direct_session.sparkContext._jvm.org.example.JarDep.value()
+    assert jar_value == "jar-dep-loaded"
+    assert direct_session.range(100).filter("id % 3 == 0").count() == 34
 
 
 csv_data = """id,name,value

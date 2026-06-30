@@ -426,6 +426,8 @@ private[spark] object YTsaurusOperationManager extends Logging {
           filePathsList.add(node)
         }
 
+        rewriteFileConfigs(conf)
+
         if (isSquashFs) {
           val spytPackagePosOpt = (0 until filePathsList.size())
             .find(i => filePathsList.getString(i).endsWith("spyt-package.zip"))
@@ -587,15 +589,18 @@ private[spark] object YTsaurusOperationManager extends Logging {
   private[ytsaurus] case class ApplicationFile(ytPath: String,
                                                targetName: Option[String] = None,
                                                isArchive: Boolean = false,
-                                               isExecutable: Boolean = false) {
-    private def originName: String = ytPath.split('/').last
+                                               isExecutable: Boolean = false,
+                                               originName: Option[String] = None) {
+    private def effectiveOriginName: String = originName.getOrElse(ytPath.split('/').last)
 
-    private def originExtension: String = originName.split("\\.", 2).last
+    private def originExtension: String = effectiveOriginName.split("\\.", 2).last
 
-    private def localName: String = targetName.getOrElse(originName)
+    private[ytsaurus] def localName: String = targetName.getOrElse(effectiveOriginName)
 
     def downloadName: String = if (isArchive) s"$localName-arc-dep.$originExtension" else localName
   }
+
+  private val YT_PATH_PREFIX = "yt:/"
 
   type UploadToCache = String => String
 
@@ -621,13 +626,14 @@ private[spark] object YTsaurusOperationManager extends Logging {
       case _ => throw new SparkException(s"Too many '#': $fileName")
     }
 
-    val (ytFileName, targetName) = if (sourceName.startsWith("yt:/")) {
-      (YtWrapper.formatPath(sourceName), specifiedName)
+    val (ytFileName, targetName, originName) = if (sourceName.startsWith(YT_PATH_PREFIX)) {
+      (YtWrapper.formatPath(sourceName), specifiedName, Option.empty[String])
     } else {
       val uri = URI.create(sourceName)
-      (uploadToCache(uri.getPath), specifiedName.orElse(Some(Paths.get(uri.getPath).getFileName.toString)))
+      val sourceFileName = Paths.get(uri.getPath).getFileName.toString
+      (uploadToCache(uri.getPath), specifiedName.orElse(Some(sourceFileName)), Some(sourceFileName))
     }
-    ApplicationFile(ytFileName, targetName, isArchive)
+    ApplicationFile(ytFileName, targetName, isArchive, originName = originName)
   }
 
   // This value is based on these code in Spark:
@@ -649,6 +655,26 @@ private[spark] object YTsaurusOperationManager extends Logging {
       ).map(_.copy(isExecutable = conf.get(YTSAURUS_IS_PYTHON_BINARY)))
 
     (files ++ primaryResource).distinct
+  }
+
+  private def rewriteFilePath(original: String, isArchive: Boolean): String = {
+    val sourceName = original.split('#').head
+    if (original.startsWith(SPARK_TMP_DIR_PREFIX) || sourceName.startsWith(YT_PATH_PREFIX)) {
+      original
+    } else {
+      val noUpload: UploadToCache = identity
+      val appFile = prepareFile(original, noUpload, isArchive)
+      if (isArchive) s"./${appFile.downloadName}#${appFile.localName}" else s"./${appFile.downloadName}"
+    }
+  }
+
+  private[ytsaurus] def rewriteFileConfigs(conf: SparkConf): Unit = {
+    Seq(JARS, FILES, ARCHIVES, SUBMIT_PYTHON_FILES).foreach { key =>
+      val files = conf.get(key)
+      if (files.nonEmpty) {
+        conf.set(key, files.map(original => rewriteFilePath(original, key == ARCHIVES)))
+      }
+    }
   }
 
   private[ytsaurus] def enrichLogsEnvironment(conf: SparkConf, environment: YTreeMapNode): Unit = {

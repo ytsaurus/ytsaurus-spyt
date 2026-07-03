@@ -33,8 +33,12 @@ def yt_client():
 
 @pytest.fixture(scope="function")
 def spyt_cluster(request):
-    spark_conf = getattr(request, 'param', {})
-    with SpytCluster(proxy=YT_PROXY, dump_dir=test_directory(request), spark_conf=spark_conf) as cluster:
+    input_params = getattr(request, 'param', {})
+    enable_multi_operation_mode = input_params.pop("enable_multi_operation_mode", False)
+    operation_alias = input_params.pop("operation_alias", None)
+    with SpytCluster(proxy=YT_PROXY, dump_dir=test_directory(request),
+                     spark_conf=input_params, enable_multi_operation_mode=enable_multi_operation_mode,
+                     operation_alias=operation_alias) as cluster:
         yield cluster
 
 

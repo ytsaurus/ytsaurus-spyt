@@ -1,5 +1,7 @@
 package tech.ytsaurus.spyt.test
 
+import org.apache.spark.sql.SparkSession
+import org.mockito.Mockito
 import tech.ytsaurus.spyt.wrapper.YtWrapper
 import tech.ytsaurus.spyt.wrapper.table.{OptimizeMode, YtReadContext, YtReadSettings}
 import tech.ytsaurus.client.CompoundClient
@@ -9,6 +11,8 @@ import tech.ytsaurus.core.cypress.{CypressNodeType, YPath}
 import tech.ytsaurus.core.rows.YTreeRowSerializer
 import tech.ytsaurus.core.tables.{ColumnValueType, TableSchema}
 import tech.ytsaurus.spyt.wrapper.YtJavaConverters.RichJavaMap
+import tech.ytsaurus.spyt.wrapper.client.YtClientConfigurationConverter.ytClientConfiguration
+import tech.ytsaurus.spyt.wrapper.client.YtClientProvider
 import tech.ytsaurus.typeinfo.TiType
 import tech.ytsaurus.yson.YsonConsumer
 import tech.ytsaurus.ysontree.{YTreeBuilder, YTreeNode, YTreeNodeUtils, YTreeTextSerializer}
@@ -239,5 +243,19 @@ trait TestUtils {
         |f11=[[{a=%true};1];[{b=%false};2];[{c=#};3];];
         |}""".stripMargin
     ), path, ytSchema)
+  }
+
+  def withSpyYt(spark: SparkSession)(body: CompoundClient => Unit): Unit = {
+    val conf = ytClientConfiguration(spark)
+    val rpcClient = YtClientProvider.ytRpcClient(conf)
+    val cacheKey = s"${rpcClient.normalizedProxy};;"
+    val spyYt: CompoundClient = Mockito.spy(rpcClient.yt)
+    try {
+      YtClientProvider.getClients(cacheKey) = rpcClient.copy(yt = spyYt)
+      body(spyYt)
+      Mockito.reset(spyYt)
+    } finally {
+      YtClientProvider.getClients(cacheKey) = rpcClient
+    }
   }
 }

@@ -38,6 +38,8 @@ class YTsaurusShuffleManager(conf: SparkConf) extends ShuffleManager with Loggin
 
   private val readConfigOpt: Option[YTreeNode] = ShuffleUtils.parseConfig(conf, YTSAURUS_SHUFFLE_READ_CONFIG)
 
+  logInfo(s"YTsaurus shuffle service is in use (account=${conf.get(YTSAURUS_SHUFFLE_ACCOUNT)})")
+
   override def registerShuffle[K, V, C](shuffleId: Int, dependency: ShuffleDependency[K, V, C]): ShuffleHandle = {
     // IS CALLED ON DRIVER
     val baseHandle = delegate.registerShuffle(shuffleId, dependency).asInstanceOf[BaseShuffleHandle[K, V, C]]

@@ -51,6 +51,7 @@ def main(raw_args=None):
     add_parser_group(parser, '--enable-yt-metrics', '--disable-yt-metrics', 'enable_yt_metrics',
                      default_enablers.enable_yt_metrics)
     add_parser_group(parser, '--enable-ytsaurus-shuffle', '--disable-ytsaurus-shuffle', 'enable_ytsaurus_shuffle', False)
+    add_parser_group(parser, '--enable-spark-shuffle', '--disable-spark-shuffle', 'enable_spark_shuffle', True)
 
     parser.set_defaults(enable_tmpfs=True)
 
@@ -175,7 +176,8 @@ def main(raw_args=None):
                         group_id=args.group_id,
                         worker_gpu_limit=args.worker_gpu_limit,
                         cluster_java_home=args.cluster_java_home,
-                        enable_ytsaurus_shuffle=args.enable_ytsaurus_shuffle
+                        enable_ytsaurus_shuffle=args.enable_ytsaurus_shuffle,
+                        enable_spark_shuffle=args.enable_spark_shuffle
                         )
 
 

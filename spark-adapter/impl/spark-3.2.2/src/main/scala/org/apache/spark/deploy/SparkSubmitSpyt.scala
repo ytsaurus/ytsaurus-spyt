@@ -39,9 +39,10 @@ private[spark] class SparkSubmitSpyt {
     // Other cluster managers are processed inside __prepareSubmitEnvironment
     val clusterManager: Int = if (args.master.startsWith(YTSAURUS_MASTER)) YTSAURUS else 0
     val isYTsaurusCluster = clusterManager == YTSAURUS && deployMode == CLUSTER
-
     // here we use args.master.startsWith instead of STANDALONE because it should be processed inside base method
-    if (args.isPython && args.master.startsWith("spark") && deployMode == CLUSTER) {
+    val isStandaloneMaster = args.master.startsWith("spark")
+
+    if (args.isPython && isStandaloneMaster && deployMode == CLUSTER) {
       args.mainClass = "org.apache.spark.deploy.PythonRunner"
       args.childArgs = ArrayBuffer("{{USER_JAR}}", "{{PY_FILES}}") ++ args.childArgs
       args.files = DependencyUtils.mergeFileLists(args.files, args.pyFiles)
@@ -142,14 +143,21 @@ private[spark] class SparkSubmitSpyt {
       }
     }
 
+    val ytShuffleEnabled = sparkConf.getBoolean("spark.ytsaurus.shuffle.enabled", false)
+
+    // Auto-wire the YTsaurus shuffle service for both direct (ytsaurus://) and standalone (spark://) submits
+    if (ytShuffleEnabled && (clusterManager == YTSAURUS || isStandaloneMaster)) {
+      sparkConf.set("spark.shuffle.manager", "org.apache.spark.shuffle.ytsaurus.YTsaurusShuffleManager")
+      sparkConf.set("spark.shuffle.sort.io.plugin.class", "tech.ytsaurus.spyt.shuffle.YTsaurusShuffleDataIO")
+    }
+
     if (clusterManager == YTSAURUS) {
       sparkConf.set("spark.ytsaurus.primary.resource", args.primaryResource)
 
       val dynAllocationEnabled = sparkConf.get(config.DYN_ALLOCATION_ENABLED)
-      val shuffleEnabled  = sparkConf.getBoolean("spark.ytsaurus.shuffle.enabled", false)
 
       // validate settings
-      if(dynAllocationEnabled && !shuffleEnabled){
+      if(dynAllocationEnabled && !ytShuffleEnabled){
         error("Dynamic allocation requires YTsaurus shuffle service. " +
           "You may enable this through spark.ytsaurus.shuffle.enabled")
       }
@@ -159,14 +167,10 @@ private[spark] class SparkSubmitSpyt {
       }
 
       // adjust settings
-      if (shuffleEnabled) {
-        sparkConf.set("spark.shuffle.manager", "org.apache.spark.shuffle.ytsaurus.YTsaurusShuffleManager")
-        sparkConf.set("spark.shuffle.sort.io.plugin.class", "tech.ytsaurus.spyt.shuffle.YTsaurusShuffleDataIO")
-        if(dynAllocationEnabled){
-          sparkConf.set(config.DYN_ALLOCATION_SHUFFLE_TRACKING_ENABLED, false)
-          // it is required for down scaling YT operation jobs
-          sparkConf.set(config.DECOMMISSION_ENABLED, true)
-        }
+      if (ytShuffleEnabled && dynAllocationEnabled) {
+        sparkConf.set(config.DYN_ALLOCATION_SHUFFLE_TRACKING_ENABLED, false)
+        // it is required for down scaling YT operation jobs
+        sparkConf.set(config.DECOMMISSION_ENABLED, true)
       }
 
       if (deployMode == CLIENT && isNetworkProjectEnabled) {

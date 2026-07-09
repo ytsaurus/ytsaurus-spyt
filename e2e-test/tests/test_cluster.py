@@ -1,4 +1,5 @@
 from common.helpers import assert_items_equal
+from utils import upload_file
 import requests
 import pytest
 
@@ -71,3 +72,27 @@ def assert_multi_operation_mode(yt_client, spyt_cluster):
 
     assert_items_equal(job_types, ["worker", "master"])
     return op_ids
+
+
+@pytest.mark.parametrize("spyt_cluster", [{"enable_ytsaurus_shuffle": True, "rpc_job_proxy": True}], indirect=True)
+@pytest.mark.parametrize("shuffle_enabled", [True, False])
+def test_per_app_ytsaurus_shuffle(yt_client, tmp_dir, spyt_cluster, shuffle_enabled):
+    from spyt.submit import SubmissionStatus
+    upload_file(yt_client, 'jobs/ytsaurus_shuffle_job.py', f'{tmp_dir}/ytsaurus_shuffle_job.py')
+    out_path = f'{tmp_dir}/shuffle_manager'
+
+    conf = {"spark.ytsaurus.shuffle.enabled": "true"} if shuffle_enabled else {}
+    status = spyt_cluster.submit_cluster_job(
+        f'{tmp_dir}/ytsaurus_shuffle_job.py',
+        args=[out_path],
+        conf=conf)
+    assert status is SubmissionStatus.FINISHED
+
+    shuffle_manager = yt_client.read_file(out_path).read().decode()
+    ytsaurus_manager = "org.apache.spark.shuffle.ytsaurus.YTsaurusShuffleManager"
+    if shuffle_enabled:
+        assert shuffle_manager == ytsaurus_manager, \
+            f"Expected {ytsaurus_manager} to be the active shuffle manager, got {shuffle_manager}"
+    else:
+        assert shuffle_manager != ytsaurus_manager, \
+            f"Expected a non-YTsaurus shuffle manager, got {shuffle_manager}"

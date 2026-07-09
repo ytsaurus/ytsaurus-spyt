@@ -46,27 +46,38 @@ case class YtInputSplit(file: YtPartitionedFile, schema: StructType,
   private def calculateYtPath(pushing: Boolean, union: Boolean = true): YPath = {
     val tableKeys = SchemaConverter.keys(schema)
     if (pushing && filterPushdownConfig.enabled && tableKeys.nonEmpty) {
-      val res = pushdownFiltersToYPath(
-        union, pushedFilters, SchemaConverter.keys(schema), filterPushdownConfig, basePath)
-
-      if (tableKeys.length > 1 || tableKeys.contains(None)) {
-        ytLog.warn("YtInputSplit pushed filters with more than one key column", logMessageInfo ++
-          Map("union" -> filterPushdownConfig.unionEnabled.toString, "ypath" -> res.toString))
-      }
-      if (!pushedFilters.map.isEmpty) {
-        ytLog.logYt("YtInputSplit pushed filters to ypath",
-          logMessageInfo ++ Map("union" -> union.toString, "ypath" -> res.toString),
-          level = if (file.delegate.isDynamic) Level.WARN else Level.INFO
-        )
-      }
+      val res = applyPushdownFilters(basePath, tableKeys, pushedFilters, filterPushdownConfig, union)
+      logPushdown(res, tableKeys, union)
       res
     } else {
       basePath
     }
   }
+
+  private def logPushdown(res: YPath, tableKeys: Seq[Option[String]], union: Boolean): Unit = {
+    if (tableKeys.length > 1 || tableKeys.contains(None)) {
+      ytLog.warn("YtInputSplit pushed filters with more than one key column", logMessageInfo ++
+        Map("union" -> filterPushdownConfig.unionEnabled.toString, "ypath" -> res.toString))
+    }
+    if (!pushedFilters.map.isEmpty) {
+      ytLog.logYt("YtInputSplit pushed filters to ypath",
+        logMessageInfo ++ Map("union" -> union.toString, "ypath" -> res.toString),
+        level = if (file.delegate.isDynamic) Level.WARN else Level.INFO
+      )
+    }
+  }
 }
 
 object YtInputSplit {
+  def applyPushdownFilters(basePath: YPath, tableKeys: Seq[Option[String]], pushedFilters: SegmentSet,
+    filterPushdownConfig: FilterPushdownConfig, union: Boolean = true): YPath = {
+    if (filterPushdownConfig.enabled && tableKeys.nonEmpty) {
+      pushdownFiltersToYPath(union, pushedFilters, tableKeys, filterPushdownConfig, basePath)
+    } else {
+      basePath
+    }
+  }
+
   private[format] def pushdownFiltersToYPath(single: Boolean, pushedFilters: SegmentSet, keys: Seq[Option[String]],
                                              filterPushdownConfig: FilterPushdownConfig, basePath: YPath) = {
     val pushdownCriteria = getCriteriaSeq(single && filterPushdownConfig.unionEnabled, pushedFilters,

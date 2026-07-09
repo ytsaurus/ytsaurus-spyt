@@ -26,7 +26,7 @@ import tech.ytsaurus.spyt.wrapper.YtWrapper
 import tech.ytsaurus.spyt.wrapper.client.YtClientConfigurationConverter.ytClientConfiguration
 import tech.ytsaurus.spyt.wrapper.client.YtClientProvider
 import tech.ytsaurus.spyt.wrapper.config.SparkYtSparkSession
-import tech.ytsaurus.spyt.wrapper.table.{OptimizeMode, YtReadContext}
+import tech.ytsaurus.spyt.wrapper.table.YtReadContext
 import tech.ytsaurus.ysontree.YTreeNode
 
 import java.util.{List => JList}
@@ -115,8 +115,7 @@ object YtFilePartition {
     readDataSchema: Option[StructType] = None,
     pushedFilterSegments: SegmentSet = SegmentSet())
     (implicit ytReadContext: YtReadContext): CompletableFuture[Seq[PartitionedFile]] = {
-    val richYPath = buildOptimizedYPath(sparkSession, path, maxSplitBytes, partitionValues,
-      readDataSchema, pushedFilterSegments)
+    val richYPath = buildOptimizedYPath(sparkSession, path, readDataSchema, pushedFilterSegments)
 
     log.info(s"richYPath passed to partitionTables: ${richYPath.toStableString}")
 
@@ -129,24 +128,14 @@ object YtFilePartition {
   }
 
   private def buildOptimizedYPath(sparkSession: SparkSession, path: YtHadoopPath,
-    maxSplitBytes: Long, partitionValues: InternalRow,
     schema: Option[StructType], filterSegments: SegmentSet
   ): YPath = {
     schema match {
       case Some(s) if s.nonEmpty =>
-        val prunedPath = path.meta.optimizeMode match {
-          case OptimizeMode.Scan => YtInputSplit.addColumnsList(path.toYPath, s)
-          case _ => path.toYPath
-        }
-
-        val filterConfig = FilterPushdownConfig(sparkSession)
-        // TODO avoid creating YtPartitionedFileDelegate(?), YtInputSplit(?) SPYT-948 (keepling)
-        // TBD: what range should be provided here
-        val pathWithRange = prunedPath.withRange(RangeLimit.key(), RangeLimit.key())
-        val fileDelegate = YtPartitionedFileDelegate(pathWithRange, maxSplitBytes, partitionValues, path)
-
-        YtInputSplit(fileDelegate, s, filterSegments, filterConfig, ytLoggerConfig = None
-        ).ytPathWithFilters
+        val basePath = YtInputSplit.addColumnsList(path.toYPath, s)
+          .withRange(RangeLimit.key(), RangeLimit.key())
+        YtInputSplit.applyPushdownFilters(
+          basePath, SchemaConverter.keys(s), filterSegments, FilterPushdownConfig(sparkSession))
 
       case _ =>
         path.toYPath

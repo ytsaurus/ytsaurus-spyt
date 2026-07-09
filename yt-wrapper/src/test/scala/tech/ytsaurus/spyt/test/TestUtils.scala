@@ -248,7 +248,7 @@ trait TestUtils {
   def withSpyYt(spark: SparkSession)(body: CompoundClient => Unit): Unit = {
     val conf = ytClientConfiguration(spark)
     val rpcClient = YtClientProvider.ytRpcClient(conf)
-    val cacheKey = s"${rpcClient.normalizedProxy};;"
+    val cacheKey = s"${rpcClient.normalizedProxy};"
     val spyYt: CompoundClient = Mockito.spy(rpcClient.yt)
     try {
       YtClientProvider.getClients(cacheKey) = rpcClient.copy(yt = spyYt)

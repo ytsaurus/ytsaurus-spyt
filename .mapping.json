@@ -667,6 +667,7 @@
   "spyt-test/src/test/scala/tech/ytsaurus/spyt/format/YTsaurusDistributedWriteTest.scala":"yt/spark/spark-over-yt/spyt-test/src/test/scala/tech/ytsaurus/spyt/format/YTsaurusDistributedWriteTest.scala",
   "spyt-test/src/test/scala/tech/ytsaurus/spyt/test/ExecutorKillerSparkListener.scala":"yt/spark/spark-over-yt/spyt-test/src/test/scala/tech/ytsaurus/spyt/test/ExecutorKillerSparkListener.scala",
   "tools/release":"yt/spark/spark-over-yt/tools/release",
+  "tools/release/build_offline_image.sh":"yt/spark/spark-over-yt/tools/release/build_offline_image.sh",
   "tools/release/deploy_snapshot.sh":"yt/spark/spark-over-yt/tools/release/deploy_snapshot.sh",
   "tools/release/publisher/__init__.py":"yt/spark/spark-over-yt/tools/release/publisher/__init__.py",
   "tools/release/publisher/build_downloader.py":"yt/spark/spark-over-yt/tools/release/publisher/build_downloader.py",

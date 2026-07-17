@@ -5,6 +5,7 @@ import os
 import pytest
 import time
 
+from common.cluster_utils import dump_operation_logs
 from common.helpers import assert_items_equal, wait_for_operation
 from pyspark.conf import SparkConf
 from pyspark.sql.types import IntegerType, StringType, StructType, StructField, Row
@@ -198,6 +199,8 @@ def test_cluster_mode_aborting_executors(yt_client, tmp_dir, direct_submitter):
         "spark.ytsaurus.driver.maxFailures": "1",
         "spark.executor.cores": "2",
         "spark.task.maxFailures": "10",
+        # Keep retries away from the orphaned executor left by the job proxy kill
+        "spark.excludeOnFailure.enabled": "true",
     }
     driver_operation_id = direct_submitter.submit(f'yt:/{tmp_dir}/spark_job_multiple_tasks.py',
                                                   job_args=[table_out],
@@ -222,6 +225,9 @@ def test_cluster_mode_aborting_executors(yt_client, tmp_dir, direct_submitter):
     os.system(f'docker exec yt.backend /bin/bash -c "{kill_command}"')
 
     driver_operation_state = wait_for_operation(yt_client, driver_operation_id)
+    if driver_operation_state.is_unsuccessfully_finished():
+        dump_operation_logs(driver_operation_id, yt_client, label="DRIVER")
+        dump_operation_logs(executors_operation_id, yt_client, label="EXECUTORS")
     assert not driver_operation_state.is_unsuccessfully_finished()
     assert yt_client.row_count(table_out) == 10000000
 

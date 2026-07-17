@@ -29,7 +29,7 @@ def dump_debug_data(dump_dir=None, op_id=None, yt_root_path=None, yt_client=None
         return
 
     if op_id and yt_client:
-        dump_operation_logs(dump_dir, op_id, yt_client)
+        dump_operation_logs(op_id, yt_client, dump_dir)
     if yt_root_path:
         dump_cluster_logs(dump_dir, yt_root_path)
     if yt_client and discovery_path:
@@ -76,20 +76,35 @@ def dump_cluster_logs(dump_dir, yt_root_path):
     dump_runtime_files(dump_dir, yt_root_path, os.path.join("spark", "work"), "worker", ignore_function)
 
 
-def dump_operation_logs(dump_dir, op_id, client):
-    dest_logs_path = get_data_path(dump_dir, "operation_logs", create_dir=True)
+def dump_operation_logs(op_id, client, dump_dir=None, label=""):
     op_error = get_operation_error(op_id, client=client)
-    if op_error:
-        Path(dest_logs_path, 'operation_stderr').write_text(json.dumps(op_error, indent=2))
     job_infos = get_jobs_with_error_or_stderr(op_id, only_failed_jobs=False, client=client)
+
+    if dump_dir:
+        dest_logs_path = get_data_path(dump_dir, "operation_logs", create_dir=True)
+
+        def dump(name, content):
+            Path(dest_logs_path, name).write_text(content)
+    else:
+        # No dump directory is provided - print to stdout so the cause is visible
+        # directly in CI logs (run_command.out.log).
+        print(f"===== OPERATION FAILURE [{label}] op={op_id} =====", flush=True)
+
+        def dump(name, content):
+            print(f"[{label}] {name}:\n{content}", flush=True)
+
+    if op_error:
+        dump('operation_stderr', json.dumps(op_error, indent=2, default=str))
     for i, job_info in enumerate(job_infos):
         if 'stderr' in job_info:
-            Path(dest_logs_path, f'stderr_{i}').write_text(job_info['stderr'])
+            dump(f'stderr_{i}', job_info['stderr'])
         if 'error' in job_info:
-            Path(dest_logs_path, f'error_{i}').write_text(job_info['error'])
-    spec = client.get_operation(op_id).get("provided_spec")
-    if spec:
-        Path(dump_dir, "operation_spec").write_bytes(yson.dumps(spec))
+            dump(f'error_{i}', job_info['error'])
+
+    if dump_dir:
+        spec = client.get_operation(op_id).get("provided_spec")
+        if spec:
+            Path(dump_dir, "operation_spec").write_bytes(yson.dumps(spec))
 
 
 def dump_html_page(dump_dir, address, component):

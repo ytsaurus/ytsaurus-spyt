@@ -88,7 +88,7 @@ if [[ "$DO_VERIFY" -eq 1 ]]; then
   # run-tests.sh deploys ghcr.io/ytsaurus/spyt:<common.sh spyt_version> — alias ours to it
   deploy_ver="$(grep -oP 'spyt_version="\K[^"]+' e2e-test/common.sh | head -1)"
   docker tag "$TAG" "${IMAGE_CR}ytsaurus/spyt:${deploy_ver}"
-  # tox env from spark version: 3.5.8 -> py312-spark358-java17 (override via --tox-env)
+  # tox env from spark version: 3.5.9 -> py312-spark359-java17 (override via --tox-env)
   tox_env="${TOX_ENV:-py312-spark${SPARK_VERSION//./}-java17}"
   runner_opt=()
   [[ -n "$YT_RUNNER" ]] && runner_opt=(--yt-local-runner-path "$YT_RUNNER")

@@ -81,7 +81,8 @@ class ArrowBatchReaderTest extends AnyFlatSpec with Matchers with TmpDir with Sc
     val schema = StructType(Seq(structField("a", IntegerType)))
 
     def testSlice(data: Seq[Int], batchSize: Int, lowerRowIndex: Int, upperRowIndex: Int): Unit = {
-      val ytReadSettings = YtReadSettings.default.copy(distributedReadingEnabled = distributedReadingEnabled)
+      val ytReadSettings = YtReadSettings.default.copy(distributedReadingEnabled = distributedReadingEnabled,
+        unordered = false)
       implicit val ytReadContext: YtReadContext = YtReadContext(yt, ytReadSettings)
       if (distributedReadingEnabled) {
         val mtps = YtWrapper.partitionTablesAsync(

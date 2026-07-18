@@ -196,7 +196,7 @@ trait YtTableUtils {
     val request = CreateTablePartitionReader.builder()
       .setCookie(cookie)
       .setSerializationContext(context)
-      .setUnordered(false)
+      .setUnordered(ytReadContext.settings.unordered)
       .setOmitInaccessibleColumns(ytReadContext.settings.omitInaccessibleColumns)
       .setRequestId(ytReadContext.requestId)
       .build()
@@ -208,7 +208,7 @@ trait YtTableUtils {
     (implicit ytReadContext: YtReadContext): PartitionCopyByteStream = {
     val request = CreateTablePartitionReader.binaryArrowBuilder()
       .setCookie(cookie)
-      .setUnordered(false)
+      .setUnordered(ytReadContext.settings.unordered)
       .setOmitInaccessibleColumns(ytReadContext.settings.omitInaccessibleColumns)
       .setRequestId(ytReadContext.requestId)
       .build()

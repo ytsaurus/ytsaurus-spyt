@@ -58,7 +58,7 @@ case class YtScan(sparkSession: SparkSession,
 
   override def filterAttributes(): Array[NamedReference] = {
     val keyColumns = SchemaConverter.keys(dataSchema).flatten
-    val result = keyColumns.map(name => FieldReference.column(name)).toArray
+    val result = keyColumns.map(name => FieldReference.column(SchemaConverter.normalizeFieldName(name))).toArray
     result
   }
 

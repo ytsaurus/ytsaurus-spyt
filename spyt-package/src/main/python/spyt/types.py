@@ -300,7 +300,7 @@ class YsonType(UserDefinedType):
     def serialize(self, obj):
         return yt_yson.dumps(obj.value, "binary")
 
-    def fromInternal(self, binary_data: bytearray) -> Union[yt_yson.YsonMap, None]:
+    def deserialize(self, binary_data: bytearray) -> Union[yt_yson.YsonMap, None]:
         if binary_data is None:
             return None
         yson: yt_yson.YsonMap = yt_yson.load(io.BytesIO(binary_data))

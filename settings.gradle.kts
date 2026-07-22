@@ -97,9 +97,7 @@ dependencyResolutionManagement {
 
             adapterSparkVersions.forEach { (sparkVersion, sparkVersionShort) ->
                 val versionRef = "spark$sparkVersionShort"
-                // TODO: temporarily use 4.2.0-preview4, remove before merge
-                val updatedVersion = if (sparkVersion == "4.2.0") "4.2.0-preview4" else sparkVersion
-                version(versionRef, updatedVersion)
+                version(versionRef, sparkVersion)
                 createSparkBundle(sparkVersionShort, versionRef)
             }
 

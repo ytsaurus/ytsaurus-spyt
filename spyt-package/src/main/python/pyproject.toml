@@ -23,13 +23,13 @@ dependencies = [
 
 [project.optional-dependencies]
 all = [
-    "pyspark>=3.3.0,<4.2.0",
+    "pyspark>=3.3.0,<4.3.0",
     "ytsaurus-client",
     "ytsaurus-yson"
 ]
 
 connect = [
-    "pyspark-client<4.2.0",
+    "pyspark-client<4.3.0",
     "ytsaurus-client",
     "ytsaurus-yson"
 ]

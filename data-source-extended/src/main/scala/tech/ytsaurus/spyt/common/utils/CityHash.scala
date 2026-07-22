@@ -44,7 +44,7 @@ object CityHash {
 
   def registerFunction(spark: SparkSession): Unit = {
     spark.sessionState.functionRegistry.registerFunction(
-      new FunctionIdentifier("cityhash"),
+      SparkAdapter.instance.functionIdentifier("cityhash"),
       new ExpressionInfo("tech.ytsaurus.spyt.common.utils.CityHash", "cityhash"),
       (children: Seq[Expression]) =>
         SparkAdapter.instance.createCast(new CityHash(children), UInt64Type)

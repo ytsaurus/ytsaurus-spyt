@@ -7,7 +7,7 @@ import org.apache.spark.ui.JettyUtils
 import org.apache.spark.util.{ShutdownHookManager, Utils}
 import org.apache.spark.{SecurityManager, SparkConf}
 import tech.ytsaurus.spark.launcher.AddressUtils
-import tech.ytsaurus.spyt.SparkAdapter
+import tech.ytsaurus.spyt.{SparkAdapter, SparkVersionUtils}
 
 class YtHistoryServer(conf: SparkConf,
                       provider: ApplicationHistoryProvider,
@@ -28,10 +28,12 @@ class YtHistoryServer(conf: SparkConf,
     val servletHandler = createServletHandlerMethod.invoke(JettyUtils, "/workerLog", servletParams, conf, "")
 
     // And this too
-    val attachHandlerMethod = this.getClass.getMethod(
-      "attachHandler",
-      Class.forName("org.sparkproject.jetty.servlet.ServletContextHandler")
-    )
+    val servletContextHandlerClass = if (SparkVersionUtils.lessThan("4.2.0")) {
+      "org.sparkproject.jetty.servlet.ServletContextHandler"
+    } else {
+      "org.sparkproject.jetty.ee10.servlet.ServletContextHandler"
+    }
+    val attachHandlerMethod = this.getClass.getMethod("attachHandler", Class.forName(servletContextHandlerClass))
     attachHandlerMethod.invoke(this, servletHandler)
 
     super.initialize()

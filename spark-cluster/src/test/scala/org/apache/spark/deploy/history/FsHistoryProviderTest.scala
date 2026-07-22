@@ -1,11 +1,11 @@
 package org.apache.spark.deploy.history
 
-import org.apache.hadoop.fs.{FileSystem, Path}
+import org.apache.hadoop.fs.Path
 import org.apache.hadoop.fs.permission.FsPermission
-import org.apache.spark.SparkConf
 import org.apache.spark.deploy.SparkHadoopUtil
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
+import tech.ytsaurus.spyt.SparkVersionUtils
 import tech.ytsaurus.spyt.fs.YtFileSystem
 import tech.ytsaurus.spyt.test.{LocalSpark, TmpDir}
 import tech.ytsaurus.spyt.wrapper.YtWrapper
@@ -23,12 +23,24 @@ class FsHistoryProviderTest extends AnyFlatSpec with Matchers with LocalSpark wi
     runTest(flag = true, createDir = true, expectedMkdirsCounter = 0)
   }
 
-  it should "throw an exception if a directory doesn't exist and config is set to false" in {
-    val exception = intercept[FileNotFoundException](
+  it should "throw FileNotFoundException if directory doesn't exist (Spark < 4.2.0)" in {
+    assume(SparkVersionUtils.lessThan("4.2.0"), "Test is only relevant for Spark < 4.2.0")
+
+    val exception = intercept[FileNotFoundException] {
       runTest(flag = false, createDir = false, expectedMkdirsCounter = 0)
-    )
+    }
 
     exception.getMessage shouldEqual s"Log directory specified does not exist: yt:/$tmpPath/logs"
+  }
+
+  it should "throw IllegalArgumentException if directory doesn't exist (Spark >= 4.2.0)" in {
+    assume(!SparkVersionUtils.lessThan("4.2.0"), "Test is only relevant for Spark >= 4.2.0")
+
+    val exception = intercept[IllegalArgumentException] {
+      runTest(flag = false, createDir = false, expectedMkdirsCounter = 0)
+    }
+
+    exception.getMessage shouldEqual s"requirement failed: None of the specified log directories exist: yt:/$tmpPath/logs"
   }
 
   private def runTest(flag: Boolean, createDir: Boolean, expectedMkdirsCounter: Int): Unit = {

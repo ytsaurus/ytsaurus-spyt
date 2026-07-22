@@ -14,7 +14,7 @@ import org.apache.spark.sql.catalyst.expressions.objects.StaticInvoke
 import org.apache.spark.sql.catalyst.expressions.{Attribute, AttributeReference, Cast, Expression}
 import org.apache.spark.sql.catalyst.plans.logical.{Aggregate, LogicalPlan}
 import org.apache.spark.sql.catalyst.util.{ArrayData, MapData}
-import org.apache.spark.sql.catalyst.{InternalRow, TableIdentifier}
+import org.apache.spark.sql.catalyst.{FunctionIdentifier, InternalRow, TableIdentifier}
 import org.apache.spark.sql.connector.catalog.Table
 import org.apache.spark.sql.connector.expressions.filter.Predicate
 import org.apache.spark.sql.connector.read.streaming.{Offset, SparkDataStream}
@@ -223,4 +223,6 @@ trait SparkAdapter330 extends SparkAdapter {
   override def fetchFile(url: String, targetDir: File, conf: SparkConf): File = {
     AdapterSupport330.fetchFile(url, targetDir, conf)
   }
+
+  override def functionIdentifier(name: String): FunctionIdentifier = new FunctionIdentifier(name)
 }

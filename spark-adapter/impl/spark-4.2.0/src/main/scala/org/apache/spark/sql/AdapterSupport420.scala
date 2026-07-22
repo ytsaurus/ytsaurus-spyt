@@ -3,6 +3,8 @@ package org.apache.spark.sql
 import org.apache.spark.{Partitioner, ShuffleDependency}
 import org.apache.spark.rdd.RDD
 import org.apache.spark.serializer.Serializer
+import org.apache.spark.sql.catalyst.FunctionIdentifier
+import org.apache.spark.sql.catalyst.analysis.FunctionRegistry
 import org.apache.spark.sql.execution.exchange.ShuffleExchangeExec.createShuffleWriteProcessor
 import org.apache.spark.sql.execution.metric.SQLMetric
 
@@ -22,4 +24,6 @@ object AdapterSupport420 {
     new ShuffleDependency[K, V, C](rdd, partitioner, serializer,
       shuffleWriterProcessor = createShuffleWriteProcessor(writeMetrics))
   }
+
+  def functionIdentifier(name: String): FunctionIdentifier = FunctionRegistry.builtinFunctionIdentifier(name)
 }

@@ -11,7 +11,8 @@ class FsHistoryProviderDecorators {
 
   @DecoratedMethod
   private def startPolling(): Unit = {
-    val path = new Path(logDir)
+    val logDirLocal = if (SparkVersionUtils.lessThan("4.2.0")) logDir else logDirs.head
+    val path = new Path(logDirLocal)
     val confFieldName = "org$apache$spark$deploy$history$FsHistoryProvider$$conf"
 
     val conf: SparkConf = this.getClass.getDeclaredField(confFieldName).get(this).asInstanceOf[SparkConf]
@@ -25,5 +26,6 @@ class FsHistoryProviderDecorators {
 
   private def __startPolling(): Unit = ???
   private val logDir: String = ???
+  private val logDirs: Seq[String] = ???
   private[history] val fs: FileSystem = ???
 }

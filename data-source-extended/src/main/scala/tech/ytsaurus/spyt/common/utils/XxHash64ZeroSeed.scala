@@ -36,7 +36,7 @@ object XxHash64ZeroSeed {
 
   def registerFunction(spark: SparkSession): Unit = {
     spark.sessionState.functionRegistry.registerFunction(
-      new FunctionIdentifier("xxhash64zeroseed"),
+      SparkAdapter.instance.functionIdentifier("xxhash64zeroseed"),
       new ExpressionInfo("tech.ytsaurus.spyt.common.utils.XxHash64ZeroSeed", "xxhash64zeroseed"),
       (children: Seq[Expression]) =>
         SparkAdapter.instance.createCast(new XxHash64ZeroSeed(children), UInt64Type)

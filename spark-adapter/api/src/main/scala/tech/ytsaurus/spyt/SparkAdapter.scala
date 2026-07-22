@@ -14,7 +14,7 @@ import org.apache.spark.sql.catalyst.expressions.{Attribute, AttributeReference,
 import org.apache.spark.sql.catalyst.parser.SqlBaseParser.PrimitiveDataTypeContext
 import org.apache.spark.sql.catalyst.plans.logical.{Aggregate, LogicalPlan}
 import org.apache.spark.sql.catalyst.util.{ArrayData, MapData}
-import org.apache.spark.sql.catalyst.{InternalRow, TableIdentifier}
+import org.apache.spark.sql.catalyst.{FunctionIdentifier, InternalRow, TableIdentifier}
 import org.apache.spark.sql.connector.catalog.Table
 import org.apache.spark.sql.connector.read.streaming.{Offset, SparkDataStream}
 import org.apache.spark.sql.connector.read.{InputPartition, PartitionReaderFactory, Scan, ScanBuilder}
@@ -165,6 +165,8 @@ trait SparkAdapter {
   def getHadoopConf(sparkConf: SparkConf): Configuration
 
   def fetchFile(url: String, targetDir: File, conf: SparkConf): File
+
+  def functionIdentifier(name: String): FunctionIdentifier
 }
 
 trait SparkAdapterProvider {

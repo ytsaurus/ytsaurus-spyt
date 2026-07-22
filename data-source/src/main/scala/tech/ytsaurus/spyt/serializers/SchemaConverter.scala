@@ -122,7 +122,7 @@ object SchemaConverter {
       val fieldSchema = schemaList.get(index)
       val fieldMap = fieldSchema.asMap()
       val originalName = fieldMap.getOrThrow("name").stringValue()
-      val fieldName = originalName.replace(".", "_")
+      val fieldName = normalizeFieldName(originalName)
       val metadata = new MetadataBuilder()
       metadata.putString(MetadataFields.ORIGINAL_NAME, originalName)
       metadata.putLong(MetadataFields.KEY_ID, if (fieldMap.containsKey("sort_order")) index else -1)
@@ -133,6 +133,10 @@ object SchemaConverter {
     }.collect(Collectors.toList())
 
     StructType(fields)
+  }
+
+  def normalizeFieldName(fieldName: String): String = {
+    fieldName.replace(".", "_")
   }
 
   @tailrec

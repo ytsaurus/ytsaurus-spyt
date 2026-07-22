@@ -23,7 +23,7 @@ class SpytCommonPlugin: Plugin<Project> {
             }
 
             jvmArgs(JavaModuleOptions.defaultModuleOptions().split(" "))
-            maxHeapSize = "4g"
+            maxHeapSize = "6g"
             environment("SPYT_TESTING", "1")
         }
 

@@ -341,7 +341,7 @@ def start_history_server(operation_title=None, operation_alias=None, discovery_p
 
 def set_random_shuffle_service_port(spark_conf):
     if 'spark.shuffle.service.port' not in spark_conf:
-        start_port = int(spark_conf.get('spark.shuffle.service.port.interval.start', "27050"))
+        start_port = int(spark_conf.get('spark.shuffle.service.port.interval.start', "27102"))
         interval_size = int(spark_conf.get('spark.shuffle.service.port.interval.size', "50"))
         spark_conf['spark.shuffle.service.port'] = str(start_port + random.randint(0, interval_size - 1))
 

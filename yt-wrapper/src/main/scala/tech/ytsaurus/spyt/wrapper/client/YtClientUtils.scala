@@ -6,10 +6,11 @@ import io.netty.channel.nio.NioEventLoopGroup
 import io.netty.channel.unix.DomainSocketAddress
 import org.slf4j.LoggerFactory
 import tech.ytsaurus.spyt.wrapper.system.SystemUtils
-import tech.ytsaurus.client.{DirectYTsaurusClient, DiscoveryClient, YTsaurusClient, YTsaurusClientConfig, YTsaurusCluster}
+import tech.ytsaurus.client.{DirectYTsaurusClient, DiscoveryClient, RetryPolicy, YTsaurusClient, YTsaurusClientConfig, YTsaurusCluster}
 import tech.ytsaurus.client.bus.DefaultBusConnector
 import tech.ytsaurus.client.discovery.StaticDiscoverer
 import tech.ytsaurus.client.rpc.RpcOptions
+import tech.ytsaurus.core.common.YTsaurusErrorCode
 import tech.ytsaurus.spyt.utils.NettyUtils
 
 import java.net.{InetSocketAddress, SocketAddress}
@@ -32,7 +33,7 @@ trait YtClientUtils {
     config: YtClientConfiguration,
     address: String,
     nThreads: Int): YtRpcClient = {
-    log.info(s"Create fixed-proxy RPC YT Client to $address")
+    log.info(s"Create fixed-proxy RPC YT Client to $address, retries: ${config.retry}")
     val socketAddress = parseHostPort(address)
     val group = new NioEventLoopGroup(nThreads, daemonThreadFactory)
     val connector = new DefaultBusConnector(group, true)
@@ -42,11 +43,13 @@ trait YtClientUtils {
     try {
       val rpcOptions = new RpcOptions()
       rpcOptions.setTimeouts(config.timeout)
+      rpcOptions.setRetries(config.retry)
       val yt = DirectYTsaurusClient.builder()
         .setSharedBusConnector(connector)
         .setAddress(socketAddress)
         .setAuth(config.clientAuth)
         .setConfig(YTsaurusClientConfig.builder().setRpcOptions(rpcOptions).build())
+        .setRetryRequests(config.retry.enabled)
         .build()
       YtRpcClient(s"${config.normalizedProxy}@$address", yt, connector)
     } catch {
@@ -137,11 +140,13 @@ trait YtClientUtils {
                                    connector: DefaultBusConnector,
                                    rpcOptions: RpcOptions,
                                    address: SocketAddress): DirectYTsaurusClient = {
+    rpcOptions.setRetries(config.retry)
     DirectYTsaurusClient.builder()
       .setSharedBusConnector(connector)
       .setAddress(address)
       .setAuth(config.clientAuth)
       .setConfig(YTsaurusClientConfig.builder().setRpcOptions(rpcOptions).build())
+      .setRetryRequests(config.retry.enabled)
       .build()
   }
 
@@ -198,6 +203,18 @@ trait YtClientUtils {
       options.setGlobalTimeout(timeout)
       options.setStreamingReadTimeout(timeout)
       options.setStreamingWriteTimeout(timeout)
+    }
+
+    def setRetries(retry: YtClientRetryConfiguration): RpcOptions = {
+      if (retry.enabled) {
+        options.setRetryPolicyFactory(() => RetryPolicy.attemptLimited(retry.attemptLimit, RetryPolicy.forCodes(
+          YTsaurusErrorCode.RequestQueueSizeLimitExceeded.getCode,
+          YTsaurusErrorCode.RpcRequestQueueSizeLimitExceeded.getCode,
+          YTsaurusErrorCode.TooManyRequests.getCode)))
+        options.setMinBackoffTime(retry.initialBackoff)
+        options.setMaxBackoffTime(retry.maxBackoff)
+      }
+      options
     }
   }
 

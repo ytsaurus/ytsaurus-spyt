@@ -19,7 +19,8 @@ case class YtClientConfiguration(
   extendedFileTimeout: Boolean,
   proxyNetworkName: Option[String],
   useCommonProxies: Boolean = false,
-  fixedProxyAddress: Option[String] = None) extends Serializable {
+  fixedProxyAddress: Option[String] = None,
+  retry: YtClientRetryConfiguration = YtClientRetryConfiguration.default) extends Serializable {
 
   private lazy val initialUrlAttempt: Try[URL] = Try(new URL(proxy))
 
@@ -72,7 +73,7 @@ object YtClientConfiguration {
     }
 
     YtClientConfiguration(proxy, user, token, timeout, getByName("proxyRole"),
-      extendedFileTimeout, proxyNetworkName)
+      extendedFileTimeout, proxyNetworkName, retry = YtClientRetryConfiguration(getByName))
   }
 
   def optionalApply(getByName: String => Option[String]): Option[YtClientConfiguration] = {

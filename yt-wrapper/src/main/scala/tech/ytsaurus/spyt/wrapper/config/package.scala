@@ -79,7 +79,7 @@ package object config {
   }
 
   implicit class SparkYtSqlConf(sqlConf: SQLConf) extends PrefixedConfProvider {
-    override protected val configurationPrefixes = Seq("spark.hadoop.yt")
+    override protected val configurationPrefixes = Seq("spark.hadoop.yt", "spark.hadoop.ytsaurus")
     override protected def rawGet(key: String): Option[String] =
       if (sqlConf.contains(key)) Some(sqlConf.getConfString(key)) else None
     override protected def rawKeys: Seq[String] = sqlConf.getAllDefinedConfs.map(_._1).toSeq
@@ -107,7 +107,7 @@ package object config {
   }
 
   implicit class SparkYtHadoopConfiguration(configuration: Configuration) extends WritableConfProvider {
-    override protected val configurationPrefixes = Seq("yt")
+    override protected val configurationPrefixes = Seq("yt", "ytsaurus")
     override protected def rawGet(key: String): Option[String] = Option(configuration.get(key))
     override protected def rawKeys: Seq[String] = configuration.asScala.map(_.getKey).toList
     override protected def rawSet(key: String, value: String): Unit = configuration.set(key, value)
@@ -122,8 +122,10 @@ package object config {
     }
 
     def getConfWithPrefix(prefix: String): JMap[String, String] = {
-      val fullPrefix = s"${configurationPrefixes.head}.$prefix."
-      configuration.getPropsWithPrefix(fullPrefix)
+      configurationPrefixes
+        .map(confPrefix => configuration.getPropsWithPrefix(s"$confPrefix.$prefix.").asScala.toMap)
+        .reduceLeft((preferred, fallback) => fallback ++ preferred)
+        .asJava
     }
   }
 

@@ -15,7 +15,8 @@ from .version import __scala_version__ as spyt_version  # noqa: E402
 
 
 def start_connect_server(client, enablers: SpytEnablers = None, prefer_ipv6: bool = False,
-                         pool: str = None, java_home: str = None, operation_alias: str = None, **kwargs):
+                         pool: str = None, java_home: str = None, operation_alias: str = None, title: str = None,
+                         **kwargs):
     params = CommonConnectParams(**kwargs)
     global_conf = read_global_conf(client=client)
     version_config = read_remote_conf(global_conf, spyt_version, client)
@@ -26,7 +27,7 @@ def start_connect_server(client, enablers: SpytEnablers = None, prefer_ipv6: boo
     enablers.apply_config(version_config)
 
     spec = build_spark_connect_server_spec(client, version_config, enablers, java_home,
-                                           prefer_ipv6, pool, operation_alias, params)
+                                           prefer_ipv6, pool, operation_alias, title, params)
     return run_operation(spec, sync=False, client=client)
 
 

@@ -513,7 +513,7 @@ def build_spark_operation_spec(config: dict, client: YtClient,
 
 
 def build_spark_connect_server_spec(client: YtClient, config, enablers: SpytEnablers, java_home: str,
-                                    prefer_ipv6: bool, pool: str, alias: str, params: CommonConnectParams):
+                                    prefer_ipv6: bool, pool: str, alias: str, title: str, params: CommonConnectParams):
     component_config = CommonComponentConfig(enable_tmpfs=False, rpc_job_proxy=True, enablers=enablers)
 
     spark_distr, spark_distr_paths = get_spark_distributive(client, enablers.enable_squashfs)
@@ -521,6 +521,8 @@ def build_spark_connect_server_spec(client: YtClient, config, enablers: SpytEnab
     user = get_user_name(client=client)
     yt_proxy = call_get_proxy_address_url(required=True, client=client)
     network_project = params.spark_conf.get("spark.ytsaurus.network.project")
+    title = title or f'Spark connect driver for {user}'
+    escaped_title = title.replace('"', '\\"')
     command = [
         f"{component_config.spark_home}/bin/spark-submit",
         f"--master ytsaurus://{yt_proxy}",
@@ -530,14 +532,14 @@ def build_spark_connect_server_spec(client: YtClient, config, enablers: SpytEnab
         f"--executor-cores {params.executor_cores}",
         f"--executor-memory {params.executor_memory}",
         f"--queue {pool or user}",
-        f'--name "Spark connect driver for {user}"',
+        f'--name "{escaped_title}"',
         f"--conf spark.driver.extraJavaOptions='-Djava.net.preferIPv6Addresses={prefer_ipv6}'",
         f"--conf spark.connect.grpc.binding.port={params.grpc_port_start}",
         "--conf spark.ytsaurus.driver.operation.id=$YT_OPERATION_ID",
     ] + [f"--conf {key}={params.spark_conf[key]}" for key in params.spark_conf] + ["spark-internal"]
 
     operation_spec = {
-        "title": "Spark connect server",
+        "title": title,
         "issue_temporary_token": True,
         "temporary_token_environment_variable_name": "YT_TOKEN",
     }

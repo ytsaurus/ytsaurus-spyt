@@ -4,7 +4,7 @@
 [versions]
 spark-compile = "4.2.0"
 spark-compile212 = "3.5.9"
-ytsaurus-client = "1.2.16-SNAPSHOT"
+ytsaurus-client = "1.2.17"
 circe = "0.12.3"
 circe-yaml = "0.12.0"
 log4j-template-json = "2.24.3"

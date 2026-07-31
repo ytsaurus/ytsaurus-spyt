@@ -71,6 +71,7 @@ trait YtTableUtils {
       .setUnordered(ytReadContext.settings.unordered)
       .setRequestId(ytReadContext.requestId)
       .optionalTransaction(transaction)
+    log.debug(s"YT read table: $path, transaction: $transaction, requestId: ${ytReadContext.requestId}")
     val reader = ytReadContext.yt.readTable(request).join()
     new SyncTableIterator(reader, timeout)
   }
@@ -83,6 +84,7 @@ trait YtTableUtils {
       .setOmitInaccessibleRows(ytReadContext.settings.omitInaccessibleRows)
       .setRequestId(ytReadContext.requestId)
       .optionalTransaction(transaction)
+    log.debug(s"YT read table arrow: $path, transaction: $transaction, requestId: ${ytReadContext.requestId}")
     val reader = ytReadContext.yt.readTable(request).join()
     new TableCopyByteStream(reader)
   }
@@ -178,6 +180,7 @@ trait YtTableUtils {
       .setPartitionMode(PartitionTablesMode.Ordered)
       .setOmitInaccessibleRows(ytReadContext.settings.omitInaccessibleRows)
       .setEnableCookies(enableCookies)
+      .setRequestId(ytReadContext.requestId)
 
     if (ytReadContext.settings.useCompressedSizeForPartitioning) {
       builder.setCompressedDataSizePerPartition(partitionSize)
@@ -186,6 +189,8 @@ trait YtTableUtils {
     }
 
     val request = builder.build()
+    log.debug(s"YT partition tables: $path, splitBytes: $splitBytes, enableCookies: $enableCookies, " +
+      s"requestId: ${ytReadContext.requestId}")
     ytReadContext.yt.partitionTables(request)
       .thenApply[Seq[MultiTablePartition]](result => result.asScala.toList)
   }
@@ -200,6 +205,7 @@ trait YtTableUtils {
       .setOmitInaccessibleColumns(ytReadContext.settings.omitInaccessibleColumns)
       .setRequestId(ytReadContext.requestId)
       .build()
+    log.debug(s"YT create table partition reader, requestId: ${ytReadContext.requestId}")
     val reader: AsyncReader[T] = ytReadContext.yt.createTablePartitionReader(request).join()
     new AsyncTableIterator(reader)
   }
@@ -212,6 +218,7 @@ trait YtTableUtils {
       .setOmitInaccessibleColumns(ytReadContext.settings.omitInaccessibleColumns)
       .setRequestId(ytReadContext.requestId)
       .build()
+    log.debug(s"YT create table partition reader arrow, requestId: ${ytReadContext.requestId}")
     val reader: AsyncReader[ByteBuffer] = ytReadContext.yt.createTablePartitionReader(request).join()
     new PartitionCopyByteStream(reader)
   }

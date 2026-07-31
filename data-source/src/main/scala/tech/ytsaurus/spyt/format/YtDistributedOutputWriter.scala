@@ -26,6 +26,7 @@ class YtDistributedOutputWriter(
   private var hasWrittenRows = false
 
   override protected def initializeWriter(): AsyncFragmentWriter[InternalRow] = {
+    log.debugLazy(s"Initialize new distributed write: $path, requestId: $requestId")
     val serializationContext = new WriteSerializationContext(
       new InternalRowSerializer(schema, WriteSchemaConverter(options), sortOption, idMapping, baseSchema)
     )

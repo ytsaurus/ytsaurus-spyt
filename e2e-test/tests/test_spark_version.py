@@ -3,7 +3,7 @@ import os
 import spyt # noqa
 import pytest
 from common.cluster import direct_spark_session
-from spyt.submit import direct_submit
+from spyt.direct_submit import direct_submit
 from pyspark import __version__ as current_version
 
 from utils import YT_PROXY, upload_file

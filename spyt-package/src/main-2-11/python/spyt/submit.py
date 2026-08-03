@@ -11,10 +11,8 @@ from pyspark import __version__ as pyspark_version
 from yt.wrapper import YtClient
 from yt.wrapper.common import SECRET_PREFIXES_RE
 
-from .jvm import launch_gateway, _submit_classpath, shutdown_gateway, java_gateway  # noqa: F401
 from .utils import SparkDiscovery
 from ._submit_common import SubmissionStatus, ApplicationStatus, _retry_with_backoff
-from .direct_submit import direct_submit, direct_submit_binary  # noqa: F401
 
 
 logger = logging.getLogger(__name__)
@@ -397,5 +395,3 @@ class SparkLauncher(object):
         for k, v in conf.items():
             self.set_conf(k, v)
         return self
-
-

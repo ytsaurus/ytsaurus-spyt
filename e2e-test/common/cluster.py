@@ -20,7 +20,8 @@ import uuid
 
 if is_classic_pyspark():
     from spyt.jvm import java_gateway
-    from spyt.submit import SparkSubmissionClient, direct_submit
+    from spyt.submit import SparkSubmissionClient
+    from spyt.direct_submit import direct_submit
 
 
 logger = logging.getLogger(__name__)

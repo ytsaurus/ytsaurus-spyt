@@ -6,7 +6,6 @@ from spyt.standalone import start_spark_cluster, SparkDefaultArguments, find_spa
 from spyt.dependency_utils import is_classic_pyspark
 
 from .cluster_utils import DEFAULT_SPARK_CONF, default_conf, dump_debug_data, is_accessible
-from .version import VERSION
 
 from yt.common import YtError
 from yt.wrapper import YtClient
@@ -108,7 +107,7 @@ class SpytCluster(ClusterBase):
             operation_title='spark_cluster', discovery_path=self.discovery_path,
             master_memory_limit='3G', enable_history_server=False, params=self.get_params(self.spark_conf),
             enable_tmpfs=False, enablers=self.get_enablers(self.enable_monium_logs_export), client=self.yt_client,
-            spark_cluster_version=VERSION, group_id=self.group_id, tvm_secret=self.tvm_secret,
+            group_id=self.group_id, tvm_secret=self.tvm_secret,
             enable_multi_operation_mode=self.enable_multi_operation_mode, operation_alias=self.operation_alias,
             enable_ytsaurus_shuffle=self.enable_ytsaurus_shuffle, rpc_job_proxy=self.rpc_job_proxy)
         if self.op is None:
@@ -172,7 +171,7 @@ class SpytCluster(ClusterBase):
     @contextmanager
     def spark_session(self, **kwargs):
         with spark_session(discovery_path=self.discovery_path, client=self.yt_client, cores_per_executor=1,
-                           executor_memory_per_core='1G', spyt_version=VERSION, **kwargs) as session:
+                           executor_memory_per_core='1G', **kwargs) as session:
             yield session
 
 
@@ -192,7 +191,6 @@ def direct_spark_session(proxy, extra_conf=None, dump_dir=None):
     conf = (default_conf()
             .set("spark.hadoop.yt.proxy", proxy)
             .set("spark.ytsaurus.config.releases.path", "//home/spark/conf/releases")
-            .set("spark.ytsaurus.spyt.version", VERSION)
             .setAll(extra_conf.items()))
     with spyt.direct_spark_session(proxy, conf) as session:
         op_id = session.conf.get("spark.ytsaurus.executor.operation.id")
@@ -253,7 +251,7 @@ class HistoryServer(ClusterBase):
         self.op = start_history_server(
             operation_title='integration_tests', discovery_path=self.discovery_path,
             history_server_cpu_limit=1, history_server_memory_limit='512m', history_server_memory_overhead='512m',
-            params=self.get_params(), enablers=self.get_enablers(), client=self.yt_client, spark_cluster_version=VERSION)
+            params=self.get_params(), enablers=self.get_enablers(), client=self.yt_client)
         if self.op is None:
             raise YtError("Server starting failed")
         self.wait_component_startup('shs_url')

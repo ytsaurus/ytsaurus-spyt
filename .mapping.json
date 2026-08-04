@@ -279,7 +279,6 @@
   "e2e-test/common/cluster_utils.py":"yt/spark/spark-over-yt/e2e-test/common/cluster_utils.py",
   "e2e-test/common/cypress.py":"yt/spark/spark-over-yt/e2e-test/common/cypress.py",
   "e2e-test/common/helpers.py":"yt/spark/spark-over-yt/e2e-test/common/helpers.py",
-  "e2e-test/common/version.py":"yt/spark/spark-over-yt/e2e-test/common/version.py",
   "e2e-test/run-tests.sh":"yt/spark/spark-over-yt/e2e-test/run-tests.sh",
   "e2e-test/tests/conftest.py":"yt/spark/spark-over-yt/e2e-test/tests/conftest.py",
   "e2e-test/tests/jobs/dependencies.py":"yt/spark/spark-over-yt/e2e-test/tests/jobs/dependencies.py",

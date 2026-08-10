@@ -169,7 +169,7 @@ def raw_submit(discovery_path, spark_home, spark_args,
         remote_paths = {}
         new_spark_args = []
         # Matches "FS:/..." path sequence
-        local_files_pattern = "[A-Za-z0-9]+:\/[^,]+(,[A-Za-z0-9]+:\/[^,]+)*"  # noqa: W605
+        local_files_pattern = "[A-Za-z0-9]+:/[^,]+(,[A-Za-z0-9]+:/[^,]+)*"
         for spark_arg in spark_args:
             is_file_list = re.fullmatch(local_files_pattern, spark_arg)
             if not is_file_list:

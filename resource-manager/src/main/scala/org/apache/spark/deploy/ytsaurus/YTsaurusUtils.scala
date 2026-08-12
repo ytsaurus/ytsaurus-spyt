@@ -19,6 +19,13 @@ object YTsaurusUtils {
       .getOrElse(YTsaurusClientAuth.loadUserAndTokenFromEnvironment().getToken.orElseThrow())
   }
 
+  def getUser(conf: SparkConf): String = {
+    sys.env.get("YT_SECURE_VAULT_YT_USER")
+      .orElse(conf.getOption("spark.hadoop.yt.user"))
+      .orElse(sys.env.get("YT_USER"))
+      .getOrElse(System.getProperty("user.name"))
+  }
+
   // Increasing visibility of SparkSubmit.isShell method
   def isShell(res: String): Boolean = SparkSubmit.isShell(res)
 

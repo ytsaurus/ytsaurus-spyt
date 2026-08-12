@@ -318,6 +318,15 @@ class YTsaurusOperationManagerSuite extends SparkFunSuite with BeforeAndAfterEac
       YTree.stringNode("test_alias"))
   }
 
+  test("SPARK_USER environment variable should be set in a driver task spec") {
+    val conf = createBaseSparkConf()
+      .set("spark.hadoop.yt.user", "test-yt-user")
+
+    val driverParams = opManagerStub.driverParams(conf, baseDriverArgs)
+    val taskSpec = driverParams.taskSpec.prepare(YTree.builder(), null, null).build().asMap()
+    taskSpec.get("environment").asMap().get("SPARK_USER") shouldBe YTree.stringNode("test-yt-user")
+  }
+
   test("It should be possible to set executor secure vault docker_auth") {
     val conf = createBaseSparkConf()
       .set("spark.ytsaurus.executor.task.parameters", """{secure_vault={docker_auth={username="user";password="pass"}}}""")

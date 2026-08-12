@@ -549,6 +549,7 @@ def build_spark_connect_server_spec(client: YtClient, config, enablers: SpytEnab
     environment = copy.deepcopy(config["environment"])
     environment["JAVA_HOME"] = java_home
     environment["SPARK_CONF_DIR"] = f"{component_config.spyt_home}/conf".replace("$HOME/", "")
+    environment["SPARK_USER"] = user
 
     task_spec = {
         "layer_paths": layer_paths,

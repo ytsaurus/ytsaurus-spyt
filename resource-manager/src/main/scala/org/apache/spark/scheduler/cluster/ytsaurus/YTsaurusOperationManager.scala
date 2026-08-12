@@ -227,6 +227,8 @@ private[spark] class YTsaurusOperationManager(
       environment.put("Y_PYTHON_ENTRY_POINT", YTree.stringNode(ep))
     }
 
+    environment.put("SPARK_USER", YTree.stringNode(YTsaurusUtils.getUser(conf)))
+
     conf.getAllWithPrefix("spark.ytsaurus.driverEnv.").foreach { v =>
       environment.put(v._1, YTree.stringNode(v._2))
     }

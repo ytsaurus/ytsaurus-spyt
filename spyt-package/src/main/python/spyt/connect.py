@@ -1,4 +1,5 @@
 import requests
+import sys
 import time
 from functools import reduce
 from spyt.dependency_utils import require_yt_client
@@ -16,11 +17,14 @@ from .version import __scala_version__ as spyt_version  # noqa: E402
 
 def start_connect_server(client, enablers: SpytEnablers = None, prefer_ipv6: bool = False,
                          pool: str = None, java_home: str = None, operation_alias: str = None, title: str = None,
-                         **kwargs):
+                         python_executable: str = None, **kwargs):
     params = CommonConnectParams(**kwargs)
     global_conf = read_global_conf(client=client)
     version_config = read_remote_conf(global_conf, spyt_version, client)
     java_home = java_home or version_config.get('default_cluster_java_home')
+
+    python_executable = python_executable or f"python{sys.version_info.major}.{sys.version_info.minor}"
+    params.spark_conf["spark.ytsaurus.python.executable"] = python_executable
 
     enable_squashfs = parse_bool(params.spark_conf.get("spark.ytsaurus.squashfs.enabled"))
     enablers = enablers or SpytEnablers(enable_squashfs=enable_squashfs)

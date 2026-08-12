@@ -4,13 +4,11 @@ from spyt.connect import start_connect_server, start_connect_server_inner_cluste
 from common.helpers import assert_items_equal, assert_sequences_equal, wait_for_operation
 from contextlib import contextmanager
 from functools import reduce
-from hashlib import sha256
 from itertools import chain
 import time
 from pyspark.sql import SparkSession
-import pyspark.sql.functions as f
-from pyspark.sql.types import Row
-from yt.wrapper.http_helpers import get_token
+import pyspark.sql.connect.functions as f
+from pyspark.sql.types import Row, StringType
 import yt.yson as yt_yson
 
 
@@ -225,3 +223,24 @@ def test_string_as_binary(yt_client, tmp_dir):
     with _direct_spark_connect_session(yt_client, spark_conf) as spark:
         df = spark.read.yt(path)
         assert type(df.collect()[0]["value"]) == bytes
+
+
+def test_python_udf(yt_client, tmp_dir):
+    path_in = f"{tmp_dir}/table_with_strings"
+    path_out = f"{tmp_dir}/table_with_hashes"
+
+    yt_client.create("table", path_in, attributes={"schema": [
+        {"name": "id", "type": "int64"},
+        {"name": "value", "type": "string"}
+    ]})
+    rows = [{"id": id, "value": f"value {id}"} for id in range(1, 10)]
+    yt_client.write_table(path_in, rows)
+
+    reverse_udf = f.udf(lambda x: x[::-1], StringType())
+    with _direct_spark_connect_session(yt_client) as spark:
+        df = spark.read.yt(path_in)
+        df.withColumn("v_reversed", reverse_udf("value")).drop("value").write.yt(path_out)
+
+    expected = [{"id": id, "v_reversed": f"value {id}"[::-1]} for id in range(1, 10)]
+    actual = [{k: v for k, v in row.items()} for row in yt_client.read_table(path_out)]
+    assert_items_equal(actual, expected)

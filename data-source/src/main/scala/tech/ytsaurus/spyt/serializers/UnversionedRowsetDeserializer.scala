@@ -5,6 +5,7 @@ import org.apache.spark.sql.execution.StreamingUtils.{ROW_INDEX_WITH_PREFIX, STR
 import org.apache.spark.sql.types.StructType
 import tech.ytsaurus.client.rows.{QueueRowset, UnversionedRowset, UnversionedValue}
 import tech.ytsaurus.core.tables.{ColumnSchema, TableSchema}
+import tech.ytsaurus.spyt.serializers.SchemaConverter.MetadataFields
 
 import scala.jdk.CollectionConverters._
 
@@ -38,7 +39,7 @@ class UnversionedRowsetDeserializer(schema: StructType) {
     rowset.getRows.asScala.iterator.map { row =>
       val rowValues = row.getValues.asScala
       val values = schema.fields.map { field =>
-        rowValues.find(value => rowset.getSchema.getColumnName(value.getId) == field.name)
+        rowValues.find(value => rowset.getSchema.getColumnName(value.getId) == MetadataFields.getOriginalName(field))
           .getOrElse(throw new IllegalStateException(s"${field.name} is not found in rowset"))
       }
       deserializeValues(values)
@@ -58,7 +59,7 @@ class UnversionedRowsetDeserializer(schema: StructType) {
 
       val values: Array[UnversionedValue] = schema.fields
         .filter(field => !field.name.startsWith(STREAMING_SERVICE_KEY_COLUMNS_PREFIX))
-        .map { field => uvMap(field.name) }
+        .map { field => uvMap(MetadataFields.getOriginalName(field)) }
 
       val newRow = keys ++ values
       deserializeValues(newRow)

@@ -24,7 +24,9 @@ abstract class WireDeserializer[T](schema: StructType) extends WireRowDeserializ
   private var _index = 0
 
   override def updateSchema(ytSchema: TableSchema): Unit = {
-    val sparkFieldIndex: Map[String, Int] = this.schema.fields.map(_.name).zipWithIndex.toMap
+    val sparkFieldIndex: Map[String, Int] = this.schema.fields
+      .map(f => MetadataFields.getOriginalName(f))
+      .zipWithIndex.toMap
     serverIdToSparkIndex = new Array[Int](ytSchema.getColumns.size())
     for (i <- 0 until ytSchema.getColumns.size()) {
       val name = ytSchema.getColumns.get(i).getName

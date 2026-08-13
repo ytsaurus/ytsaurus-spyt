@@ -23,8 +23,8 @@ object YtClientConfigurationConverter {
     ytClientConfiguration(hadoopConf(sqlConf.getAllConfs.toArray))
   }
 
-  private def hadoopConf(conf: Array[(String, String)]): Configuration = {
-    val hadoopConf = new Configuration()
+  private[client] def hadoopConf(conf: Array[(String, String)]): Configuration = {
+    val hadoopConf = new Configuration(false)
     for ((key, value) <- conf if key.startsWith("spark.hadoop.")) {
       hadoopConf.set(key.substring("spark.hadoop.".length), value)
     }

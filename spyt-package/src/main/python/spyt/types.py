@@ -352,6 +352,53 @@ class UInt64Type(IntegralType):
         return j_long if j_long is None or j_long >= 0 else (j_long & UINT64_MAX)
 
 
+def restore_uint64_fields(schema, arrow_schema):
+    """Replaces LongType with UInt64Type for the columns that are unsigned in the Arrow payload.
+
+    The Spark Connect protocol has no uint64 data type, so the server reports uint64 columns as
+    LongType (see DataTypeProtoConverterDecorators in the spyt-connect module). Arrow data keeps
+    the original unsigned type, so it is used here for restoring uint64 columns on the client side.
+    Without it pyspark casts such a column to int64 in toPandas() and values above 2^63-1 overflow.
+
+    :param schema: StructType reported by the Spark Connect server, may be None
+    :param arrow_schema: pyarrow.Schema of the received data, may be None
+    :return: StructType with restored uint64 columns
+    """
+    from pyarrow.types import is_uint64
+    from pyspark.sql.types import StructField, StructType
+
+    if schema is None or arrow_schema is None or len(schema.fields) != len(arrow_schema):
+        return schema
+
+    def restore_field(field, arrow_field):
+        if isinstance(field.dataType, LongType) and is_uint64(arrow_field.type):
+            return StructField(field.name, UInt64Type(), field.nullable, field.metadata)
+        else:
+            return field
+
+    return StructType([restore_field(field, arrow_field) for field, arrow_field in zip(schema.fields, arrow_schema)])
+
+
+def uint64_as_unparsed(data_type):
+    """Replaces UInt64Type with its unparsed DDL representation for sending it to a Spark Connect server.
+
+    The Spark Connect protocol has no uint64 data type, so UInt64Type has no proto counterpart and
+    pyspark rejects it on the client side with [UNSUPPORTED_OPERATION] data type UInt64Type() is not
+    supported. An unparsed data type is sent as a DDL string instead and is resolved back to uint64 by
+    the patched SQL data type parser on the server side (see DataTypeAstBuilderDecorators in the
+    spark-adapter module).
+
+    :param data_type: DataType that is about to be converted to proto
+    :return: UnparsedDataType("uint64") for UInt64Type, the argument itself otherwise
+    """
+    from pyspark.sql.connect.types import UnparsedDataType
+
+    if isinstance(data_type, UInt64Type):
+        return UnparsedDataType(UInt64Type.typeName())
+    else:
+        return data_type
+
+
 def uint64_to_string(number):
     if number is None:
         return None

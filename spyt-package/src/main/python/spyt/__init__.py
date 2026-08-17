@@ -5,6 +5,7 @@ for extensions to take an effect.
 """
 from importlib.util import find_spec
 import logging
+import sys
 from types import CodeType
 
 from .dependency_utils import require_pyspark, is_classic_pyspark, is_spark_connect_available
@@ -15,7 +16,7 @@ from .client import connect, spark_session, connect_direct, direct_spark_session
     info, stop, yt_client  # noqa: E402
 from .extensions import read_yt, read_schema_hint, write_yt, sorted_by, optimize_for, withYsonColumn, transform, \
     write_schema_hint  # noqa: E402
-from .types import UInt64Type  # noqa: E402
+from .types import UInt64Type, restore_uint64_fields, uint64_as_unparsed  # noqa: E402
 from .utils import check_spark_version  # noqa: E402
 import pyspark.sql.types  # noqa: E402
 import pyspark.sql.readwriter  # noqa: E402
@@ -56,6 +57,20 @@ def configure_logging():
     logger.addHandler(handler)
 
 
+def patch_function(module, name, new_function):
+    """Replaces module.<name> with new_function everywhere it is visible.
+
+    Setting the attribute on the origin module is not enough: a `from <module> import <name>`
+    statement binds the function in the importing module namespace, and such a binding keeps
+    pointing to the original function. So the already imported clients are patched as well.
+    """
+    original_function = getattr(module, name)
+    setattr(module, name, new_function)
+    for loaded_module in list(sys.modules.values()):
+        if getattr(loaded_module, name, None) is original_function:
+            setattr(loaded_module, name, new_function)
+
+
 def initialize():
     pyspark.sql.types._atomic_types.append(UInt64Type)
     if check_spark_version(less_than="4.0.0"):
@@ -87,6 +102,32 @@ def initialize():
 
         df.withYsonColumn = withYsonColumn
         df.transform = transform
+
+    if is_spark_connect_available():
+        import pyspark.sql.connect.types as connect_types
+
+        types_to_proto_types = connect_types.pyspark_types_to_proto_types
+
+        def spyt_types_to_proto_types(data_type):
+            return types_to_proto_types(uint64_as_unparsed(data_type))
+
+        # Nested data types are converted by recursive calls resolved through the patched module
+        # attribute, so a uint64 column inside a struct, an array or a map is covered as well.
+        patch_function(connect_types, 'pyspark_types_to_proto_types', spyt_types_to_proto_types)
+
+        try:
+            from pyspark.sql.connect.client.core import SparkConnectClient
+            execute_and_fetch = SparkConnectClient._execute_and_fetch
+
+            def spyt_execute_and_fetch(self, *args, **kwargs):
+                table, schema, *rest = execute_and_fetch(self, *args, **kwargs)
+                arrow_schema = table.schema if table is not None else None
+                return (table, restore_uint64_fields(schema, arrow_schema), *rest)
+
+            SparkConnectClient._execute_and_fetch = spyt_execute_and_fetch
+        except ImportError:
+            # Spyt is used with classic pyspark, so we just don't patch this method
+            pass
 
     if is_classic_pyspark():
         register_whl_package_extension()

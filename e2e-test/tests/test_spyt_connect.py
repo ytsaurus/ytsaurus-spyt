@@ -9,6 +9,7 @@ import time
 from pyspark.sql import SparkSession
 import pyspark.sql.connect.functions as f
 from pyspark.sql.types import Row, StringType
+from spyt.types import UInt64Type
 import yt.yson as yt_yson
 
 
@@ -244,3 +245,34 @@ def test_python_udf(yt_client, tmp_dir):
     expected = [{"id": id, "v_reversed": f"value {id}"[::-1]} for id in range(1, 10)]
     actual = [{k: v for k, v in row.items()} for row in yt_client.read_table(path_out)]
     assert_items_equal(actual, expected)
+
+
+def test_uint64_deserialization(yt_client, tmp_dir):
+    table_path = f"{tmp_dir}/table_with_uint64"
+    yt_client.create("table", table_path, attributes={"schema": [
+        {"name": "id", "type": "uint64"},
+        {"name": "value", "type": "string"}
+    ]})
+    rows = [
+        {"id": 1, "value": "value 1"},
+        {"id": 2, "value": "value 2"},
+        {"id": 3, "value": "value 3"},
+        {"id": 9223372036854775816, "value": "value 4"},
+        {"id": 9223372036854775813, "value": "value 5"},
+        {"id": 18446744073709551615, "value": "value 6"},
+    ]
+    yt_client.write_table(table_path, rows)
+
+    expected = [1, 2, 3, 9223372036854775816, 9223372036854775813, 18446744073709551615]
+
+    with _direct_spark_connect_session(yt_client) as spark:
+        df = spark.read.yt(table_path)
+
+        collected = [row.id for row in df.collect()]
+        assert_items_equal(collected, expected)
+
+        collected_explicit_cast = [row.id for row in df.select(f.col("id").cast(UInt64Type())).collect()]
+        assert_items_equal(collected_explicit_cast, expected)
+
+        pandas_list = df.toPandas()["id"].tolist()
+        assert_items_equal(pandas_list, expected)

@@ -1,4 +1,5 @@
 import requests
+import os
 import sys
 import time
 from functools import reduce
@@ -7,8 +8,10 @@ from spyt.enabler import SpytEnablers
 
 require_yt_client()
 
+from yt.wrapper.file_commands import upload_file_to_cache  # noqa: E402
 from yt.wrapper.http_helpers import get_token, get_user_name  # noqa: E402
 from yt.wrapper.run_operation_commands import run_operation  # noqa: E402
+import yt.yson as yson  # noqa: E402
 from .conf import read_global_conf, read_remote_conf  # noqa: E402
 from .spec import build_spark_connect_server_spec, CommonConnectParams  # noqa: E402
 from .utils import parse_bool, SparkDiscovery  # noqa: E402
@@ -17,21 +20,32 @@ from .version import __scala_version__ as spyt_version  # noqa: E402
 
 def start_connect_server(client, enablers: SpytEnablers = None, prefer_ipv6: bool = False,
                          pool: str = None, java_home: str = None, operation_alias: str = None, title: str = None,
-                         python_executable: str = None, **kwargs):
+                         python_executable: str = None, self_upload: bool = False, **kwargs):
     params = CommonConnectParams(**kwargs)
     global_conf = read_global_conf(client=client)
     version_config = read_remote_conf(global_conf, spyt_version, client)
     java_home = java_home or version_config.get('default_cluster_java_home')
+    extra_files = []
 
-    python_executable = python_executable or f"python{sys.version_info.major}.{sys.version_info.minor}"
-    params.spark_conf["spark.ytsaurus.python.executable"] = python_executable
+    if self_upload:
+        cached_binary = upload_file_to_cache(sys.executable, client=client)
+        binary_file_name = os.path.basename(sys.executable)
+        extra_files.append(yson.to_yson_type(cached_binary, attributes={
+            "executable": True,
+            "file_name": binary_file_name,
+        }))
+        params.spark_conf["spark.ytsaurus.isPythonBinary"] = "true"
+        params.spark_conf["spark.ytsaurus.python.binary.file"] = binary_file_name
+    else:
+        python_executable = python_executable or f"python{sys.version_info.major}.{sys.version_info.minor}"
+        params.spark_conf["spark.ytsaurus.python.executable"] = python_executable
 
     enable_squashfs = parse_bool(params.spark_conf.get("spark.ytsaurus.squashfs.enabled"))
     enablers = enablers or SpytEnablers(enable_squashfs=enable_squashfs)
     enablers.apply_config(version_config)
 
     spec = build_spark_connect_server_spec(client, version_config, enablers, java_home,
-                                           prefer_ipv6, pool, operation_alias, title, params)
+                                           prefer_ipv6, pool, operation_alias, title, extra_files, params)
     return run_operation(spec, sync=False, client=client)
 
 

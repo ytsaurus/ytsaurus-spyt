@@ -3,7 +3,7 @@ import logging
 import os
 import shlex
 from dataclasses import dataclass, field
-from typing import List, NamedTuple
+from typing import Any, List, NamedTuple
 
 from spyt.dependency_utils import require_yt_client
 
@@ -513,7 +513,8 @@ def build_spark_operation_spec(config: dict, client: YtClient,
 
 
 def build_spark_connect_server_spec(client: YtClient, config, enablers: SpytEnablers, java_home: str,
-                                    prefer_ipv6: bool, pool: str, alias: str, title: str, params: CommonConnectParams):
+                                    prefer_ipv6: bool, pool: str, alias: str, title: str, extra_files: List[Any],
+                                    params: CommonConnectParams):
     component_config = CommonComponentConfig(enable_tmpfs=False, rpc_job_proxy=True, enablers=enablers)
 
     spark_distr, spark_distr_paths = get_spark_distributive(client, enablers.enable_squashfs)
@@ -545,6 +546,8 @@ def build_spark_connect_server_spec(client: YtClient, config, enablers: SpytEnab
     }
 
     file_paths, layer_paths = _create_file_and_layer_paths(config, enablers.enable_squashfs, spark_distr_paths)
+
+    file_paths.extend(extra_files)
 
     environment = copy.deepcopy(config["environment"])
     environment["JAVA_HOME"] = java_home

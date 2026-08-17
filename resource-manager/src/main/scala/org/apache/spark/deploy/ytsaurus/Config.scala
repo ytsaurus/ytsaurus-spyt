@@ -90,6 +90,12 @@ object Config {
     .stringConf
     .createOptional
 
+  val YTSAURUS_PYTHON_BINARY_FILE = ConfigBuilder("spark.ytsaurus.python.binary.file")
+    .doc("The name of python binary file. If not specified then the value of spark.ytsaurus.primary.resource is used")
+    .version("2.11.1")
+    .stringConf
+    .createOptional
+
   val YTSAURUS_PYTHON_EXECUTABLE = ConfigBuilder("spark.ytsaurus.python.executable")
     .internal()
     .version("1.78.0")

@@ -280,8 +280,9 @@ private[spark] class YTsaurusOperationManager(
     }
 
     if (conf.get(YTSAURUS_IS_PYTHON_BINARY)) {
-      val binaryExecutable = Paths.get(conf.get(SPARK_PRIMARY_RESOURCE)).getFileName.toString
-      environment.put("Y_BINARY_EXECUTABLE", YTree.stringNode(binaryExecutable))
+      val executableFileName = conf.get(YTSAURUS_PYTHON_BINARY_FILE).getOrElse(conf.get(SPARK_PRIMARY_RESOURCE))
+      val binaryExecutable = Paths.get(executableFileName).getFileName.toString
+      environment.put("Y_BINARY_EXECUTABLE", YTree.stringNode(s"$$(SandboxPath)/$binaryExecutable"))
     }
 
     conf.getExecutorEnv.foreach { v =>

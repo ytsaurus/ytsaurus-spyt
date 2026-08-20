@@ -99,6 +99,15 @@ class SparkSubmitSpytTest extends AnyFlatSpec with Matchers {
     conf.get(DECOMMISSION_ENABLED) shouldBe true
   }
 
+  it should "wire YTsaurus shuffle confs when spark.ytsaurus.shuffle.enabled is true" in {
+    val appArgs = new SparkSubmitArguments(dynamicAllocationArgs(true).toSeq)
+
+    val (childArgs, classpath, conf, mainClass) = submit.prepareSubmitEnvironment(appArgs)
+
+    conf.get("spark.shuffle.manager") shouldBe "org.apache.spark.shuffle.ytsaurus.YTsaurusShuffleManager"
+    conf.get("spark.shuffle.sort.io.plugin.class") shouldBe "tech.ytsaurus.spyt.shuffle.YTsaurusShuffleDataIO"
+  }
+
   private def ytArgs(deployMode: String): Seq[String] = Seq(
     "--master", "ytsaurus://my.yt.cluster",
     "--deploy-mode", deployMode,

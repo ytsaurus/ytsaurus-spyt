@@ -1,5 +1,6 @@
 import spyt
 
+from contextlib import contextmanager
 from common.cluster import DirectSubmitter, HistoryServer, SpytCluster, ReverseProxySpytCluster, direct_spark_session
 from common.cluster_utils import default_conf
 import logging
@@ -11,6 +12,7 @@ from pyspark.sql import SparkSession
 import pytest
 import shutil
 import spyt.client
+from spyt.utils import check_spark_version
 from utils import DRIVER_CLIENT_CONF, SPARK_CONF, YT_PROXY
 import uuid
 from yt.wrapper import YtClient
@@ -148,3 +150,35 @@ def direct_submitter(request):
 def cluster_session(spyt_cluster):
     with spyt_cluster.spark_session(spark_conf_args=DRIVER_CLIENT_CONF) as spark:
         yield spark
+
+
+if check_spark_version(greater_than_or_equal="4.0.0"):
+    from spyt.connect import start_connect_server, wait_for_spark_connect_endpoint
+
+    @pytest.fixture(scope="function")
+    def spark_connect_session_factory(yt_client):
+        @contextmanager
+        def _factory(spark_conf=None, endpoint=None):
+            operation = None
+            spark = None
+            try:
+                if endpoint is None:
+                    operation = start_connect_server(yt_client, spark_conf=spark_conf or {})
+                    endpoint = wait_for_spark_connect_endpoint(yt_client, operation.id)
+
+                spark = SparkSession.builder.remote(f"sc://{endpoint}").getOrCreate()
+                yield spark
+            finally:
+                if spark:
+                    spark.stop()
+                if "SPARK_CONNECT_MODE_ENABLED" in os.environ:
+                    del os.environ["SPARK_CONNECT_MODE_ENABLED"]
+                if operation:
+                    yt_client.complete_operation(operation.id)
+
+        return _factory
+
+    @pytest.fixture(scope="function")
+    def direct_spark_connect_session(spark_connect_session_factory):
+        with spark_connect_session_factory() as spark:
+            yield spark

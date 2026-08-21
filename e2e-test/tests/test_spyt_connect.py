@@ -2,7 +2,6 @@ from spyt.connect import start_connect_server, start_connect_server_inner_cluste
     list_active_connect_servers_inner_cluster, wait_for_spark_connect_endpoint
 
 from common.helpers import assert_items_equal, assert_sequences_equal, wait_for_operation
-from contextlib import contextmanager
 from functools import reduce
 from itertools import chain
 import time
@@ -11,28 +10,6 @@ import pyspark.sql.connect.functions as f
 from pyspark.sql.types import Row, StringType
 from spyt.types import UInt64Type
 import yt.yson as yt_yson
-
-
-@contextmanager
-def _spark_connect_session(spark_connect_endpoint):
-    spark = None
-    try:
-        spark = SparkSession.builder.remote(f"sc://{spark_connect_endpoint}").getOrCreate()
-        yield spark
-    finally:
-        if spark:
-            spark.stop()
-
-
-@contextmanager
-def _direct_spark_connect_session(yt_client, spark_conf={}):
-    operation = start_connect_server(yt_client, spark_conf=spark_conf)
-    try:
-        spark_connect_endpoint = wait_for_spark_connect_endpoint(yt_client, operation.id)
-        with _spark_connect_session(spark_connect_endpoint) as spark:
-            yield spark
-    finally:
-        yt_client.complete_operation(operation.id)
 
 
 def test_idle_shutdown(yt_client):
@@ -91,18 +68,18 @@ def _test_base_request(spark):
     assert_items_equal(result, expected)
 
 
-def test_base_request(yt_client):
-    with _direct_spark_connect_session(yt_client) as spark:
+def test_base_request(spark_connect_session_factory):
+    with spark_connect_session_factory() as spark:
         _test_base_request(spark)
 
 
-def test_base_request_inner_cluster(yt_client, spyt_cluster):
+def test_base_request_inner_cluster(yt_client, spyt_cluster, spark_connect_session_factory):
     endpoint = start_connect_server_inner_cluster(yt_client, spyt_cluster.discovery_path)
-    with _spark_connect_session(endpoint) as spark:
+    with spark_connect_session_factory(endpoint=endpoint) as spark:
         _test_base_request(spark)
 
 
-def test_custom_types(yt_client, tmp_dir):
+def test_custom_types(yt_client, tmp_dir, spark_connect_session_factory):
     path = f"{tmp_dir}/table_with_custom_types"
     yt_client.create("table", path, attributes={"schema": [
         {"name": "id", "type": "uint64"},
@@ -136,16 +113,16 @@ def test_custom_types(yt_client, tmp_dir):
         for row in rows
     ]
 
-    with _direct_spark_connect_session(yt_client) as spark:
+    with spark_connect_session_factory() as spark:
         df = spark.read.yt(path)
         result = df.collect()
         assert_items_equal(result, expected_rows)
 
 
-def test_sql_mixed_sort_orders(yt_client, tmp_dir):
+def test_sql_mixed_sort_orders(yt_client, tmp_dir, spark_connect_session_factory):
     path = f"{tmp_dir}/mixed_sort_orders"
 
-    with _direct_spark_connect_session(yt_client) as spark:
+    with spark_connect_session_factory() as spark:
         test_data = [
             (2023, "Electronics", 2.5, "Laptop X1"),
             (2023, "Electronics", 1.2, "Tablet Pro"),
@@ -211,7 +188,7 @@ def test_list_active_connect_servers_inner_clusters(yt_client, spyt_cluster):
     assert active_servers[0]["driverId"] is not None
 
 
-def test_string_as_binary(yt_client, tmp_dir):
+def test_string_as_binary(yt_client, tmp_dir, spark_connect_session_factory):
     path = f"{tmp_dir}/table_with_strings"
     yt_client.create("table", path, attributes={"schema": [
         {"name": "id", "type": "int64"},
@@ -221,12 +198,12 @@ def test_string_as_binary(yt_client, tmp_dir):
     yt_client.write_table(path, rows)
 
     spark_conf = {"spark.ytsaurus.arrow.stringToBinary": "true"}
-    with _direct_spark_connect_session(yt_client, spark_conf) as spark:
+    with spark_connect_session_factory(spark_conf=spark_conf) as spark:
         df = spark.read.yt(path)
         assert type(df.collect()[0]["value"]) == bytes
 
 
-def test_python_udf(yt_client, tmp_dir):
+def test_python_udf(yt_client, tmp_dir, spark_connect_session_factory):
     path_in = f"{tmp_dir}/table_with_strings"
     path_out = f"{tmp_dir}/table_with_hashes"
 
@@ -238,7 +215,7 @@ def test_python_udf(yt_client, tmp_dir):
     yt_client.write_table(path_in, rows)
 
     reverse_udf = f.udf(lambda x: x[::-1], StringType())
-    with _direct_spark_connect_session(yt_client) as spark:
+    with spark_connect_session_factory() as spark:
         df = spark.read.yt(path_in)
         df.withColumn("v_reversed", reverse_udf("value")).drop("value").write.yt(path_out)
 
@@ -247,7 +224,7 @@ def test_python_udf(yt_client, tmp_dir):
     assert_items_equal(actual, expected)
 
 
-def test_uint64_deserialization(yt_client, tmp_dir):
+def test_uint64_deserialization(yt_client, tmp_dir, spark_connect_session_factory):
     table_path = f"{tmp_dir}/table_with_uint64"
     yt_client.create("table", table_path, attributes={"schema": [
         {"name": "id", "type": "uint64"},
@@ -265,7 +242,7 @@ def test_uint64_deserialization(yt_client, tmp_dir):
 
     expected = [1, 2, 3, 9223372036854775816, 9223372036854775813, 18446744073709551615]
 
-    with _direct_spark_connect_session(yt_client) as spark:
+    with spark_connect_session_factory() as spark:
         df = spark.read.yt(table_path)
 
         collected = [row.id for row in df.collect()]

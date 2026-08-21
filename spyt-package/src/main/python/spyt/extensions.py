@@ -1,6 +1,9 @@
 import dis
+import json
 import sys
 import types
+
+from pyspark.sql.types import StructType, StructField
 
 from .dependency_utils import is_classic_pyspark
 if is_classic_pyspark():
@@ -15,8 +18,26 @@ def read_yt(self, *paths):
     return self.format("yt").load(path=list(paths))
 
 
+def _read_schema(fields):
+    struct_fields = []
+    for name, data_type in fields.items():
+        if isinstance(data_type, dict):
+            data_type = StructType([StructField(k, v) for k, v in data_type.items()])
+        struct_fields.append(StructField(name, data_type))
+    return StructType(struct_fields)
+
+
 def read_schema_hint(self, fields):
-    return apply_read_schema_hint(self, fields)
+    return apply_read_schema_hint(self, _read_schema(fields))
+
+
+def read_schema_hint_connect(self, fields):
+    df_reader = self
+    schema = _read_schema(fields)
+    # In consistency with tech.ytsaurus.spyt.serializers.SchemaConverter.serializeSchemaHint
+    for field in schema:
+        df_reader = df_reader.option(f"{field.name}_hint", field.dataType.json())
+    return df_reader
 
 
 # DataFrameWriter extensions
@@ -42,9 +63,19 @@ def write_schema_hint(self, fields):
     return apply_write_schema_hint(self, fields)
 
 
+def write_schema_hint_connect(self, fields):
+    self.option("write_schema_hint", json.dumps(fields))
+    return self
+
+
 # DataFrame extensions
 def withYsonColumn(self, colName, col):
     return with_yson_column(self, colName, col)
+
+
+def withYsonColumnConnect(self, colName, col):
+    raise NotImplementedError("withYsonColumn method is not supported for Spark Connect sessions. Further versions "
+                              "of SPYT will implement YTsaurus YSON type as Spark Variant type.")
 
 
 def transform(self, func):

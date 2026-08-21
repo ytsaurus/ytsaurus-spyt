@@ -38,7 +38,6 @@ from pyspark.serializers import read_int, UTF8Deserializer
 from pyspark.sql import SparkSession
 from pyspark.sql.column import Column
 from pyspark.sql.dataframe import DataFrame
-from pyspark.sql.types import StructType, StructField
 
 from .utils import check_spark_version, get_spark_home, get_spyt_home, get_spyt_conf_dir, get_scala_version
 
@@ -225,19 +224,12 @@ def shutdown_jvm(spark):
 # DataFrameReader / DataFrameWriter schema hint helpers
 # ---------------------------------------------------------------------------
 
-def apply_read_schema_hint(reader, fields):
+def apply_read_schema_hint(reader, schema):
     """Apply a YT schema hint to *reader* (DataFrameReader) via the JVM.
 
     Returns the modified reader.
     """
     spark = SparkSession.builder.getOrCreate()
-    struct_fields = []
-    for name, data_type in fields.items():
-        if isinstance(data_type, dict):
-            data_type = StructType([StructField(k, v) for k, v in data_type.items()])
-        struct_fields.append(StructField(name, data_type))
-    schema = StructType(struct_fields)
-
     jschema = spark._jsparkSession.parseDataType(schema.json())
     reader._jreader = spark._jvm.tech.ytsaurus.spyt.PythonUtils.schemaHint(reader._jreader, jschema)
     return reader

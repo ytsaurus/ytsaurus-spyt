@@ -736,7 +736,6 @@
   "yt-wrapper/src/main/scala/tech/ytsaurus/spyt/wrapper/operation/BriefProgress.scala":"yt/spark/spark-over-yt/yt-wrapper/src/main/scala/tech/ytsaurus/spyt/wrapper/operation/BriefProgress.scala",
   "yt-wrapper/src/main/scala/tech/ytsaurus/spyt/wrapper/operation/OperationStatus.scala":"yt/spark/spark-over-yt/yt-wrapper/src/main/scala/tech/ytsaurus/spyt/wrapper/operation/OperationStatus.scala",
   "yt-wrapper/src/main/scala/tech/ytsaurus/spyt/wrapper/operation/YtOperationUtils.scala":"yt/spark/spark-over-yt/yt-wrapper/src/main/scala/tech/ytsaurus/spyt/wrapper/operation/YtOperationUtils.scala",
-  "yt-wrapper/src/main/scala/tech/ytsaurus/spyt/wrapper/system/SystemUtils.scala":"yt/spark/spark-over-yt/yt-wrapper/src/main/scala/tech/ytsaurus/spyt/wrapper/system/SystemUtils.scala",
   "yt-wrapper/src/main/scala/tech/ytsaurus/spyt/wrapper/table/AsyncTableIterator.scala":"yt/spark/spark-over-yt/yt-wrapper/src/main/scala/tech/ytsaurus/spyt/wrapper/table/AsyncTableIterator.scala",
   "yt-wrapper/src/main/scala/tech/ytsaurus/spyt/wrapper/table/BaseYtTableSettings.scala":"yt/spark/spark-over-yt/yt-wrapper/src/main/scala/tech/ytsaurus/spyt/wrapper/table/BaseYtTableSettings.scala",
   "yt-wrapper/src/main/scala/tech/ytsaurus/spyt/wrapper/table/OptimizeMode.scala":"yt/spark/spark-over-yt/yt-wrapper/src/main/scala/tech/ytsaurus/spyt/wrapper/table/OptimizeMode.scala",

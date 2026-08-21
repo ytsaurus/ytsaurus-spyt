@@ -1,11 +1,8 @@
 package tech.ytsaurus.spyt.wrapper.client
 
-import io.netty.channel.EventLoopGroup
-import io.netty.channel.epoll.EpollEventLoopGroup
 import io.netty.channel.nio.NioEventLoopGroup
 import io.netty.channel.unix.DomainSocketAddress
 import org.slf4j.LoggerFactory
-import tech.ytsaurus.spyt.wrapper.system.SystemUtils
 import tech.ytsaurus.client.{DirectYTsaurusClient, DiscoveryClient, RetryPolicy, YTsaurusClient, YTsaurusClientConfig, YTsaurusCluster}
 import tech.ytsaurus.client.bus.DefaultBusConnector
 import tech.ytsaurus.client.discovery.StaticDiscoverer
@@ -107,7 +104,7 @@ trait YtClientUtils {
   }
 
   private def jobProxyEndpoint(config: YtClientConfiguration): Option[SocketAddress] = {
-    if (!config.useCommonProxies && SystemUtils.isEnabled("rpc_job_proxy")) {
+    if (!config.useCommonProxies && sys.env.get("SPARK_YT_RPC_JOB_PROXY_ENABLED").exists(_.toBoolean)) {
       for {
         socketFile <- sys.env.get("YT_JOB_PROXY_SOCKET_PATH")
       } yield new DomainSocketAddress(socketFile)

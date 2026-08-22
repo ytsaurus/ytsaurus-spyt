@@ -1,3 +1,4 @@
+import spyt.connect as spyt_connect
 from spyt.connect import start_connect_server, start_connect_server_inner_cluster, \
     list_active_connect_servers_inner_cluster, wait_for_spark_connect_endpoint
 
@@ -10,6 +11,50 @@ import pyspark.sql.connect.functions as f
 from pyspark.sql.types import Row, StringType
 from spyt.types import UInt64Type
 import yt.yson as yt_yson
+
+
+def test_wait_for_spark_connect_endpoint_checks_reachability(monkeypatch):
+    class Connection:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc_value, traceback):
+            pass
+
+    class Client:
+        call_count = 0
+
+        def get_operation(self, operation_id):
+            assert operation_id == "operation-id"
+            self.call_count += 1
+            return {
+                "runtime_parameters": {
+                    "annotations": {
+                        "spark_connect_endpoint": "[::1]:27080",
+                    },
+                },
+            }
+
+    connection_attempt_count = 0
+
+    def create_connection(address, timeout):
+        nonlocal connection_attempt_count
+        connection_attempt_count += 1
+        assert address == ("::1", 27080)
+        assert timeout <= 1
+        if connection_attempt_count == 1:
+            raise TimeoutError
+        return Connection()
+
+    monkeypatch.setattr(spyt_connect.socket, "create_connection", create_connection)
+    monkeypatch.setattr(spyt_connect.time, "sleep", lambda timeout: None)
+
+    client = Client()
+    endpoint = wait_for_spark_connect_endpoint(client, "operation-id")
+
+    assert endpoint == "[::1]:27080"
+    assert client.call_count == 2
+    assert connection_attempt_count == 2
 
 
 def test_idle_shutdown(yt_client):

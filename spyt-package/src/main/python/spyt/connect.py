@@ -1,5 +1,6 @@
 import requests
 import os
+import socket
 import sys
 import time
 from functools import reduce
@@ -49,18 +50,33 @@ def start_connect_server(client, enablers: SpytEnablers = None, prefer_ipv6: boo
     return run_operation(spec, sync=False, client=client)
 
 
+def _is_spark_connect_endpoint_reachable(endpoint: str, timeout: float) -> bool:
+    try:
+        host, port = endpoint.rsplit(":", 1)
+        if host.startswith("[") and host.endswith("]"):
+            host = host[1:-1]
+        with socket.create_connection((host, int(port)), timeout=timeout):
+            return True
+    except (OSError, ValueError):
+        return False
+
+
 def wait_for_spark_connect_endpoint(client, operation_id: str, timeout: int = 60):
     spark_connect_endpoint = None
-    remaining_timeout = timeout
-    while not spark_connect_endpoint and remaining_timeout > 0:
+    deadline = time.monotonic() + timeout
+    while (remaining_timeout := deadline - time.monotonic()) > 0:
         operation = client.get_operation(operation_id)
         spark_connect_endpoint = (reduce(lambda map, key: map[key] if map and key in map else None,
                                          ['runtime_parameters', 'annotations', 'spark_connect_endpoint'],
                                          operation))
-        if spark_connect_endpoint:
+        if spark_connect_endpoint and _is_spark_connect_endpoint_reachable(
+                str(spark_connect_endpoint), min(1, remaining_timeout)):
             return str(spark_connect_endpoint)
-        time.sleep(1)
-        remaining_timeout -= 1
+        time.sleep(min(1, max(0, deadline - time.monotonic())))
+    if spark_connect_endpoint:
+        raise TimeoutError(
+            f"Spark connect endpoint {spark_connect_endpoint} is not reachable in {timeout} seconds"
+        )
     raise TimeoutError(f"Spark connect endpoint not found in {timeout} seconds")
 
 

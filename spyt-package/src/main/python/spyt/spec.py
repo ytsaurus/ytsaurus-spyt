@@ -432,7 +432,8 @@ def build_spark_operation_spec(config: dict, client: YtClient,
             logger.error("Unable to start logs export: tvm secret is not set")
         else:
             environment["ENABLE_MONIUM_LOGS_EXPORT"] = str(common_config.enablers.enable_monium_logs_export).lower()
-            operation_spec["secure_vault"] = {"tvm_logs" : common_config.tvm_secret}
+            operation_spec["secure_vault"] = update(operation_spec.get("secure_vault"),
+                                                    {"tvm_logs": common_config.tvm_secret})
             spark_defaults_conf = read_spark_defaults_conf()
             agent_pull_port = spark_defaults_conf["spark.ytsaurus.metrics.agent.pull.port"]
 

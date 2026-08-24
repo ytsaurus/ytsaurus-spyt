@@ -16,7 +16,7 @@ from yt.wrapper.spec_builders import VanillaSpecBuilder  # noqa: E402
 
 from .conf import get_spark_distributive  # noqa: E402
 from .conf import read_metrics_conf, read_spark_defaults_conf  # noqa: E402
-from .utils import SparkDiscovery, call_get_proxy_address_url, parse_memory, get_scala_version  # noqa: E402
+from .utils import SparkDiscovery, call_get_proxy_address_url, parse_bool, parse_memory, get_scala_version  # noqa: E402
 from .enabler import SpytEnablers  # noqa: E402
 from .version import __version__  # noqa: E402
 
@@ -515,7 +515,8 @@ def build_spark_operation_spec(config: dict, client: YtClient,
 def build_spark_connect_server_spec(client: YtClient, config, enablers: SpytEnablers, java_home: str,
                                     prefer_ipv6: bool, pool: str, alias: str, title: str, extra_files: List[Any],
                                     params: CommonConnectParams):
-    component_config = CommonComponentConfig(enable_tmpfs=False, rpc_job_proxy=True, enablers=enablers)
+    rpc_job_proxy = parse_bool(params.spark_conf.get("spark.ytsaurus.rpc.job.proxy.enabled", "true"))
+    component_config = CommonComponentConfig(enable_tmpfs=False, enablers=enablers)
 
     spark_distr, spark_distr_paths = get_spark_distributive(client, enablers.enable_squashfs)
     setup = setup_spyt_env(component_config.container_home, spark_distr, enablers.enable_squashfs, [])
@@ -553,16 +554,20 @@ def build_spark_connect_server_spec(client: YtClient, config, enablers: SpytEnab
     environment["JAVA_HOME"] = java_home
     environment["SPARK_CONF_DIR"] = f"{component_config.spyt_home}/conf".replace("$HOME/", "")
     environment["SPARK_USER"] = user
+    environment["SPARK_YT_RPC_JOB_PROXY_ENABLED"] = str(rpc_job_proxy)
 
     task_spec = {
         "layer_paths": layer_paths,
         "file_paths": file_paths,
-        "enable_rpc_proxy_in_job_proxy": component_config.rpc_job_proxy,
+        "enable_rpc_proxy_in_job_proxy": rpc_job_proxy,
         "environment": environment,
     }
 
     if network_project:
         task_spec["network_project"] = network_project
+
+    if parse_bool(params.spark_conf.get("spark.ytsaurus.shuffle.enabled")):
+        task_spec["enable_shuffle_service_in_job_proxy"] = True
 
     builder = VanillaSpecBuilder()
     builder.begin_task("driver") \

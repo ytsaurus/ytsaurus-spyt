@@ -1,9 +1,15 @@
+import pytest
+
 from spyt.enabler import SpytEnablers
-from spyt.spec import CommonComponentConfig, CommonSpecParams, WorkerConfig, WorkerResources, SparkDefaultArguments
-from spyt.spec import build_worker_spec, build_spark_operation_spec
-from spyt.utils import SparkDiscovery, format_memory, parse_memory
+from spyt.spec import CommonComponentConfig, CommonConnectParams, CommonSpecParams, WorkerConfig, WorkerResources, \
+    SparkDefaultArguments
+from spyt.spec import build_worker_spec, build_spark_operation_spec, build_spark_connect_server_spec
+from spyt.utils import SparkDiscovery, format_memory, parse_bool, parse_memory
 from yt.wrapper.common import update
 from yt.wrapper.spec_builders import VanillaSpecBuilder
+
+SHUFFLE_ENABLED_CONF = "spark.ytsaurus.shuffle.enabled"
+RPC_JOB_PROXY_ENABLED_CONF = "spark.ytsaurus.rpc.job.proxy.enabled"
 
 
 def test_parse_memory():
@@ -29,6 +35,17 @@ def test_parse_memory():
     assert parse_memory("256gb") == 256 * 1024 * 1024 * 1024
     assert parse_memory("256Gb") == 256 * 1024 * 1024 * 1024
     assert parse_memory("256GB") == 256 * 1024 * 1024 * 1024
+
+
+def test_parse_bool():
+    assert parse_bool(None) is False
+    assert parse_bool("true") is True
+    assert parse_bool("True") is True
+    assert parse_bool("TRUE") is True
+    assert parse_bool("false") is False
+    assert parse_bool("False") is False
+    assert parse_bool("") is False
+    assert parse_bool("yes") is False
 
 
 def test_format_memory():
@@ -66,7 +83,7 @@ def _build_worker_spec(enable_tmpfs=False):
     return builder.build()
 
 
-def _build_operation_spec(yt_client, alias = None):
+def _init_config():
     init_config = {
         "spark_conf":{},
         "operation_spec":{},
@@ -77,7 +94,11 @@ def _build_operation_spec(yt_client, alias = None):
         "layer_paths":[]
     }
     dynamic_config = SparkDefaultArguments.get_params()
-    init_config = update(init_config, dynamic_config)
+    return update(init_config, dynamic_config)
+
+
+def _build_operation_spec(yt_client, alias = None):
+    init_config = _init_config()
 
     _, worker_config, common_config = _build_configs(enable_tmpfs=False, alias=alias)
 
@@ -184,3 +205,51 @@ def test_spark_operation_spec_builder(yt_client):
     assert actual_operation_title == "_root"
 
 
+def _build_connect_server_spec(yt_client, pool=None, alias=None, title=None, spark_conf=None):
+    enablers = SpytEnablers(enable_profiling=False)
+    params = CommonConnectParams(spark_conf=spark_conf or {})
+    builder = build_spark_connect_server_spec(
+        client=yt_client, config=_init_config(), enablers=enablers, java_home="/opt/jdk", prefer_ipv6=False,
+        pool=pool, alias=alias, title=title, extra_files=[], params=params)
+    return builder.build()
+
+
+@pytest.mark.parametrize("rpc_job_proxy_conf", [{},
+                                                {RPC_JOB_PROXY_ENABLED_CONF: "false"},
+                                                {RPC_JOB_PROXY_ENABLED_CONF: "true"}])
+def test_connect_server_spec_rpc_job_proxy(yt_client, rpc_job_proxy_conf):
+    expected_value = rpc_job_proxy_conf.get(RPC_JOB_PROXY_ENABLED_CONF) != "false"
+    driver_task = _build_connect_server_spec(yt_client, spark_conf=rpc_job_proxy_conf)["tasks"]["driver"]
+
+    assert driver_task["environment"]["SPARK_YT_RPC_JOB_PROXY_ENABLED"] == str(expected_value)
+    assert driver_task["enable_rpc_proxy_in_job_proxy"] is expected_value
+
+
+@pytest.mark.parametrize("shuffle_conf", [{}, {SHUFFLE_ENABLED_CONF: "false"}])
+def test_connect_server_spec_shuffle_service_disabled(yt_client, shuffle_conf):
+    driver_task = _build_connect_server_spec(yt_client, spark_conf=shuffle_conf)["tasks"]["driver"]
+
+    assert "enable_shuffle_service_in_job_proxy" not in driver_task
+
+
+def test_connect_server_spec_shuffle_service_enabled(yt_client):
+    spark_conf = {SHUFFLE_ENABLED_CONF: "true"}
+    driver_task = _build_connect_server_spec(yt_client, spark_conf=spark_conf)["tasks"]["driver"]
+
+    assert driver_task["enable_shuffle_service_in_job_proxy"] is True
+
+
+def test_connect_server_spec_pool(yt_client):
+    spec = _build_connect_server_spec(yt_client, pool="test_pool", alias="*connect_alias", title="Test connect server")
+
+    assert spec["pool"] == "test_pool"
+    assert spec["alias"] == "*connect_alias"
+    assert spec["title"] == "Test connect server"
+    assert "--queue test_pool" in spec["tasks"]["driver"]["command"]
+
+
+def test_connect_server_spec_without_pool(yt_client):
+    spec = _build_connect_server_spec(yt_client)
+
+    assert "pool" not in spec
+    assert "alias" not in spec

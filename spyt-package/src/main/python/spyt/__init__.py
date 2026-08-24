@@ -15,7 +15,7 @@ require_pyspark()
 from .client import connect, spark_session, connect_direct, direct_spark_session, \
     info, stop, yt_client  # noqa: E402
 from .extensions import read_yt, read_schema_hint, write_yt, sorted_by, optimize_for, withYsonColumn, transform, \
-    write_schema_hint  # noqa: E402
+    write_schema_hint, read_schema_hint_connect, write_schema_hint_connect, withYsonColumnConnect  # noqa: E402
 from .types import UInt64Type, restore_uint64_fields, uint64_as_unparsed  # noqa: E402
 from .utils import check_spark_version  # noqa: E402
 import pyspark.sql.types  # noqa: E402
@@ -85,22 +85,27 @@ def initialize():
         pyspark.sql.readwriter.DataFrameReader,
         pyspark.sql.readwriter.DataFrameWriter)]
 
+    pyspark.sql.readwriter.DataFrameReader.schema_hint = read_schema_hint
+    pyspark.sql.readwriter.DataFrameWriter.schema_hint = write_schema_hint
+    pyspark.sql.dataframe.DataFrame.withYsonColumn = withYsonColumn
+
     if is_spark_connect_available():
         df_classes.append((
             pyspark.sql.connect.dataframe.DataFrame,
             pyspark.sql.connect.readwriter.DataFrameReader,
             pyspark.sql.connect.readwriter.DataFrameWriter))
 
+        pyspark.sql.connect.readwriter.DataFrameReader.schema_hint = read_schema_hint_connect
+        pyspark.sql.connect.readwriter.DataFrameWriter.schema_hint = write_schema_hint_connect
+        pyspark.sql.connect.dataframe.DataFrame.withYsonColumn = withYsonColumnConnect
+
     for (df, df_reader, df_writer) in df_classes:
         df_reader.yt = read_yt
-        df_reader.schema_hint = read_schema_hint
 
         df_writer.yt = write_yt
-        df_writer.schema_hint = write_schema_hint
         df_writer.sorted_by = sorted_by
         df_writer.optimize_for = optimize_for
 
-        df.withYsonColumn = withYsonColumn
         df.transform = transform
 
     if is_spark_connect_available():

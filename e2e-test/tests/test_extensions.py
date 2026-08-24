@@ -1,21 +1,37 @@
 from datetime import date, datetime, timezone
+import pytest
 
 import yt.type_info.typing as ti
 import yt.wrapper as yt_wrapper
 from common.helpers import assert_items_equal, assert_sequences_equal
 from pyspark.sql import SparkSession, Row, DataFrame
-from pyspark.sql.readwriter import DataFrameReader, DataFrameWriter
-from pyspark.sql.types import StructType, StructField, StringType, IntegerType, LongType
+from pyspark.sql.types import StructType, StructField, StringType, IntegerType, LongType, BinaryType
 from pyspark.sql.functions import col
 from spyt.types import Date32, Datetime64, Timestamp64, Interval64, Datetime, MIN_DATE32, MIN_DATETIME64, \
     MIN_TIMESTAMP64, MIN_INTERVAL64, MAX_DATE32, \
     MAX_DATETIME64, MAX_TIMESTAMP64, MAX_INTERVAL64, YsonType
+from spyt.utils import check_spark_version
 from yt.wrapper import YtClient
 from yt.wrapper.format import RowsIterator
 from yt.wrapper.schema import TableSchema
 
 
-def test_read_schema_hint(yt_client, tmp_dir, local_session: SparkSession):
+session_types = ["local"]
+if check_spark_version(greater_than_or_equal="4.0.0"):
+    session_types.append("connect")
+
+
+@pytest.fixture(scope="function", params=session_types)
+def spark(request):
+    if request.param == "local":
+        return request.getfixturevalue("local_session")
+    elif request.param == "connect":
+        return request.getfixturevalue("direct_spark_connect_session")
+    else:
+        raise ValueError(f"Unknown session type: {request.param}")
+
+
+def test_read_schema_hint(yt_client, tmp_dir, spark):
     table_path = f"{tmp_dir}/read_schema_hint_table"
 
     yt_schema = yt_wrapper.schema.TableSchema() \
@@ -40,16 +56,15 @@ def test_read_schema_hint(yt_client, tmp_dir, local_session: SparkSession):
         }
     ])
 
-    reader: DataFrameReader = local_session.read.format("yt")
-
-    read_df: DataFrame = reader.yt(table_path)
+    read_df: DataFrame = spark.read.yt(table_path)
     schema_with_schema_hint_without_metadata = StructType([
         StructField(field.name, field.dataType, field.nullable)
         for field in read_df.schema
     ])
+    expected_address_type = BinaryType() if ".connect." in str(spark) else YsonType()
     assert schema_with_schema_hint_without_metadata == StructType([
         StructField("money", IntegerType(), nullable=True),
-        StructField("address", YsonType(), nullable=True)
+        StructField("address", expected_address_type, nullable=True)
     ])
 
     fields = {
@@ -59,8 +74,7 @@ def test_read_schema_hint(yt_client, tmp_dir, local_session: SparkSession):
             'zipcode': IntegerType()
         }
     }
-    reader = reader.schema_hint(fields)
-    read_df_with_schema_hint: DataFrame = reader.yt(table_path)
+    read_df_with_schema_hint: DataFrame = spark.read.schema_hint(fields).yt(table_path)
     schema_with_schema_hint_without_metadata = StructType([
         StructField(field.name, field.dataType, field.nullable)
         for field in read_df_with_schema_hint.schema
@@ -78,8 +92,27 @@ def test_read_schema_hint(yt_client, tmp_dir, local_session: SparkSession):
         Row(money=None, address=Row(street=None, zipcode=11111))
     ])
 
+    partial_schema_hint = {
+        'address': {
+            'street': StringType(),
+            'zipcode': LongType()
+        }
+    }
+    read_df_with_partial_schema_hint = spark.read.schema_hint(partial_schema_hint).yt(table_path)
+    schema_with_partial_schema_hint = StructType([
+        StructField(field.name, field.dataType, field.nullable)
+        for field in read_df_with_partial_schema_hint.schema
+    ])
+    assert schema_with_partial_schema_hint == StructType([
+        StructField("money", IntegerType(), nullable=True),
+        StructField("address", StructType([
+            StructField("street", StringType(), nullable=True),
+            StructField("zipcode", LongType(), nullable=True),
+        ]), nullable=True)
+    ])
 
-def test_write_schema_hint(yt_client: YtClient, tmp_dir, local_session: SparkSession):
+
+def test_write_schema_hint(yt_client: YtClient, tmp_dir, spark):
     table_path = f"{tmp_dir}/write_schema_hint_table"
 
     columns = [
@@ -168,8 +201,8 @@ def test_write_schema_hint(yt_client: YtClient, tmp_dir, local_session: SparkSes
         }
     ]
 
-    df = local_session.createDataFrame(spark_rows, columns)
-    writer: DataFrameWriter = df.write.format("yt")
+    df = spark.createDataFrame(spark_rows, columns)
+    writer = df.write.format("yt")
     fields: dict = {yt_type: yt_type for yt_type in columns}
     writer = writer.schema_hint(fields)
     writer.yt(table_path)
@@ -203,7 +236,7 @@ def test_write_schema_hint(yt_client: YtClient, tmp_dir, local_session: SparkSes
     assert_items_equal(result, yt_rows)
 
 
-def test_write_mixed_sort_orders(yt_client, tmp_dir, local_session: SparkSession):
+def test_write_mixed_sort_orders(yt_client, tmp_dir, spark):
     table_path = f"{tmp_dir}/mixed_sort_orders"
 
     test_data = [
@@ -232,7 +265,7 @@ def test_write_mixed_sort_orders(yt_client, tmp_dir, local_session: SparkSession
         {'year': 2021, 'category': 'Electronics', 'weight_kg': 2.8, 'product_name': 'Laptop Old'}
     ]
 
-    df = local_session.createDataFrame(test_data, columns)
+    df = spark.createDataFrame(test_data, columns)
 
     order_exprs = [col(col_name).desc() if order == "desc" else col(col_name).asc()
                    for col_name, order in zip(sort_columns, sort_orders)]

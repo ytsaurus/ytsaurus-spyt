@@ -15,8 +15,3 @@ RESOURCE_FILES(
     PREFIX yt/spark/spark-over-yt/spyt-package/src/main-2-11/
     ${SPARK_DISTRIBUTIVE}
 )
-
-NO_CHECK_IMPORTS(
-    pyspark.*
-    spyt.*
-)

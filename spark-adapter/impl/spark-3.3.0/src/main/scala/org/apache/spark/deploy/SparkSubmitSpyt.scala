@@ -143,12 +143,11 @@ private[spark] class SparkSubmitSpyt {
       }
     }
 
-    val ytShuffleEnabled = sparkConf.getBoolean("spark.ytsaurus.shuffle.enabled", false)
+    val ytShuffleEnabled = YTsaurusShuffleSupport.isYtShuffleEnabled(sparkConf)
 
     // Auto-wire the YTsaurus shuffle service for both direct (ytsaurus://) and standalone (spark://) submits
     if (ytShuffleEnabled && (clusterManager == YTSAURUS || isStandaloneMaster)) {
-      sparkConf.set("spark.shuffle.manager", "org.apache.spark.shuffle.ytsaurus.YTsaurusShuffleManager")
-      sparkConf.set("spark.shuffle.sort.io.plugin.class", "tech.ytsaurus.spyt.shuffle.YTsaurusShuffleDataIO")
+      YTsaurusShuffleSupport.wireYtShuffleConfs(sparkConf)
     }
 
     if (clusterManager == YTSAURUS) {

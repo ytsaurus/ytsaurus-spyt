@@ -41,7 +41,6 @@ private[spark] class YTsaurusOperationManager(
   layerPaths: YTreeNode,
   filePaths: YTreeNode,
   environment: YTreeMapNode,
-  home: String,
   prepareEnvCommand: String,
   sparkClassPath: String,
   javaCommand: String,
@@ -180,12 +179,14 @@ private[spark] class YTsaurusOperationManager(
       case "python" =>
         val pythonFile = Paths.get(appArgs.mainAppResource.get).getFileName.toString
         val suppliedFiles = (conf.get(FILES) ++ conf.get(SUBMIT_PYTHON_FILES)).map { fileName =>
-          s"$home/${Paths.get(fileName).getFileName.toString}"
+          s"$$HOME/${Paths.get(fileName).getFileName.toString}"
         }
-        val pyFiles = (Seq(s"$home/spyt-package/python") ++ suppliedFiles).mkString(",")
+        val pyFiles = (Seq("$HOME/spyt-package/python") ++ suppliedFiles).mkString(",")
         Seq(pythonFile, pyFiles)
       case _ => Seq.empty
     }
+
+    val additionalArgsString = additionalArgs.map(arg => s""""$arg"""").mkString(" ")
 
     val filterKey: String => Boolean = {
       val pattern = conf.get(SECRET_REDACTION_PATTERN)
@@ -197,13 +198,13 @@ private[spark] class YTsaurusOperationManager(
     }
 
     var driverCommand = (
-      s"$prepareEnvCommand && ${bashCommand(javaCommand, s"-Xmx${driverMemoryMiB}m", "-cp", sparkClassPath)}"
-        + s" ${bashCommand(sparkJavaOpts: _*)}"
+      s"$prepareEnvCommand && ${bashCommand(javaCommand, s"-Xmx${driverMemoryMiB}m", "-cp")}"
+        + s""" "$sparkClassPath" ${bashCommand(sparkJavaOpts: _*)}"""
         + s""" "-D${Config.DRIVER_OPERATION_ID}=$$YT_OPERATION_ID""""
         + s" $netOptBash"
         + s" $ytsaurusJavaOptionsBash ${bashCommand(driverOpts ++ splitCommandString(JavaModuleOptions.defaultModuleOptions()): _*)}"
         + s" org.apache.spark.deploy.ytsaurus.DriverWrapper ${bashCommand(appArgs.mainClass)}"
-        + s" ${bashCommand(additionalArgs: _*)} ${bashCommand(appArgs.driverArgs: _*)}"
+        + s" $additionalArgsString ${bashCommand(appArgs.driverArgs: _*)}"
       )
 
     driverCommand = addRedirectToStderrIfNeeded(conf, driverCommand)
@@ -257,7 +258,7 @@ private[spark] class YTsaurusOperationManager(
   private[ytsaurus] def executorParams(conf: SparkConf, appId: String, resourceProfile: ResourceProfile,
                                        numExecutors: Int): OperationParameters = {
 
-    val isPythonApp = conf.get(YTSAURUS_IS_PYTHON)
+    val isPythonApp = conf.get(YTSAURUS_IS_PYTHON) || conf.get(YTSAURUS_PYTHON_EXECUTABLE).isDefined
 
     val driverUrl = RpcEndpointAddress(
       conf.get(DRIVER_HOST_ADDRESS),
@@ -274,7 +275,7 @@ private[spark] class YTsaurusOperationManager(
 
     val executorOpts = splitCommandString(conf.get(EXECUTOR_JAVA_OPTIONS).getOrElse(""))
 
-    if (isPythonApp && conf.get(YTSAURUS_PYTHON_EXECUTABLE).isDefined) {
+    if (conf.get(YTSAURUS_PYTHON_EXECUTABLE).isDefined) {
       environment.put("PYSPARK_EXECUTOR_PYTHON", YTree.stringNode(conf.get(YTSAURUS_PYTHON_EXECUTABLE).get))
     }
 
@@ -294,7 +295,8 @@ private[spark] class YTsaurusOperationManager(
       .getOrElse("$HOSTNAME")
 
     var executorCommand = (
-      s"$prepareEnvCommand && ${bashCommand(javaCommand, "-cp", sparkClassPath, s"-Xmx${execResources.executorMemoryMiB}m")}"
+      s"$prepareEnvCommand && ${bashCommand(javaCommand, "-cp")}"
+        + s""" "$sparkClassPath" -Xmx${execResources.executorMemoryMiB}m"""
         + s" ${bashCommand(sparkJavaOpts: _*)} $ytsaurusJavaOptionsBash ${bashCommand(executorOpts: _*)}"
         + s" org.apache.spark.executor.YTsaurusCoarseGrainedExecutorBackend"
         + s" --driver-url ${bashCommand(driverUrl)}"
@@ -393,7 +395,7 @@ private[spark] object YTsaurusOperationManager extends Logging {
       val deployMode = conf.get(SUBMIT_DEPLOY_MODE)
 
       require(!(sparkVersionOverride.isDefined && deployMode == "client"), "spark.ytsaurus.spark.version is only supported in cluster mode")
-      
+
       val sv = sparkVersionOverride.getOrElse(org.apache.spark.SPARK_VERSION_SHORT)
       val (svMajor, svMinor, svPatch) = VersionUtils.majorMinorPatchVersion(sv).get
       val distrRootPath = Seq(conf.get(SPARK_DISTRIBUTIVES_PATH), svMajor, svMinor, svPatch).mkString("/")
@@ -447,17 +449,19 @@ private[spark] object YTsaurusOperationManager extends Logging {
       enrichSparkConf(conf, globalConfig)
 
       val javaCommand = s"$javaHome/bin/java"
-      val home = "."
+      val home = "$(SandboxPath)"
       val sparkHome = if (isSquashFs) "/usr/lib/spark" else s"$home/spark"
       val spytHome = if (isSquashFs) "/usr/lib/spyt" else s"$home/spyt-package"
       val scalaBaseVersion = scalaVersion.substring(0, scalaVersion.lastIndexOf("."))
-      val sparkClassPath =
-        s"$home/*:$spytHome/conf/:$spytHome/jars/scala-$scalaBaseVersion/*:$spytHome/jars/common/*:$sparkHome/jars/*"
       environment.put("SPARK_HOME", YTree.stringNode(sparkHome))
       environment.put("SPYT_HOME", YTree.stringNode(spytHome))
+      val sparkClassPath = Seq(
+        "$HOME/*", "$SPYT_HOME/conf/", s"$$SPYT_HOME/jars/scala-$scalaBaseVersion/*",
+        "$SPYT_HOME/jars/common/*", "$SPARK_HOME/jars/*"
+      ).mkString(":")
 
       if (conf.get(Config.YTSAURUS_METRICS_ENABLED)) {
-        enrichMetricsEnvironment(spytHome, conf, environment)
+        enrichMetricsEnvironment(conf, environment)
       }
 
       if (conf.get(YTSAURUS_IS_PYTHON_BINARY)) {
@@ -474,9 +478,9 @@ private[spark] object YTsaurusOperationManager extends Logging {
         YTree.stringNode(conf.get(YTSAURUS_RPC_JOB_PROXY_ENABLED).toString)
       )
 
-      conf.set("spark.executor.resource.gpu.discoveryScript", s"$spytHome/bin/getGpusResources.sh")
+      conf.set("spark.executor.resource.gpu.discoveryScript", "$SPYT_HOME/bin/getGpusResources.sh")
 
-      var ytsaurusJavaOptionsBash = s"$$(cat ${bashCommand(spytHome)}/conf/java-opts)"
+      var ytsaurusJavaOptionsBash = s"$$(cat $$SPYT_HOME/conf/java-opts)"
       if (conf.getBoolean("spark.hadoop.yt.preferenceIpv6.enabled", defaultValue = false)) {
         if (SparkVersionUtils.lessThan("3.4.0")) {
           ytsaurusJavaOptionsBash += " -Djava.net.preferIPv6Addresses=true"
@@ -496,7 +500,7 @@ private[spark] object YTsaurusOperationManager extends Logging {
       val prepareEnvParameters = if (isSquashFs) {
         "--use-squashfs"
       } else {
-        s"--spark-home $home --spark-distributive $sparkDistr"
+        s"""--spark-home "$$HOME" --spark-distributive $sparkDistr"""
       }
 
       val prepareEnvCommand = s"./setup-spyt-env.sh $prepareEnvParameters " +
@@ -509,7 +513,6 @@ private[spark] object YTsaurusOperationManager extends Logging {
         layerPaths,
         filePaths,
         environment,
-        home,
         prepareEnvCommand,
         sparkClassPath,
         javaCommand,
@@ -693,9 +696,11 @@ private[spark] object YTsaurusOperationManager extends Logging {
     envVars.foreach(kv => environment.put(kv._1, YTree.stringNode(kv._2)))
   }
 
-  private[ytsaurus] def enrichMetricsEnvironment(spytHome: String, conf: SparkConf, environment: YTreeMapNode): Unit = {
+  private[ytsaurus] def enrichMetricsEnvironment(conf: SparkConf, environment: YTreeMapNode): Unit = {
     logDebug(s"Initializing YT metrics environment")
-    val sparkConfDir = Option(System.getenv("SPARK_CONF_DIR")).getOrElse(s"$spytHome/conf")
+    val sparkConfDir = Option(System.getenv("SPARK_CONF_DIR"))
+      .orElse(Option(System.getenv("SPYT_HOME")).map(spytHome => s"$spytHome/conf"))
+      .getOrElse(throw new SparkException("SPARK_CONF_DIR or SPYT_HOME is not set"))
     val metricsConfPath = conf.get("spark.metrics.conf", s"$sparkConfDir/metrics.properties")
     logDebug(s"Loading metrics.properties from $metricsConfPath")
     val metricProps = loadPropertiesFromFile(metricsConfPath)

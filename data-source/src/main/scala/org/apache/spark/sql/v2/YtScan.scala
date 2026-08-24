@@ -75,9 +75,10 @@ case class YtScan(sparkSession: SparkSession,
 
   override def isSplitable(path: Path): Boolean = true
 
+  private lazy val broadcastedConf = sparkSession.sparkContext.broadcast(
+    new SerializableConfiguration(hadoopConf))
+
   override def createReaderFactory(): PartitionReaderFactory = {
-    val broadcastedConf = sparkSession.sparkContext.broadcast(
-      new SerializableConfiguration(hadoopConf))
     val keyPartitionedOptions = Map(YtTableSparkSettings.KeyPartitioned.name -> supportsKeyPartitioning.toString)
 
     val adapter = YtPartitionReaderFactoryAdapter(sparkSession.sessionState.conf, broadcastedConf,

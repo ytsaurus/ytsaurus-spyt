@@ -57,12 +57,13 @@ def test_format_memory():
     assert format_memory(256 * 1024 * 1024 * 1024) == "256G"
 
 
-def _build_configs(enable_tmpfs=False, alias = None):
-    enablers = SpytEnablers(enable_profiling=False)
+def _build_configs(enable_tmpfs=False, alias = None, enablers = None, tvm_secret = None):
+    enablers = enablers or SpytEnablers(enable_profiling=False)
     discovery = SparkDiscovery("//home/cluster")
     common_config = CommonComponentConfig(operation_alias=alias, container_home="./spark",
                                           enable_tmpfs=enable_tmpfs, enablers=enablers, rpc_job_proxy_thread_pool_size=6,
-                                          spark_discovery=discovery, enable_ytsaurus_shuffle=True)
+                                          spark_discovery=discovery, enable_ytsaurus_shuffle=True,
+                                          tvm_secret=tvm_secret)
     common_params = CommonSpecParams(
         spark_distributive="spark-3.3.0-bin-hadoop3.tgz", scala_version="2.12", java_home="/opt/jdk",
         extra_java_opts=["-Dtest=true"], environment={"TEST_ENV": "True"}, spark_conf={"spark.yt.option": "2024"},
@@ -97,10 +98,12 @@ def _init_config():
     return update(init_config, dynamic_config)
 
 
-def _build_operation_spec(yt_client, alias = None):
+def _build_operation_spec(yt_client, alias = None, enablers = None, tvm_secret = None, config_patch = None):
     init_config = _init_config()
+    init_config = update(init_config, config_patch)
 
-    _, worker_config, common_config = _build_configs(enable_tmpfs=False, alias=alias)
+    _, worker_config, common_config = _build_configs(enable_tmpfs=False, alias=alias, enablers=enablers,
+                                                     tvm_secret=tvm_secret)
 
     builder = build_spark_operation_spec(config=init_config, client=yt_client, job_types=['worker'],
                                       common_config=common_config, worker_config=worker_config)
@@ -191,6 +194,18 @@ def test_yt_metrics_annotations(yt_client):
         ],
         "solomon_resolver_tag": "spark"
     }
+
+    assert update(actual_section, expected_section) == actual_section, \
+        f"{update(actual_section, expected_section)} != {actual_section}"
+
+
+def test_secure_vault_keeps_custom_keys_with_logs_export(yt_client):
+    enablers = SpytEnablers(enable_profiling=False, enable_monium_logs_export=True)
+    config_patch = {"operation_spec": {"secure_vault": {"key1": "secret1", "key2": "secret2"}}}
+    spec = _build_operation_spec(yt_client, enablers=enablers, tvm_secret="tvm_secret", config_patch=config_patch)
+
+    actual_section = spec["secure_vault"]
+    expected_section = {"key1": "secret1", "key2": "secret2", "tvm_logs": "tvm_secret"}
 
     assert update(actual_section, expected_section) == actual_section, \
         f"{update(actual_section, expected_section)} != {actual_section}"

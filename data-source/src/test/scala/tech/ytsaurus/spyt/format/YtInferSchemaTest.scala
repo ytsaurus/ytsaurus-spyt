@@ -2,28 +2,23 @@ package tech.ytsaurus.spyt.format
 
 import org.apache.hadoop.fs.Path
 import org.apache.spark.SparkException
-import org.apache.spark.sql.{Row, SparkSession}
+import org.apache.spark.sql.Row
 import org.apache.spark.sql.types.{ArrayType, BooleanType, DoubleType, IntegerType, LongType, Metadata, MetadataBuilder, StringType, StructField, StructType}
 import org.apache.spark.sql.v2.YtUtils
-import org.mockito.Mockito
 import org.mockito.scalatest.MockitoSugar
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import tech.ytsaurus.spyt.test.{LocalSpark, TestUtils, TmpDir}
 import tech.ytsaurus.spyt._
-import tech.ytsaurus.spyt.wrapper.client.YtClientConfigurationConverter.ytClientConfiguration
 import tech.ytsaurus.spyt.serializers.SchemaConverter.MetadataFields
 import tech.ytsaurus.spyt.wrapper.YtWrapper
-import tech.ytsaurus.client.CompoundClient
 import tech.ytsaurus.client.request.GetNode
-import tech.ytsaurus.core.cypress.YPath
 import tech.ytsaurus.core.tables.{ColumnValueType, TableSchema}
 import tech.ytsaurus.spyt.SchemaTestUtils
 import tech.ytsaurus.spyt.fs.YtTableFileSystem
-import tech.ytsaurus.spyt.wrapper.client.{YtClientProvider, YtRpcClient}
+import tech.ytsaurus.spyt.wrapper.table.OptimizeMode.{Scan, Lookup}
 import tech.ytsaurus.typeinfo.TiType
 
-import java.util.concurrent.atomic.AtomicInteger
 
 class YtInferSchemaTest extends AnyFlatSpec with Matchers with LocalSpark
   with TmpDir with SchemaTestUtils with MockitoSugar with TestUtils {
@@ -71,21 +66,23 @@ class YtInferSchemaTest extends AnyFlatSpec with Matchers with LocalSpark
     )
   }
 
-  it should "read dataset with column name containing dots" in {
-    val columnName = "a.b"
-    val sparkColumnName = columnName.replace('.', '_')
-    writeTableFromYson(Seq(
-      s"""{"$columnName" = 1}""",
-      s"""{"$columnName" = 2}"""
-    ), tmpPath, TableSchema.builder().addKey(columnName, ColumnValueType.INT64).build())
+  Seq(Scan, Lookup).foreach { optimizeMode =>
+    it should s"read dataset with column name containing dots (optimizeMode=$optimizeMode)" in {
+      val columnName = "a.b"
+      val sparkColumnName = columnName.replace('.', '_')
+      writeTableFromYson(Seq(
+        s"""{"$columnName" = 1}""",
+        s"""{"$columnName" = 2}"""
+      ), tmpPath, TableSchema.builder().addKey(columnName, ColumnValueType.INT64).build(), optimizeFor = optimizeMode)
 
-    val res = spark.read.yt(tmpPath)
+      val res = spark.read.yt(tmpPath)
 
-    res.columns should contain theSameElementsAs Seq(sparkColumnName)
-    res.select(sparkColumnName).collect() should contain theSameElementsAs Seq(
-      Row(1),
-      Row(2)
-    )
+      res.columns should contain theSameElementsAs Seq(sparkColumnName)
+      res.select(sparkColumnName).collect() should contain theSameElementsAs Seq(
+        Row(1),
+        Row(2)
+      )
+    }
   }
 
   it should "read tables with different schemas when mergeSchema is enabled in read's option" in {

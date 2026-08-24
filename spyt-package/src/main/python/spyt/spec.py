@@ -576,4 +576,7 @@ def build_spark_connect_server_spec(client: YtClient, config, enablers: SpytEnab
     if alias:
         builder.alias(alias)
 
+    if pool:
+        builder.pool(pool)
+
     return builder.spec(operation_spec)

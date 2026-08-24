@@ -45,10 +45,13 @@ class WorkerLogLauncherTest extends AnyFlatSpec with LocalYtClient with Matchers
     additionalTableOptions = Map[String, Any]("enable_dynamic_store_read" -> true)
   )
 
+  private val shippedJsonTemplateUri: String =
+    new File("../spyt-package/src/main/spark-extra/conf/worker-log-template.json").getAbsoluteFile.toURI.toString
+
   private lazy val jsonLayout: JsonTemplateLayout =
     JsonTemplateLayout.newBuilder()
       .setConfiguration(LoggerContext.getContext(false).getConfiguration)
-      .setEventTemplateUri("classpath:JsonTemplateLayout.json")
+      .setEventTemplateUri(shippedJsonTemplateUri)
       .build()
 
   private def createLocalDir(path: String): Unit = {

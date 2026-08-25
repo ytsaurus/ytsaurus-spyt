@@ -360,6 +360,56 @@ class ComplexTypeV3Test extends AnyFlatSpec with Matchers with LocalSpark with T
     }
   }
 
+  it should "write schema hint specified as a JSON string" in {
+    Seq("user@example.com")
+      .toDF("email").coalesce(1)
+      .write
+      .option(YtTableSparkSettings.WriteSchemaHint.name, """{"email": "utf8"}""")
+      .option(YtTableSparkSettings.WriteTypeV3.name, value = true)
+      .yt(tmpPath)
+
+    val schema = TableSchema.fromYTree(YtWrapper.attribute(tmpPath, "schema"))
+
+    schema shouldEqual TableSchema.builder()
+      .setUniqueKeys(false)
+      .addValue("email", TiType.utf8())
+      .build()
+  }
+
+  it should "write complex schema hint specified as a JSON string" in {
+    val schemaHint = """{"email": "{\"type_name\"=\"optional\";\"item\"=\"utf8\";}"}"""
+
+    Seq(Some("user@example.com"), None)
+      .toDF("email").coalesce(1)
+      .write
+      .option(YtTableSparkSettings.WriteSchemaHint.name, schemaHint)
+      .option(YtTableSparkSettings.WriteTypeV3.name, value = true)
+      .yt(tmpPath)
+
+    val schema = TableSchema.fromYTree(YtWrapper.attribute(tmpPath, "schema"))
+
+    schema shouldEqual TableSchema.builder()
+      .setUniqueKeys(false)
+      .addValue("email", TiType.optional(TiType.utf8()))
+      .build()
+  }
+
+  it should "write optional type to yt when it specified in schema hint even if spark type is not nullable" in {
+    val schemaHint = """{"email": "{\"type_name\"=\"optional\";\"item\"=\"utf8\";}"}"""
+    val sparkSchema = StructType(Seq(StructField("email", StringType, nullable = false)))
+
+    val df = spark.createDataFrame(JList.of(Row("user@example.com"), Row("user2@example.com")), sparkSchema)
+    df.write.option(YtTableSparkSettings.WriteSchemaHint.name, schemaHint)
+      .option(YtTableSparkSettings.WriteTypeV3.name, value = true)
+      .yt(tmpPath)
+
+    val schema = TableSchema.fromYTree(YtWrapper.attribute(tmpPath, "schema"))
+    schema shouldEqual TableSchema.builder()
+      .setUniqueKeys(false)
+      .addValue("email", TiType.optional(TiType.utf8()))
+      .build()
+  }
+
   it should "write array to yt" in {
     val data = Seq(Seq(1, 2, 3), Seq(4, 5, 6))
     data
@@ -486,6 +536,33 @@ class ComplexTypeV3Test extends AnyFlatSpec with Matchers with LocalSpark with T
         YtLogicalType.VariantOverStruct(JList.of(
           ("i", YtLogicalType.Int32, Metadata.empty), ("s", YtLogicalType.String, Metadata.empty)))))
       .option(YtTableSparkSettings.WriteTypeV3.name, value = true).yt(tmpPath)
+
+    val res = spark.read.option(YtUtils.Options.PARSING_TYPE_V3, value = true).yt(tmpPath)
+    res.collect() should contain theSameElementsAs nullableData.map(x => Row(Row.fromTuple(x)))
+  }
+
+  it should "write variant over struct with positional view from a JSON schema hint" in {
+    val data = Seq(TestVariant(None, Some("2.0")), TestVariant(Some(1), None))
+    val nullableData = Seq(Tuple2(null, "2.0"), Tuple2(1, null))
+    val schemaHint =
+      """{"a": "{\"type_name\"=\"variant\";\"members\"=[""" +
+        """{\"name\"=\"i\";\"type\"=\"int32\";};""" +
+        """{\"name\"=\"s\";\"type\"=\"string\";};];}"}"""
+
+    data.map(Some(_))
+      .toDF("a").coalesce(1).write
+      .option(YtTableSparkSettings.WriteSchemaHint.name, schemaHint)
+      .option(YtTableSparkSettings.WriteTypeV3.name, value = true).yt(tmpPath)
+
+    val schema = TableSchema.fromYTree(YtWrapper.attribute(tmpPath, "schema"))
+
+    schema shouldEqual TableSchema.builder()
+      .setUniqueKeys(false)
+      .addValue("a", TiType.variantOverStruct(JList.of(
+        new Member("i", TiType.int32()),
+        new Member("s", TiType.string())
+      )))
+      .build()
 
     val res = spark.read.option(YtUtils.Options.PARSING_TYPE_V3, value = true).yt(tmpPath)
     res.collect() should contain theSameElementsAs nullableData.map(x => Row(Row.fromTuple(x)))
@@ -716,4 +793,3 @@ case class TestStruct(d: Double, s: String)
 case class TestVariant(i: Option[Int], s: Option[String])
 
 case class TestStructHard(v: Int, l: Option[Seq[TestStruct]])
-

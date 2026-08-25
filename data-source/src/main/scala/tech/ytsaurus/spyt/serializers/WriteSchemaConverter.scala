@@ -48,8 +48,13 @@ class WriteSchemaConverter(
     YtLogicalType.Struct(fields)
   }
 
-  def ytLogicalTypeV3(structField: StructField): YtLogicalType =
-    ytLogicalTypeV3(structField.dataType, hint.getOrElse(structField.name, ytLogicalTypeV3FromMetadata(structField)))
+  def ytLogicalTypeV3(structField: StructField): YtLogicalType = {
+    val fieldHint = hint.getOrElse(structField.name, ytLogicalTypeV3FromMetadata(structField)) match {
+      case YtLogicalType.Optional(inner) => inner
+      case other => other
+    }
+    ytLogicalTypeV3(structField.dataType, fieldHint)
+  }
 
   private def ytLogicalTypeV3FromMetadata(structField: StructField): YtLogicalType = {
     if (structField.metadata.contains(MetadataFields.YT_LOGICAL_TYPE))

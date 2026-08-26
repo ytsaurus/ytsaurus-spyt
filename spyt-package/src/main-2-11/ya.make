@@ -10,7 +10,7 @@ SET(SPYT_VARIANT_DIR yt/spark/spark-over-yt/spyt-package/src/main-2-11)
 INCLUDE(${ARCADIA_ROOT}/yt/spark/spark-over-yt/spyt-package/src/spark_distrib.inc)
 
 FROM_SANDBOX(
-    12999771743 AUTOUPDATED spyt_cluster
+    13349430671 AUTOUPDATED spyt_cluster
     OUT_NOAUTO spyt_cluster/spyt-package.zip
 )
 

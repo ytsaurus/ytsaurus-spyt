@@ -76,6 +76,8 @@ object SparkYtConfiguration {
 
       case object UnionEnabled extends ConfigEntry[Boolean](s"$prefix.union.enabled", Some(false))
 
+      case object MergeAdjacentEnabled extends ConfigEntry[Boolean](s"$prefix.mergeAdjacent.enabled", Some(false))
+
       case object YtPathCountLimit extends ConfigEntry[Int](s"$prefix.ytPathCount.limit", Some(100))
     }
 

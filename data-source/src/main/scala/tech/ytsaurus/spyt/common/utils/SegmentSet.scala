@@ -2,6 +2,7 @@ package tech.ytsaurus.spyt.common.utils
 
 import org.apache.spark.sql.sources.{And, Filter, GreaterThanOrEqual, In, LessThanOrEqual, Or}
 import Segment.Segment
+import tech.ytsaurus.spyt.types.UInt64Long
 import tech.ytsaurus.spyt.utils.CollectionUtils
 
 import java.util.function.{Function => JFunction}
@@ -31,6 +32,16 @@ object Segment {
     pointFilters ++ segmentFilters
   }
 
+  private[utils] def isAdjacent(prev: Point, next: Point): Boolean = (prev, next) match {
+    case (RealValue(a: Long), RealValue(b: Long)) => a != Long.MaxValue && b == a + 1
+    case (RealValue(a: UInt64Long), RealValue(b: UInt64Long)) => a.value != -1L && b.value == a.value + 1
+    case _ => false
+  }
+
+  private[utils] def mergeAdjacent(segments: Seq[Segment]): Seq[Segment] = {
+    AbstractSegment.unionNeighbourSegments(segments, isAdjacent)
+  }
+
   private[utils] def segmentToFilter(varName: String, segment: Segment): Option[Filter] = segment match {
     case Segment(MInfinity(), PInfinity()) => None
     case Segment(MInfinity(), rv: RealValue[_]) => Some(LessThanOrEqual(varName, rv.canonicalValue))
@@ -42,6 +53,10 @@ object Segment {
 }
 
 case class SegmentSet(map: JMap[String, Seq[Segment]]) {
+  def mergeAdjacentSegments: SegmentSet = {
+    SegmentSet(CollectionUtils.mapValues(map, (segments: Seq[Segment]) => Segment.mergeAdjacent(segments)))
+  }
+
   def simplifySegments: SegmentSet = {
     val mapped =
       CollectionUtils.mapValues(map, (segments: Seq[Segment]) => Seq(Segment(segments.head.left, segments.last.right)))

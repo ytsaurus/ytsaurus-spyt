@@ -8,6 +8,7 @@ import org.scalatest.matchers.should.Matchers
 import AbstractSegment.SegmentSide
 import Segment._
 import tech.ytsaurus.spyt.test.TestUtils
+import tech.ytsaurus.spyt.types.UInt64Long
 import tech.ytsaurus.spyt.utils.CollectionUtils
 import tech.ytsaurus.spyt.utils.CollectionUtils.concatMaps
 
@@ -206,6 +207,49 @@ class SegmentSetTest extends AnyFlatSpec with Matchers
       Segment(RealValue(5), RealValue(15)),
       Segment(RealValue(20), RealValue(30))
     )
+  }
+
+  it should "merge adjacent segments" in {
+    val point2 = Segment(RealValue(2L), RealValue(2L))
+    val point3 = Segment(RealValue(3L), RealValue(3L))
+    val point4 = Segment(RealValue(4L), RealValue(4L))
+    val point18 = Segment(RealValue(18L), RealValue(18L))
+
+    SegmentSet(JMap.of("a", Seq(point2, point3, point4, point18))).mergeAdjacentSegments shouldBe
+      SegmentSet(JMap.of("a", Seq(Segment(RealValue(2L), RealValue(4L)), point18)))
+
+    SegmentSet(JMap.of("a", Seq(point2, point4))).mergeAdjacentSegments shouldBe
+      SegmentSet(JMap.of("a", Seq(point2, point4)))
+
+    SegmentSet(JMap.of("a", Seq(Segment(RealValue(1L), RealValue(5L)), Segment(RealValue(5L), RealValue(10L)))))
+      .mergeAdjacentSegments shouldBe
+      SegmentSet(JMap.of("a", Seq(Segment(RealValue(1L), RealValue(10L)))))
+
+    val year: Seq[Segment] = (2451911L to 2452275L).map(v => Segment(RealValue(v), RealValue(v)))
+    SegmentSet(JMap.of("a", year)).mergeAdjacentSegments shouldBe
+      SegmentSet(JMap.of("a", Seq(Segment(RealValue(2451911L), RealValue(2452275L)))))
+
+    val unsigned = Seq(Long.MinValue, Long.MinValue + 1, Long.MinValue + 5)
+      .map(v => Segment(RealValue(UInt64Long(v)), RealValue(UInt64Long(v))))
+    SegmentSet(JMap.of("a", unsigned)).mergeAdjacentSegments shouldBe SegmentSet(JMap.of("a", Seq(
+      Segment(RealValue(UInt64Long(Long.MinValue)), RealValue(UInt64Long(Long.MinValue + 1))), unsigned.last
+    )))
+
+    val strings = Seq(Segment(RealValue("a"), RealValue("a")), Segment(RealValue("b"), RealValue("b")))
+    SegmentSet(JMap.of("a", strings)).mergeAdjacentSegments shouldBe SegmentSet(JMap.of("a", strings))
+
+    val infinite = Seq(Segment(MInfinity(), RealValue(5L)), Segment(RealValue(15L), PInfinity()))
+    SegmentSet(JMap.of("a", infinite)).mergeAdjacentSegments shouldBe SegmentSet(JMap.of("a", infinite))
+
+    SegmentSet(JMap.of("a", Seq(point2, point3), "b", Seq(point4, point18))).mergeAdjacentSegments shouldBe
+      SegmentSet(JMap.of("a", Seq(Segment(RealValue(2L), RealValue(3L))), "b", Seq(point4, point18)))
+  }
+
+  it should "not treat an integer overflow as adjacency" in {
+    isAdjacent(RealValue(Long.MaxValue), RealValue(Long.MinValue)) shouldBe false
+    isAdjacent(RealValue(UInt64Long(-1L)), RealValue(UInt64Long(0L))) shouldBe false
+    isAdjacent(RealValue(2L), RealValue(UInt64Long(3L))) shouldBe false
+    isAdjacent(RealValue(UInt64Long(2L)), RealValue(3L)) shouldBe false
   }
 
   it should "simplify segment set" in {

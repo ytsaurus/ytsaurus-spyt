@@ -69,12 +69,17 @@ object AbstractSegment {
   }
 
   private[utils] def unionNeighbourSegments[T <: Ordered[T]](array: Seq[AbstractSegment[T]]): Seq[AbstractSegment[T]] = {
+    unionNeighbourSegments(array, (_: T, _: T) => false)
+  }
+
+  private[utils] def unionNeighbourSegments[T <: Ordered[T]](array: Seq[AbstractSegment[T]],
+    adjacent: (T, T) => Boolean): Seq[AbstractSegment[T]] = {
     array.foldLeft(List.empty[AbstractSegment[T]]) {
       case (result, segment) =>
         result match {
           case Nil => List(segment)
           case head :: tail =>
-            if (head.right == segment.left) {
+            if (head.right == segment.left || adjacent(head.right, segment.left)) {
               AbstractSegment(head.left, segment.right) :: tail
             } else {
               segment :: result

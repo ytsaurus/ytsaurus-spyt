@@ -14,6 +14,7 @@ import tech.ytsaurus.spyt.format.YtInputSplit.{getKeyFilterSegments, pushdownFil
 import tech.ytsaurus.spyt.wrapper.YtWrapper
 import tech.ytsaurus.spyt.wrapper.table.OptimizeMode
 import tech.ytsaurus.core.tables.{ColumnValueType, TableSchema}
+import tech.ytsaurus.spyt.common.utils.Segment.Segment
 import tech.ytsaurus.spyt.common.utils.{MInfinity, PInfinity, RealValue, Segment, SegmentSet}
 import tech.ytsaurus.spyt.format.conf.FilterPushdownConfig
 import tech.ytsaurus.spyt.test.TestRow
@@ -319,11 +320,28 @@ class YtInputSplitTest extends YtInputSplitTestBase {
     )
   }
 
+  it should "merge adjacent key segments into fewer ypath ranges" in {
+    val keyColumns = List("a")
+    val file = YtPartitionedFileDelegate.static("//dir/path", 2, 5, 10)
+    val baseYPath = file.delegate.ypath.withColumns(keyColumns: _*)
+    val consecutive: Seq[Segment] = (1L to 5L).map(x => Segment(RealValue(x), RealValue(x)))
+    val segments = SegmentSet(JMap.of("a", consecutive))
+    val merging = FilterPushdownConfig(enabled = true, unionEnabled = false, mergeAdjacentEnabled = true,
+      ytPathCountLimit = 100)
+    val plain = merging.copy(mergeAdjacentEnabled = false)
+
+    pushdownFiltersToYPath(single = false, segments, keyColumns.map(Some(_)), merging, baseYPath)
+      .getRanges.size shouldBe 1
+    pushdownFiltersToYPath(single = false, segments, keyColumns.map(Some(_)), plain, baseYPath)
+      .getRanges.size shouldBe 5
+  }
+
   it should "get ypath" in {
     val keyColumns = List("a", "b")
     val file = YtPartitionedFileDelegate.static("//dir/path", 2, 5, 10)
     val baseYPath = file.delegate.ypath.withColumns(keyColumns: _*)
-    val config = FilterPushdownConfig(enabled = true, unionEnabled = true, ytPathCountLimit = 5)
+    val config = FilterPushdownConfig(enabled = true, unionEnabled = true, mergeAdjacentEnabled = true,
+      ytPathCountLimit = 5)
     pushdownFiltersToYPath(single = false, exampleSet1, keyColumns.map(Some(_)), config, baseYPath).toString shouldBe
       """<"ranges"=
         |[{"lower_limit"={"row_index"=2;"key"=[<"type"="min";>#;2;];};

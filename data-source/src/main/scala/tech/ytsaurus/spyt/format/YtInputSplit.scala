@@ -130,7 +130,8 @@ object YtInputSplit {
                                     (implicit ytLog: YtLogger = YtLogger.noop): Seq[TupleSegment] = {
 
     val rawYPathFilterSegments = getKeyFilterSegments(
-      preparePushedFilters(single, pushedFilters), keys.toList.flatten, filterPushdownConfig.ytPathCountLimit)(ytLog)
+      preparePushedFilters(single, pushedFilters, filterPushdownConfig), keys.toList.flatten,
+      filterPushdownConfig.ytPathCountLimit)(ytLog)
       .map(_.toMap)
 
     getTupleSegmentRanges(rawYPathFilterSegments, keys)
@@ -153,9 +154,12 @@ object YtInputSplit {
     new Range(getRangeLimit(TuplePoint(Seq(PInfinity()))), getRangeLimit(TuplePoint(Seq(MInfinity()))))
   }
 
-  private def preparePushedFilters(single: Boolean, pushedFilters: SegmentSet): SegmentSet = {
+  private def preparePushedFilters(single: Boolean, pushedFilters: SegmentSet,
+    filterPushdownConfig: FilterPushdownConfig): SegmentSet = {
     if (single) {
       pushedFilters.simplifySegments
+    } else if (filterPushdownConfig.mergeAdjacentEnabled) {
+      pushedFilters.mergeAdjacentSegments
     } else {
       pushedFilters
     }

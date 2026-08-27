@@ -57,6 +57,46 @@ abstract class YtInputSplitTestBase extends AnyFlatSpec with Matchers with Local
     }
   }
 
+  it should "merge adjacent key segments without changing query results" in {
+    prepareTestTable(
+      tmpPath,
+      (1L to 1000L).map(x => (x / 10, x % 10, 0.toString)).map { case (a, b, c) => TestRow(a, b, c) },
+      Seq(Seq(), Seq(6, 0), Seq(7, 0), Seq(50), Seq(80, 0)),
+    )
+
+    val prefixKeyFilter: DataFrame => Column = df => df("a").isin(10L, 11L, 12L) && df("b") === 1L
+    val filters: Seq[DataFrame => Column] = Seq(
+      prefixKeyFilter,
+      df => df("a").isin(10L, 11L, 12L),
+      df => df("a") >= 50L && df("b").isin(0L, 1L, 2L),
+      df => df("a").isin(10L, 11L) || df("a") === 40L,
+      df => df("a").isin(10L, 11L, 12L) && df("c") === "0"
+    )
+
+    filters.foreach { filter =>
+      countWithMergeAdjacent(enabled = true, filter) shouldBe countWithMergeAdjacent(enabled = false, filter)
+    }
+
+    scannedRowsWithMergeAdjacent(enabled = true, prefixKeyFilter) should
+      be > scannedRowsWithMergeAdjacent(enabled = false, prefixKeyFilter)
+  }
+
+  private def readTestTable: DataFrame = spark.read.option("enable_inconsistent_read", "true").yt(tmpPath)
+
+  private def countWithMergeAdjacent(enabled: Boolean, filter: DataFrame => Column): Long = {
+    withConf(SparkYtConfiguration.Read.KeyColumnsFilterPushdown.MergeAdjacentEnabled, enabled) {
+      val df = readTestTable
+      df.filter(filter(df)).count()
+    }
+  }
+
+  private def scannedRowsWithMergeAdjacent(enabled: Boolean, filter: DataFrame => Column): Long = {
+    withConf(SparkYtConfiguration.Read.KeyColumnsFilterPushdown.MergeAdjacentEnabled, enabled) {
+      val df = readTestTable
+      getNumOutputRows(df, filter(df))
+    }
+  }
+
   protected def getNumOutputRows(res: DataFrame, filter: Column): Long = {
     val query = res.filter(filter)
     query.collect()

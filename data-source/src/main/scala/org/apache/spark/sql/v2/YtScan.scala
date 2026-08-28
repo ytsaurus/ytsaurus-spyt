@@ -20,7 +20,7 @@ import tech.ytsaurus.spyt.common.utils.{ExpressionTransformer, SegmentSet}
 import tech.ytsaurus.spyt.format.conf.SparkYtConfiguration.YtReadSettingsFactory
 import tech.ytsaurus.spyt.format.conf.{FilterPushdownConfig, KeyPartitioningConfig, SparkYtConfiguration, YtTableSparkSettings}
 import tech.ytsaurus.spyt.fs.YtHadoopPath
-import tech.ytsaurus.spyt.logger.{YtDynTableLoggerConfig, YtLogger}
+import tech.ytsaurus.spyt.logger.{YtDynTableLogger, YtDynTableLoggerConfig, YtLogger}
 import tech.ytsaurus.spyt.serializers.SchemaConverter
 import tech.ytsaurus.spyt.wrapper.client.YtThrottle
 import tech.ytsaurus.spyt.wrapper.config.SparkYtSparkSession
@@ -62,9 +62,27 @@ case class YtScan(sparkSession: SparkSession,
     result
   }
 
+  @transient private lazy val pushdownLoggerConfig: Option[YtDynTableLoggerConfig] =
+    YtDynTableLoggerConfig.fromSpark(sparkSession)
+
+  @transient private lazy val pushdownYtLog: YtLogger = YtDynTableLogger.pushdown(pushdownLoggerConfig)
+
   override def filter(filters: Array[Filter]): Unit = {
-    implicit val ytLog: YtLogger = YtLogger.noop
+    implicit val ytLog: YtLogger = pushdownYtLog
     val newRuntimeSegments = ExpressionTransformer.filtersToSegmentSet(filters.toSeq)
+    if (pushdownLoggerConfig.isDefined) {
+      val logInfo = Map(
+        "filters" -> filters.mkString(", "),
+        "keyColumns" -> SchemaConverter.keys(dataSchema).mkString(", "),
+        "segments" -> newRuntimeSegments.toString,
+        "paths" -> options.get("paths")
+      )
+      if (!newRuntimeSegments.map.isEmpty) {
+        ytLog.info("Pushing runtime filters in YtScan, filters contain some key columns", logInfo)
+      } else {
+        ytLog.debug("Pushing runtime filters in YtScan", logInfo)
+      }
+    }
     runtimeFilterSegments = newRuntimeSegments
     cachedPartitions = None
   }

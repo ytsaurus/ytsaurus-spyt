@@ -3,6 +3,7 @@ package tech.ytsaurus.spyt.format
 import org.apache.hadoop.mapreduce.InputSplit
 import org.apache.logging.log4j.Level
 import org.apache.spark.sql.types.StructType
+import org.slf4j.LoggerFactory
 import tech.ytsaurus.spyt.common.utils.Segment.Segment
 import tech.ytsaurus.spyt.common.utils.TupleSegment.TupleSegment
 import tech.ytsaurus.spyt.common.utils._
@@ -18,6 +19,8 @@ import tech.ytsaurus.spyt.logger.{YtDynTableLogger, YtDynTableLoggerConfig}
 import tech.ytsaurus.spyt.serializers.SchemaConverter
 import tech.ytsaurus.spyt.types.UInt64Long
 import tech.ytsaurus.ysontree.{YTreeBooleanNodeImpl, YTreeBuilder, YTreeDoubleNodeImpl, YTreeEntityNodeImpl, YTreeIntegerNodeImpl, YTreeNode, YTreeStringNodeImpl}
+
+import java.util.concurrent.ConcurrentHashMap
 
 import scala.jdk.CollectionConverters._
 import scala.annotation.tailrec
@@ -69,19 +72,21 @@ case class YtInputSplit(file: YtPartitionedFile, schema: StructType,
 }
 
 object YtInputSplit {
+  @transient private val log = LoggerFactory.getLogger(getClass)
+
   def applyPushdownFilters(basePath: YPath, tableKeys: Seq[Option[String]], pushedFilters: SegmentSet,
-    filterPushdownConfig: FilterPushdownConfig, union: Boolean = true): YPath = {
+    filterPushdownConfig: FilterPushdownConfig, union: Boolean = true, fromPlanning: Boolean = false): YPath = {
     if (filterPushdownConfig.enabled && tableKeys.nonEmpty) {
-      pushdownFiltersToYPath(union, pushedFilters, tableKeys, filterPushdownConfig, basePath)
+      pushdownFiltersToYPath(union, pushedFilters, tableKeys, filterPushdownConfig, basePath, fromPlanning)
     } else {
       basePath
     }
   }
 
   private[format] def pushdownFiltersToYPath(single: Boolean, pushedFilters: SegmentSet, keys: Seq[Option[String]],
-                                             filterPushdownConfig: FilterPushdownConfig, basePath: YPath) = {
+    filterPushdownConfig: FilterPushdownConfig, basePath: YPath, fromPlanning: Boolean = false) = {
     val pushdownCriteria = getCriteriaSeq(single && filterPushdownConfig.unionEnabled, pushedFilters,
-      keys, filterPushdownConfig)
+      keys, filterPushdownConfig, fromPlanning, YPathUtils.getPath(basePath))
     applySegmentsToYPath(pushdownCriteria, basePath)
   }
 
@@ -125,13 +130,13 @@ object YtInputSplit {
     ypath.ranges(newRanges.toSeq : _*)
   }
 
-  private[format] def getCriteriaSeq(single: Boolean, pushedFilters: SegmentSet,
-                                     keys: Seq[Option[String]], filterPushdownConfig: FilterPushdownConfig)
-                                    (implicit ytLog: YtLogger = YtLogger.noop): Seq[TupleSegment] = {
+  private[format] def getCriteriaSeq(single: Boolean, pushedFilters: SegmentSet, keys: Seq[Option[String]],
+    filterPushdownConfig: FilterPushdownConfig, fromPlanning: Boolean = false, tablePath: String = "")
+    (implicit ytLog: YtLogger = YtLogger.noop): Seq[TupleSegment] = {
 
     val rawYPathFilterSegments = getKeyFilterSegments(
       preparePushedFilters(single, pushedFilters, filterPushdownConfig), keys.toList.flatten,
-      filterPushdownConfig.ytPathCountLimit)(ytLog)
+      filterPushdownConfig.ytPathCountLimit, fromPlanning, tablePath)(ytLog)
       .map(_.toMap)
 
     getTupleSegmentRanges(rawYPathFilterSegments, keys)
@@ -165,31 +170,60 @@ object YtInputSplit {
     }
   }
 
-  private[format] def getKeyFilterSegments(filterSegments: SegmentSet,
-                                           keys: List[String],
-                                           pathCountLimit: Int)
-                                          (implicit ytLog: YtLogger = YtLogger.noop): List[List[(String, Segment)]] = {
-    recursiveGetFilterSegmentsImpl(filterSegments, keys, pathCountLimit)(ytLog)
+  private val reportedBailouts = ConcurrentHashMap.newKeySet[String]()
+  private val reportedBailoutsLimit = 64
+
+  private def logPushdownLimitExceeded(tablePath: String, headKey: String, tailKeys: List[String],
+    segmentCount: Int, result: List[List[(String, Segment)]], pathCountLimit: Int, fromPlanning: Boolean): Unit = {
+    val logEnabled = if (fromPlanning) log.isWarnEnabled else log.isDebugEnabled
+    if (logEnabled) {
+      val skippedKeys = headKey +: tailKeys
+      val appliedKeys = result.headOption.map(_.map(_._1).reverse).getOrElse(Nil)
+      val effect = if (appliedKeys.isEmpty) {
+        "no key column keeps an exact filter"
+      } else {
+        s"key columns [${appliedKeys.mkString(", ")}] still keep exact filters"
+      }
+      val target = if (tablePath.isEmpty) s"column '$headKey'" else s"table '$tablePath' column '$headKey'"
+      val message =
+        s"Key columns filter pushdown stopped on $target: $segmentCount segments x " +
+          s"${result.size} accumulated ranges = ${segmentCount.toLong * result.size} exceeds " +
+          s"spark.yt.read.keyColumnsFilterPushdown.ytPathCount.limit=$pathCountLimit. " +
+          s"Exact filtering is dropped for key columns [${skippedKeys.mkString(", ")}] and the scan " +
+          s"reads a wider key range, $effect. Raise the limit to keep the exact pushdown."
+      if (fromPlanning && reportedBailouts.size < reportedBailoutsLimit && reportedBailouts.add(message)) {
+        log.warn(message)
+      } else if (!fromPlanning) {
+        log.debug(message)
+      }
+    }
+  }
+
+  private[format] def getKeyFilterSegments(filterSegments: SegmentSet, keys: List[String], pathCountLimit: Int,
+    fromPlanning: Boolean = false, tablePath: String = "")
+    (implicit ytLog: YtLogger = YtLogger.noop): List[List[(String, Segment)]] = {
+    recursiveGetFilterSegmentsImpl(filterSegments, keys, pathCountLimit, fromPlanning, tablePath)(ytLog)
   }
 
   @tailrec
-  private def recursiveGetFilterSegmentsImpl(filterSegments: SegmentSet,
-                                             keys: List[String], pathCountLimit: Int,
-                                             result: List[List[(String, Segment)]] = List(Nil))
-                                            (implicit ytLog: YtLogger = YtLogger.noop): List[List[(String, Segment)]] = {
+  private def recursiveGetFilterSegmentsImpl(filterSegments: SegmentSet, keys: List[String], pathCountLimit: Int,
+    fromPlanning: Boolean, tablePath: String, result: List[List[(String, Segment)]] = List(Nil))
+    (implicit ytLog: YtLogger = YtLogger.noop): List[List[(String, Segment)]] = {
     keys match {
       case headKey :: tailKeys =>
         if (filterSegments.map.containsKey(headKey)) {
           val segments = filterSegments.map.get(headKey)
           if (segments.size * result.size > pathCountLimit) {
+            logPushdownLimitExceeded(tablePath, headKey, tailKeys, segments.size, result, pathCountLimit,
+              fromPlanning)
             ytLog.debug(s"YtInputSplit got more than ${pathCountLimit} segments and stopped")
             result.map(_.reverse)
           } else {
-            recursiveGetFilterSegmentsImpl(filterSegments, tailKeys, pathCountLimit,
+            recursiveGetFilterSegmentsImpl(filterSegments, tailKeys, pathCountLimit, fromPlanning, tablePath,
               result.flatMap(res => segments.map((headKey, _) +: res)))
           }
         } else {
-          recursiveGetFilterSegmentsImpl(filterSegments, tailKeys, pathCountLimit, result)
+          recursiveGetFilterSegmentsImpl(filterSegments, tailKeys, pathCountLimit, fromPlanning, tablePath, result)
         }
       case Nil =>
         result.map(_.reverse)

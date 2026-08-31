@@ -13,6 +13,31 @@ from spyt.types import UInt64Type
 import yt.yson as yt_yson
 
 
+def test_connect_server_settings_hash_is_deterministic():
+    first_settings = {
+        "nested": {"second": 2, "first": 1},
+        "items": [{"second": 2, "first": 1}, "value"],
+        "file": yt_yson.to_yson_type(
+            "//tmp/file",
+            attributes={"file_name": "file", "executable": True},
+        ),
+    }
+    second_settings = {
+        "file": yt_yson.to_yson_type(
+            "//tmp/file",
+            attributes={"executable": True, "file_name": "file"},
+        ),
+        "items": [{"first": 1, "second": 2}, "value"],
+        "nested": {"first": 1, "second": 2},
+    }
+
+    assert spyt_connect._connect_server_settings_hash(first_settings) == \
+        spyt_connect._connect_server_settings_hash(second_settings)
+    second_settings["items"].reverse()
+    assert spyt_connect._connect_server_settings_hash(first_settings) != \
+        spyt_connect._connect_server_settings_hash(second_settings)
+
+
 def test_wait_for_spark_connect_endpoint_checks_reachability(monkeypatch):
     class Connection:
         def __enter__(self):
@@ -82,6 +107,32 @@ def test_two_servers(yt_client):
         for op in [op1, op2]:
             if op:
                 yt_client.complete_operation(op.id)
+
+
+def test_reuse_existing_server(yt_client):
+    title = "Spark connect reuse test"
+    operations = {}
+    try:
+        operation = start_connect_server(yt_client, title=title)
+        operations[operation.id] = operation
+        wait_for_spark_connect_endpoint(yt_client, operation.id)
+
+        reused_operation = start_connect_server(yt_client, title=title, reuse_existing=True)
+        operations[reused_operation.id] = reused_operation
+        assert reused_operation.id == operation.id
+
+        different_operation = start_connect_server(
+            yt_client,
+            title=title,
+            reuse_existing=True,
+            executor_memory="3G",
+        )
+        operations[different_operation.id] = different_operation
+        assert different_operation.id != operation.id
+        wait_for_spark_connect_endpoint(yt_client, different_operation.id)
+    finally:
+        for operation in operations.values():
+            yt_client.complete_operation(operation.id)
 
 
 def test_web_ui_endpoint(yt_client):

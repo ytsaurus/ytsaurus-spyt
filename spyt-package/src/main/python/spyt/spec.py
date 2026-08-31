@@ -515,7 +515,7 @@ def build_spark_operation_spec(config: dict, client: YtClient,
 
 def build_spark_connect_server_spec(client: YtClient, config, enablers: SpytEnablers, java_home: str,
                                     prefer_ipv6: bool, pool: str, alias: str, title: str, extra_files: List[Any],
-                                    params: CommonConnectParams):
+                                    params: CommonConnectParams, settings_hash: str = None):
     rpc_job_proxy = parse_bool(params.spark_conf.get("spark.ytsaurus.rpc.job.proxy.enabled", "true"))
     component_config = CommonComponentConfig(enable_tmpfs=False, enablers=enablers)
 
@@ -524,7 +524,6 @@ def build_spark_connect_server_spec(client: YtClient, config, enablers: SpytEnab
     user = get_user_name(client=client)
     yt_proxy = call_get_proxy_address_url(required=True, client=client)
     network_project = params.spark_conf.get("spark.ytsaurus.network.project")
-    title = title or f'Spark connect driver for {user}'
     escaped_title = title.replace('"', '\\"')
     command = [
         f"{component_config.spark_home}/bin/spark-submit",
@@ -546,6 +545,10 @@ def build_spark_connect_server_spec(client: YtClient, config, enablers: SpytEnab
         "issue_temporary_token": True,
         "temporary_token_environment_variable_name": "YT_TOKEN",
     }
+    if settings_hash:
+        operation_spec.setdefault("annotations", {}).update({
+            "settings_hash": settings_hash,
+        })
 
     file_paths, layer_paths = _create_file_and_layer_paths(config, enablers.enable_squashfs, spark_distr_paths)
 

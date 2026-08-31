@@ -220,7 +220,8 @@ def test_spark_operation_spec_builder(yt_client):
     assert actual_operation_title == "_root"
 
 
-def _build_connect_server_spec(yt_client, pool=None, alias=None, title=None, spark_conf=None):
+def _build_connect_server_spec(yt_client, pool=None, alias=None,
+                               title="Spark connect driver test", spark_conf=None):
     enablers = SpytEnablers(enable_profiling=False)
     params = CommonConnectParams(spark_conf=spark_conf or {})
     builder = build_spark_connect_server_spec(

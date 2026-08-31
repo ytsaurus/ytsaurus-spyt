@@ -1,4 +1,6 @@
 import requests
+
+import hashlib
 import os
 import socket
 import sys
@@ -11,6 +13,7 @@ require_yt_client()
 
 from yt.wrapper.file_commands import upload_file_to_cache  # noqa: E402
 from yt.wrapper.http_helpers import get_token, get_user_name  # noqa: E402
+from yt.wrapper.operation_commands import Operation  # noqa: E402
 from yt.wrapper.run_operation_commands import run_operation  # noqa: E402
 import yt.yson as yson  # noqa: E402
 from .conf import read_global_conf, read_remote_conf  # noqa: E402
@@ -19,9 +22,29 @@ from .utils import parse_bool, SparkDiscovery  # noqa: E402
 from .version import __scala_version__ as spyt_version  # noqa: E402
 
 
+def _connect_server_settings_hash(settings: dict) -> str:
+    serialized_settings = yson.dumps(settings, yson_format="binary", sort_keys=True)
+    return hashlib.sha256(serialized_settings).hexdigest()
+
+
+def _find_existing_connect_server(client, user: str, title: str, settings_hash: str):
+    operations = client.list_operations(
+        user=user,
+        state="running",
+        filter=title,
+        attributes=["id", "type", "runtime_parameters"],
+    )["operations"]
+    for operation in operations:
+        annotations = operation.get("runtime_parameters", {}).get("annotations", {})
+        if annotations.get("settings_hash") == settings_hash:
+            return Operation(operation["id"], type=operation.get("type"), client=client)
+    return None
+
+
 def start_connect_server(client, enablers: SpytEnablers = None, prefer_ipv6: bool = False,
                          pool: str = None, java_home: str = None, operation_alias: str = None, title: str = None,
-                         python_executable: str = None, self_upload: bool = False, **kwargs):
+                         python_executable: str = None, self_upload: bool = False, reuse_existing: bool = False,
+                         **kwargs):
     params = CommonConnectParams(**kwargs)
     global_conf = read_global_conf(client=client)
     version_config = read_remote_conf(global_conf, spyt_version, client)
@@ -45,8 +68,30 @@ def start_connect_server(client, enablers: SpytEnablers = None, prefer_ipv6: boo
     enablers = enablers or SpytEnablers(enable_squashfs=enable_squashfs)
     enablers.apply_config(version_config)
 
+    user = get_user_name(client=client)
+    title = title or f"Spark connect driver for {user}"
+    settings_hash = _connect_server_settings_hash({
+        "enablers": vars(enablers),
+        "extra_files": extra_files,
+        "java_home": java_home,
+        "operation_alias": operation_alias,
+        "params": vars(params),
+        "pool": pool,
+        "prefer_ipv6": prefer_ipv6,
+        "python_executable": python_executable,
+        "self_upload": self_upload,
+        "spyt_version": spyt_version,
+        "title": title,
+        "user": user,
+    })
+    if reuse_existing:
+        operation = _find_existing_connect_server(client, user, title, settings_hash)
+        if operation:
+            return operation
+
     spec = build_spark_connect_server_spec(client, version_config, enablers, java_home,
-                                           prefer_ipv6, pool, operation_alias, title, extra_files, params)
+                                           prefer_ipv6, pool, operation_alias, title, extra_files,
+                                           params, settings_hash)
     return run_operation(spec, sync=False, client=client)
 
 

@@ -289,6 +289,8 @@ private[spark] class YTsaurusOperationManager(
       environment.put(v._1, YTree.stringNode(v._2))
     }
 
+    environment.put(EXECUTOR_APP_ID_ENV, YTree.stringNode(appId))
+
     val execCores = SparkAdapter.instance.getExecutorCores(execResources)
 
     val hostname = conf.get(YTSAURUS_NETWORK_PROJECT)
@@ -764,6 +766,12 @@ private[spark] object YTsaurusOperationManager extends Logging {
   val MEMORY_OVERHEAD_FACTOR = 0.1
   val NON_JVM_MEMORY_OVERHEAD_FACTOR = 0.4
   val DEFAULT_DRIVER_PORT = 27001
+
+  // Executor attribute (SPARK_EXECUTOR_ATTRIBUTE_* environment variable) carrying the id of the application
+  // the executor was launched for
+  val EXECUTOR_APP_ID_ATTRIBUTE = "SPYT_APP_ID"
+  val EXECUTOR_APP_ID_ENV = s"SPARK_EXECUTOR_ATTRIBUTE_$EXECUTOR_APP_ID_ATTRIBUTE"
+
   val MIB: Long = 1L << 20
 
   val DRIVER_TASK = "driver"

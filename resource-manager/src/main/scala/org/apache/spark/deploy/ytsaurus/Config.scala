@@ -58,6 +58,13 @@ object Config {
     .longConf
     .createWithDefault(10000)
 
+  val YTSAURUS_EXECUTOR_APP_ID_CHECK_ENABLED = ConfigBuilder("spark.ytsaurus.executor.appIdCheck.enabled")
+    .doc("Reject executors that try to register with the driver but were launched for another application, " +
+      "e.g. executors of a previous driver operation restarted by YTsaurus on the same host")
+    .version("2.12.0")
+    .booleanConf
+    .createWithDefault(true)
+
   val EXECUTOR_STATE_POLL_INTERVAL = ConfigBuilder("spark.ytsaurus.executor.state.poll.interval")
     .doc("Interval between executor operation state checks in milliseconds")
     .version("2.8.0")

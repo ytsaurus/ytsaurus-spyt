@@ -4,7 +4,10 @@ package org.apache.spark.scheduler.cluster.ytsaurus
 import org.apache.spark.SparkContext
 import org.apache.spark.deploy.ytsaurus.Config._
 import org.apache.spark.resource.ResourceProfile
+import org.apache.spark.rpc.RpcCallContext
+import org.apache.spark.scheduler.cluster.CoarseGrainedClusterMessages.RegisterExecutor
 import org.apache.spark.scheduler.cluster.{CoarseGrainedSchedulerBackend, SchedulerBackendUtils}
+import org.apache.spark.scheduler.cluster.ytsaurus.YTsaurusOperationManager.EXECUTOR_APP_ID_ATTRIBUTE
 import org.apache.spark.scheduler.{ExecutorDecommissionInfo, TaskSchedulerImpl}
 import org.apache.spark.util.Utils
 import tech.ytsaurus.client.CompoundClient
@@ -147,6 +150,27 @@ private[spark] class YTsaurusSchedulerBackend (
 
   override def applicationId(): String = {
     conf.getOption("spark.app.id").getOrElse(super.applicationId())
+  }
+
+  override protected def createDriverEndpoint(): DriverEndpoint = new YTsaurusDriverEndpoint()
+
+  private class YTsaurusDriverEndpoint extends DriverEndpoint {
+    override def receiveAndReply(context: RpcCallContext): PartialFunction[Any, Unit] = {
+      val rejectForeignExecutors: PartialFunction[Any, Unit] = {
+        case registration: RegisterExecutor if !isExecutorRegistrationAllowed(registration.attributes) =>
+          val executorAppId = registration.attributes.getOrElse(EXECUTOR_APP_ID_ATTRIBUTE, "<unknown>")
+          val message = s"Rejecting executor ${registration.executorId} launched for application $executorAppId: " +
+            s"this driver runs application ${applicationId()}"
+          logWarning(message)
+          context.sendFailure(new IllegalStateException(message))
+      }
+      rejectForeignExecutors.orElse(super.receiveAndReply(context))
+    }
+  }
+
+  private def isExecutorRegistrationAllowed(attributes: Map[String, String]): Boolean = {
+    !conf.get(YTSAURUS_EXECUTOR_APP_ID_CHECK_ENABLED) ||
+      attributes.get(EXECUTOR_APP_ID_ATTRIBUTE).contains(applicationId())
   }
 
   protected override def doRequestTotalExecutors(resourceProfileToTotalExecs: Map[ResourceProfile, Int]): Future[Boolean] = {

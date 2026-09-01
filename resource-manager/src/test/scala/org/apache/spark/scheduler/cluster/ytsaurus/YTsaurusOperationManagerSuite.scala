@@ -6,7 +6,7 @@ import org.apache.spark.deploy.ytsaurus.Config._
 import org.apache.spark.internal.config.{ARCHIVES, DRIVER_HOST_ADDRESS, DRIVER_PORT, FILES, JARS, SUBMIT_PYTHON_FILES}
 import org.apache.spark.launcher.SparkLauncher
 import org.apache.spark.resource.ResourceProfile
-import org.apache.spark.scheduler.cluster.ytsaurus.YTsaurusOperationManager.{ApplicationFile, DRIVER_TASK, EXECUTOR_TASK}
+import org.apache.spark.scheduler.cluster.ytsaurus.YTsaurusOperationManager.{ApplicationFile, DRIVER_TASK, EXECUTOR_APP_ID_ENV, EXECUTOR_TASK}
 import org.apache.spark.{SparkConf, SparkFunSuite}
 import org.scalatest.{BeforeAndAfter, BeforeAndAfterEach}
 import org.scalatest.matchers.should.Matchers
@@ -28,19 +28,7 @@ class YTsaurusOperationManagerSuite extends SparkFunSuite with BeforeAndAfterEac
   private var opManagerStub: YTsaurusOperationManager = _
   override def beforeEach(): Unit = {
     super.beforeEach()
-    // TODO scala version
-    opManagerStub = new YTsaurusOperationManager(
-      ytClient = null,
-      token = "testToken",
-      layerPaths = YTree.listBuilder().buildList(),
-      filePaths = YTree.listBuilder().buildList(),
-      environment = YTree.mapBuilder().buildMap(),
-      prepareEnvCommand = "./setup-spyt-env.sh --some-key some-value",
-      sparkClassPath =
-        "$HOME/*:/usr/lib/spyt/conf/:/usr/lib/spyt/jars/scala-2.13/*:/usr/lib/spyt/jars/common/*:/usr/lib/spark/jars/*",
-      javaCommand = "/usr/bin/java",
-      ytsaurusJavaOptionsBash = ""
-    )
+    opManagerStub = YTsaurusOperationManagerStub()
   }
 
   private val baseDriverArgs = ApplicationArguments.fromCommandLineArgs(Array("--main-class", "Main"))
@@ -395,5 +383,11 @@ class YTsaurusOperationManagerSuite extends SparkFunSuite with BeforeAndAfterEac
     conf.get(JARS) shouldBe Seq.empty
     conf.get(FILES) shouldBe Seq.empty
     conf.get(SUBMIT_PYTHON_FILES) shouldBe Seq.empty
+  }
+
+  test("Executor task spec should pass the application id to executors as an executor attribute") {
+    val execOpParams = opManagerStub.executorParams(createBaseSparkConf(), "appId", testResourceProfile, 1)
+    val taskSpec = execOpParams.taskSpec.prepare(YTree.builder(), null, null).build().asMap()
+    taskSpec.get("environment").asMap().get(EXECUTOR_APP_ID_ENV) shouldBe YTree.stringNode("appId")
   }
 }

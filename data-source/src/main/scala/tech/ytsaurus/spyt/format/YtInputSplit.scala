@@ -177,20 +177,25 @@ object YtInputSplit {
     segmentCount: Int, result: List[List[(String, Segment)]], pathCountLimit: Int, fromPlanning: Boolean): Unit = {
     val logEnabled = if (fromPlanning) log.isWarnEnabled else log.isDebugEnabled
     if (logEnabled) {
-      val skippedKeys = headKey +: tailKeys
       val appliedKeys = result.headOption.map(_.map(_._1).reverse).getOrElse(Nil)
       val effect = if (appliedKeys.isEmpty) {
         "no key column keeps an exact filter"
       } else {
         s"key columns [${appliedKeys.mkString(", ")}] still keep exact filters"
       }
+      val dropped = if (tailKeys.isEmpty) {
+        ""
+      } else {
+        s", exact filtering is dropped for key columns [${tailKeys.mkString(", ")}]"
+      }
       val target = if (tablePath.isEmpty) s"column '$headKey'" else s"table '$tablePath' column '$headKey'"
       val message =
         s"Key columns filter pushdown stopped on $target: $segmentCount segments x " +
           s"${result.size} accumulated ranges = ${segmentCount.toLong * result.size} exceeds " +
           s"spark.yt.read.keyColumnsFilterPushdown.ytPathCount.limit=$pathCountLimit. " +
-          s"Exact filtering is dropped for key columns [${skippedKeys.mkString(", ")}] and the scan " +
-          s"reads a wider key range, $effect. Raise the limit to keep the exact pushdown."
+          s"Column '$headKey' is narrowed to the range covering all its segments instead of an " +
+          s"exact filter$dropped, so the scan reads a wider key range, $effect. " +
+          s"Raise the limit to keep the exact pushdown."
       if (fromPlanning && reportedBailouts.size < reportedBailoutsLimit && reportedBailouts.add(message)) {
         log.warn(message)
       } else if (!fromPlanning) {
@@ -217,7 +222,8 @@ object YtInputSplit {
             logPushdownLimitExceeded(tablePath, headKey, tailKeys, segments.size, result, pathCountLimit,
               fromPlanning)
             ytLog.debug(s"YtInputSplit got more than ${pathCountLimit} segments and stopped")
-            result.map(_.reverse)
+            val covering = Segment(segments.map(_.left).min, segments.map(_.right).max)
+            result.map(res => ((headKey, covering) +: res).reverse)
           } else {
             recursiveGetFilterSegmentsImpl(filterSegments, tailKeys, pathCountLimit, fromPlanning, tablePath,
               result.flatMap(res => segments.map((headKey, _) +: res)))

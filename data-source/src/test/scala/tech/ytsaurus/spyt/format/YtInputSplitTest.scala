@@ -18,6 +18,7 @@ import tech.ytsaurus.spyt.common.utils.Segment.Segment
 import tech.ytsaurus.spyt.common.utils.{MInfinity, PInfinity, RealValue, Segment, SegmentSet}
 import tech.ytsaurus.spyt.format.conf.FilterPushdownConfig
 import tech.ytsaurus.spyt.test.TestRow
+import tech.ytsaurus.spyt.types.UInt64Long
 
 import java.util.{Map => JMap}
 import scala.util.Random
@@ -316,7 +317,40 @@ class YtInputSplitTest extends YtInputSplitTestBase {
 
     val res4 = getKeyFilterSegments(exampleSet1, List("b", "a"), 1)
     res4 should contain theSameElementsAs Seq(
-      Seq(("b", segment2To20))
+      Seq(("b", segment2To20), ("a", Segment(MInfinity(), PInfinity())))
+    )
+  }
+
+  it should "clamp overflowing key column to a covering segment on bail-out" in {
+    val scattered = SegmentSet(JMap.of(
+      "a", Seq(segment2To20),
+      "b", Seq(Segment(RealValue(1L), RealValue(2L)), Segment(RealValue(5L), RealValue(6L)),
+        Segment(RealValue(9L), RealValue(10L)))))
+
+    val clampedTail = getKeyFilterSegments(scattered, List("a", "b"), 2)
+    clampedTail should contain theSameElementsAs Seq(
+      Seq(("a", segment2To20), ("b", Segment(RealValue(1L), RealValue(10L))))
+    )
+
+    val clampedHead = getKeyFilterSegments(scattered, List("b", "a"), 2)
+    clampedHead should contain theSameElementsAs Seq(
+      Seq(("b", Segment(RealValue(1L), RealValue(10L))))
+    )
+
+    val unsigned = SegmentSet(JMap.of(
+      "a", Seq(Segment(RealValue(UInt64Long(1L)), RealValue(UInt64Long(2L))),
+        Segment(RealValue(UInt64Long(-1L)), RealValue(UInt64Long(-1L))))))
+    val clampedUnsigned = getKeyFilterSegments(unsigned, List("a"), 1)
+    clampedUnsigned should contain theSameElementsAs Seq(
+      Seq(("a", Segment(RealValue(UInt64Long(1L)), RealValue(UInt64Long(-1L)))))
+    )
+
+    val unordered = SegmentSet(JMap.of(
+      "a", Seq(Segment(RealValue(9L), RealValue(10L)), Segment(RealValue(1L), RealValue(2L)),
+        Segment(RealValue(5L), RealValue(6L)))))
+    val clampedUnordered = getKeyFilterSegments(unordered, List("a"), 1)
+    clampedUnordered should contain theSameElementsAs Seq(
+      Seq(("a", Segment(RealValue(1L), RealValue(10L))))
     )
   }
 

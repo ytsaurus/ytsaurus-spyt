@@ -5,7 +5,6 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "ytsaurus-spyt"
 dynamic = ["version"]
-# version = "0.0.1"  # TODO You need to replace this with dynamic fetching if required
 description = "YTsaurus SPYT high-level client"
 readme = "README.md"
 keywords = ["yt", "ytsaurus", "python", "spyt"]
@@ -18,7 +17,8 @@ authors = [
 dependencies = [
     "pyarrow",
     "pyyaml",
-    "packaging"
+    "packaging",
+    "requests"
 ]
 
 [project.optional-dependencies]

@@ -222,9 +222,11 @@ case class YtScan(sparkSession: SparkSession,
     splitFilesFutures.flatMap(_.get())
   }
 
-  // This method is intended to support YTsaurus native partitioning and should help to avoid shuffle at spark side
+  // Spark drops UnknownPartitioning in V2ScanPartitioningAndOrdering and never reads its partition
+  // count, so computing the partitions here would only cost an extra partition_tables call while
+  // planning.
   override def outputPartitioning(): Partitioning = {
-    new UnknownPartitioning(partitions.length)
+    new UnknownPartitioning(0)
   }
 
   override def estimateStatistics(): Statistics = new Statistics {

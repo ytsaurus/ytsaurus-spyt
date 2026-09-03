@@ -221,12 +221,14 @@ def test_spark_operation_spec_builder(yt_client):
 
 
 def _build_connect_server_spec(yt_client, pool=None, alias=None,
-                               title="Spark connect driver test", spark_conf=None):
+                               title="Spark connect driver test", spark_conf=None,
+                               fail_on_job_restart=False):
     enablers = SpytEnablers(enable_profiling=False)
     params = CommonConnectParams(spark_conf=spark_conf or {})
     builder = build_spark_connect_server_spec(
         client=yt_client, config=_init_config(), enablers=enablers, java_home="/opt/jdk", prefer_ipv6=False,
-        pool=pool, alias=alias, title=title, extra_files=[], params=params)
+        pool=pool, alias=alias, title=title, extra_files=[], params=params,
+        settings_hash=None, fail_on_job_restart=fail_on_job_restart)
     return builder.build()
 
 
@@ -269,3 +271,10 @@ def test_connect_server_spec_without_pool(yt_client):
 
     assert "pool" not in spec
     assert "alias" not in spec
+
+
+@pytest.mark.parametrize("fail_on_job_restart", [False, True])
+def test_connect_server_spec_fail_on_job_restart(yt_client, fail_on_job_restart):
+    spec = _build_connect_server_spec(yt_client, fail_on_job_restart=fail_on_job_restart)
+
+    assert spec["fail_on_job_restart"] is fail_on_job_restart

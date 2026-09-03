@@ -135,6 +135,22 @@ def test_reuse_existing_server(yt_client):
             yt_client.complete_operation(operation.id)
 
 
+def test_abort_driver_job_stops_operation(yt_client):
+    operation = start_connect_server(yt_client, fail_on_job_restart=True)
+    try:
+        wait_for_spark_connect_endpoint(yt_client, operation.id)
+        driver_jobs = yt_client.list_jobs(operation.id, job_state="running")["jobs"]
+        assert len(driver_jobs) == 1
+
+        yt_client.abort_job(driver_jobs[0]["id"])
+
+        operation_state = wait_for_operation(yt_client, operation.id)
+        assert str(operation_state) == "failed"
+    finally:
+        if not yt_client.get_operation_state(operation.id).is_finished():
+            yt_client.complete_operation(operation.id)
+
+
 def test_web_ui_endpoint(yt_client):
     operation = start_connect_server(yt_client)
     try:

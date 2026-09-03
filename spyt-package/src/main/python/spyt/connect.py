@@ -44,7 +44,7 @@ def _find_existing_connect_server(client, user: str, title: str, settings_hash: 
 def start_connect_server(client, enablers: SpytEnablers = None, prefer_ipv6: bool = False,
                          pool: str = None, java_home: str = None, operation_alias: str = None, title: str = None,
                          python_executable: str = None, self_upload: bool = False, reuse_existing: bool = False,
-                         **kwargs):
+                         fail_on_job_restart: bool = False, **kwargs):
     params = CommonConnectParams(**kwargs)
     global_conf = read_global_conf(client=client)
     version_config = read_remote_conf(global_conf, spyt_version, client)
@@ -73,6 +73,7 @@ def start_connect_server(client, enablers: SpytEnablers = None, prefer_ipv6: boo
     settings_hash = _connect_server_settings_hash({
         "enablers": vars(enablers),
         "extra_files": extra_files,
+        "fail_on_job_restart": fail_on_job_restart,
         "java_home": java_home,
         "operation_alias": operation_alias,
         "params": vars(params),
@@ -91,7 +92,7 @@ def start_connect_server(client, enablers: SpytEnablers = None, prefer_ipv6: boo
 
     spec = build_spark_connect_server_spec(client, version_config, enablers, java_home,
                                            prefer_ipv6, pool, operation_alias, title, extra_files,
-                                           params, settings_hash)
+                                           params, settings_hash, fail_on_job_restart)
     return run_operation(spec, sync=False, client=client)
 
 

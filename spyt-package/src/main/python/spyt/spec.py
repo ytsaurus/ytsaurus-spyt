@@ -515,7 +515,7 @@ def build_spark_operation_spec(config: dict, client: YtClient,
 
 def build_spark_connect_server_spec(client: YtClient, config, enablers: SpytEnablers, java_home: str,
                                     prefer_ipv6: bool, pool: str, alias: str, title: str, extra_files: List[Any],
-                                    params: CommonConnectParams, settings_hash: str = None):
+                                    params: CommonConnectParams, settings_hash: str, fail_on_job_restart: bool):
     rpc_job_proxy = parse_bool(params.spark_conf.get("spark.ytsaurus.rpc.job.proxy.enabled", "true"))
     component_config = CommonComponentConfig(enable_tmpfs=False, enablers=enablers)
 
@@ -542,6 +542,7 @@ def build_spark_connect_server_spec(client: YtClient, config, enablers: SpytEnab
 
     operation_spec = {
         "title": title,
+        "fail_on_job_restart": fail_on_job_restart,
         "issue_temporary_token": True,
         "temporary_token_environment_variable_name": "YT_TOKEN",
     }

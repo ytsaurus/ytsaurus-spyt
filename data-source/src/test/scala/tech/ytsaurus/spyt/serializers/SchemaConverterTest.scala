@@ -44,6 +44,26 @@ class SchemaConverterTest extends AnyFlatSpec with Matchers
     ))
   }
 
+  it should "expose yt expression in schema metadata" in {
+    val schema = TableSchema.builder()
+      .setUniqueKeys(false)
+      .addKeyExpression("hash", ColumnValueType.INT64, "farm_hash(k)")
+      .addValue("k", ColumnValueType.STRING)
+      .build()
+    val res = SchemaConverter.sparkSchema(schema.toYTree)
+    res.fields.head.metadata.getString(MetadataFields.EXPRESSION) shouldBe "farm_hash(k)"
+  }
+
+
+  it should "not propagate an empty yt expression" in {
+    val schema = TableSchema.builder()
+      .setUniqueKeys(false)
+      .addKeyExpression("hash", ColumnValueType.INT64, "")
+      .build()
+    val res = SchemaConverter.sparkSchema(schema.toYTree)
+    res.fields.head.metadata.contains(MetadataFields.EXPRESSION) shouldBe false
+  }
+
   it should "read schema without parsing type v3" in {
     // in sparkSchema.toYTree no type_v1 type names
     spark.conf.set(s"spark.yt.${TypeV3.name}", value = false)

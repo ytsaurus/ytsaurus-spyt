@@ -29,6 +29,7 @@ object SchemaConverter {
     val OPTIONAL = "optional"
     val ARROW_SUPPORTED = "arrow_supported"
     val YT_LOGICAL_TYPE = "yt_logical_type"
+    val EXPRESSION = "yt_expression"
 
     def getOriginalName(field: StructField): String = {
       if (field.metadata.contains(ORIGINAL_NAME)) field.metadata.getString(ORIGINAL_NAME) else field.name
@@ -126,6 +127,9 @@ object SchemaConverter {
       val metadata = new MetadataBuilder()
       metadata.putString(MetadataFields.ORIGINAL_NAME, originalName)
       metadata.putLong(MetadataFields.KEY_ID, if (fieldMap.containsKey("sort_order")) index else -1)
+      Option(fieldMap.get("expression")).map(_.stringValue()).filter(_.nonEmpty).foreach { expression =>
+        metadata.putString(MetadataFields.EXPRESSION, expression)
+      }
       val ytType = getAvailableType(fieldMap, parsingTypeV3)
       setYtLogicalTypeIfUnsignedType(ytType, metadata)
       metadata.putBoolean(MetadataFields.ARROW_SUPPORTED, ytType.arrowSupported)

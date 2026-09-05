@@ -117,7 +117,7 @@ object YtUtils {
   }
 
   private[v2] def dropKeyFieldsMetadata(schema: StructType): StructType = {
-    schema.copy(fields = schema.fields.map(_.withKeyId(-1)))
+    schema.copy(fields = schema.fields.map(_.withKeyId(-1).dropExpression))
   }
 
   private[v2] def getFilesSchemas(
@@ -205,6 +205,15 @@ object YtUtils {
       val newMetadata = new MetadataBuilder()
         .withMetadata(field.metadata)
         .putLong(MetadataFields.KEY_ID, keyId)
+        .build()
+
+      field.copy(metadata = newMetadata)
+    }
+
+    def dropExpression: StructField = {
+      val newMetadata = new MetadataBuilder()
+        .withMetadata(field.metadata)
+        .remove(MetadataFields.EXPRESSION)
         .build()
 
       field.copy(metadata = newMetadata)

@@ -8,6 +8,7 @@ import org.scalatest.prop.TableDrivenPropertyChecks
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import tech.ytsaurus.spyt.fs.{YtFileStatus, YtHadoopPath, YtTableMeta}
+import tech.ytsaurus.spyt.serializers.SchemaConverter.MetadataFields
 import tech.ytsaurus.spyt.wrapper.table.OptimizeMode
 import tech.ytsaurus.spyt.SchemaTestUtils
 import tech.ytsaurus.spyt.fs.path.YPathEnriched
@@ -22,6 +23,9 @@ class YtUtilsTest extends AnyFlatSpec with Matchers with SchemaTestUtils with Ta
     val a = structField("a", StringType, metadata = new MetadataBuilder().putString("custom", "my metadata"))
     val b = structField("b", LongType)
     val c = structField("c", DoubleType, originalName = Some("x"))
+    val e = structField("e", LongType)
+    val eWithExpression = structField("e", LongType,
+      metadata = new MetadataBuilder().putString(MetadataFields.EXPRESSION, "farm_hash(a)"))
 
     val ss = Seq(
       FileWithSchema(fileStatus("/path0"), StructType(Seq(a))),
@@ -36,6 +40,8 @@ class YtUtilsTest extends AnyFlatSpec with Matchers with SchemaTestUtils with Ta
       FileWithSchema(fileStatus("/path9"), StructType(Seq(a, b.setNullable(false), c))),
       FileWithSchema(fileStatus("/path10"), StructType(Seq(c))),
       FileWithSchema(fileStatus("/path11"), StructType(Seq(a.copy(dataType = LongType)))),
+      FileWithSchema(fileStatus("/path12"), StructType(Seq(a, b, e))),
+      FileWithSchema(fileStatus("/path13"), StructType(Seq(a, b, eWithExpression))),
     )
 
     val table = Table(
@@ -56,6 +62,7 @@ class YtUtilsTest extends AnyFlatSpec with Matchers with SchemaTestUtils with Ta
       (ss.slice(4, 6) :+ ss(9), false, Left(classOf[SparkException])),
       (ss.slice(0, 2) :+ ss(10), false, Left(classOf[SparkException])),
       (ss.slice(0, 2) :+ ss(11), false, Left(classOf[SparkException])),
+      (ss.slice(12, 14), false, Right(Some(StructType(Seq(a, b, e))))), // ignore expression
 
 
       (ss.slice(0, 1), true, Right(Some(ss.head.schema))),
@@ -126,7 +133,8 @@ class YtUtilsTest extends AnyFlatSpec with Matchers with SchemaTestUtils with Ta
       structField("c", DoubleType, originalName = Some("x"), keyId = 2),
       structField("d", StringType, metadata = new MetadataBuilder().putString("custom 2", "my metadata 2")),
       structField("e", LongType),
-      structField("f", DoubleType, originalName = Some("x"))
+      structField("f", DoubleType, originalName = Some("x")),
+      structField("g", LongType, keyId = 3, metadata = new MetadataBuilder().putString(MetadataFields.EXPRESSION, "farm_hash(a)"))
     ))
 
     val res = YtUtils.dropKeyFieldsMetadata(schema)
@@ -137,7 +145,8 @@ class YtUtilsTest extends AnyFlatSpec with Matchers with SchemaTestUtils with Ta
       structField("c", DoubleType, originalName = Some("x")),
       structField("d", StringType, metadata = new MetadataBuilder().putString("custom 2", "my metadata 2")),
       structField("e", LongType),
-      structField("f", DoubleType, originalName = Some("x"))
+      structField("f", DoubleType, originalName = Some("x")),
+      structField("g", LongType)
     )
   }
 

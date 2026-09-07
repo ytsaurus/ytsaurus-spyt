@@ -398,7 +398,7 @@ object YtFilePartition {
     val tableIterator = YtWrapper.readTable(
       pathWithRanges,
       InternalRowDeserializer.getOrCreate(schema)
-    )
+    )(YtReadContext(ctx.yt, ctx.settings))
     try {
       (mInfinitySeq ++ getParsedRows(tableIterator, schema)).sorted
     } finally {

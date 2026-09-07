@@ -1,13 +1,21 @@
 package org.apache.spark.sql.v2
 
 import org.apache.spark.sql.Row
+import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.functions.col
 import org.apache.spark.sql.types.{LongType, StringType, StructField, StructType}
 import org.apache.spark.sql.v2.Utils.{extractRawKeys, extractYtScan, getParsedKeys}
+import org.mockito.Mockito
+import org.mockito.invocation.InvocationOnMock
 import org.mockito.scalatest.MockitoSugar
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
+import tech.ytsaurus.TError
+import tech.ytsaurus.client.{CompoundClient, TableReader}
+import tech.ytsaurus.client.request.ReadTable
 import tech.ytsaurus.client.rows.{UnversionedRow, UnversionedValue}
+import tech.ytsaurus.core.GUID
+import tech.ytsaurus.core.common.{YTsaurusError, YTsaurusErrorCode}
 import tech.ytsaurus.core.tables.{ColumnValueType, TableSchema}
 import tech.ytsaurus.spyt.SparkAdapter
 import tech.ytsaurus.spyt.common.utils.{TuplePoint, TupleSegment}
@@ -18,6 +26,10 @@ import tech.ytsaurus.spyt.common.utils.{MInfinity, PInfinity, RealValue}
 import tech.ytsaurus.spyt.format.YtPartitionedFileDelegate
 import tech.ytsaurus.spyt.wrapper.table.OptimizeMode.Scan
 import tech.ytsaurus.spyt.wrapper.table.{YtReadContext, YtReadSettings}
+
+import java.util.concurrent.CompletableFuture
+
+import scala.collection.mutable
 
 class SortedTablesKeyPartitioningTest extends AnyFlatSpec with Matchers with LocalSpark
   with TmpDir with MockitoSugar with DynTableTestUtils with TestUtils {
@@ -287,6 +299,45 @@ class SortedTablesKeyPartitioningTest extends AnyFlatSpec with Matchers with Loc
     res should contain theSameElementsAs Seq(
       TuplePoint(Seq(MInfinity()))
     )
+  }
+
+  it should "isolate pivot key reads from delayed cancellation of previous reads" in {
+    val client = mock[CompoundClient]
+    val canceledRequests = mutable.Set.empty[GUID]
+    when(client.readTable(any[ReadTable.BuilderBase[InternalRow, _]])).thenAnswer {
+      request: ReadTable.BuilderBase[InternalRow, _] =>
+        val requestId = request.build().getRequestId.orElseThrow()
+        if (canceledRequests.contains(requestId)) {
+          CompletableFuture.failedFuture[TableReader[InternalRow]](new YTsaurusError(TError.newBuilder()
+            .setCode(YTsaurusErrorCode.Canceled.code)
+            .setMessage("Request canceled")
+            .build()))
+        } else {
+          val reader = mock[TableReader[InternalRow]]
+          when(reader.canRead).thenReturn(true, false)
+          when(reader.readyEvent()).thenReturn(CompletableFuture.completedFuture[Void](null))
+          when(reader.read()).thenReturn(java.util.Collections.singletonList(InternalRow(1L)))
+          when(reader.getDataStatistics).thenReturn(null)
+          Mockito.when(reader.close()).thenAnswer { _: InvocationOnMock =>
+            canceledRequests += requestId
+            CompletableFuture.completedFuture[Void](null)
+          }
+          CompletableFuture.completedFuture(reader)
+        }
+    }
+
+    val context = YtReadContext(client, YtReadSettings.default)
+    val schema = StructType(Seq(StructField("key", LongType)))
+    val files = Seq(
+      YtPartitionedFileDelegate.static(tmpPath, 0, 1, 0),
+      YtPartitionedFileDelegate.static(tmpPath, 1, 2, 0)
+    )
+    val expected = Seq(TupleSegment.mInfinity, TuplePoint(Seq(RealValue(1L))))
+
+    (1 to 3).foreach { _ =>
+      YtFilePartition.getPivotKeys(schema, Seq("key"), files)(context) shouldBe expected
+    }
+    canceledRequests.size shouldBe 3
   }
 
   it should "add keys to partitioned files" in {

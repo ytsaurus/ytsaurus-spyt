@@ -408,6 +408,7 @@
   "shuffle-service/src/main/scala/org/apache/spark/shuffle/ytsaurus/YTsaurusShuffleExecutorComponents.scala":"yt/spark/spark-over-yt/shuffle-service/src/main/scala/org/apache/spark/shuffle/ytsaurus/YTsaurusShuffleExecutorComponents.scala",
   "shuffle-service/src/main/scala/org/apache/spark/shuffle/ytsaurus/YTsaurusShuffleManager.scala":"yt/spark/spark-over-yt/shuffle-service/src/main/scala/org/apache/spark/shuffle/ytsaurus/YTsaurusShuffleManager.scala",
   "shuffle-service/src/main/scala/org/apache/spark/shuffle/ytsaurus/YTsaurusShuffleReader.scala":"yt/spark/spark-over-yt/shuffle-service/src/main/scala/org/apache/spark/shuffle/ytsaurus/YTsaurusShuffleReader.scala",
+  "shuffle-service/src/test/scala/org/apache/spark/shuffle/ytsaurus/ShuffleUtilsTest.scala":"yt/spark/spark-over-yt/shuffle-service/src/test/scala/org/apache/spark/shuffle/ytsaurus/ShuffleUtilsTest.scala",
   "shuffle-service/src/test/scala/org/apache/spark/shuffle/ytsaurus/YTsaurusShuffleManagerTest.scala":"yt/spark/spark-over-yt/shuffle-service/src/test/scala/org/apache/spark/shuffle/ytsaurus/YTsaurusShuffleManagerTest.scala",
   "spark-adapter":"yt/spark/spark-over-yt/spark-adapter",
   "spark-adapter/api/build.gradle.kts":"yt/spark/spark-over-yt/spark-adapter/api/build.gradle.kts",

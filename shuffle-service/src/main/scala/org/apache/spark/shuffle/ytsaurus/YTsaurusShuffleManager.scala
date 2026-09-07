@@ -19,7 +19,7 @@ import tech.ytsaurus.core.tables.{ColumnValueType, TableSchema}
 import tech.ytsaurus.spyt.wrapper.YtWrapper
 import tech.ytsaurus.spyt.wrapper.client.YtClientProvider
 import tech.ytsaurus.spyt.wrapper.client.YtClientConfigurationConverter.ytClientConfiguration
-import tech.ytsaurus.ysontree.YTreeNode
+import tech.ytsaurus.ysontree.YTreeMapNode
 
 import java.time.Duration
 import java.util.concurrent.TimeUnit
@@ -41,17 +41,16 @@ class YTsaurusShuffleManager(conf: SparkConf) extends ShuffleManager with Loggin
   private implicit val ytClient: CompoundClient = ytClientProvider.ytClient(ytClientConf)
   private val delegate = new SortShuffleManager(conf)
 
-  private val readConfigOpt: Option[YTreeNode] = ShuffleUtils.parseConfig(conf, YTSAURUS_SHUFFLE_READ_CONFIG)
-  private val pushConfigOpt: Option[YTreeNode] = ShuffleUtils.parseConfig(conf, YTSAURUS_SHUFFLE_PUSH_CONFIG)
+  private val pushBasedEnabled = conf.get(YTSAURUS_SHUFFLE_PUSH_BASED_ENABLED)
+  private lazy val shuffleConfigOpt: Option[YTreeMapNode] = ShuffleUtils.shuffleConfig(conf, pushBasedEnabled)
 
   logInfo(s"YTsaurus shuffle service is in use (account=${conf.get(YTSAURUS_SHUFFLE_ACCOUNT)}, " +
-    s"pushBased=${conf.get(YTSAURUS_SHUFFLE_PUSH_BASED_ENABLED)})")
+    s"pushBased=$pushBasedEnabled)")
 
   override def registerShuffle[K, V, C](shuffleId: Int, dependency: ShuffleDependency[K, V, C]): ShuffleHandle = {
     // IS CALLED ON DRIVER
     val baseHandle = delegate.registerShuffle(shuffleId, dependency).asInstanceOf[BaseShuffleHandle[K, V, C]]
     val shuffleTransactionTimeout = Duration.ofMillis(conf.get(YTSAURUS_SHUFFLE_TRANSACTION_TIMEOUT))
-    val pushBasedEnabled = conf.get(YTSAURUS_SHUFFLE_PUSH_BASED_ENABLED)
     val shuffleTransaction = YtWrapper.createTransaction(None, shuffleTransactionTimeout)
     val partitionCount = dependency.partitioner.numPartitions
 
@@ -62,7 +61,7 @@ class YTsaurusShuffleManager(conf: SparkConf) extends ShuffleManager with Loggin
       .setUsePushBasedShuffle(pushBasedEnabled)
       .setSchema(SHUFFLE_SCHEMA)
 
-    pushConfigOpt.map(_.mapNode).foreach(reqBuilder.setPushConfig)
+    shuffleConfigOpt.foreach(reqBuilder.setConfig)
 
     conf.get(YTSAURUS_SHUFFLE_MEDIUM).foreach(reqBuilder.setMedium)
     conf.get(YTSAURUS_SHUFFLE_REPLICATION_FACTOR).foreach(rf => reqBuilder.setReplicationFactor(rf))
@@ -137,8 +136,7 @@ class YTsaurusShuffleManager(conf: SparkConf) extends ShuffleManager with Loggin
       endPartition,
       context,
       metrics,
-      ytClient,
-      readConfigOpt
+      ytClient
     )
   }
 

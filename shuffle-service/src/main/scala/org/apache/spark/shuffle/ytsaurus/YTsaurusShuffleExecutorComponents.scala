@@ -9,7 +9,6 @@ import tech.ytsaurus.client.CompoundClient
 import tech.ytsaurus.spyt.shuffle.YTsaurusShuffleMapOutputWriter
 import tech.ytsaurus.spyt.wrapper.client.YtClientConfigurationConverter.ytClientConfiguration
 import tech.ytsaurus.spyt.wrapper.client.YtClientProvider
-import tech.ytsaurus.ysontree.YTreeNode
 
 import java.util
 
@@ -17,8 +16,6 @@ class YTsaurusShuffleExecutorComponents(sparkConf: SparkConf) extends ShuffleExe
 
   private val ytClientConf = ytClientConfiguration(sparkConf)
   private implicit val ytsaurusClient: CompoundClient = YtClientProvider.ytClient(ytClientConf)
-
-  private val writeConfigOpt: Option[YTreeNode] = ShuffleUtils.parseConfig(sparkConf, YTSAURUS_SHUFFLE_WRITE_CONFIG)
 
   override def initializeExecutor(appId: String, execId: String, extraConfigs: util.Map[String, String]): Unit = ()
 
@@ -33,8 +30,6 @@ class YTsaurusShuffleExecutorComponents(sparkConf: SparkConf) extends ShuffleExe
       .setPartitionColumn(sparkConf.get(YTSAURUS_SHUFFLE_PARTITION_COLUMN))
       .setWriterIndex(mapIndex)
       .setOverwriteExistingWriterData(true)
-
-    writeConfigOpt.foreach(reqBuilder.setConfig)
 
     val rowSize = sparkConf.get(YTSAURUS_SHUFFLE_WRITE_ROW_SIZE).toInt
     val bufferSize = sparkConf.get(YTSAURUS_SHUFFLE_WRITE_BUFFER_SIZE)

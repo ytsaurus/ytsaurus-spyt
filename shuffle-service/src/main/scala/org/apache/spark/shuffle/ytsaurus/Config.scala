@@ -50,27 +50,18 @@ object Config {
     .intConf
     .createWithDefault(10)
 
-  val YTSAURUS_SHUFFLE_WRITE_CONFIG = ConfigBuilder("spark.ytsaurus.shuffle.write.config")
-    .doc("YSON-serialized config for writing shuffle data to YTsaurus")
-    .version("2.7.0")
-    .stringConf
-    .createOptional
-
-  val YTSAURUS_SHUFFLE_READ_CONFIG = ConfigBuilder("spark.ytsaurus.shuffle.read.config")
-    .doc("YSON-serialized config for reading shuffle data from YTsaurus")
-    .version("2.7.0")
-    .stringConf
-    .createOptional
-
   val YTSAURUS_SHUFFLE_PUSH_BASED_ENABLED = ConfigBuilder("spark.ytsaurus.shuffle.push.enabled")
     .doc("Enables push-based model for YTSaurus shuffle")
     .version("2.11.0")
     .booleanConf
     .createWithDefault(false)
 
-  val YTSAURUS_SHUFFLE_PUSH_CONFIG = ConfigBuilder("spark.ytsaurus.shuffle.push.config")
-    .doc("YSON-serialized config for reading shuffle data from YTsaurus")
-    .version("2.11.0")
+  val YTSAURUS_SHUFFLE_CONFIG = ConfigBuilder("spark.ytsaurus.shuffle.config")
+    .doc("YSON-serialized YTsaurus shuffle config. It is passed once when a shuffle is started and is shared " +
+      "by all writers and readers of that shuffle. May contain only the section of the used shuffle mode: " +
+      "{pull={reader=...;writer=...}} when spark.ytsaurus.shuffle.push.enabled is false or " +
+      "{push={writer=...;reader=...;journal_writer=...;session_pool=...}} when it is true")
+    .version("2.12.0")
     .stringConf
     .createOptional
 

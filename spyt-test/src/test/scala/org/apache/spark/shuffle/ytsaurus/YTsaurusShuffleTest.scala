@@ -1,6 +1,6 @@
 package org.apache.spark.shuffle.ytsaurus
 
-import org.apache.spark.shuffle.ytsaurus.Config.{YTSAURUS_SHUFFLE_PUSH_BASED_ENABLED, YTSAURUS_SHUFFLE_PUSH_CONFIG}
+import org.apache.spark.shuffle.ytsaurus.Config.{YTSAURUS_SHUFFLE_CONFIG, YTSAURUS_SHUFFLE_PUSH_BASED_ENABLED}
 import org.apache.spark.sql.{DataFrame, Dataset, SparkSession}
 import org.apache.spark.{SparkConf, SparkEnv}
 import org.mockito.ArgumentMatchers.any
@@ -150,12 +150,19 @@ class YTsaurusShuffleTest extends AnyFlatSpec with Matchers with LocalSpark with
     checkSort
   }
 
-  it should "pass a custom push config to the shuffle service when push-based shuffle is enabled" in {
-    val fakePushConfig = """{fake_option="fake_value";another_fake_option="42"}"""
+  it should "pass a custom shuffle config to the shuffle service" in {
+    withSparkSession(
+      Map(YTSAURUS_SHUFFLE_CONFIG.key -> """{pull={writer={block_size=1048576};reader={window_size=1048576}}}""")
+    ) {
+      checkSort
+    }
+  }
+
+  it should "pass a custom shuffle config to the shuffle service when push-based shuffle is enabled" in {
     withSparkSession(
       Map(
         YTSAURUS_SHUFFLE_PUSH_BASED_ENABLED.key -> "true",
-        YTSAURUS_SHUFFLE_PUSH_CONFIG.key -> fakePushConfig
+        YTSAURUS_SHUFFLE_CONFIG.key -> """{push={writer={codec="lz4"}}}"""
       )
     ) {
       checkSort

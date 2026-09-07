@@ -8,7 +8,6 @@ import org.apache.spark.util.CompletionIterator
 import tech.ytsaurus.client.rows.UnversionedRow
 import tech.ytsaurus.client.{AsyncReader, CompoundClient}
 import tech.ytsaurus.client.request.CreateShuffleReader
-import tech.ytsaurus.ysontree.YTreeNode
 
 import java.io.{ByteArrayInputStream, InputStream, SequenceInputStream}
 import java.nio.ByteBuffer
@@ -22,8 +21,7 @@ class YTsaurusShuffleReader[K, C](compoundHandle: CompoundShuffleHandle[K, _, C]
                                   endPartition: Int,
                                   context: TaskContext,
                                   readMetrics: ShuffleReadMetricsReporter,
-                                  ytClient: CompoundClient,
-                                  readConfigOpt: Option[YTreeNode]
+                                  ytClient: CompoundClient
                                  ) extends ShuffleReader[K, C] with Logging {
   private val serializer = compoundHandle.baseHandle.dependency.serializer.newInstance()
   private val blockId = ShuffleBlockId(compoundHandle.shuffleId, startMapIndex, startPartition)
@@ -39,8 +37,6 @@ class YTsaurusShuffleReader[K, C](compoundHandle: CompoundShuffleHandle[K, _, C]
       .setHandle(compoundHandle.ytHandle)
       .setPartitionIndex(partitionIndex)
       .setRange(new CreateShuffleReader.Range(startMapIndex, endMapIndex))
-
-    readConfigOpt.foreach(reqBuilder.setConfig)
 
     ytClient.createShuffleReader(reqBuilder.build())
   }

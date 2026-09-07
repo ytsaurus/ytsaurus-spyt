@@ -23,14 +23,11 @@ import tech.ytsaurus.spyt.fs.path.YPathEnriched
 import tech.ytsaurus.spyt.wrapper.YtWrapper
 import tech.ytsaurus.spyt.wrapper.client.YtClientConfigurationConverter.ytClientConfiguration
 import tech.ytsaurus.spyt.wrapper.client.YtClientProvider
-import tech.ytsaurus.spyt.wrapper.config.ConfigEntry.implicits.intArrayAdapter
 import tech.ytsaurus.spyt.wrapper.config.{ConfigEntry, _}
 
 import java.io.{IOException, ObjectOutputStream}
 import java.util.concurrent.{ConcurrentHashMap, ConcurrentMap, Semaphore}
 import scala.jdk.CollectionConverters._
-import scala.collection.mutable.ArrayBuffer
-import scala.concurrent.Promise
 
 abstract class AbstractYtOutputCommitProtocol(
   jobId: String,
@@ -396,6 +393,8 @@ class DistributedWriteOutputCommitProtocol(
             } catch {
               case e: Exception => logError(s"Failed to start distributed write session " +
                 s"(path: ${outputPath.toYPath}, transaction: $transactionId, cookieCount: $cookieCount)", e)
+                throw new SparkException("Failed to start the distributed write session. The number of output tasks " +
+                  "may be too high. Try reducing it using coalesce(...) before writing.", e)
             }
           }
         }

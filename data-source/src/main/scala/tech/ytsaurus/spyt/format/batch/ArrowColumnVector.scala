@@ -64,6 +64,8 @@ class ArrowColumnVector(dataType: IndexedDataType,
 
   private var childColumns: Array[ColumnVector] = _
 
+  def getValueVector: ValueVector = accessor.vector
+
   override def hasNull: Boolean = accessor.getNullCount > 0
 
   override def numNulls: Int = accessor.getNullCount

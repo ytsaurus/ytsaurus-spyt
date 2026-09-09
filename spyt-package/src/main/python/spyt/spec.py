@@ -3,7 +3,7 @@ import logging
 import os
 import shlex
 from dataclasses import dataclass, field
-from typing import Any, List, NamedTuple
+from typing import Any, List, NamedTuple, Optional
 
 from spyt.dependency_utils import require_yt_client
 
@@ -516,7 +516,9 @@ def build_spark_operation_spec(config: dict, client: YtClient,
 def build_spark_connect_server_spec(client: YtClient, config, enablers: SpytEnablers, java_home: str,
                                     prefer_ipv6: bool, pool: str, alias: str, title: str, extra_files: List[Any],
                                     params: CommonConnectParams, settings_hash: str, fail_on_job_restart: bool,
-                                    spark_version: str = default_spark_version):
+                                    spark_version: str = default_spark_version,
+                                    files: Optional[List[str]] = None,
+                                    jars: Optional[List[str]] = None):
     rpc_job_proxy = parse_bool(params.spark_conf.get("spark.ytsaurus.rpc.job.proxy.enabled", "true"))
     component_config = CommonComponentConfig(enable_tmpfs=False, enablers=enablers)
 
@@ -526,21 +528,28 @@ def build_spark_connect_server_spec(client: YtClient, config, enablers: SpytEnab
     user = get_user_name(client=client)
     yt_proxy = call_get_proxy_address_url(required=True, client=client)
     network_project = params.spark_conf.get("spark.ytsaurus.network.project")
-    escaped_title = title.replace('"', '\\"')
+    spark_home = component_config.spark_home.replace("$HOME/", "")
     command = [
-        f"{component_config.spark_home}/bin/spark-submit",
-        f"--master ytsaurus://{yt_proxy}",
-        "--deploy-mode client",
-        "--class org.apache.spark.sql.connect.ytsaurus.SpytConnectServer",
-        f"--num-executors {params.num_executors}",
-        f"--executor-cores {params.executor_cores}",
-        f"--executor-memory {params.executor_memory}",
-        f"--queue {pool or user}",
-        f'--name "{escaped_title}"',
-        f"--conf spark.driver.extraJavaOptions='-Djava.net.preferIPv6Addresses={prefer_ipv6}'",
-        f"--conf spark.connect.grpc.binding.port={params.grpc_port_start}",
-        "--conf spark.ytsaurus.driver.operation.id=$YT_OPERATION_ID",
-    ] + [f"--conf {key}={params.spark_conf[key]}" for key in params.spark_conf] + ["spark-internal"]
+        f"{spark_home}/bin/spark-submit",
+        "--master", f"ytsaurus://{yt_proxy}",
+        "--deploy-mode", "client",
+        "--class", "org.apache.spark.sql.connect.ytsaurus.SpytConnectServer",
+        "--num-executors", str(params.num_executors),
+        "--executor-cores", str(params.executor_cores),
+        "--executor-memory", params.executor_memory,
+        "--queue", pool or user,
+        "--name", title,
+        "--conf", f"spark.driver.extraJavaOptions=-Djava.net.preferIPv6Addresses={prefer_ipv6}",
+        "--conf", f"spark.connect.grpc.binding.port={params.grpc_port_start}",
+    ]
+    for key, value in params.spark_conf.items():
+        command.extend(["--conf", f"{key}={value}"])
+    if files:
+        command.extend(["--files", ",".join(files)])
+    if jars:
+        command.extend(["--jars", ",".join(jars)])
+    command_string = shlex.join(command)
+    command_string += ' --conf "spark.ytsaurus.driver.operation.id=$YT_OPERATION_ID" spark-internal'
 
     operation_spec = {
         "title": title,
@@ -578,7 +587,7 @@ def build_spark_connect_server_spec(client: YtClient, config, enablers: SpytEnab
 
     builder = VanillaSpecBuilder()
     builder.begin_task("driver") \
-        .command(" ".join([setup, "&&"] + command)) \
+        .command(f"{setup} && {command_string}") \
         .job_count(1) \
         .cpu_limit(1) \
         .memory_limit(parse_memory(params.driver_memory)) \

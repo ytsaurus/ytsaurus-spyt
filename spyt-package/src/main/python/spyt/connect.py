@@ -6,6 +6,7 @@ import socket
 import sys
 import time
 from functools import reduce
+from typing import List, Optional
 from spyt.dependency_utils import require_yt_client
 from spyt.enabler import SpytEnablers
 
@@ -45,10 +46,21 @@ def start_connect_server(client, enablers: SpytEnablers = None, prefer_ipv6: boo
                          pool: str = None, java_home: str = None, operation_alias: str = None, title: str = None,
                          python_executable: str = None, self_upload: bool = False, reuse_existing: bool = False,
                          fail_on_job_restart: bool = False, spyt_version: str = None,
-                         spark_version: str = None, **kwargs):
-    """Start a Connect server, defaulting to the installed SPYT and PySpark versions."""
+                         spark_version: str = None, files: Optional[List[str]] = None,
+                         jars: Optional[List[str]] = None, **kwargs):
+    """Start a Connect server, defaulting to the installed SPYT and PySpark versions.
+
+    files and jars accept YT paths (//...) or yt:/// URIs without commas for spark-submit.
+    """
     spyt_version = spyt_version if spyt_version is not None else default_spyt_version
     spark_version = spark_version if spark_version is not None else default_spark_version
+    for option, paths in [("files", files), ("jars", jars)]:
+        for path in paths or []:
+            if "," in path:
+                raise ValueError(f"{option} path {path!r} contains a comma, which spark-submit "
+                                 "uses to separate paths")
+    files = [f"yt:/{path}" if path.startswith("//") else path for path in files or []]
+    jars = [f"yt:/{path}" if path.startswith("//") else path for path in jars or []]
     params = CommonConnectParams(**kwargs)
     global_conf = read_global_conf(client=client)
     version_config = read_remote_conf(global_conf, spyt_version, client)
@@ -78,7 +90,9 @@ def start_connect_server(client, enablers: SpytEnablers = None, prefer_ipv6: boo
         "enablers": vars(enablers),
         "extra_files": extra_files,
         "fail_on_job_restart": fail_on_job_restart,
+        "files": sorted(files),
         "java_home": java_home,
+        "jars": sorted(jars),
         "operation_alias": operation_alias,
         "params": vars(params),
         "pool": pool,
@@ -98,7 +112,7 @@ def start_connect_server(client, enablers: SpytEnablers = None, prefer_ipv6: boo
     spec = build_spark_connect_server_spec(client, version_config, enablers, java_home,
                                            prefer_ipv6, pool, operation_alias, title, extra_files,
                                            params, settings_hash, fail_on_job_restart,
-                                           spark_version=spark_version)
+                                           spark_version=spark_version, files=files, jars=jars)
     return run_operation(spec, sync=False, client=client)
 
 

@@ -7,6 +7,10 @@ from spyt.connect import start_connect_server, start_connect_server_inner_cluste
 from common.helpers import assert_items_equal, assert_sequences_equal, wait_for_operation
 from functools import reduce
 from itertools import chain
+from types import SimpleNamespace
+import os
+import shlex
+import subprocess
 import time
 import pytest
 from pyspark.sql import SparkSession
@@ -14,6 +18,7 @@ import pyspark.sql.connect.functions as f
 from pyspark.sql.types import Row, StringType
 from spyt.types import UInt64Type
 import yt.yson as yt_yson
+from utils import upload_file
 
 
 @pytest.fixture
@@ -96,6 +101,143 @@ def test_connect_server_spec_versions_affect_reuse(connect_server_spec_client):
         len({spyt_connect.default_spyt_version, "2.11.0"})
         * len({spyt_connect.default_spark_version, "4.1.2"})
     )
+
+
+@pytest.mark.parametrize("files", [None, [], ["//tmp/config file", "yt:///tmp/file's-$name"]])
+@pytest.mark.parametrize("jars", [None, [], ["//tmp/first.jar", "yt:///tmp/second jar.jar"]])
+def test_connect_server_spec_files_and_jars(connect_server_spec_client, files, jars):
+    spec = spyt_connect.start_connect_server(connect_server_spec_client, files=files, jars=jars)
+    command = shlex.split(spec["tasks"]["driver"]["command"])
+
+    for flag, paths, expected in [
+        ("--files", files, "yt:///tmp/config file,yt:///tmp/file's-$name"),
+        ("--jars", jars, "yt:///tmp/first.jar,yt:///tmp/second jar.jar"),
+    ]:
+        if paths:
+            assert command.count(flag) == 1
+            index = command.index(flag)
+            assert command[index + 1] == expected
+            assert index < command.index("spark-internal")
+        else:
+            assert flag not in command
+
+
+@pytest.mark.parametrize("option", ["files", "jars"])
+@pytest.mark.parametrize("path", ["//tmp/first,second", "yt:///tmp/first,second"])
+def test_connect_server_rejects_commas(option, path):
+    with pytest.raises(ValueError, match=f"{option} path .* contains a comma"):
+        start_connect_server(None, **{option: [path]})
+
+
+def test_connect_server_command_quoting(connect_server_spec_client, tmp_path):
+    title = "Connect \"server\" 'name' $HOME $(false) `false`"
+    conf_value = "value with spaces; $HOME $(false) 'quotes'"
+    files = ["//tmp/file's name", "yt:///tmp/$HOME"]
+    spec = start_connect_server(
+        connect_server_spec_client, title=title, files=files,
+        spark_conf={"spark.test.value": conf_value},
+    )
+    command = spec["tasks"]["driver"]["command"].split(" && ", 1)[1]
+    spark_submit = tmp_path / "spark" / "bin" / "spark-submit"
+    spark_submit.parent.mkdir(parents=True)
+    spark_submit.write_text("#!/bin/sh\nprintf '%s\\0' \"$@\"\n")
+    spark_submit.chmod(0o755)
+
+    result = subprocess.run(
+        ["/bin/sh", "-c", command], cwd=tmp_path,
+        env={**os.environ, "YT_OPERATION_ID": "test-operation-id"},
+        capture_output=True, text=True, check=True,
+    )
+    args = result.stdout.rstrip("\0").split("\0")
+    assert args[args.index("--name") + 1] == title
+    assert args[args.index("--files") + 1] == "yt:///tmp/file's name,yt:///tmp/$HOME"
+    conf = [args[index + 1] for index, arg in enumerate(args) if arg == "--conf"]
+    assert f"spark.test.value={conf_value}" in conf
+    assert "spark.ytsaurus.driver.operation.id=test-operation-id" in conf
+    assert args[-1] == "spark-internal"
+
+
+def test_connect_server_spec_dependencies_affect_reuse(connect_server_spec_client):
+    def settings_hash(**kwargs):
+        spec = spyt_connect.start_connect_server(connect_server_spec_client, **kwargs)
+        return spec["annotations"]["settings_hash"]
+
+    default_hash = settings_hash()
+    assert settings_hash(files=None, jars=None) == default_hash
+    assert settings_hash(files=[], jars=[]) == default_hash
+    assert settings_hash(files=["//tmp/file"], jars=["//tmp/dep.jar"]) == settings_hash(
+        files=["yt:///tmp/file"], jars=["yt:///tmp/dep.jar"],
+    )
+    assert len({
+        default_hash,
+        settings_hash(files=["//tmp/file"]),
+        settings_hash(files=["//tmp/other"]),
+        settings_hash(jars=["//tmp/dep.jar"]),
+        settings_hash(jars=["//tmp/other.jar"]),
+        settings_hash(files=["//tmp/file"], jars=["//tmp/dep.jar"]),
+    }) == 6
+
+
+@pytest.mark.parametrize("reverse_files", [False, True])
+@pytest.mark.parametrize("reverse_jars", [False, True])
+def test_connect_server_reuses_reordered_dependencies(
+    connect_server_spec_client, monkeypatch, reverse_files, reverse_jars,
+):
+    files = ["//tmp/first.txt", "//tmp/second.txt"]
+    jars = ["//tmp/first.jar", "//tmp/second.jar"]
+    spec = start_connect_server(connect_server_spec_client, files=files, jars=jars)
+    settings_hash = spec["annotations"]["settings_hash"]
+    reordered_files = files[::-1] if reverse_files else files
+    reordered_jars = jars[::-1] if reverse_jars else jars
+    reordered_spec = start_connect_server(
+        connect_server_spec_client, files=reordered_files, jars=reordered_jars,
+    )
+    assert reordered_spec["annotations"]["settings_hash"] == settings_hash
+
+    operation_id = "1-2-3-4"
+    monkeypatch.setattr(
+        spyt_connect, "Operation", lambda id, type, client: SimpleNamespace(id=id),
+    )
+    monkeypatch.setattr(connect_server_spec_client, "list_operations", lambda **kwargs: {
+        "operations": [{
+            "id": operation_id,
+            "type": "vanilla",
+            "runtime_parameters": {"annotations": {"settings_hash": settings_hash}},
+        }],
+    })
+    reused_operation = start_connect_server(
+        connect_server_spec_client, files=reordered_files, jars=reordered_jars,
+        reuse_existing=True,
+    )
+    assert reused_operation.id == operation_id
+
+
+def test_connect_server_files_and_jars(yt_client, tmp_dir, spark_connect_session_factory):
+    file_path = f"{tmp_dir}/message.txt"
+    jar_path = f"{tmp_dir}/deps.jar"
+    yt_client.create("file", file_path)
+    yt_client.write_file(file_path, b"file-dep-loaded")
+    upload_file(yt_client, "jobs/deps.jar", jar_path)
+
+    operation = start_connect_server(yt_client, files=[file_path], jars=[jar_path])
+    try:
+        endpoint = wait_for_spark_connect_endpoint(yt_client, operation.id)
+        with spark_connect_session_factory(endpoint=endpoint) as spark:
+            @f.udf(StringType())
+            def read_file():
+                """Read server-wide files outside Connect's isolated session artifact directory."""
+                import os
+
+                with open(os.path.join(os.environ["HOME"], "message.txt")) as file:
+                    return file.read()
+
+            result = spark.range(1).select(
+                read_file().alias("file_value"),
+                f.expr("reflect('org.example.JarDep', 'value')").alias("jar_value"),
+            ).collect()
+            assert result == [Row(file_value="file-dep-loaded", jar_value="jar-dep-loaded")]
+    finally:
+        yt_client.complete_operation(operation.id)
 
 
 def test_connect_server_settings_hash_is_deterministic():

@@ -175,7 +175,7 @@ def get_available_spyt_versions(client=None):
     return yt_list(SPYT_BASE_PATH.join(RELEASES_SUBDIR), client=client)
 
 
-def get_spark_distributive(client, enable_squashfs):
+def get_spark_distributive(client, enable_squashfs, spark_version: str = spark_version):
     distrib_root = DISTRIB_BASE_PATH.join(spark_version.replace('.', '/'))
     distrib_root_contents = yt_list(distrib_root, client=client)
     extension = '.squashfs' if enable_squashfs else '.tgz'

@@ -16,10 +16,10 @@ from yt.wrapper.http_helpers import get_token, get_user_name  # noqa: E402
 from yt.wrapper.operation_commands import Operation  # noqa: E402
 from yt.wrapper.run_operation_commands import run_operation  # noqa: E402
 import yt.yson as yson  # noqa: E402
-from .conf import read_global_conf, read_remote_conf  # noqa: E402
+from .conf import read_global_conf, read_remote_conf, spark_version as default_spark_version  # noqa: E402
 from .spec import build_spark_connect_server_spec, CommonConnectParams  # noqa: E402
 from .utils import parse_bool, SparkDiscovery  # noqa: E402
-from .version import __scala_version__ as spyt_version  # noqa: E402
+from .version import __scala_version__ as default_spyt_version  # noqa: E402
 
 
 def _connect_server_settings_hash(settings: dict) -> str:
@@ -44,7 +44,11 @@ def _find_existing_connect_server(client, user: str, title: str, settings_hash: 
 def start_connect_server(client, enablers: SpytEnablers = None, prefer_ipv6: bool = False,
                          pool: str = None, java_home: str = None, operation_alias: str = None, title: str = None,
                          python_executable: str = None, self_upload: bool = False, reuse_existing: bool = False,
-                         fail_on_job_restart: bool = False, **kwargs):
+                         fail_on_job_restart: bool = False, spyt_version: str = None,
+                         spark_version: str = None, **kwargs):
+    """Start a Connect server, defaulting to the installed SPYT and PySpark versions."""
+    spyt_version = spyt_version if spyt_version is not None else default_spyt_version
+    spark_version = spark_version if spark_version is not None else default_spark_version
     params = CommonConnectParams(**kwargs)
     global_conf = read_global_conf(client=client)
     version_config = read_remote_conf(global_conf, spyt_version, client)
@@ -81,6 +85,7 @@ def start_connect_server(client, enablers: SpytEnablers = None, prefer_ipv6: boo
         "prefer_ipv6": prefer_ipv6,
         "python_executable": python_executable,
         "self_upload": self_upload,
+        "spark_version": spark_version,
         "spyt_version": spyt_version,
         "title": title,
         "user": user,
@@ -92,7 +97,8 @@ def start_connect_server(client, enablers: SpytEnablers = None, prefer_ipv6: boo
 
     spec = build_spark_connect_server_spec(client, version_config, enablers, java_home,
                                            prefer_ipv6, pool, operation_alias, title, extra_files,
-                                           params, settings_hash, fail_on_job_restart)
+                                           params, settings_hash, fail_on_job_restart,
+                                           spark_version=spark_version)
     return run_operation(spec, sync=False, client=client)
 
 

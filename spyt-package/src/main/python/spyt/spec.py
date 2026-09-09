@@ -14,7 +14,7 @@ from yt.wrapper.common import update_inplace, update  # noqa: E402
 from yt.wrapper.http_helpers import get_token, get_user_name  # noqa: E402
 from yt.wrapper.spec_builders import VanillaSpecBuilder  # noqa: E402
 
-from .conf import get_spark_distributive  # noqa: E402
+from .conf import get_spark_distributive, spark_version as default_spark_version  # noqa: E402
 from .conf import read_metrics_conf, read_spark_defaults_conf  # noqa: E402
 from .utils import SparkDiscovery, call_get_proxy_address_url, parse_bool, parse_memory, get_scala_version  # noqa: E402
 from .enabler import SpytEnablers  # noqa: E402
@@ -515,11 +515,13 @@ def build_spark_operation_spec(config: dict, client: YtClient,
 
 def build_spark_connect_server_spec(client: YtClient, config, enablers: SpytEnablers, java_home: str,
                                     prefer_ipv6: bool, pool: str, alias: str, title: str, extra_files: List[Any],
-                                    params: CommonConnectParams, settings_hash: str, fail_on_job_restart: bool):
+                                    params: CommonConnectParams, settings_hash: str, fail_on_job_restart: bool,
+                                    spark_version: str = default_spark_version):
     rpc_job_proxy = parse_bool(params.spark_conf.get("spark.ytsaurus.rpc.job.proxy.enabled", "true"))
     component_config = CommonComponentConfig(enable_tmpfs=False, enablers=enablers)
 
-    spark_distr, spark_distr_paths = get_spark_distributive(client, enablers.enable_squashfs)
+    spark_distr, spark_distr_paths = get_spark_distributive(
+        client, enablers.enable_squashfs, spark_version=spark_version)
     setup = setup_spyt_env(component_config.container_home, spark_distr, enablers.enable_squashfs, [])
     user = get_user_name(client=client)
     yt_proxy = call_get_proxy_address_url(required=True, client=client)

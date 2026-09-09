@@ -1,4 +1,6 @@
+import spyt.conf as spyt_conf
 import spyt.connect as spyt_connect
+import spyt.spec as spyt_spec
 from spyt.connect import start_connect_server, start_connect_server_inner_cluster, \
     list_active_connect_servers_inner_cluster, wait_for_spark_connect_endpoint
 
@@ -6,11 +8,94 @@ from common.helpers import assert_items_equal, assert_sequences_equal, wait_for_
 from functools import reduce
 from itertools import chain
 import time
+import pytest
 from pyspark.sql import SparkSession
 import pyspark.sql.connect.functions as f
 from pyspark.sql.types import Row, StringType
 from spyt.types import UInt64Type
 import yt.yson as yt_yson
+
+
+@pytest.fixture
+def connect_server_spec_client(yt_client, monkeypatch):
+    def read_version_config(path, client):
+        version = str(path).split("/")[-2]
+        return {
+            "spark_conf": {},
+            "environment": {},
+            "layer_paths": [],
+            "squashfs_layer_paths": [],
+            "default_cluster_java_home": "/opt/jdk",
+            "spark_yt_base_path": f"//home/spark/spyt/releases/{version}",
+            "file_paths": [f"//home/spark/spyt/releases/{version}/spyt-package.zip"],
+            "enablers": {"enable_squashfs": True},
+        }
+
+    monkeypatch.setattr(spyt_connect, "read_global_conf", lambda client: {})
+    monkeypatch.setattr(spyt_conf, "get", read_version_config)
+    monkeypatch.setattr(
+        spyt_conf, "yt_list",
+        lambda path, client: ["spark.tgz", "spark.squashfs", "extra.jar"],
+    )
+    monkeypatch.setattr(spyt_connect, "get_user_name", lambda client: "test-user")
+    monkeypatch.setattr(spyt_spec, "get_user_name", lambda client: "test-user")
+    monkeypatch.setattr(
+        spyt_connect, "run_operation", lambda builder, sync, client: builder.build(),
+    )
+    return yt_client
+
+
+@pytest.mark.parametrize("spyt_override", [{}, {"spyt_version": None}, {"spyt_version": "2.11.0"}])
+@pytest.mark.parametrize("spark_override", [{}, {"spark_version": None}, {"spark_version": "4.1.2"}])
+@pytest.mark.parametrize("enable_squashfs", [False, True])
+def test_connect_server_spec_versions(
+    connect_server_spec_client, spyt_override, spark_override, enable_squashfs,
+):
+    spec = spyt_connect.start_connect_server(
+        connect_server_spec_client,
+        spark_conf={"spark.ytsaurus.squashfs.enabled": str(enable_squashfs)},
+        **spyt_override, **spark_override,
+    )
+    spyt_version = spyt_override.get("spyt_version") or spyt_connect.default_spyt_version
+    spark_version = spark_override.get("spark_version") or spyt_connect.default_spark_version
+    spark_root = str(spyt_conf.DISTRIB_BASE_PATH.join(spark_version.replace(".", "/")))
+    spyt_root = f"//home/spark/spyt/releases/{spyt_version}"
+    driver = spec["tasks"]["driver"]
+
+    if enable_squashfs:
+        assert driver["layer_paths"] == [
+            f"{spyt_root}/spyt-package.squashfs", f"{spark_root}/spark.squashfs",
+        ]
+        assert driver["file_paths"] == []
+        assert "--use-squashfs" in driver["command"]
+    else:
+        assert driver["file_paths"] == [
+            f"{spyt_root}/spyt-package.zip", f"{spark_root}/spark.tgz",
+            f"{spark_root}/extra.jar",
+        ]
+        assert "--spark-distributive spark.tgz" in driver["command"]
+
+
+def test_connect_server_spec_versions_affect_reuse(connect_server_spec_client):
+    def settings_hash(**kwargs):
+        spec = spyt_connect.start_connect_server(connect_server_spec_client, **kwargs)
+        return spec["annotations"]["settings_hash"]
+
+    default_hash = settings_hash()
+    assert settings_hash(
+        spyt_version=spyt_connect.default_spyt_version,
+        spark_version=spyt_connect.default_spark_version,
+    ) == default_hash
+    assert settings_hash(spyt_version=None, spark_version=None) == default_hash
+    assert len({
+        default_hash,
+        settings_hash(spyt_version="2.11.0"),
+        settings_hash(spark_version="4.1.2"),
+        settings_hash(spyt_version="2.11.0", spark_version="4.1.2"),
+    }) == (
+        len({spyt_connect.default_spyt_version, "2.11.0"})
+        * len({spyt_connect.default_spark_version, "4.1.2"})
+    )
 
 
 def test_connect_server_settings_hash_is_deterministic():

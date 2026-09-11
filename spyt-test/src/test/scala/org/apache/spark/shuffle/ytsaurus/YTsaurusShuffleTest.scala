@@ -152,7 +152,8 @@ class YTsaurusShuffleTest extends AnyFlatSpec with Matchers with LocalSpark with
 
   it should "pass a custom shuffle config to the shuffle service" in {
     withSparkSession(
-      Map(YTSAURUS_SHUFFLE_CONFIG.key -> """{pull={writer={block_size=1048576};reader={window_size=1048576}}}""")
+      Map(YTSAURUS_SHUFFLE_CONFIG.key ->
+        """{pull={writer={block_size=1048576};reader={window_size=1048576;group_size=1048576}}}""")
     ) {
       checkSort
     }
@@ -162,7 +163,7 @@ class YTsaurusShuffleTest extends AnyFlatSpec with Matchers with LocalSpark with
     withSparkSession(
       Map(
         YTSAURUS_SHUFFLE_PUSH_BASED_ENABLED.key -> "true",
-        YTSAURUS_SHUFFLE_CONFIG.key -> """{push={writer={codec="lz4"}}}"""
+        YTSAURUS_SHUFFLE_CONFIG.key -> """{push={writer={codec="lz4"};reader={codec="lz4"}}}"""
       )
     ) {
       checkSort

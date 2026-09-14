@@ -35,7 +35,15 @@ object SpytConnectServer {
 
     checkAndUpdateGrpcPort()
     val serverRunner: Runnable = () => {
-      SparkConnectServer.main(args)
+      var exitCode = 1
+      try {
+        SparkConnectServer.main(args)
+        exitCode = 0
+      } catch {
+        case error: Throwable => log.error("Spark connect server failed", error)
+      } finally {
+        System.exit(exitCode)
+      }
     }
     val serverThread = new Thread(serverRunner, "Spark connect server")
     serverThread.start()

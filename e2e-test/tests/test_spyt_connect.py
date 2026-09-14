@@ -309,12 +309,57 @@ def test_wait_for_spark_connect_endpoint_checks_reachability(monkeypatch):
     assert connection_attempt_count == 2
 
 
+@pytest.mark.timeout(210)
+def test_malformed_configuration_stops_server(yt_client) -> None:
+    """Fail the driver when Spark Connect crashes during session initialization."""
+    config_key = "spark.sql.shuffle.partitions"
+    operation = start_connect_server(
+        yt_client,
+        spark_conf={config_key: "malformed"},
+        fail_on_job_restart=True,
+    )
+    try:
+        startup_deadline = time.monotonic() + 120
+        while time.monotonic() < startup_deadline:
+            operation_state = yt_client.get_operation_state(operation.id)
+            jobs = yt_client.list_jobs(operation.id)["jobs"]
+            if any(job.get("stderr_size", 0) > 0 for job in jobs):
+                break
+            if operation_state.is_finished():
+                pytest.fail(f"Driver did not start; operation state: {operation_state}")
+            time.sleep(1)
+        else:
+            pytest.fail(f"Driver did not start within 120 seconds; "
+                        f"operation state: {operation_state}")
+
+        deadline = time.monotonic() + 60
+        while time.monotonic() < deadline:
+            operation_state = yt_client.get_operation_state(operation.id)
+            if operation_state.is_finished():
+                break
+            time.sleep(1)
+        else:
+            pytest.fail(f"Driver did not terminate within 60 seconds; "
+                        f"operation state: {operation_state}")
+
+        jobs = yt_client.list_jobs(operation.id)["jobs"]
+        assert len(jobs) == 1
+        stderr = yt_client.get_job_stderr(operation.id, jobs[0]["id"]).read().decode()
+        assert "Spark connect server failed" in stderr, stderr
+        assert "org.apache.spark.sql.connect.service.SparkConnectServer" in stderr, stderr
+        assert config_key in stderr and "malformed" in stderr, stderr
+        assert str(yt_client.get_operation_state(operation.id)) == "failed", stderr
+    finally:
+        if not yt_client.get_operation_state(operation.id).is_finished():
+            yt_client.abort_operation(operation.id)
+
+
 def test_idle_shutdown(yt_client):
     idle_timeout_seconds = 30
     spark_conf = {"spark.ytsaurus.connect.idle.timeout": f"{idle_timeout_seconds}s"}
     operation = start_connect_server(yt_client, spark_conf=spark_conf)
     start = time.time()
-    wait_for_operation(yt_client, operation.id)
+    assert str(wait_for_operation(yt_client, operation.id)) == "completed"
     finish = time.time()
     assert finish - start > idle_timeout_seconds
 

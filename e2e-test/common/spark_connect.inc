@@ -2,11 +2,11 @@ PEERDIR(
     contrib/python/pyspark-client
 )
 
-SET(SPARK_VERSION 4.1.2)
+SET(SPARK_VERSION 4.2.0)
 SET(SPARK_DISTRIBUTIVE spark/spark-${SPARK_VERSION}-bin-hadoop3.tgz)
 
 FROM_SANDBOX(
-    12963328575
+    13593466859
     OUT_NOAUTO
     ${SPARK_DISTRIBUTIVE}
 )

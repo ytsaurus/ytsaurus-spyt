@@ -577,6 +577,7 @@ def build_spark_connect_server_spec(client: YtClient, config, enablers: SpytEnab
         "file_paths": file_paths,
         "enable_rpc_proxy_in_job_proxy": rpc_job_proxy,
         "environment": environment,
+        "memory_reserve_factor": 1.0,
     }
 
     if network_project:

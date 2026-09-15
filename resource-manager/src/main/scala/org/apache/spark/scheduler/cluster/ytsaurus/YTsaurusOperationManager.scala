@@ -352,6 +352,7 @@ private[spark] class YTsaurusOperationManager(
       .key("layer_paths").value(layerPaths)
       .key("file_paths").value(filePaths)
       .key("environment").value(environment)
+      .key("memory_reserve_factor").value(1.0)
       .key("enable_rpc_proxy_in_job_proxy").value(conf.get(YTSAURUS_RPC_JOB_PROXY_ENABLED))
       .key("enable_shuffle_service_in_job_proxy").value(conf.get(YTSAURUS_SHUFFLE_ENABLED))
 

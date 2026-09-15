@@ -14,7 +14,7 @@ require_yt_client()
 
 from yt.wrapper.file_commands import upload_file_to_cache  # noqa: E402
 from yt.wrapper.http_helpers import get_token, get_user_name  # noqa: E402
-from yt.wrapper.operation_commands import Operation  # noqa: E402
+from yt.wrapper.operation_commands import Operation, OperationState  # noqa: E402
 from yt.wrapper.run_operation_commands import run_operation  # noqa: E402
 import yt.yson as yson  # noqa: E402
 from .conf import read_global_conf, read_remote_conf, spark_version as default_spark_version  # noqa: E402
@@ -132,6 +132,9 @@ def wait_for_spark_connect_endpoint(client, operation_id: str, timeout: int = 60
     deadline = time.monotonic() + timeout
     while (remaining_timeout := deadline - time.monotonic()) > 0:
         operation = client.get_operation(operation_id)
+        state = OperationState(operation["state"])
+        if state.is_unsuccessfully_finished():
+            raise RuntimeError(f"Operation {operation_id} {state}")
         spark_connect_endpoint = (reduce(lambda map, key: map[key] if map and key in map else None,
                                          ['runtime_parameters', 'annotations', 'spark_connect_endpoint'],
                                          operation))

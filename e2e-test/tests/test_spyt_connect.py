@@ -280,6 +280,7 @@ def test_wait_for_spark_connect_endpoint_checks_reachability(monkeypatch):
             assert operation_id == "operation-id"
             self.call_count += 1
             return {
+                "state": "running",
                 "runtime_parameters": {
                     "annotations": {
                         "spark_connect_endpoint": "[::1]:27080",
@@ -307,6 +308,29 @@ def test_wait_for_spark_connect_endpoint_checks_reachability(monkeypatch):
     assert endpoint == "[::1]:27080"
     assert client.call_count == 2
     assert connection_attempt_count == 2
+
+
+@pytest.mark.parametrize("state", ["failed", "aborted"])
+@pytest.mark.parametrize("endpoint", [None, "localhost:27080"])
+def test_wait_for_spark_connect_endpoint_unsuccessful_operation(monkeypatch, state, endpoint):
+    class Client:
+        def get_operation(self, operation_id):
+            assert operation_id == "operation-id"
+            return {
+                "state": state,
+                "runtime_parameters": {
+                    "annotations": {"spark_connect_endpoint": endpoint},
+                },
+            }
+
+    def unexpected_call(*args, **kwargs):
+        pytest.fail("Failed operations must not probe the endpoint or wait")
+
+    monkeypatch.setattr(spyt_connect.socket, "create_connection", unexpected_call)
+    monkeypatch.setattr(spyt_connect.time, "sleep", unexpected_call)
+
+    with pytest.raises(RuntimeError, match=f"Operation operation-id {state}"):
+        wait_for_spark_connect_endpoint(Client(), "operation-id")
 
 
 @pytest.mark.timeout(210)

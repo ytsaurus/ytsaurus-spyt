@@ -28,7 +28,6 @@ val subprojects = mapOf(
     "file-system",
     "data-source-extended",
     "resource-manager",
-    "shuffle-service",
     "spyt-connect",
     "spark-cluster",
     "spark-submit",
@@ -50,6 +49,8 @@ scalaVersions.forEach { scalaVersion ->
 
 include("spyt-patch-agent")
 project(":spyt-patch-agent").projectDir = file("spark-patch")
+
+include("shuffle-service")
 
 include("spyt-package")
 

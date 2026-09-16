@@ -2,17 +2,18 @@ plugins {
     id("tech.ytsaurus.spyt.common.plugin")
 }
 
-val ytWrapper = ":yt-wrapper_${extra["scalaVersion"]}"
+val ytWrapper = findProject(":yt-wrapper_2.13") ?: project(":yt-wrapper_2.12")
+val testScalaVersion = providers.gradleProperty("testScalaVersion").getOrElse("2.13")
 
 dependencies {
-    implementation(project(ytWrapper))
+    compileOnly(ytWrapper)
 
-    testImplementation(project(mapOf("path" to ytWrapper, "configuration" to "testArtifacts")))
+    testImplementation(project(":yt-wrapper_$testScalaVersion"))
+    testImplementation(project(mapOf("path" to ":yt-wrapper_$testScalaVersion", "configuration" to "testArtifacts")))
 }
 
-sourceSets {
-    main {
-        java.setSrcDirs(emptyList<String>())
-        scala.srcDir("src/main/java")
+tasks.withType<Test>().configureEach {
+    useJUnitPlatform {
+        setIncludeEngines(setOf("junit-jupiter"))
     }
 }

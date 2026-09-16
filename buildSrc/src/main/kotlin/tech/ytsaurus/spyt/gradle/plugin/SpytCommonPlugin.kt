@@ -6,7 +6,6 @@ import org.gradle.api.Project
 import org.gradle.api.Plugin
 import org.gradle.api.artifacts.VersionCatalogsExtension
 import org.gradle.api.tasks.testing.Test
-import org.gradle.internal.extensions.core.extra
 
 class SpytCommonPlugin: Plugin<Project> {
     override fun apply(project: Project) {
@@ -27,7 +26,8 @@ class SpytCommonPlugin: Plugin<Project> {
             environment("SPYT_TESTING", "1")
         }
 
-        val scalaVersion = project.extra["scalaVersion"]
+        val scalaVersion = project.findProperty("scalaVersion")
+            ?: project.findProperty("testScalaVersion") ?: "2.13"
         val bundleName = if (scalaVersion == "2.12") "sparktest212" else "sparktest"
         val catalogs = project.extensions.getByType(VersionCatalogsExtension::class.java)
         val libs = catalogs.named("libs")

@@ -7,7 +7,7 @@ val scalaVersion: String? by extra
 
 dependencies {
     testImplementation(project(mapOf("path" to ":spark-cluster_$scalaVersion", "configuration" to "testArtifacts")))
-    testImplementation(project(":shuffle-service_$scalaVersion"))
+    testImplementation(project(":shuffle-service"))
 
     testWithJavaAgent(project(":spyt-patch-agent"))
 }

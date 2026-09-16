@@ -2,8 +2,10 @@ package tech.ytsaurus.spyt.format.bucketing;
 
 import com.google.common.hash.Hashing;
 
-import java.nio.charset.StandardCharsets;
-
+/**
+ * Building blocks of the YTsaurus FarmFingerprint family: the 64-bit fingerprints of a number and of a byte string,
+ * the pair combiner and the seeded fold that {@link HashFunction#FARM_HASH} applies to an argument list.
+ */
 public final class FarmHash {
     private static final long MULTIPLIER = 0x9ddfea08eb382d69L;
 
@@ -33,17 +35,5 @@ public final class FarmHash {
             result = combine(result, fingerprint);
         }
         return result ^ fingerprints.length;
-    }
-
-    public static long hashLong(long value) {
-        return fold(fingerprint(value));
-    }
-
-    public static long hashBytes(byte[] bytes) {
-        return fold(fingerprintBytes(bytes));
-    }
-
-    public static long hashString(String value) {
-        return hashBytes(value.getBytes(StandardCharsets.UTF_8));
     }
 }

@@ -163,7 +163,7 @@ class YTsaurusShuffleTest extends AnyFlatSpec with Matchers with LocalSpark with
     withSparkSession(
       Map(
         YTSAURUS_SHUFFLE_PUSH_BASED_ENABLED.key -> "true",
-        YTSAURUS_SHUFFLE_CONFIG.key -> """{push={writer={codec="lz4"};reader={codec="lz4"}}}"""
+        YTSAURUS_SHUFFLE_CONFIG.key -> """{push={writer={max_send_attempts=5};reader={max_bytes_per_read=1048576}}}"""
       )
     ) {
       checkSort

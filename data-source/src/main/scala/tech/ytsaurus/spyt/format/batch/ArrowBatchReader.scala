@@ -44,8 +44,12 @@ class ArrowBatchReader(stream: YtArrowInputStream, schema: StructType,
     if (emptySchema) {
       false
     } else {
-      if (stream.isNextPage) updateReader()
-      val batchLoaded = _reader.loadNextBatch()
+      var batchLoaded = false
+      // Empty record batches are valid and do not indicate end of stream.
+      do {
+        if (stream.isNextPage) updateReader()
+        batchLoaded = _reader.loadNextBatch()
+      } while (batchLoaded && _root.getRowCount == 0)
       if (batchLoaded) {
         updateBatch()
         setNumRows(_root.getRowCount)

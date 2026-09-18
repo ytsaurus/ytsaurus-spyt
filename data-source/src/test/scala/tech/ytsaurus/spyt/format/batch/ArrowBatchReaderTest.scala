@@ -7,6 +7,7 @@ import org.scalatest.matchers.should.Matchers
 import tech.ytsaurus.core.cypress.YPath
 import tech.ytsaurus.spyt.serializers.WriteSchemaConverter
 import tech.ytsaurus.spyt.test.{LocalSpark, TmpDir}
+import tech.ytsaurus.spyt.wrapper.YtJavaConverters.RichJavaMap
 import tech.ytsaurus.spyt.wrapper.YtWrapper
 import tech.ytsaurus.spyt.wrapper.table.{OptimizeMode, YtArrowInputStream, YtReadContext, YtReadSettings}
 import tech.ytsaurus.spyt.{SchemaTestUtils, SparkAdapter, YtDistributedReadingTestUtils, YtReader, YtWriter}
@@ -75,6 +76,26 @@ class ArrowBatchReaderTest extends AnyFlatSpec with Matchers with TmpDir with Sc
       val res = spark.read.enableArrow.yt(tmpPath).count()
       res shouldBe count
     }
+  }
+
+  it should "read a scan-optimized table with some lookup-optimized chunks" in {
+    val schema = StructType(Seq(structField("a", IntegerType)))
+    val data = Seq(1).toDF("a").coalesce(1)
+
+    data.write.optimizeFor(OptimizeMode.Lookup).yt(tmpPath)
+    data.write.mode(SaveMode.Append).optimizeFor(OptimizeMode.Scan).yt(tmpPath)
+
+    YtWrapper.attribute(tmpPath, "optimize_for").stringValue() shouldEqual OptimizeMode.Scan.name
+    val optimizeForStatistics = YtWrapper.attribute(tmpPath, "optimize_for_statistics").asMap()
+    optimizeForStatistics.getOrThrow("lookup").asMap().getOrThrow("chunk_count").intValue() shouldEqual 1
+    optimizeForStatistics.getOrThrow("scan").asMap().getOrThrow("chunk_count").intValue() shouldEqual 1
+
+    implicit val ytReadContext: YtReadContext = YtReadContext(yt, YtReadSettings.default)
+
+    val stream = YtWrapper.readTableArrowStream(YPath.simple(tmpPath))
+    val reader = new ArrowBatchReader(stream, schema, new WriteSchemaConverter().tableSchema(schema))
+    val result = readFully(reader, schema, Int.MaxValue)
+    result should contain theSameElementsAs Seq(Row(1), Row(1))
   }
 
   testWithDistributedReading("read arrow stream from yt") { distributedReadingEnabled =>

@@ -131,7 +131,8 @@ class _SubmitRejectedError(RuntimeError):
 
 class SparkSubmissionClient(object):
     def __init__(self, gateway=None, proxy=None, discovery_path=None,
-                 user=None, token=None):
+                 user=None, token=None, timeout_sec=30.0):
+        """Create a submission client with an HTTP request timeout in seconds."""
         if proxy is None or discovery_path is None:
             raise TypeError("proxy and discovery_path are required")
         if gateway is not None:
@@ -147,13 +148,14 @@ class SparkSubmissionClient(object):
         self._discovery_path = discovery_path
         self._user = user
         self._token = token
+        self._timeout_sec = timeout_sec
         self._yt_client = YtClient(proxy=self._proxy, token=self._token)
         self._rest_cache = None
 
     @classmethod
-    def create(cls, proxy, discovery_path, user=None, token=None):
+    def create(cls, proxy, discovery_path, user=None, token=None, timeout_sec=30.0):
         return cls(gateway=None, proxy=proxy, discovery_path=discovery_path,
-                   user=user, token=token)
+                   user=user, token=token, timeout_sec=timeout_sec)
 
     def new_launcher(self):
         return SparkLauncher()
@@ -291,7 +293,7 @@ class SparkSubmissionClient(object):
         eps = RestClusterEndpoints.discover(
             discovery_path=self._discovery_path, yt_client=self._yt_client,
         )
-        self._rest_cache = SparkRestClient(eps)
+        self._rest_cache = SparkRestClient(eps, timeout_sec=self._timeout_sec)
 
     @property
     def _rest(self):

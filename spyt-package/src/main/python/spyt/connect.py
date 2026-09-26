@@ -155,7 +155,8 @@ def _spyt_connect_server_inner_cluster_endpoint(client, discovery_path: str):
     return f"http://{master_rest_endpoint}/v1/submissions/spytConnectServer"
 
 
-def start_connect_server_inner_cluster(client, discovery_path: str, **kwargs):
+def start_connect_server_inner_cluster(client, discovery_path: str, timeout_sec: float = 120.0, **kwargs):
+    """Start a Connect server with an HTTP request timeout in seconds."""
     params = CommonConnectParams(**kwargs)
     user = get_user_name(client=client)
     token = get_token(client=client)
@@ -177,13 +178,16 @@ def start_connect_server_inner_cluster(client, discovery_path: str, **kwargs):
         "sparkConf": spark_conf
     }
 
-    result = requests.post(_spyt_connect_server_inner_cluster_endpoint(client, discovery_path), json=request_body)
+    result = requests.post(_spyt_connect_server_inner_cluster_endpoint(client, discovery_path),
+                           json=request_body, timeout=timeout_sec)
     result.raise_for_status()
     return result.json()["endpoint"]
 
 
-def list_active_connect_servers_inner_cluster(client, discovery_path: str):
+def list_active_connect_servers_inner_cluster(client, discovery_path: str, timeout_sec: float = 120.0):
+    """List active Connect servers with an HTTP request timeout in seconds."""
     user = get_user_name(client=client)
-    result = requests.get(_spyt_connect_server_inner_cluster_endpoint(client, discovery_path), params={"user": user})
+    result = requests.get(_spyt_connect_server_inner_cluster_endpoint(client, discovery_path),
+                          params={"user": user}, timeout=timeout_sec)
     result.raise_for_status()
     return result.json()["apps"]

@@ -52,10 +52,12 @@ project(":spyt-patch-agent").projectDir = file("spark-patch")
 
 include("shuffle-service")
 
+include("columnar-api")
+
 include("spyt-package")
 
 val publishBlacklist = setOf("spyt-test", "spyt-package")
-val excludeScalaList = setOf("ytsaurus-spyt", "spyt-package")
+val excludeScalaList = setOf("ytsaurus-spyt", "spyt-package", "columnar-api")
 
 gradle.allprojects {
     val scalaVersion = scalaVersions.find { name.endsWith("_$it") }

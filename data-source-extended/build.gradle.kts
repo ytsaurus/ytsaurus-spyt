@@ -7,6 +7,7 @@ val dataSourceBase = ":data-source-base_${extra["scalaVersion"]}"
 
 dependencies {
     api(project(dataSourceBase))
+    implementation(project(":columnar-api"))
 
     testImplementation(project(mapOf("path" to dataSourceBase, "configuration" to "testArtifacts")))
 

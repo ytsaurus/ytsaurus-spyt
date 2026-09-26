@@ -17,7 +17,7 @@ from .client import connect, spark_session, connect_direct, direct_spark_session
 from .extensions import read_yt, read_schema_hint, write_yt, sorted_by, optimize_for, withYsonColumn, transform, \
     write_schema_hint, read_schema_hint_connect, write_schema_hint_connect, withYsonColumnConnect  # noqa: E402
 from .types import UInt64Type, restore_uint64_fields, uint64_as_unparsed  # noqa: E402
-from .utils import check_spark_version  # noqa: E402
+from .utils import check_spark_version, register_columnar_function  # noqa: E402
 import pyspark.sql.types  # noqa: E402
 import pyspark.sql.readwriter  # noqa: E402
 
@@ -31,6 +31,7 @@ if is_spark_connect_available():
     import pyspark.sql.connect.readwriter  # noqa: E402
 
 __all__ = [
+    'register_columnar_function',
     'connect',
     'connect_direct',
     'spark_session',

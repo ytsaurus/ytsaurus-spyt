@@ -9,7 +9,11 @@ import java.time.Duration
 object SparkYtConfiguration {
   import ConfigEntry.implicits._
 
+  case object ColumnarUdfEnabled
+    extends ConfigEntry[Boolean]("spark.ytsaurus.columnar.udf.enabled", Some(false))
+
   object Write {
+
     private val prefix = "write"
 
     case object BufferSize extends ConfigEntry[Int](s"$prefix.bufferSize", Some(1000),
@@ -24,6 +28,7 @@ object SparkYtConfiguration {
     ))
 
     object Distributed {
+
       private val prefix = s"${Write.prefix}.distributed"
 
       case object Enabled extends ConfigEntry[Boolean](s"$prefix.enabled", Some(false))
@@ -31,6 +36,7 @@ object SparkYtConfiguration {
   }
 
   object Read {
+
     private val prefix = "read"
 
     case object VectorizedCapacity extends ConfigEntry[Int](s"$prefix.vectorized.capacity", Some(1000))
@@ -61,6 +67,7 @@ object SparkYtConfiguration {
     ))
 
     object KeyPartitioning {
+
       private val prefix: String = s"${Read.prefix}.keyPartitioningSortedTables"
 
       case object Enabled extends ConfigEntry[Boolean](s"$prefix.enabled", Some(false))
@@ -70,6 +77,7 @@ object SparkYtConfiguration {
 
 
     object KeyColumnsFilterPushdown {
+
       private val prefix: String = s"${Read.prefix}.keyColumnsFilterPushdown"
 
       case object Enabled extends ConfigEntry[Boolean](s"$prefix.enabled", Some(false))
@@ -87,6 +95,7 @@ object SparkYtConfiguration {
   }
 
   object Throttling {
+
     private val prefix = "throttling"
 
     case object MaxConcurrency extends ConfigEntry[Int](s"$prefix.maxConcurrency", Some(0))
@@ -99,6 +108,7 @@ object SparkYtConfiguration {
   }
 
   object Transaction {
+
     private val prefix = "transaction"
 
     case object Timeout extends ConfigEntry[Duration](s"$prefix.timeout", Some(Duration.ofMinutes(5)))
@@ -108,6 +118,7 @@ object SparkYtConfiguration {
   }
 
   object GlobalTransaction {
+
     private val prefix = "globalTransaction"
 
     case object Timeout extends ConfigEntry[Duration](s"$prefix.timeout", Some(Duration.ofMinutes(2)))
@@ -118,6 +129,7 @@ object SparkYtConfiguration {
   }
 
   object Schema {
+
     private val prefix = "schema"
 
     case object ForcingNullableIfNoMetadata extends ConfigEntry[Boolean](s"$prefix.forcingNullableIfNoMetadata.enabled", Some(true))

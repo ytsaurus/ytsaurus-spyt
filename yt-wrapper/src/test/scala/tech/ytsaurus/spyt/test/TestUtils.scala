@@ -27,6 +27,7 @@ import scala.annotation.tailrec
 import scala.jdk.CollectionConverters._
 
 trait TestUtils {
+
   val longColumnSchema: TableSchema = TableSchema.builder()
     .setUniqueKeys(false)
     .addValue("value", ColumnValueType.INT64)
@@ -69,6 +70,7 @@ trait TestUtils {
     readSettings: YtReadSettings)(implicit yt: CompoundClient): Seq[YTreeNode] = {
     val schema = TableSchema.fromYTree(YtWrapper.attribute(path, "schema", transaction))
     val deser = new WireRowDeserializer[YTreeNode] with WireValueDeserializer[Unit] {
+
       private var builder = new YTreeBuilder().beginMap()
 
       override def onNewRow(i: Int): WireValueDeserializer[_] = {
@@ -120,8 +122,10 @@ trait TestUtils {
     overwriteTableFromYson(rows, path, physicalSchema)
   }
 
-  def overwriteTableFromYson(rows: Seq[String], path: String, physicalSchema: TableSchema)
-                            (implicit yt: CompoundClient): Unit = {
+  def overwriteTableFromYson(
+    rows: Seq[String],
+    path: String, physicalSchema: TableSchema,
+    append: Boolean = false)(implicit yt: CompoundClient): Unit = {
     val serializer = new YTreeRowSerializer[String] {
       override def serialize(obj: String, consumer: YsonConsumer): Unit = {
         val node = YTreeTextSerializer.deserialize(new ByteArrayInputStream(obj.getBytes(StandardCharsets.UTF_8)))
@@ -139,7 +143,7 @@ trait TestUtils {
       }
     }
     val req = WriteTable.builder[String]()
-      .setPath(YPath.simple(path))
+      .setPath(YPath.simple(path).append(append))
       .setSerializationContext(new SerializationContext(serializer))
       .setNeedRetries(false)
       .setTableSchema(physicalSchema)

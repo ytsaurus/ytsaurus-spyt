@@ -11,6 +11,7 @@ import org.apache.spark.sql.{AnalysisException, Column, DataFrame, Dataset, Row,
 import org.apache.spark.sql.catalyst.catalog.{CatalogStorageFormat, CatalogTable, CatalogTableType}
 import org.apache.spark.sql.catalyst.encoders.ExpressionEncoder
 import org.apache.spark.sql.catalyst.expressions.{Attribute, AttributeReference, Cast, Expression}
+import org.apache.spark.sql.catalyst.parser.ParserInterface
 import org.apache.spark.sql.catalyst.parser.SqlBaseParser.PrimitiveDataTypeContext
 import org.apache.spark.sql.catalyst.plans.logical.{Aggregate, LogicalPlan}
 import org.apache.spark.sql.catalyst.util.{ArrayData, MapData}
@@ -167,6 +168,13 @@ trait SparkAdapter {
   def fetchFile(url: String, targetDir: File, conf: SparkConf): File
 
   def functionIdentifier(name: String): FunctionIdentifier
+
+  /** Wraps a SQL parser with columnar registration syntax, using register to construct the command. */
+  def createYtColumnarFunctionParser(
+    delegate: ParserInterface,
+    register: (String, String, Map[String, String]) => LogicalPlan): ParserInterface
+
+  def sparkClassLoader(session: SparkSession): ClassLoader
 }
 
 trait SparkAdapterProvider {

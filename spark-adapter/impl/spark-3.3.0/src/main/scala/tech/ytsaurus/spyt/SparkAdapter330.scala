@@ -12,6 +12,7 @@ import org.apache.spark.sql.catalyst.catalog.{CatalogStorageFormat, CatalogTable
 import org.apache.spark.sql.catalyst.encoders.{ExpressionEncoder, RowEncoder}
 import org.apache.spark.sql.catalyst.expressions.objects.StaticInvoke
 import org.apache.spark.sql.catalyst.expressions.{Attribute, AttributeReference, Cast, Expression}
+import org.apache.spark.sql.catalyst.parser.ParserInterface
 import org.apache.spark.sql.catalyst.plans.logical.{Aggregate, LogicalPlan}
 import org.apache.spark.sql.catalyst.util.{ArrayData, MapData}
 import org.apache.spark.sql.catalyst.{FunctionIdentifier, InternalRow, TableIdentifier}
@@ -39,6 +40,17 @@ import java.net.URI
 import scala.reflect.ClassTag
 
 trait SparkAdapter330 extends SparkAdapter {
+  override def createYtColumnarFunctionParser(
+    delegate: ParserInterface,
+    register: (String, String, Map[String, String]) => LogicalPlan): ParserInterface = {
+    throw new UnsupportedOperationException(
+      s"Columnar function parsing requires Spark 4.1.0 or later; found ${SparkVersionUtils.currentVersion}")
+  }
+
+  override def sparkClassLoader(session: SparkSession): ClassLoader = {
+    AdapterSupport330.sparkClassLoader(session)
+  }
+
 
   override def pushFilters(scanBuilder: ScanBuilder, filters: Seq[Expression]): Either[Seq[Filter], Seq[Predicate]] = {
     PushDownUtils.pushFilters(scanBuilder, filters)._1

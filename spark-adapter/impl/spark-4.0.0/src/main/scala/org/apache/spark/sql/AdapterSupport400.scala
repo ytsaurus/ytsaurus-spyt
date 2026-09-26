@@ -27,6 +27,8 @@ import scala.xml.Node
 
 // The sole purpose of this object is to increase visibility of some Spark package-private methods
 object AdapterSupport400 {
+  def sparkClassLoader(session: SparkSession): ClassLoader = session.sessionState.artifactManager.classloader
+
   def dfShowString(df: Dataset[_], numRows: Int, truncate: Int): String = df.showString(numRows, truncate)
 
   def getSQLConf(sqlContext: SQLContext): SQLConf = {

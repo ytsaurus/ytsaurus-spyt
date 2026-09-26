@@ -11,6 +11,7 @@ log4j-template-json = "2.24.3"
 shapeless = "2.3.7"
 sttp = "2.1.4"
 jetty = "12.1.8"
+arrow = "19.0.0"
 
 scalacheck = "1.14.3"
 scalatest = "3.2.19"
@@ -25,6 +26,7 @@ spark-connect = { module = "org.apache.spark:spark-connect_2.13", version.ref = 
 spark-connect212 = { module = "org.apache.spark:spark-connect_2.12", version.ref = "spark-compile212" }
 ytsaurus-client = {module = "tech.ytsaurus:ytsaurus-client", version.ref = "ytsaurus-client"}
 
+arrow-c-data = { module = "org.apache.arrow:arrow-c-data", version.ref = "arrow" }
 circe-core = {module = "io.circe:circe-core_2.13", version.ref = "circe" }
 circe-generic = {module = "io.circe:circe-generic_2.13", version.ref = "circe" }
 circe-parser = {module = "io.circe:circe-parser_2.13", version.ref = "circe" }

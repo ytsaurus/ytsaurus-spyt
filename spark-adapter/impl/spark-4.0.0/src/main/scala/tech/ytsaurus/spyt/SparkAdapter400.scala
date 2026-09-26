@@ -31,6 +31,10 @@ import scala.reflect.ClassTag
 
 trait SparkAdapter400 extends SparkAdapter {
 
+  override def sparkClassLoader(session: SparkSession): ClassLoader = {
+    AdapterSupport400.sparkClassLoader(session)
+  }
+
   override def dfShowString(df: Dataset[_], numRows: Int, truncate: Int): String = {
     AdapterSupport400.dfShowString(df, numRows, truncate)
   }

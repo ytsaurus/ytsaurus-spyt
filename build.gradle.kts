@@ -9,8 +9,6 @@ val testsMutex = gradle.sharedServices.registerIfAbsent("testsMutex", TestsMutex
 }
 
 subprojects {
-    apply(plugin = "scala")
-
     repositories {
         mavenCentral()
         maven {
@@ -74,12 +72,14 @@ subprojects {
             withSourcesJar()
         }
 
-        val scaladoc = tasks.named<ScalaDoc>("scaladoc") {
-            source = sourceSets["main"].allSource
-        }
+        plugins.withId("scala") {
+            val scaladoc = tasks.named<ScalaDoc>("scaladoc") {
+                source = sourceSets["main"].allSource
+            }
 
-        tasks.named<Jar>("javadocJar") {
-            from(scaladoc)
+            tasks.named<Jar>("javadocJar") {
+                from(scaladoc)
+            }
         }
 
         tasks.named<Javadoc>("javadoc") {

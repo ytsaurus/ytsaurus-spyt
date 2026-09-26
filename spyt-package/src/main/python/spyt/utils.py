@@ -1,4 +1,5 @@
 import argparse
+import json
 import logging
 import os
 import re
@@ -365,3 +366,30 @@ def create_base_spark_env(spark_home):
     if spark_home:
         spark_env["SPARK_HOME"] = spark_home
     return spark_env
+
+
+def register_columnar_function(spark, name, provider, options=None):
+    """Register a companion JAR provider as a session-local SQL function.
+
+    Upload the JAR and its native libraries before registration. Spark Connect
+    supports ``spark.addArtifact(jar)`` and ``spark.addArtifact(library, file=True)``.
+    The provider must implement SPYT's ColumnarFunctionProvider Java interface.
+    Option keys and values must be strings; library options should contain only
+    the distributed artifact filename.
+    """
+    if not isinstance(name, str) or not name:
+        raise ValueError("name must be a nonempty string")
+    if not isinstance(provider, str) or not provider:
+        raise ValueError("provider must be a nonempty class name")
+    options = {} if options is None else options
+    if not isinstance(options, dict) or any(
+        not isinstance(key, str) or not isinstance(value, str)
+        for key, value in options.items()
+    ):
+        raise ValueError("options must be a dictionary with string keys and values")
+    identifier = "`" + name.replace("`", "``") + "`"
+    provider_literal = "'" + provider.replace("'", "''") + "'"
+    options_literal = "'" + json.dumps(options).replace("'", "''") + "'"
+    spark.sql(
+        f"REGISTER COLUMNAR FUNCTION {identifier} AS {provider_literal} OPTIONS {options_literal}"
+    ).collect()

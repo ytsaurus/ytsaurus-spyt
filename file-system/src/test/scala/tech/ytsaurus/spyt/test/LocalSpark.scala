@@ -53,7 +53,8 @@ trait LocalSpark extends LocalYtClient with BeforeAndAfterEach {
     }
   }
 
-  lazy val spark: SparkSession = sparkSession()
+  /** Returns the current session, including after reinstantiateSparkSession restarts it between tests. */
+  def spark: SparkSession = sparkSession()
 
   def withSparkSession(conf: Map[String, String] = Map.empty)(testBody: SparkSession => Any): Any = {
     val _spark = sparkSession(conf)

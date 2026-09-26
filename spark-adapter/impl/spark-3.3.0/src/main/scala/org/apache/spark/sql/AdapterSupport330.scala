@@ -26,6 +26,7 @@ import scala.xml.Node
 
 // The sole purpose of this object is to increase visibility of some Spark package-private methods
 object AdapterSupport330 {
+  def sparkClassLoader(session: SparkSession): ClassLoader = session.sharedState.jarClassLoader
   def getExecutorCores(execResources: Product): Int = execResources.asInstanceOf[ExecutorResourcesOrDefaults].cores
   def schemaToAttributes(schema: StructType): Seq[AttributeReference] = schema.toAttributes
   def castToLong(x: NumericType): Any => Any = { b => x.numeric.asInstanceOf[Numeric[Any]].toLong(b) }

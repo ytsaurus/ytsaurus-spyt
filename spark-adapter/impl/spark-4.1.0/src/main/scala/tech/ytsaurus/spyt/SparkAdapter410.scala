@@ -7,7 +7,8 @@ import org.apache.spark.serializer.Serializer
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.{Partitioner, ShuffleDependency, SparkConf}
 import org.apache.spark.sql.{AdapterSupport410, AnalysisException}
-import org.apache.spark.sql.catalyst.parser.SqlBaseParser
+import org.apache.spark.sql.catalyst.parser.{ParserInterface, SqlBaseParser}
+import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
 import org.apache.spark.sql.catalyst.util.{ArrayData, MapData}
 import org.apache.spark.sql.connector.catalog.Table
 import org.apache.spark.sql.connector.read.streaming.Offset
@@ -18,11 +19,19 @@ import org.apache.spark.sql.execution.streaming.sinks.FileStreamSink
 import org.apache.spark.sql.vectorized.ColumnarBatchRowWrapperBase
 import org.apache.spark.unsafe.types.{GeographyVal, GeometryVal, VariantVal}
 
+import tech.ytsaurus.spyt.format.columnar.YtColumnarFunctionParser
+
 import java.io.File
 import java.util.Locale
 import scala.reflect.ClassTag
 
 trait SparkAdapter410 extends SparkAdapter {
+
+  override def createYtColumnarFunctionParser(
+    delegate: ParserInterface,
+    register: (String, String, Map[String, String]) => LogicalPlan): ParserInterface = {
+    new YtColumnarFunctionParser(delegate, register)
+  }
 
   override def createAnalysisException(message: String): AnalysisException = {
     new AnalysisException(message, None, None, None, None, Map.empty, Array.empty)

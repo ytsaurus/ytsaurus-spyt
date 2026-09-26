@@ -7,6 +7,10 @@ val scalaVersions: List<String> by gradle.extra
 dependencies {
     runtimeOnly(project(":spyt-patch-agent"))
     runtimeOnly(project(":shuffle-service"))
+    runtimeOnly(project(":columnar-api"))
+    runtimeOnly(libs.arrow.c.data) {
+        isTransitive = false
+    }
     projectIds.forEach { projectId ->
         scalaVersions.forEach { scalaVersion ->
             runtimeOnly(project("${projectId}_$scalaVersion"))

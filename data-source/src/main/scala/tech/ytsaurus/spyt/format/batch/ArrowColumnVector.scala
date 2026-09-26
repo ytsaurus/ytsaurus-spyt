@@ -66,6 +66,14 @@ class ArrowColumnVector(dataType: IndexedDataType,
 
   def getValueVector: ValueVector = accessor.vector
 
+  /**
+   * Reports whether the backing vector contains dictionary indices rather than decoded values.
+   * Columnar plugin adapters use this flag to choose decoding instead of retaining the raw vector.
+   *
+   * @return true when this Spark column resolves its values through an Arrow dictionary
+   */
+  def isDictionaryEncoded: Boolean = dictionary.nonEmpty
+
   override def hasNull: Boolean = accessor.getNullCount > 0
 
   override def numNulls: Int = accessor.getNullCount
@@ -386,6 +394,7 @@ class ArrowColumnVector(dataType: IndexedDataType,
   }
 
   private case class NullAccessor(keys: Option[BaseIntVector], values: NullVector) extends ArrowVectorAccessor {
+
     override val vector: ValueVector = null
 
     override def isNullAt(rowId: Int): Boolean = true

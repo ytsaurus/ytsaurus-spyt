@@ -7,12 +7,13 @@ import org.slf4j.LoggerFactory
 import tech.ytsaurus.client.CompoundClient
 import tech.ytsaurus.core.cypress.YPath
 import tech.ytsaurus.core.tables.TableSchema
+import tech.ytsaurus.spyt.common.utils.YtReadingUtils
 import tech.ytsaurus.spyt.format.batch.{ArrowBatchReader, BatchReader, EmptyColumnsBatchReader, WireRowBatchReader}
 import tech.ytsaurus.spyt.format.{YPathUtils, YtInputSplit}
 import tech.ytsaurus.spyt.fs.YtHadoopPath
 import tech.ytsaurus.spyt.serializers.ArrayAnyDeserializer
 import tech.ytsaurus.spyt.wrapper.YtWrapper
-import tech.ytsaurus.spyt.wrapper.table.{TableIterator, YtReadContext}
+import tech.ytsaurus.spyt.wrapper.table.YtReadContext
 
 import java.time.Duration
 
@@ -29,7 +30,7 @@ class YtVectorizedReader(split: YtInputSplit,
   private val log = LoggerFactory.getLogger(getClass)
   private var _batchIdx = 0
   private implicit val yt: CompoundClient = ytReadContext.yt
-
+  private val transaction: Option[String] = hadoopPath.ypath.transaction
 
   private val batchReader: BatchReader = {
     val path = split.ytPathWithFilters
@@ -46,23 +47,13 @@ class YtVectorizedReader(split: YtInputSplit,
   }
 
   private def createArrowBatchReader(path: YPath, schema: StructType): ArrowBatchReader = {
-    val ytSchema = TableSchema.fromYTree(YtWrapper.attribute(path, "schema", hadoopPath.ypath.transaction))
-    val stream = if (ytReadContext.settings.distributedReadingEnabled) {
-      YtWrapper.createTablePartitionArrowStream(split.file.delegate.cookie.get)
-    } else {
-      YtWrapper.readTableArrowStream(path, hadoopPath.ypath.transaction)
-    }
-    new ArrowBatchReader(stream, schema, ytSchema)
+    val ytSchema = TableSchema.fromYTree(YtWrapper.attribute(path, "schema", transaction))
+    new ArrowBatchReader(YtReadingUtils.createArrowStream(split, path, transaction), schema, ytSchema)
   }
 
   private def createWireRowBatchReader(path: YPath, schema: StructType) = {
     val deserializer = ArrayAnyDeserializer.getOrCreate(schema)
-
-    val rowIterator: TableIterator[Array[Any]] = if (ytReadContext.settings.distributedReadingEnabled) {
-      YtWrapper.createTablePartitionReader(split.file.delegate.cookie.get, deserializer)
-    } else {
-      YtWrapper.readTable(path, deserializer, timeout, hadoopPath.ypath.transaction)
-    }
+    val rowIterator = YtReadingUtils.createRowIterator(split, path, deserializer, timeout, transaction)
     new WireRowBatchReader(rowIterator, batchMaxSize, schema)
   }
 

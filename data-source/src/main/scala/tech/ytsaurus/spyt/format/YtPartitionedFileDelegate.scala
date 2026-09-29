@@ -17,13 +17,12 @@ import java.io.ByteArrayInputStream
 import scala.jdk.CollectionConverters._
 
 // At most one range supported inside ypath.
-class YtPartitionedFileDelegate(val serializedYPath: Array[Byte],
+class YtPartitionedFileDelegate(
+  val serializedYPath: Array[Byte],
   override val byteLength: Long,
   override val partitionValues: InternalRow,
   val hadoopPath: YtHadoopPath,
-  val distributedReadingEnabled: Boolean = false,
-  val cookie: Option[TablePartitionCookie] = None
-) extends YtPartitioningDelegate {
+  val cookie: Option[TablePartitionCookie] = None) extends YtPartitioningDelegate {
 
   override val filePath: String = getPath(serializedYPath)
   override val start: Long = getNormalizedStart(serializedYPath)
@@ -113,14 +112,17 @@ object YtPartitionedFileDelegate {
 
   def apply(yPath: YPath, byteLength: Long, partitionValues: InternalRow,
     hadoopPath: YtHadoopPath): YtPartitionedFile = {
-    apply(yPath, byteLength, partitionValues, hadoopPath, distributedReading = false, None)
+    apply(yPath, byteLength, partitionValues, hadoopPath, None)
   }
 
-  def apply(yPath: YPath, byteLength: Long, partitionValues: InternalRow, hadoopPath: YtHadoopPath,
-    distributedReading: Boolean, cookie: Option[TablePartitionCookie]): YtPartitionedFile = {
+  def apply(
+    yPath: YPath,
+    byteLength: Long,
+    partitionValues: InternalRow,
+    hadoopPath: YtHadoopPath,
+    cookie: Option[TablePartitionCookie]): YtPartitionedFile = {
     val serializedYPath: Array[Byte] = serializeYPath(yPath)
-    val delegate = new YtPartitionedFileDelegate(serializedYPath, byteLength, partitionValues, hadoopPath,
-      distributedReading, cookie)
+    val delegate = new YtPartitionedFileDelegate(serializedYPath, byteLength, partitionValues, hadoopPath, cookie)
     SparkAdapter.instance.createYtPartitionedFile(delegate)
   }
 

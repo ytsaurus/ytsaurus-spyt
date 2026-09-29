@@ -89,8 +89,7 @@ object YtFilePartition {
           }
         }
         val cookie = multiTablePartition.getCookie
-        YtPartitionedFileDelegate(combinedYPath, maxSplitBytes, partitionValues, path, distributedReading = true,
-          cookie = Some(cookie))
+        YtPartitionedFileDelegate(combinedYPath, maxSplitBytes, partitionValues, path, cookie = Some(cookie))
       }
     } else {
       multiTablePartitions.flatMap { multiTablePartition =>
@@ -203,10 +202,12 @@ object YtFilePartition {
         YtReadContext.withContext(yt, YtReadSettingsFactory.fromSpark(sparkSession)) { implicit readContext =>
           lazy val keyColumns = YtWrapper.keyColumns(yp.toYPath, yp.ypath.transaction)
           // TODO(alex-shishkin): Ordered dynamic tables could not be partitioned by YT partitioning.
+          val isOrderedDynamic = yp.meta.isDynamic && keyColumns.isEmpty
           val ytPartitioningAllowed = sparkSession.ytConf(SparkYtConfiguration.Read.YtPartitioningEnabled) &&
-            !(yp.meta.isDynamic && keyColumns.isEmpty)
+            !isOrderedDynamic
+          val distributedReadingAllowed = readContext.settings.distributedReadingEnabled && !isOrderedDynamic
 
-          if (readContext.settings.distributedReadingEnabled || ytPartitioningAllowed) {
+          if (distributedReadingAllowed || ytPartitioningAllowed) {
             splitTableYtPartitioningAsync(sparkSession, yp, maxSplitBytes, partitionValues, readDataSchema, pushedFilterSegments)
           } else if (yp.meta.isDynamic) {
             CompletableFuture.completedFuture(splitDynamicTableManual(yp, keyColumns.isEmpty, partitionValues))

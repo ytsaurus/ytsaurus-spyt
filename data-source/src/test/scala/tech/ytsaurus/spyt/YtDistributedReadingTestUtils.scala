@@ -1,7 +1,6 @@
 package tech.ytsaurus.spyt
 
-import org.apache.spark.sql.SparkSession
-import org.apache.spark.sql.execution.datasources.FilePartition
+import org.apache.spark.sql.{DataFrame, SparkSession}
 import org.apache.spark.sql.v2.Utils.extractYtScan
 import org.scalatest.Tag
 import org.scalatest.flatspec.AnyFlatSpec
@@ -36,15 +35,13 @@ trait YtDistributedReadingTestUtils extends AnyFlatSpec with Matchers with Local
     }
   }
 
-  def getPartitionsForTable(spark: SparkSession, tmpPath: String): Seq[FilePartition] = {
-    val readTask = spark.read.yt(tmpPath)
-    readTask.collect()
-    val ytScan = extractYtScan(readTask.queryExecution.executedPlan)
-    ytScan.getPartitions
+  def getDelegatesForTable(spark: SparkSession, tmpPath: String): Seq[YtPartitionedFileDelegate] = {
+    getDelegates(spark.read.yt(tmpPath))
   }
 
-  def getDelegatesForTable(spark: SparkSession, tmpPath: String): Seq[YtPartitionedFileDelegate] = {
-    getPartitionsForTable(spark, tmpPath)
+  def getDelegates(df: DataFrame): Seq[YtPartitionedFileDelegate] = {
+    df.collect()
+    extractYtScan(df.queryExecution.executedPlan).getPartitions
       .flatMap(_.files.map(_.asInstanceOf[YtPartitionedFileBase[YtPartitionedFileDelegate]].delegate))
   }
 }

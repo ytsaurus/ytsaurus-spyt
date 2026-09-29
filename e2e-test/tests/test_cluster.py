@@ -1,5 +1,6 @@
+from common.cluster import SpytCluster
 from common.helpers import assert_items_equal
-from utils import upload_file
+from utils import YT_PROXY, upload_file
 from spyt.conf import read_global_conf, read_remote_conf, read_spark_defaults_conf
 import requests
 import pytest
@@ -157,3 +158,55 @@ def wait_submission_final_state(rest_endpoint, submission_id, timeout=120, ping_
             return driver_state
         time.sleep(ping_period)
     raise TimeoutError(f"Submission {submission_id} has not finished in {timeout} seconds")
+
+
+@pytest.mark.timeout(180)
+def test_cluster_owner_token_in_driver_and_executor(yt_client, tmp_user, tmp_dir, tmp_path) -> None:
+    """Check that driver and executor environments omit the cluster owner's token."""
+    from spyt.submit import SparkSubmissionClient, SubmissionStatus
+
+    user_name, token = tmp_user
+    yt_client.set(f"{tmp_dir}/@acl", [{
+        "action": "allow",
+        "subjects": [user_name],
+        "permissions": ["read", "write", "remove"],
+    }])
+
+    with SpytCluster(proxy=YT_PROXY, discovery_path=f"{tmp_dir}/cluster",
+                     dump_dir=str(tmp_path), user=user_name, token=token) as cluster:
+        operation = yt_client.get_operation(cluster.op.id)
+        assert operation["authenticated_user"] == user_name
+        assert_items_equal(cluster.yt_client.list(cluster.discovery_path), ["discovery", "logs"])
+        assert_items_equal(cluster.yt_client.list(f"{cluster.discovery_path}/discovery"),
+                           ["conf", "operation", "rest", "spark_address", "version", "webui",
+                            "master_jobs"])
+
+        job_path = f"{tmp_dir}/cluster_owner_token.py"
+        upload_file(yt_client, "jobs/cluster_owner_token.py", job_path)
+
+        submitter = SparkSubmissionClient.create(
+            proxy=YT_PROXY, discovery_path=cluster.discovery_path, user="root", token="token")
+        launcher = submitter.new_launcher()
+        launcher.set_app_resource(f"yt:/{job_path}")
+        launcher.set_conf("spark.submit.deployMode", "cluster")
+        launcher.set_conf("spark.executor.cores", "1")
+        launcher.set_conf("spark.executor.memory", "1g")
+        submission_id = submitter.submit(launcher)
+        assert submitter.wait_final(submission_id) is SubmissionStatus.FINISHED
+
+        master_url = cluster.get_component_url("master_web_ui_url")
+        response = requests.get(f"http://{master_url}/json/", timeout=10)
+        response.raise_for_status()
+        workers = response.json()["workers"]
+        assert len(workers) == 1
+        response = requests.get(
+            f"{workers[0]['webuiaddress']}/log",
+            params={"driverId": submission_id, "logType": "stdout"},
+            timeout=10,
+        )
+        response.raise_for_status()
+        output = response.text.splitlines()
+        assert "driver_token=None" in output
+        assert "executor_token=None" in output
+        assert f"driver_token={token}" not in output
+        assert f"executor_token={token}" not in output

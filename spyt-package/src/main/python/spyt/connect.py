@@ -47,10 +47,12 @@ def start_connect_server(client, enablers: SpytEnablers = None, prefer_ipv6: boo
                          python_executable: str = None, self_upload: bool = False, reuse_existing: bool = False,
                          fail_on_job_restart: bool = False, spyt_version: str = None,
                          spark_version: str = None, files: Optional[List[str]] = None,
-                         jars: Optional[List[str]] = None, **kwargs):
+                         jars: Optional[List[str]] = None, driver_memory_overhead: str = "1G", **kwargs):
     """Start a Connect server, defaulting to the installed SPYT and PySpark versions.
 
     files and jars accept YT paths (//...) or yt:/// URIs without commas for spark-submit.
+    With the embedded RPC proxy enabled, driver_memory_overhead
+    reserves an additional 1G by default in YT, without increasing the JVM heap.
     """
     spyt_version = spyt_version if spyt_version is not None else default_spyt_version
     spark_version = spark_version if spark_version is not None else default_spark_version
@@ -61,7 +63,8 @@ def start_connect_server(client, enablers: SpytEnablers = None, prefer_ipv6: boo
                                  "uses to separate paths")
     files = [f"yt:/{path}" if path.startswith("//") else path for path in files or []]
     jars = [f"yt:/{path}" if path.startswith("//") else path for path in jars or []]
-    params = CommonConnectParams(**kwargs)
+    params = CommonConnectParams(driver_memory_overhead=driver_memory_overhead, **kwargs)
+    params.spark_conf = params.spark_conf.copy()
     global_conf = read_global_conf(client=client)
     version_config = read_remote_conf(global_conf, spyt_version, client)
     java_home = java_home or version_config.get('default_cluster_java_home')

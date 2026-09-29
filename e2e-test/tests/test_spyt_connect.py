@@ -5,6 +5,7 @@ from spyt.connect import start_connect_server, start_connect_server_inner_cluste
     list_active_connect_servers_inner_cluster, wait_for_spark_connect_endpoint
 
 from common.helpers import assert_items_equal, assert_sequences_equal, wait_for_operation
+from copy import deepcopy
 from functools import reduce
 from itertools import chain
 from types import SimpleNamespace
@@ -17,6 +18,7 @@ from pyspark.sql import SparkSession
 import pyspark.sql.connect.functions as f
 from pyspark.sql.types import Row, StringType
 from spyt.types import UInt64Type
+from yt.wrapper import VanillaSpecBuilder
 import yt.yson as yt_yson
 from utils import upload_file
 
@@ -79,6 +81,18 @@ def test_connect_server_spec_versions(
             f"{spark_root}/extra.jar",
         ]
         assert "--spark-distributive spark.tgz" in driver["command"]
+
+
+def test_connect_server_spec_rpc_proxy_memory_overhead_affects_reuse(connect_server_spec_client):
+    default_spec = start_connect_server(connect_server_spec_client)
+    explicit_spec = start_connect_server(
+        connect_server_spec_client, driver_memory_overhead="1G",
+    )
+    custom_spec = start_connect_server(
+        connect_server_spec_client, driver_memory_overhead="512M",
+    )
+    assert default_spec["annotations"]["settings_hash"] == explicit_spec["annotations"]["settings_hash"]
+    assert default_spec["annotations"]["settings_hash"] != custom_spec["annotations"]["settings_hash"]
 
 
 def test_connect_server_spec_versions_affect_reuse(connect_server_spec_client):
@@ -445,6 +459,139 @@ def test_abort_driver_job_stops_operation(yt_client):
     finally:
         if not yt_client.get_operation_state(operation.id).is_finished():
             yt_client.complete_operation(operation.id)
+
+
+@pytest.fixture
+def connect_proxy_memory_pressure(yt_client, tmp_dir, monkeypatch):
+    deadline = time.monotonic() + 60
+    node = None
+    while node is None:
+        for candidate in yt_client.list("//sys/cluster_nodes"):
+            resource_path = f"//sys/cluster_nodes/{candidate}/orchid/exec_node/job_resource_manager"
+            resources = yt_client.get(resource_path)
+            if all(resources[kind]["user_slots"] == 0 for kind in ("acquired_resources", "releasing_resources")):
+                node = str(candidate)
+                break
+        assert node is not None or time.monotonic() < deadline, "No execution node became idle within 60 seconds."
+        if node is None:
+            time.sleep(0.5)
+
+    pressure_operation = None
+    cluster_paths = []
+
+    def apply_memory_pressure():
+        nonlocal pressure_operation
+        resources = yt_client.get(resource_path)
+        # The warmed-up driver is already accounted for. Reserve spare memory, leaving
+        # 128 MiB for the pressure job's proxy and 256 MiB for node memory fluctuations.
+        pressure_memory = (resources["resource_limits"]["user_memory"]
+                           - resources["acquired_resources"]["user_memory"]
+                           - resources["releasing_resources"]["user_memory"] - (128 + 256) * 1024 ** 2)
+        assert pressure_memory > 0, f"Node {node} has insufficient memory for the reproduction: {resources}."
+        pressure_spec = {
+            "scheduling_tag_filter": node,
+            "fail_on_job_restart": True,
+            "tasks": {"pressure": {
+                "command": "while true; do sleep 60; done",
+                "job_count": 1,
+                "cpu_limit": 0.1,
+                "memory_limit": pressure_memory,
+                "memory_reserve_factor": 1.0,
+            }},
+        }
+        pressure_operation = yt_client.run_operation(VanillaSpecBuilder().spec(pressure_spec), sync=False)
+        deadline = time.monotonic() + 60
+        while not yt_client.list_jobs(pressure_operation.id, job_state="running")["jobs"]:
+            error = pressure_operation.get_error()
+            if error is not None:
+                raise error
+            assert time.monotonic() < deadline, f"The pressure job did not start on node {node}."
+            time.sleep(0.5)
+
+        connection = yt_client.get("//sys/@cluster_connection")
+        prefix = f"connect-memory-{tmp_dir.rsplit('/', 1)[1]}"
+        # Native connections for a large cluster directory reproduce the proxy's
+        # production-scale footprint through normal initialization, without allocation hooks.
+        for index in range(96):
+            cluster_name = f"{prefix}-{index}"
+            cluster_connection = deepcopy(connection)
+            cluster_connection["cluster_name"] = cluster_name
+            cell_id = str(cluster_connection["primary_master"]["cell_id"]).split("-")
+            # Separate cell tags keep the entries distinct in the native cluster directory.
+            cell_id[2] = f"{((20000 + index) << 16) | (int(cell_id[2], 16) & 0xffff):x}"
+            cluster_connection["primary_master"]["cell_id"] = "-".join(cell_id)
+            cluster_connection["secondary_masters"] = []
+            path = f"//sys/clusters/{cluster_name}"
+            cluster_paths.append(path)
+            yt_client.set(path, cluster_connection)
+        return pressure_operation
+
+    try:
+        spec_overrides = deepcopy(yt_client.config["spec_overrides"])
+        spec_overrides["scheduling_tag_filter"] = str(node)
+        monkeypatch.setitem(yt_client.config, "spec_overrides", spec_overrides)
+        yield node, apply_memory_pressure
+    finally:
+        try:
+            if pressure_operation is not None:
+                yt_client.abort_operation(pressure_operation.id)
+        finally:
+            for path in cluster_paths:
+                yt_client.remove(path, recursive=True, force=True)
+
+
+@pytest.mark.timeout(360)
+def test_connect_server_rpc_proxy_resource_overdraft(
+    yt_client, tmp_dir, spark_connect_session_factory, connect_proxy_memory_pressure,
+):
+    node, apply_memory_pressure = connect_proxy_memory_pressure
+    table_path = f"{tmp_dir}/proxy_memory_input"
+    rows = [{"id": value} for value in range(100)]
+    yt_client.create("table", table_path, attributes={"schema": [{"name": "id", "type": "int64"}]})
+    yt_client.write_table(table_path, rows)
+
+    operation = start_connect_server(
+        yt_client, driver_memory="1G", fail_on_job_restart=True,
+        spark_conf={
+            "spark.ytsaurus.rpc.job.proxy.enabled": "true",
+            # Keep executor CPU and memory reservations off the node used for proxy pressure.
+            "spark.ytsaurus.executor.operation.parameters": yt_yson.dumps({
+                "scheduling_tag_filter": f"!{node}",
+            }).decode(),
+        },
+    )
+    try:
+        try:
+            endpoint = wait_for_spark_connect_endpoint(yt_client, operation.id, timeout=120)
+        except RuntimeError:
+            # Surface YT's actual abort reason instead of the endpoint helper's generic failure.
+            error = operation.get_error()
+            if error is not None:
+                raise error from None
+            raise
+        with spark_connect_session_factory(endpoint=endpoint) as spark:
+            assert_items_equal(spark.read.yt(table_path).collect(), [Row(**row) for row in rows])
+        pressure_operation = apply_memory_pressure()
+        deadline = time.monotonic() + 120
+        proxy_memory = 0
+        # 96 directory entries produce about 850 MiB of proxy memory. Wait until most
+        # connections are initialized, well above the proxy's 128 MiB reservation.
+        while proxy_memory < 768 * 1024 ** 2:
+            for running_operation in (operation, pressure_operation):
+                error = running_operation.get_error()
+                if error is not None:
+                    raise error
+            progress = yt_client.get_operation(operation.id, attributes=["progress"])["progress"]
+            samples = progress.get("job_statistics_v2", {}).get("job_proxy", {}).get("max_memory", [])
+            proxy_memory = max((sample["summary"]["max"] for sample in samples
+                                if sample["tags"]["job_type"] == "driver"), default=0)
+            assert time.monotonic() < deadline, f"Proxy memory did not grow under pressure: {proxy_memory} bytes."
+            time.sleep(0.5)
+        with spark_connect_session_factory(endpoint=endpoint) as spark:
+            assert_items_equal(spark.read.yt(table_path).collect(), [Row(**row) for row in rows])
+    finally:
+        if not yt_client.get_operation_state(operation.id).is_finished():
+            yt_client.abort_operation(operation.id)
 
 
 def test_web_ui_endpoint(yt_client):

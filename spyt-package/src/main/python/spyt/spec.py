@@ -148,6 +148,7 @@ class CommonConnectParams():
     executor_memory: str = "2G"
     grpc_port_start: int = 27080
     spark_conf: dict = field(default_factory=dict)
+    driver_memory_overhead: str = "1G"
 
 
 def _put_if_not_none(d, key, value):
@@ -520,6 +521,10 @@ def build_spark_connect_server_spec(client: YtClient, config, enablers: SpytEnab
                                     files: Optional[List[str]] = None,
                                     jars: Optional[List[str]] = None):
     rpc_job_proxy = parse_bool(params.spark_conf.get("spark.ytsaurus.rpc.job.proxy.enabled", "true"))
+    memory_limit = parse_memory(params.driver_memory)
+    if rpc_job_proxy:
+        # YT's vanilla-job estimate excludes the embedded RPC proxy's native connections and caches.
+        memory_limit += parse_memory(params.driver_memory_overhead)
     component_config = CommonComponentConfig(enable_tmpfs=False, enablers=enablers)
 
     spark_distr, spark_distr_paths = get_spark_distributive(
@@ -591,7 +596,7 @@ def build_spark_connect_server_spec(client: YtClient, config, enablers: SpytEnab
         .command(f"{setup} && {command_string}") \
         .job_count(1) \
         .cpu_limit(1) \
-        .memory_limit(parse_memory(params.driver_memory)) \
+        .memory_limit(memory_limit) \
         .spec(task_spec) \
         .end_task()
 

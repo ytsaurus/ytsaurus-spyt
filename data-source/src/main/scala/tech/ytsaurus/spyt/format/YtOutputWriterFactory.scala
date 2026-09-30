@@ -13,7 +13,7 @@ import tech.ytsaurus.spyt.fs.path.YPathEnriched
 import tech.ytsaurus.spyt.serializers.{SchemaConverter, WriteSchemaConverter}
 import tech.ytsaurus.spyt.wrapper.YtWrapper
 import tech.ytsaurus.spyt.wrapper.client.{YtClientConfiguration, YtClientProvider}
-import tech.ytsaurus.spyt.wrapper.config.SparkYtHadoopConfiguration
+import tech.ytsaurus.spyt.wrapper.config.{OptionsConf, SparkYtHadoopConfiguration}
 
 class YtOutputWriterFactory(ytClientConf: YtClientConfiguration,
                             writeConfiguration: SparkYtWriteConfiguration,
@@ -56,6 +56,7 @@ object YtOutputWriterFactory {
              dataSchema: StructType,
              jobConfiguration: Configuration): YtOutputWriterFactory = {
     SchemaConverter.checkSchema(dataSchema, options)
+    YtWriteSecurityTags.resolve(options)
 
     val updatedOptions = addWriteOptions(options, writeConfiguration)
     YtTableSparkSettings.serialize(

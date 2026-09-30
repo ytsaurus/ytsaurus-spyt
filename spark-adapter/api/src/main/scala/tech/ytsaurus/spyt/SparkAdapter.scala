@@ -175,6 +175,8 @@ trait SparkAdapter {
     register: (String, String, Map[String, String]) => LogicalPlan): ParserInterface
 
   def sparkClassLoader(session: SparkSession): ClassLoader
+
+  def lookupCachedPlan(session: SparkSession, plan: LogicalPlan): Option[LogicalPlan]
 }
 
 trait SparkAdapterProvider {

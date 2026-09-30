@@ -102,7 +102,7 @@ class YtOutputWriter(richPath: YPathEnriched,
   private def transactionGuid: String = richPath.transaction.get
 
   protected override def initializeWriter(): AsyncWriter[InternalRow] = {
-    val appendPath = richPath.withAttr("append", "true").toYPath
+    val appendPath = YtWriteSecurityTags.withTags(richPath.withAttr("append", "true").toYPath, options)
     log.debugLazy(s"Initialize new write: $appendPath, transaction: $transactionGuid, requestId: $requestId")
     val serializationContext = new WriteSerializationContext(
       new InternalRowSerializer(schema, WriteSchemaConverter(options))

@@ -10,6 +10,7 @@ import org.apache.spark.resource.ResourceProfile.ExecutorResourcesOrDefaults
 import org.apache.spark.serializer.Serializer
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.{Attribute, AttributeReference}
+import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
 import org.apache.spark.sql.execution.exchange.ShuffleExchangeExec.createShuffleWriteProcessor
 import org.apache.spark.sql.execution.metric.SQLMetric
 import org.apache.spark.sql.internal.SQLConf
@@ -26,6 +27,7 @@ import scala.xml.Node
 
 // The sole purpose of this object is to increase visibility of some Spark package-private methods
 object AdapterSupport330 {
+
   def sparkClassLoader(session: SparkSession): ClassLoader = session.sharedState.jarClassLoader
   def getExecutorCores(execResources: Product): Int = execResources.asInstanceOf[ExecutorResourcesOrDefaults].cores
   def schemaToAttributes(schema: StructType): Seq[AttributeReference] = schema.toAttributes
@@ -108,4 +110,8 @@ object AdapterSupport330 {
     System.currentTimeMillis(),
     useCache = false
   )
+
+  def lookupCachedPlan(session: SparkSession, plan: LogicalPlan): Option[LogicalPlan] = {
+    session.sharedState.cacheManager.lookupCachedData(plan).map(_.plan)
+  }
 }

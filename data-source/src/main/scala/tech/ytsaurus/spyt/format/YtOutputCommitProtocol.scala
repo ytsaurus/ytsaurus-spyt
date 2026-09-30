@@ -383,7 +383,7 @@ class DistributedWriteOutputCommitProtocol(
             sparkJobId = jobStart.jobId
             val cookieCount = numOutputTasksOpt.get
             val distributedWriteRequest = StartDistributedWriteSession.builder()
-              .setPath(outputPath.toYPath)
+              .setPath(YtWriteSecurityTags.withTags(outputPath.toYPath, conf))
               .setCookieCount(cookieCount)
               .setTransactionalOptions(new TransactionalOptions(GUID.valueOf(transactionId)))
               .build()

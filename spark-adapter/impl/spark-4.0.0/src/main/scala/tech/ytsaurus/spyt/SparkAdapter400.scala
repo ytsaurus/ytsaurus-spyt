@@ -151,4 +151,8 @@ trait SparkAdapter400 extends SparkAdapter {
   override def fetchFile(url: String, targetDir: File, conf: SparkConf): File = {
     AdapterSupport400.fetchFile(url, targetDir, conf)
   }
+
+  override def lookupCachedPlan(session: SparkSession, plan: LogicalPlan): Option[LogicalPlan] = {
+    AdapterSupport400.lookupCachedPlan(session, plan)
+  }
 }

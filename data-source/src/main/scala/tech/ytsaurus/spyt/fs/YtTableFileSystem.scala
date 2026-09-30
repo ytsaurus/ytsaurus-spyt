@@ -10,7 +10,7 @@ import tech.ytsaurus.spyt.fs.YtTableFileSystem.{DEFAULT_FILTER, PathName}
 import tech.ytsaurus.spyt.fs.path._
 import tech.ytsaurus.spyt.wrapper.YtWrapper
 import tech.ytsaurus.spyt.wrapper.cypress.{PathType, YtAttributes}
-import tech.ytsaurus.spyt.wrapper.table.{OptimizeMode, TableType}
+import tech.ytsaurus.spyt.wrapper.table.{OptimizeMode, TableType, YtSecurityTags}
 import tech.ytsaurus.ysontree.YTreeNode
 
 import java.util.concurrent.CompletableFuture
@@ -185,7 +185,8 @@ class YtTableFileSystem extends YtFileSystemBase {
         modificationTime = modificationTime,
         optimizeMode = optimizeMode,
         fullReadAllowed = fullReadAllowed,
-        schemaIdOpt = YtWrapper.schemaId(attributes)
+        schemaIdOpt = YtWrapper.schemaId(attributes),
+        securityTags = YtSecurityTags.fromAttributes(attributes)
       )
     }
   }

@@ -40,6 +40,7 @@ import java.net.URI
 import scala.reflect.ClassTag
 
 trait SparkAdapter330 extends SparkAdapter {
+
   override def createYtColumnarFunctionParser(
     delegate: ParserInterface,
     register: (String, String, Map[String, String]) => LogicalPlan): ParserInterface = {
@@ -237,4 +238,8 @@ trait SparkAdapter330 extends SparkAdapter {
   }
 
   override def functionIdentifier(name: String): FunctionIdentifier = new FunctionIdentifier(name)
+
+  override def lookupCachedPlan(session: SparkSession, plan: LogicalPlan): Option[LogicalPlan] = {
+    AdapterSupport330.lookupCachedPlan(session, plan)
+  }
 }

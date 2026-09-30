@@ -15,8 +15,9 @@ object YtAttributes {
   val tabletState = "tablet_state"
   val tabletCount = "tablet_count"
   val schemaId = "schema_id"
+  val securityTags = "security_tags"
 
   val tableAttributes: Seq[String] = Seq(
-    `type`, dynamic, modificationTime, compressedDataSize, optimizeFor, rowCount, chunkRowCount, schemaId
+    `type`, dynamic, modificationTime, compressedDataSize, optimizeFor, rowCount, chunkRowCount, schemaId, securityTags
   )
 }

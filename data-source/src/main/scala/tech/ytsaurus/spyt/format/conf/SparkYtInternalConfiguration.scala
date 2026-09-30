@@ -17,6 +17,8 @@ object SparkYtInternalConfiguration {
 
   // write options
 
+  case object InferredSecurityTags extends ConfigEntry[YTreeNode](s"$prefix.inferred_security_tags")
+
   case object IdMapping extends ConfigEntry[Array[Int]]("id_mapping", None)
 
   case object BaseSchema extends ConfigEntry[YTreeNode]("base_schema", None)

@@ -1,6 +1,6 @@
 package tech.ytsaurus.spyt.format
 
-import org.apache.spark.sql.yt.ReadTransactionStrategy
+import org.apache.spark.sql.yt.{ReadTransactionStrategy, SecurityTagsRule}
 import org.apache.spark.sql.{SparkSessionExtensions, SparkSessionExtensionsProvider}
 import org.slf4j.LoggerFactory
 
@@ -17,6 +17,7 @@ class YtSparkExtensions extends SparkSessionExtensionsProvider {
     log.info("Apply YtSparkExtensions")
     extensions.injectPlannerStrategy(YtSortedTableStrategy(_))
     extensions.injectPreCBORule(new ReadTransactionStrategy(_))
+    extensions.injectPostHocResolutionRule(new SecurityTagsRule(_))
     extensions.injectPlannerStrategy(_ => new YtSourceStrategy())
     extensions.injectColumnar(session => new YtColumnarUdfRule(session))
     extensions.injectParser { (session, parser) =>

@@ -3,17 +3,24 @@ package tech.ytsaurus.spyt.fs
 import org.apache.hadoop.fs.Path
 import tech.ytsaurus.core.cypress.YPath
 import tech.ytsaurus.spyt.fs.path.YPathEnriched
+import tech.ytsaurus.spyt.wrapper.config.ConfigEntry.{fromJsonTyped, toJsonTyped}
 import tech.ytsaurus.spyt.wrapper.table.OptimizeMode
+
+import java.nio.charset.StandardCharsets.UTF_8
+import java.util.Base64
 
 import scala.util.Try
 
-case class YtTableMeta(rowCount: Long = 0,
+case class YtTableMeta(
+  rowCount: Long = 0,
   size: Long = 1L,
   modificationTime: Long = 0L,
   optimizeMode: OptimizeMode = OptimizeMode.Scan,
   isDynamic: Boolean = false,
   fullReadAllowed: Boolean = true,
-  schemaIdOpt: Option[String] = None) extends Serializable {
+  schemaIdOpt: Option[String] = None,
+  securityTags: Seq[String] = Nil) extends Serializable {
+
   def approximateRowSize: Long = if (rowCount == 0) 0 else (size + rowCount - 1) / rowCount
 }
 
@@ -35,14 +42,15 @@ object YtHadoopPath {
       optimizeMode.name,
       isDynamic,
       fullReadAllowed,
-      schemaIdOpt.getOrElse("None")
+      schemaIdOpt.getOrElse("None"),
+      Base64.getUrlEncoder.withoutPadding().encodeToString(toJsonTyped(securityTags).getBytes(UTF_8))
     ).mkString("_")
   }
 
   private def tryDeserialize(path: Path): Option[YtHadoopPath] = {
     Try {
       val (rowCountStr :: sizeStr :: modificationTimeStr :: optimizeModeStr ::
-        isDynamicStr :: fullReadAllowedStr :: schemaIdOptStr :: Nil) = path.getName.trim.split("_", 7).toList
+        isDynamicStr :: fullReadAllowedStr :: schemaIdOptStr :: extra) = path.getName.trim.split("_", 8).toList
       val rowCount = rowCountStr.trim.toLong
       val size = sizeStr.trim.toLong
       val modificationTime = modificationTimeStr.trim.toLong
@@ -53,8 +61,12 @@ object YtHadoopPath {
         case "None" => None
         case s => Some(s)
       }
-      YtHadoopPath(YPathEnriched.fromPath(path.getParent),
-        YtTableMeta(rowCount, size, modificationTime, optimizeMode, isDynamic, fullReadAllowed, schemaIdOpt))
+      val securityTags = extra.headOption.map { encoded =>
+        fromJsonTyped[Seq[String]](new String(Base64.getUrlDecoder.decode(encoded), UTF_8))
+      }.getOrElse(Nil)
+      YtHadoopPath(
+        YPathEnriched.fromPath(path.getParent),
+        YtTableMeta(rowCount, size, modificationTime, optimizeMode, isDynamic, fullReadAllowed, schemaIdOpt, securityTags))
     }.toOption
   }
 

@@ -107,6 +107,8 @@ object YtTableSparkSettings {
 
   case object CustomAttribute extends ConfigEntry[YTreeNode]("attr_")
 
+  case object SecurityTags extends ConfigEntry[YTreeNode]("security_tags", aliases = List("attr_security_tags"))
+
   case object StringToUtf8 extends ConfigEntry[Boolean]("string_to_utf8", Some(false))
 
   case object NullTypeAllowed extends ConfigEntry[Boolean]("null_type_allowed", Some(false))
@@ -130,7 +132,16 @@ object YtTableSparkSettings {
       }.getOrElse(str)
     }
 
-    val excludeOptions: Set[String] = Set(SortColumns, SortOrders, Schema, WriteTypeV3, NullTypeAllowed, Path, TableWriterConfig).map(_.name) ++
+    val excludeOptions: Set[String] = Set(
+      SortColumns,
+      SortOrders,
+      Schema,
+      WriteTypeV3,
+      NullTypeAllowed,
+      Path,
+      TableWriterConfig,
+      SecurityTags,
+      SparkYtInternalConfiguration.InferredSecurityTags).map(_.name) ++
       Set("write_transaction", "__partition_columns", "write_schema_hint")
   }
 

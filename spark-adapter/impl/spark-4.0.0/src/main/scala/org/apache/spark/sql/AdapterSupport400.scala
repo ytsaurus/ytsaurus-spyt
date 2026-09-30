@@ -11,6 +11,7 @@ import org.apache.spark.resource.ResourceProfile
 import org.apache.spark.serializer.Serializer
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.Expression
+import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
 import org.apache.spark.sql.classic.ClassicConversions.castToImpl
 import org.apache.spark.sql.classic.{ExpressionColumnNode, ExpressionUtils}
 import org.apache.spark.sql.execution.exchange.ShuffleExchangeExec.createShuffleWriteProcessor
@@ -27,6 +28,7 @@ import scala.xml.Node
 
 // The sole purpose of this object is to increase visibility of some Spark package-private methods
 object AdapterSupport400 {
+
   def sparkClassLoader(session: SparkSession): ClassLoader = session.sessionState.artifactManager.classloader
 
   def dfShowString(df: Dataset[_], numRows: Int, truncate: Int): String = df.showString(numRows, truncate)
@@ -117,4 +119,8 @@ object AdapterSupport400 {
     System.currentTimeMillis(),
     useCache = false
   )
+
+  def lookupCachedPlan(session: SparkSession, plan: LogicalPlan): Option[LogicalPlan] = {
+    session.sharedState.cacheManager.lookupCachedData(session, plan).map(_.plan)
+  }
 }

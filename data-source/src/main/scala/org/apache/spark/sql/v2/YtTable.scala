@@ -61,8 +61,8 @@ case class YtTable(
     }
   }
 
-  override def newScanBuilder(options: CaseInsensitiveStringMap): ScanBuilder = {
-    new YtScanBuilder(sparkSession, fileIndex, schema, dataSchema, options)
+  override def newScanBuilder(scanOptions: CaseInsensitiveStringMap): ScanBuilder = {
+    new YtScanBuilder(sparkSession, fileIndex, schema, dataSchema, YtTable.mergeScanOptions(options, scanOptions))
   }
 
   override def inferSchema(files: Seq[FileStatus]): Option[StructType] =
@@ -79,6 +79,22 @@ case class YtTable(
 }
 
 object YtTable {
+  /** Scan options override table options with the same key in any case, as reader options override session options. */
+  def mergeScanOptions(
+    tableOptions: CaseInsensitiveStringMap,
+    scanOptions: CaseInsensitiveStringMap): CaseInsensitiveStringMap = {
+    val merged = new java.util.HashMap[String, String]()
+
+    tableOptions.asCaseSensitiveMap.forEach { (key, value) =>
+      if (!scanOptions.containsKey(key)) {
+        merged.put(key, value)
+      }
+    }
+
+    merged.putAll(scanOptions.asCaseSensitiveMap)
+    new CaseInsensitiveStringMap(merged)
+  }
+
   @tailrec
   def supportsDataType(dataType: DataType): Boolean = dataType match {
     case _: NullType => true

@@ -258,6 +258,38 @@ class SchemaConverterTest extends AnyFlatSpec with Matchers
     SchemaConverter.keys(schema4) shouldBe Seq(Some("a"), None, Some("c"))
   }
 
+  private def hashedSchema(hashFirst: Boolean, schemaHint: Option[StructType] = None): StructType = {
+    val builder = TableSchema.builder().setUniqueKeys(false)
+    val withKeys = if (hashFirst) {
+      builder.addKeyExpression("hash", ColumnValueType.UINT64, "farm_hash(k) % 8").addKey("k", ColumnValueType.INT64)
+    } else {
+      builder.addKey("k", ColumnValueType.INT64).addKeyExpression("hash", ColumnValueType.UINT64, "farm_hash(k) % 8")
+    }
+    SchemaConverter.sparkSchema(withKeys.addValue("v", ColumnValueType.INT64).build().toYTree, schemaHint)
+  }
+
+  it should "take the key prefix from the YTsaurus key order, whatever the Spark field order" in {
+    Seq(true -> Seq("hash", "k"), false -> Seq("k", "hash")).foreach { case (hashFirst, keyOrder) =>
+      val schema = hashedSchema(hashFirst)
+      SchemaConverter.prefixKeys(schema) shouldBe keyOrder
+      SchemaConverter.prefixKeys(StructType(schema.fields.reverse)) shouldBe keyOrder
+    }
+  }
+
+  it should "keep the key position of a key column retyped by a schema hint" in {
+    val schema = hashedSchema(hashFirst = true, Some(StructType(Seq(StructField("k", StringType)))))
+    schema("k").dataType shouldBe StringType
+    SchemaConverter.prefixKeys(schema) shouldBe Seq("hash", "k")
+  }
+
+  it should "end the key prefix at the first key position without a column" in {
+    def keyField(name: String, keyId: Long): StructField = StructField(name, LongType, metadata = new MetadataBuilder()
+      .putLong(MetadataFields.KEY_ID, keyId)
+      .putString(MetadataFields.ORIGINAL_NAME, name)
+      .build())
+    SchemaConverter.prefixKeys(StructType(Seq(keyField("c", 2), keyField("a", 0)))) shouldBe Seq("a")
+  }
+
   it should "correctly write byte and short" in {
     withConf(SparkYtConfiguration.Schema.ForcingNullableIfNoMetadata, false){
       spark.createDataFrame(

@@ -28,10 +28,14 @@ public final class HashFunctionCall implements Serializable {
     public HashFunctionCall(HashFunction function, List<String> arguments, int buckets) {
         this.function = Objects.requireNonNull(function, "function");
         this.arguments = columns(arguments);
+        this.buckets = requirePositiveBuckets(buckets);
+    }
+
+    private static int requirePositiveBuckets(int buckets) {
         if (buckets <= 0) {
             throw new IllegalArgumentException("bucket count must be positive, got " + buckets);
         }
-        this.buckets = buckets;
+        return buckets;
     }
 
     private static List<String> columns(List<String> arguments) {
@@ -54,21 +58,9 @@ public final class HashFunctionCall implements Serializable {
         return buckets == NO_BUCKETS ? Optional.empty() : Optional.of(buckets);
     }
 
-    /** Hashes one value per column, in column order; a null array is a caller bug, pass {@code (Object) null} for a null value. */
-    public long hash(Object... argumentValues) {
-        Objects.requireNonNull(argumentValues, "argument values array is null; pass (Object) null for a null value");
-        if (argumentValues.length != arguments.size()) {
-            throw new IllegalArgumentException(this + " takes " + arguments.size() + " values, got "
-                    + argumentValues.length);
-        }
-        return function.hashArguments(argumentValues);
-    }
-
-    public long bucket(Object... argumentValues) {
-        if (buckets == NO_BUCKETS) {
-            throw new IllegalStateException(this + " has no bucket count");
-        }
-        return Long.remainderUnsigned(hash(argumentValues), buckets);
+    /** The bucket of a hash as YTsaurus computes {@code hash % buckets} for a uint64 hash: the unsigned remainder. */
+    public static long bucketOf(long hash, int buckets) {
+        return Long.remainderUnsigned(hash, requirePositiveBuckets(buckets));
     }
 
     @Override

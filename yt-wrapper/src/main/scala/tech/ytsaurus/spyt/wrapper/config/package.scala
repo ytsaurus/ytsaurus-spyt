@@ -15,6 +15,15 @@ import scala.util.Try
 
 package object config {
 
+  /** Prefixes of SPYT settings in Spark and session configs, in lookup order: spark.ytsaurus wins over spark.yt. */
+  val sparkConfigurationPrefixes: Seq[String] = Seq("spark.ytsaurus", "spark.yt")
+
+  /** The Spark config keys a setting is read from, for messages that tell users which key to set. */
+  def sparkConfigKeys(entry: ConfigEntry[_]): String = {
+    val keys = sparkConfigurationPrefixes.map(prefix => s"$prefix.${entry.name}")
+    s"${keys.head} (or ${keys.tail.mkString(", ")})"
+  }
+
   trait ConfProvider {
     def getYtConf(name: String): Option[String]
 
@@ -73,7 +82,7 @@ package object config {
   }
 
   implicit class SparkYtSqlContext(sqlContext: SQLContext) extends PrefixedConfProvider {
-    override protected val configurationPrefixes = Seq("spark.ytsaurus", "spark.yt")
+    override protected val configurationPrefixes = sparkConfigurationPrefixes
     override protected def rawGet(key: String): Option[String] = Try(sqlContext.getConf(key)).toOption
     override protected def rawKeys: Seq[String] = sqlContext.sparkSession.conf.getAll.keys.toList
   }
@@ -86,7 +95,7 @@ package object config {
   }
 
   implicit class SparkYtSparkConf(sparkConf: SparkConf) extends PrefixedConfProvider {
-    override protected val configurationPrefixes = Seq("spark.ytsaurus", "spark.yt")
+    override protected val configurationPrefixes = sparkConfigurationPrefixes
     override protected def rawGet(key: String): Option[String] = sparkConf.getOption(key)
     override protected def rawKeys: Seq[String] = sparkConf.getAll.map(_._1).toSeq
 
@@ -100,7 +109,7 @@ package object config {
   }
 
   implicit class SparkYtSparkSession(spark: SparkSession) extends WritableConfProvider {
-    override protected val configurationPrefixes = Seq("spark.ytsaurus", "spark.yt")
+    override protected val configurationPrefixes = sparkConfigurationPrefixes
     override protected def rawGet(key: String): Option[String] = spark.conf.getOption(key)
     override protected def rawKeys: Seq[String] = spark.conf.getAll.keys.toList
     override protected def rawSet(key: String, value: String): Unit = spark.conf.set(key, value)

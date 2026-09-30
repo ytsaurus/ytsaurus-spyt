@@ -65,8 +65,4 @@ public final class HashFunctionJavaCalls {
     public static long two(long first, String second) {
         return HashFunction.FARM_HASH.hashArguments(first, second);
     }
-
-    public static long callWithNullValues(HashFunctionCall call) {
-        return call.hash((Object[]) null);
-    }
 }

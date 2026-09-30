@@ -2,7 +2,7 @@ package org.apache.spark.sql.v2
 
 import org.apache.spark.sql.connector.catalog.{SessionConfigSupport, Table}
 import org.apache.spark.sql.execution.datasources.FileFormat
-import org.apache.spark.sql.execution.datasources.v2.FileDataSourceV2
+import org.apache.spark.sql.execution.datasources.v2.{DataSourceV2Utils, FileDataSourceV2}
 import org.apache.spark.sql.types.StructType
 import org.apache.spark.sql.util.CaseInsensitiveStringMap
 import org.apache.spark.sql.vectorized.YtFileFormat
@@ -60,4 +60,8 @@ class YtDataSourceV2 extends FileDataSourceV2 with SessionConfigSupport {
   }
 
   override def keyPrefix(): String = "yt"
+
+  def sessionOptions: Map[String, String] = {
+    DataSourceV2Utils.extractSessionConfigs(this, sparkSession.sessionState.conf)
+  }
 }

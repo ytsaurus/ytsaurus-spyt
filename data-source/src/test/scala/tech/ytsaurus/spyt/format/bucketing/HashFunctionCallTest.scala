@@ -7,8 +7,6 @@ import java.util.{Arrays, Collections, Optional}
 
 class HashFunctionCallTest extends AnyFlatSpec with Matchers {
 
-  private def int64(value: Long): java.lang.Long = Long.box(value)
-
   private def columns(names: String*): java.util.List[String] = Arrays.asList(names: _*)
 
   it should "expose the function, the columns and the optional bucket count" in {
@@ -45,37 +43,18 @@ class HashFunctionCallTest extends AnyFlatSpec with Matchers {
     new HashFunctionCall(HashFunction.FARM_HASH, columns("k"), Int.MaxValue).buckets shouldEqual Optional.of(Int.MaxValue)
   }
 
-  it should "hash and bucket values in column order the way YTsaurus does" in {
-    val call = new HashFunctionCall(HashFunction.FARM_HASH, columns("user_id", "region"), 10)
-    java.lang.Long.toUnsignedString(call.hash(int64(1L), "abc")) shouldEqual "12535759425065966635"
-    call.bucket(int64(1L), "abc") shouldEqual 5L
-    new HashFunctionCall(HashFunction.FARM_HASH, columns("region", "user_id"), 10).bucket("abc", int64(1L)) shouldEqual 4L
-  }
-
-  it should "take the bucket as the unsigned remainder, as YTsaurus does for uint64" in {
-    val call = new HashFunctionCall(HashFunction.FARM_HASH, columns("k"), 100)
-    val hash = call.hash(int64(4L))
+  it should "bucket a hash by its unsigned remainder, as YTsaurus does for uint64, for any positive bucket count" in {
+    val hash = HashFunction.FARM_HASH.hash(Long.box(4L))
     hash should be < 0L
-    call.bucket(int64(4L)) shouldEqual 22L
-    hash % 100L shouldEqual -94L
-  }
-
-  it should "refuse to evaluate the wrong number of values or a missing value array" in {
-    val call = new HashFunctionCall(HashFunction.FARM_HASH, columns("user_id", "region"), 10)
-    an[IllegalArgumentException] should be thrownBy call.hash(int64(1L))
-    an[IllegalArgumentException] should be thrownBy call.hash(int64(1L), "abc", "extra")
-    an[IllegalArgumentException] should be thrownBy call.bucket()
-    a[NullPointerException] should be thrownBy HashFunctionJavaCalls.callWithNullValues(call)
-  }
-
-  it should "hash a null value as YTsaurus null" in {
-    val call = new HashFunctionCall(HashFunction.FARM_HASH, columns("k"))
-    java.lang.Long.toUnsignedString(call.hash(null.asInstanceOf[AnyRef])) shouldEqual "3315701238936582721"
-  }
-
-  it should "refuse to bucket a call without a bucket count" in {
-    an[IllegalStateException] should be thrownBy
-      new HashFunctionCall(HashFunction.FARM_HASH, columns("k")).bucket(int64(42L))
+    HashFunctionCall.bucketOf(hash, 100) shouldEqual 22L
+    // farm_hash(4) % 2147483647, the uint64 hash 15016036017421091022 taken unsigned
+    HashFunctionCall.bucketOf(hash, Int.MaxValue) shouldEqual 832723767L
+    Seq(0, -1, Int.MinValue).foreach { buckets =>
+      withClue(s"[$buckets]: ") {
+        val error = the[IllegalArgumentException] thrownBy HashFunctionCall.bucketOf(1L, buckets)
+        error.getMessage should include(buckets.toString)
+      }
+    }
   }
 
   it should "compare by function, columns and bucket count" in {

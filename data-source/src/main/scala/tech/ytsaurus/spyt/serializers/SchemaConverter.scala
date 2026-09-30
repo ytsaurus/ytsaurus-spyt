@@ -35,6 +35,10 @@ object SchemaConverter {
       if (field.metadata.contains(ORIGINAL_NAME)) field.metadata.getString(ORIGINAL_NAME) else field.name
     }
 
+    def getExpression(field: StructField): Option[String] = {
+      if (field.metadata.contains(EXPRESSION)) Some(field.metadata.getString(EXPRESSION)) else None
+    }
+
     def isArrowSupported(field: StructField): Boolean = {
       field.metadata.contains(ARROW_SUPPORTED) && field.metadata.getBoolean(ARROW_SUPPORTED)
     }
@@ -229,9 +233,19 @@ object SchemaConverter {
     }
   }
 
+  private val schemaHintSuffix = "_hint"
+
+  /**
+   * Names of the columns that have a schema hint option, spelled as in the option keys (lowercased when the options
+   * come from a CaseInsensitiveStringMap), without parsing the hinted types.
+   */
+  def hintedColumns(options: Map[String, String]): Set[String] = {
+    options.keys.collect { case key if key.endsWith(schemaHintSuffix) => key.stripSuffix(schemaHintSuffix) }.toSet
+  }
+
   def schemaHint(options: Map[String, String]): Option[StructType] = {
     val fields = options.flatMap { case (key, value) =>
-      val name = key.stripSuffix("_hint")
+      val name = key.stripSuffix(schemaHintSuffix)
       if (name != key) Some(StructField(name, DataType.fromJson(value))) else None
     }
 
@@ -243,7 +257,7 @@ object SchemaConverter {
   }
 
   def serializeSchemaHint(schema: StructType): Map[String, String] = {
-    schema.map(f => (s"${f.name}_hint", f.dataType.json)).toMap
+    schema.map(f => (s"${f.name}$schemaHintSuffix", f.dataType.json)).toMap
   }
 
   def wrapSparkAttributes(

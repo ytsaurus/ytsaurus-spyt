@@ -99,12 +99,21 @@ class YtScanBuilder(
 
   override def build(): Scan = build(readDataSchema(), readPartitionSchema())
 
-  private def build(dataSchema: StructType, partitionSchema: StructType): Scan = {
+  private def build(readSchema: StructType, partitionSchema: StructType): Scan = {
     var opts = options.asScala
     opts = opts + (YtTableSparkSettings.OptimizedForScan.name -> optimizedForScan.toString)
     opts = opts + (SparkYtInternalConfiguration.FullReadAllowed.name -> fullReadAllowed.toString)
-    YtScan(sparkSession, hadoopConf, fileIndex, dataSchema, dataSchema, partitionSchema,
-      new CaseInsensitiveStringMap(opts.asJava), partitionFilters, dataFilters,
+    YtScan(
+      sparkSession,
+      hadoopConf,
+      fileIndex,
+      readSchema,
+      readSchema,
+      partitionSchema,
+      new CaseInsensitiveStringMap(opts.asJava),
+      partitionFilters,
+      dataFilters,
+      fullDataSchema = dataSchema,
       pushedFilterSegments = pushedFilterSegments)
   }
 }

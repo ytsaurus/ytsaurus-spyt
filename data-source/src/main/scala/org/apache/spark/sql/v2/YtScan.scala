@@ -5,7 +5,7 @@ import org.apache.hadoop.fs.Path
 import org.apache.spark.sql.catalyst.expressions.Expression
 import org.apache.spark.sql.catalyst.expressions.codegen.GenerateUnsafeProjection
 import org.apache.spark.sql.connector.expressions.{FieldReference, NamedReference}
-import org.apache.spark.sql.connector.read.partitioning.{Partitioning, UnknownPartitioning}
+import org.apache.spark.sql.connector.read.partitioning.{KeyGroupedPartitioning, Partitioning, UnknownPartitioning}
 import org.apache.spark.sql.connector.read.{PartitionReaderFactory, Statistics, SupportsReportPartitioning, SupportsRuntimeFiltering}
 import org.apache.spark.sql.execution.datasources.v2.FileScan
 import org.apache.spark.sql.execution.datasources.{FilePartition, PartitionDirectory, PartitionedFile, PartitioningAwareFileIndex}
@@ -29,17 +29,19 @@ import java.util.concurrent.CompletableFuture
 import java.util.{Locale, OptionalLong}
 import scala.jdk.CollectionConverters._
 
-case class YtScan(sparkSession: SparkSession,
-                  hadoopConf: Configuration,
-                  fileIndex: PartitioningAwareFileIndex,
-                  dataSchema: StructType,
-                  readDataSchema: StructType,
-                  readPartitionSchema: StructType,
-                  options: CaseInsensitiveStringMap,
-                  partitionFilters: Seq[Expression],
-                  dataFilters: Seq[Expression],
-                  pushedFilterSegments: SegmentSet = SegmentSet(),
-                  keyPartitionsHint: Option[Seq[FilePartition]] = None) extends FileScan
+case class YtScan(
+  sparkSession: SparkSession,
+  hadoopConf: Configuration,
+  fileIndex: PartitioningAwareFileIndex,
+  dataSchema: StructType,
+  readDataSchema: StructType,
+  readPartitionSchema: StructType,
+  options: CaseInsensitiveStringMap,
+  partitionFilters: Seq[Expression],
+  dataFilters: Seq[Expression],
+  fullDataSchema: StructType,
+  pushedFilterSegments: SegmentSet = SegmentSet(),
+  keyPartitionsHint: Option[Seq[FilePartition]] = None) extends FileScan
   with SupportsReportPartitioning
   with SupportsRuntimeFiltering {
 
@@ -49,6 +51,20 @@ case class YtScan(sparkSession: SparkSession,
   @transient private var runtimeFilterSegments: SegmentSet = SegmentSet()
 
   @transient private var cachedPartitions: Option[Seq[FilePartition]] = None
+
+  @transient private lazy val hashBucketing: Option[YtHashBucketing] = {
+    if (keyPartitionsHint.isDefined) {
+      None
+    } else {
+      YtHashBucketing.tryBuild(
+        sparkSession,
+        fileIndex,
+        fullDataSchema,
+        readDataSchema,
+        readPartitionSchema,
+        options.asScala.toMap)
+    }
+  }
 
   private def effectiveFilterSegments: SegmentSet = {
     SegmentSet.intercept(pushedFilterSegments, runtimeFilterSegments)
@@ -88,7 +104,7 @@ case class YtScan(sparkSession: SparkSession,
   }
 
   def supportsKeyPartitioning: Boolean = {
-    keyPartitionsHint.isDefined
+    keyPartitionsHint.isDefined || hashBucketing.isDefined
   }
 
   override def isSplitable(path: Path): Boolean = true
@@ -97,7 +113,7 @@ case class YtScan(sparkSession: SparkSession,
     new SerializableConfiguration(hadoopConf))
 
   override def createReaderFactory(): PartitionReaderFactory = {
-    val keyPartitionedOptions = Map(YtTableSparkSettings.KeyPartitioned.name -> supportsKeyPartitioning.toString)
+    val keyPartitionedOptions = Map(YtTableSparkSettings.KeyPartitioned.name -> keyPartitionsHint.isDefined.toString)
 
     val adapter = YtPartitionReaderFactoryAdapter(sparkSession.sessionState.conf, broadcastedConf,
       dataSchema, readDataSchema, readPartitionSchema,
@@ -164,7 +180,7 @@ case class YtScan(sparkSession: SparkSession,
 
   override protected def partitions: Seq[FilePartition] = {
     cachedPartitions.getOrElse {
-      val computed = keyPartitionsHint.getOrElse {
+      val computed = keyPartitionsHint.orElse(hashBucketing.map(_.partitions)).getOrElse {
         val splitFiles = preparePartitioning()
         YtFilePartition.getFilePartitions(splitFiles)
       }
@@ -222,11 +238,17 @@ case class YtScan(sparkSession: SparkSession,
     splitFilesFutures.flatMap(_.get())
   }
 
-  // Spark drops UnknownPartitioning in V2ScanPartitioningAndOrdering and never reads its partition
-  // count, so computing the partitions here would only cost an extra partition_tables call while
-  // planning.
+  // A hash-bucketed scan reports KeyGroupedPartitioning, so Spark can join it without shuffling this side
+  // (storage-partitioned join); its partitions are bucket key ranges and need no partition_tables call.
+  // Any other scan reports UnknownPartitioning: Spark drops it in V2ScanPartitioningAndOrdering and never reads
+  // its partition count, so computing the partitions here would only cost an extra partition_tables call.
   override def outputPartitioning(): Partitioning = {
-    new UnknownPartitioning(0)
+    hashBucketing match {
+      case Some(bucketing) =>
+        new KeyGroupedPartitioning(Array(bucketing.transform), bucketing.partitions.length)
+      case None =>
+        new UnknownPartitioning(0)
+    }
   }
 
   override def estimateStatistics(): Statistics = new Statistics {

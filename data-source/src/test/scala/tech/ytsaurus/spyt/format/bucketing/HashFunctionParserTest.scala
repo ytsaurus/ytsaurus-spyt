@@ -17,6 +17,12 @@ class HashFunctionParserTest extends AnyFlatSpec with Matchers {
     Optional.of(new HashFunctionCall(HashFunction.FARM_HASH, Arrays.asList(columns: _*), buckets))
   }
 
+  private def parsedBucket(expression: String, values: AnyRef*): Long = {
+    val call = HashFunctionParser.parse(expression).get
+    call.arguments.size shouldEqual values.length
+    HashFunctionCall.bucketOf(call.function.hashArguments(values: _*), call.buckets.get.intValue())
+  }
+
   private def rejected(expressions: String*): Unit = {
     expressions.foreach { expression =>
       withClue(s"[$expression]: ") {
@@ -221,9 +227,9 @@ class HashFunctionParserTest extends AnyFlatSpec with Matchers {
 
   it should "evaluate a parsed call end to end" in {
     // smoke vectors only; the full golden set lives in HashFunctionTest
-    HashFunctionParser.parse("farm_hash(k) % 8").get.bucket(int64(42L)) shouldEqual 4L
-    HashFunctionParser.parse("farm_hash(user_id, region) % 10").get.bucket(int64(1L), "abc") shouldEqual 5L
-    HashFunctionParser.parse("farm_hash(region, user_id) % 10").get.bucket("abc", int64(1L)) shouldEqual 4L
-    HashFunctionParser.parse("farm_hash([user-id]) % 100u").get.bucket(int64(42L)) shouldEqual 4L
+    parsedBucket("farm_hash(k) % 8", int64(42L)) shouldEqual 4L
+    parsedBucket("farm_hash(user_id, region) % 10", int64(1L), "abc") shouldEqual 5L
+    parsedBucket("farm_hash(region, user_id) % 10", "abc", int64(1L)) shouldEqual 4L
+    parsedBucket("farm_hash([user-id]) % 100u", int64(42L)) shouldEqual 4L
   }
 }

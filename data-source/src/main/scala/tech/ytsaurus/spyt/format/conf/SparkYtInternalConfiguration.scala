@@ -15,6 +15,8 @@ object SparkYtInternalConfiguration {
 
   case object FullReadAllowed extends ConfigEntry[Boolean]("full_read_allowed", Some(true))
 
+  case object HashBucketingCatalogRead extends ConfigEntry[Boolean]("hash_bucketing_catalog_read", Some(false))
+
   // write options
 
   case object InferredSecurityTags extends ConfigEntry[YTreeNode](s"$prefix.inferred_security_tags")

@@ -75,6 +75,14 @@ object SparkYtConfiguration {
       case object UnionLimit extends ConfigEntry[Int](s"$prefix.unionLimit", Some(1))
     }
 
+    /** Read farm_hash(...) % N bucketed static tables as N key-grouped partitions, up to MaxBuckets buckets. */
+    object HashBucketing {
+      private val prefix: String = s"${Read.prefix}.hashBucketing"
+
+      case object Enabled extends ConfigEntry[Boolean](s"$prefix.enabled", Some(false))
+
+      case object MaxBuckets extends ConfigEntry[Int](s"$prefix.maxBuckets", Some(4096))
+    }
 
     object KeyColumnsFilterPushdown {
 

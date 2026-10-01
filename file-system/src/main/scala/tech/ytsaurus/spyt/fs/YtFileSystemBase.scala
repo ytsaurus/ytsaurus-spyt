@@ -27,11 +27,15 @@ abstract class YtFileSystemBase extends FileSystem with LogLazy {
   private var _workingDirectory: Path = new Path("/")
 
   private var defaultYtConf: YtClientConfiguration = _
+  private var clientScope: Option[String] = None
 
   protected[fs] def ytUser: String = defaultYtConf.user
 
   protected[fs] def ytClient(f: YPathEnriched): CompoundClient = {
-    YtClientProvider.ytClientWithProxy(defaultYtConf, f.cluster)
+    clientScope match {
+      case Some(scope) => YtClientProvider.scopedYtRpcClient(defaultYtConf.replaceProxy(f.cluster), scope).yt
+      case None => YtClientProvider.ytClientWithProxy(defaultYtConf, f.cluster)
+    }
   }
 
   private[fs] def validateSameCluster(src: YPathEnriched, dst: YPathEnriched): Unit = {
@@ -46,6 +50,7 @@ abstract class YtFileSystemBase extends FileSystem with LogLazy {
     setConf(conf)
     this._uri = uri
     this.defaultYtConf = ytClientConfiguration(getConf)
+    this.clientScope = Option(conf.get(YtFileSystemBase.CLIENT_SCOPE_KEY))
   }
 
   override def getUri: URI = _uri
@@ -186,4 +191,10 @@ abstract class YtFileSystemBase extends FileSystem with LogLazy {
         throw unknown
     }
   }
+}
+
+object YtFileSystemBase {
+  // File systems created with this key use the YT clients of the given scope. Whoever sets the key closes them
+  // with YtClientProvider.closeScope after the file systems are no longer used.
+  val CLIENT_SCOPE_KEY: String = "yt.clientScope"
 }

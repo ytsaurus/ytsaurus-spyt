@@ -1,5 +1,7 @@
 from common.cluster_utils import DEFAULT_SPARK_CONF
 
+from contextlib import contextmanager
+from hashlib import sha256
 import logging
 import os
 import time
@@ -33,6 +35,27 @@ def upload_file(yt_client, source_path, remote_path):
     yt_client.create("file", remote_path)
     with open(job_path(source_path), 'rb') as file:
         yt_client.write_file(remote_path, file)
+
+
+@contextmanager
+def temporary_yt_user(yt_client, user_name, token):
+    """Create a user that authenticates with the token and remove the user on exit."""
+    yt_client.create("user", attributes={"name": user_name}, ignore_existing=True)
+    while yt_client.get(f"//sys/users/{user_name}/@life_stage") != "creation_committed":
+        time.sleep(1)
+
+    token_hash = sha256(token.encode()).hexdigest()
+    yt_client.set(f"//sys/tokens/{token_hash}", user_name)
+    yt_client.create("map_node", f"//sys/cypress_tokens/{token_hash}", ignore_existing=True)
+    yt_client.set(f"//sys/cypress_tokens/{token_hash}/@user", user_name)
+    try:
+        yield user_name, token
+    finally:
+        yt_client.remove(f"//sys/users/{user_name}")
+        yt_client.remove(f"//sys/tokens/{token_hash}")
+        yt_client.remove(f"//sys/cypress_tokens/{token_hash}")
+        while yt_client.exists(f"//sys/users/{user_name}"):
+            time.sleep(1)
 
 
 def get_executors_operation_id(yt_client, driver_operation_id, retries=30):

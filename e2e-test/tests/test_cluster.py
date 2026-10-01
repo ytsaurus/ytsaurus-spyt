@@ -1,9 +1,12 @@
+from common.cluster import SpytCluster
 from common.helpers import assert_items_equal
-from utils import upload_file
+from utils import YT_PROXY, temporary_yt_user, upload_file
 from spyt.conf import read_global_conf, read_remote_conf, read_spark_defaults_conf
+import json
 import requests
 import pytest
 import time
+import uuid
 
 def test_spyt_root_existence(yt_client):
     assert_items_equal(yt_client.list("//home/spark"), ["conf", "distrib", "spyt"])
@@ -157,3 +160,52 @@ def wait_submission_final_state(rest_endpoint, submission_id, timeout=120, ping_
             return driver_state
         time.sleep(ping_period)
     raise TimeoutError(f"Submission {submission_id} has not finished in {timeout} seconds")
+
+
+@pytest.mark.timeout(300)
+def test_rest_submit_resolves_dependencies_with_submitter_credentials(yt_client, tmp_user, tmp_dir, tmp_path) -> None:
+    """Check that the master resolves the dependencies of every REST submit with the submitter's credentials."""
+    from spyt.submit import RetryConfig, SparkSubmissionClient, SubmissionStatus
+
+    owner_name, owner_token = tmp_user
+    suffix = uuid.uuid4().hex[:8]
+    with temporary_yt_user(yt_client, f"submitter_a_{suffix}", uuid.uuid4().hex) as submitter_a, \
+            temporary_yt_user(yt_client, f"submitter_b_{suffix}", uuid.uuid4().hex) as submitter_b:
+        submitters = [submitter_a, submitter_b]
+        yt_client.set(f"{tmp_dir}/@acl", [{
+            "action": "allow",
+            "subjects": [owner_name] + [name for name, _ in submitters],
+            "permissions": ["read", "write", "remove"],
+        }])
+        job_path = f"{tmp_dir}/spark_job_files_and_jars.py"
+        upload_file(yt_client, "jobs/spark_job_files_and_jars.py", job_path)
+        deps_dirs = {name: f"{tmp_dir}/deps_{name}" for name, _ in submitters}
+        for name, deps_dir in deps_dirs.items():
+            yt_client.create("map_node", deps_dir, attributes={
+                "inherit_acl": False,
+                "acl": [{"action": "allow", "subjects": [name], "permissions": ["read"]}],
+            })
+            for dependency in ["id.py", "deps.jar"]:
+                upload_file(yt_client, f"jobs/{dependency}", f"{deps_dir}/{dependency}")
+
+        with SpytCluster(proxy=YT_PROXY, discovery_path=f"{tmp_dir}/cluster",
+                         dump_dir=str(tmp_path), user=owner_name, token=owner_token) as cluster:
+            for name, token in submitters:
+                deps_dir = deps_dirs[name]
+                out_path = f"{tmp_dir}/out_{name}"
+                submitter = SparkSubmissionClient.create(
+                    proxy=YT_PROXY, discovery_path=cluster.discovery_path, user=name, token=token)
+                launcher = submitter.new_launcher()
+                launcher.set_app_resource(f"yt:/{job_path}")
+                launcher.add_file(f"yt:/{deps_dir}/id.py")
+                launcher.add_jar(f"yt:/{deps_dir}/deps.jar")
+                launcher.add_app_args(out_path)
+                launcher.set_conf("spark.submit.deployMode", "cluster")
+                launcher.set_conf("spark.executor.cores", "1")
+                launcher.set_conf("spark.executor.memory", "1g")
+                submission_id = submitter.submit(launcher, RetryConfig(enable_retry=False))
+                assert submitter.wait_final(submission_id) is SubmissionStatus.FINISHED
+
+                result = json.loads(yt_client.read_file(out_path).read())
+                # A standalone driver does not get spark.files in its working directory, so only the jar is checked
+                assert result["jar_value"] == "jar-dep-loaded"

@@ -3,6 +3,8 @@ package tech.ytsaurus.spyt.test
 import org.apache.spark.scheduler.{SparkListener, SparkListenerStageSubmitted, SparkListenerTaskStart}
 import org.apache.spark.sql.SparkSession
 import org.scalatest.Assertions
+import org.scalatest.concurrent.Eventually
+import org.scalatest.time.SpanSugar.convertIntToGrainOfTime
 
 import scala.sys.process._
 import scala.util.{Failure, Success, Try}
@@ -33,7 +35,7 @@ class ExecutorKillerSparkListener(victimProcess: ProcessHandle,
   }
 }
 
-object ExecutorKillerSparkListener extends Assertions {
+object ExecutorKillerSparkListener extends Assertions with Eventually {
   def scheduleExecutorKillByStage(spark: SparkSession)(stageCondition: SparkListenerStageSubmitted => Boolean): Unit = {
     scheduleExecutorKill(spark, stageCondition = stageCondition)
   }
@@ -48,7 +50,7 @@ object ExecutorKillerSparkListener extends Assertions {
     taskCondition: SparkListenerTaskStart => Boolean = _ => false): Unit = {
     // Since we're using here local-cluster Spark master hence Executors are child processes of the test process.
     // So here we are choosing one child executor process as a victim to kill it later.
-    val executorProcessToKillOpt = ProcessHandle.current().descendants().filter { child =>
+    def findExecutorProcess() = ProcessHandle.current().descendants().filter { child =>
       Try(Seq("cat", s"/proc/${child.pid()}/cmdline").!!) match {
         case Success(procCmd) => procCmd.contains("CoarseGrainedExecutorBackend")
         case Failure(exception) =>
@@ -58,10 +60,14 @@ object ExecutorKillerSparkListener extends Assertions {
       }
     }.findAny()
 
-    if (executorProcessToKillOpt.isEmpty) {
-      fail("No executor child processes is found, there must be at least one")
+    // A new local-cluster session starts its executors asynchronously, so wait until one of them is running.
+    val executorProcessToKill = eventually(timeout(30.seconds), interval(500.millis)) {
+      val executorProcessToKillOpt = findExecutorProcess()
+      if (executorProcessToKillOpt.isEmpty) {
+        fail("No executor child processes is found, there must be at least one")
+      }
+      executorProcessToKillOpt.get()
     }
-    val executorProcessToKill = executorProcessToKillOpt.get()
     val executorKillerListener = new ExecutorKillerSparkListener(executorProcessToKill, stageCondition, taskCondition)
 
     spark.sparkContext.addSparkListener(executorKillerListener)

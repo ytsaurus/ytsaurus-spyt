@@ -5,15 +5,13 @@ from common.cluster import DirectSubmitter, HistoryServer, SpytCluster, ReverseP
 from common.cluster_utils import default_conf
 import logging
 import os
-import time
-from hashlib import sha256
 
 from pyspark.sql import SparkSession
 import pytest
 import shutil
 import spyt.client
 from spyt.utils import check_spark_version
-from utils import DRIVER_CLIENT_CONF, SPARK_CONF, YT_PROXY
+from utils import DRIVER_CLIENT_CONF, SPARK_CONF, YT_PROXY, temporary_yt_user
 import uuid
 from yt.wrapper import YtClient
 
@@ -73,25 +71,8 @@ def tmp_dir(yt_client):
 
 @pytest.fixture
 def tmp_user(yt_client):
-    user_name = "tmp_user"
-    token = "sometoken"
-    yt_client.create("user", attributes={"name": user_name}, ignore_existing=True)
-
-    while yt_client.get(f"//sys/users/{user_name}/@life_stage") != "creation_committed":
-        time.sleep(1)
-
-    token_hash = sha256(token.encode()).hexdigest()
-    yt_client.set(f"//sys/tokens/{token_hash}", user_name)
-    yt_client.create("map_node", f"//sys/cypress_tokens/{token_hash}", ignore_existing=True)
-    yt_client.set(f"//sys/cypress_tokens/{token_hash}/@user", user_name)
-
-    yield user_name, token
-
-    yt_client.remove(f"//sys/users/{user_name}")
-    yt_client.remove(f"//sys/tokens/{token_hash}")
-    yt_client.remove(f"//sys/cypress_tokens/{token_hash}")
-    while yt_client.exists(f"//sys/users/{user_name}"):
-        time.sleep(1)
+    with temporary_yt_user(yt_client, "tmp_user", "sometoken") as user:
+        yield user
 
 
 def _create_local_spark_session(request, user_config=None):

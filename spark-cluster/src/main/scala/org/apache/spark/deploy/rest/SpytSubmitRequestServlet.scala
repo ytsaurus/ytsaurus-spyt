@@ -1,18 +1,21 @@
 package org.apache.spark.deploy.rest
 
 import com.fasterxml.jackson.core.JsonProcessingException
+import org.apache.hadoop.conf.Configuration
 import org.apache.spark.SparkConf
 import org.apache.spark.deploy.{DeployMessages, SparkSubmit, SparkSubmitArguments}
 import org.apache.spark.internal.Logging
 import org.apache.spark.rpc.RpcEndpointRef
 import org.apache.spark.util.Utils
-import tech.ytsaurus.spyt.SparkVersionUtils
+import tech.ytsaurus.spyt.{SparkAdapter, SparkVersionUtils}
+import tech.ytsaurus.spyt.fs.YtFileSystemBase
 import tech.ytsaurus.spyt.wrapper.client.YtClientConfigurationConverter.ytClientConfiguration
 import tech.ytsaurus.spyt.wrapper.client.YtClientProvider
 import tech.ytsaurus.spyt.wrapper.config.Utils.{parseRemoteConfig, remoteClusterConfigPath, remoteGlobalConfigPath, remoteVersionConfigPath}
 import tech.ytsaurus.spyt.wrapper.discovery.CypressDiscoveryService
 
 import java.io.InputStream
+import java.util.UUID
 import scala.io.Source
 import scala.jdk.CollectionConverters._
 import scala.util.control.NonFatal
@@ -76,7 +79,9 @@ class SpytSubmitRequestServlet(masterEndpoint: RpcEndpointRef, masterUrl: String
     val args = classArgs ++ confArgs ++ Seq(req.appResource) ++
       Option(req.appArgs).map(_.toSeq).getOrElse(Seq.empty)
     val sa = new SparkSubmitArguments(args, sys.env)
-    val (_, _, sparkConf, _) = new SparkSubmit().prepareSubmitEnvironment(sa)
+    val (_, _, sparkConf, _) = withClientScope { clientScope =>
+      new SparkSubmit().prepareSubmitEnvironment(sa, Some(submitterHadoopConf(sa, clientScope)))
+    }
 
     val driveropConf =
       if (anyActiveWorkerHasDriverOp()) Map(SPARK_DRIVER_RESOURCE_DRIVEROP_AMOUNT -> "1")
@@ -148,10 +153,42 @@ private object SpytSubmitRequestServlet {
   val SPYT_CLUSTER_VERSION_ENV: String = "SPYT_CLUSTER_VERSION"
   val SPARK_BASE_DISCOVERY_PATH_ENV: String = "SPARK_BASE_DISCOVERY_PATH"
   val PreferIpv6Opt: String = "-Djava.net.preferIPv6Addresses=true"
+  private val SPYT_FS_PACKAGE_PREFIX: String = "tech.ytsaurus.spyt.fs."
 
   def prependJavaOpt(conf: Map[String, String], key: String): Map[String, String] = {
     val cur = conf.getOrElse(key, "")
     if (cur.contains("java.net.preferIPv6Addresses")) conf
     else conf + (key -> (if (cur.isEmpty) PreferIpv6Opt else s"$PreferIpv6Opt $cur"))
+  }
+
+  def withClientScope[T](body: String => T): T = {
+    val clientScope = UUID.randomUUID().toString
+    try {
+      body(clientScope)
+    } finally {
+      YtClientProvider.closeScope(clientScope)
+    }
+  }
+
+  // The YT clients of the request are created in its own scope, so they are not shared with other submitters and
+  // are closed right after the dependencies are resolved.
+  def submitterHadoopConf(sa: SparkSubmitArguments, clientScope: String): Configuration = {
+    val hadoopConf = withSpytFsCacheDisabled(SparkAdapter.instance.getHadoopConf(sa.toSparkConf()))
+    hadoopConf.set(YtFileSystemBase.CLIENT_SCOPE_KEY, clientScope)
+    hadoopConf
+  }
+
+  // Hadoop caches FileSystem instances per scheme and UGI, and the master resolves dependencies of all submitters
+  // under one UGI, so a cached SPYT FileSystem would keep the YTsaurus credentials of the first submitter.
+  def withSpytFsCacheDisabled(hadoopConf: Configuration): Configuration = {
+    val result = new Configuration(hadoopConf)
+    hadoopConf.asScala.foreach { entry =>
+      entry.getKey.split('.') match {
+        case Array("fs", scheme, "impl") if entry.getValue.startsWith(SPYT_FS_PACKAGE_PREFIX) =>
+          result.setBoolean(s"fs.$scheme.impl.disable.cache", true)
+        case _ =>
+      }
+    }
+    result
   }
 }

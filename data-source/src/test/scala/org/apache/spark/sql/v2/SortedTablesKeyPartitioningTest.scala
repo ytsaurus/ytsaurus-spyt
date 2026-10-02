@@ -45,11 +45,6 @@ class SortedTablesKeyPartitioningTest extends AnyFlatSpec with Matchers with Loc
     spark.conf.set(s"spark.yt.${SparkYtConfiguration.Read.KeyPartitioning.UnionLimit.name}", value = 2)
   }
 
-  override def afterAll(): Unit = {
-    super.afterAll()
-    spark.conf.set(s"spark.yt.${SparkYtConfiguration.Read.KeyPartitioning.Enabled.name}", value = false)
-  }
-
   private def validatePivotKeys(keys: Seq[(TuplePoint, TuplePoint)]): Unit = {
     keys.head._1 shouldBe TupleSegment.mInfinity
     keys.zip(keys.tail).foreach { case ((_, prevSegmentEnd), (nextSegmentBegin, _)) =>

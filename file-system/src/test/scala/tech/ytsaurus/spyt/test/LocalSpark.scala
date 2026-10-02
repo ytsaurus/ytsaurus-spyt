@@ -44,11 +44,26 @@ trait LocalSpark extends LocalYtClient with BeforeAndAfterEach {
     super.afterEach()
   }
 
+  /**
+   * Returns the shared session to the settings it was created with, so that settings this suite changed through
+   * spark.conf do not reach the suites that run after it in the same JVM. The scope is the suite, not the test:
+   * settings set in beforeAll or in a test stay for the remaining tests of the suite. Settings the session was created
+   * with, such as a sparkConf override of the suite that created it, stay; use reinstantiateSparkSession against them.
+   */
+  override def afterAll(): Unit = {
+    try {
+      LocalSpark.restoreInitialConf()
+    } finally {
+      super.afterAll()
+    }
+  }
+
   private def sparkSession(extraConf: Map[String, String] = Map()): SparkSession = {
     if (LocalSpark.spark != null) {
       LocalSpark.spark
     } else {
       LocalSpark.spark = sparkSessionBuilder(extraConf).getOrCreate()
+      LocalSpark.initialConf = LocalSpark.spark.conf.getAll
       LocalSpark.spark
     }
   }
@@ -162,11 +177,32 @@ trait LocalSpark extends LocalYtClient with BeforeAndAfterEach {
 object LocalSpark {
   private var spark: SparkSession = _
 
+  /** Settings of the shared session right after it was created; empty while there is no shared session. */
+  private var initialConf: Map[String, String] = Map.empty
+
   def stop(): Unit = {
     SparkSession.getDefaultSession.foreach(_.stop())
     SparkSession.clearActiveSession()
     SparkSession.clearDefaultSession()
     spark = null
+    initialConf = Map.empty
+  }
+
+  /**
+   * Unsets the settings added to the shared session since it was created and sets back the ones changed or unset
+   * since then. Settings that still have their initial value are not touched, because static and Spark core settings
+   * cannot be set through spark.conf. Does nothing when there is no shared session.
+   */
+  private[test] def restoreInitialConf(): Unit = {
+    if (spark != null) {
+      val currentConf = spark.conf.getAll
+      currentConf.keys.filterNot(initialConf.contains).foreach(spark.conf.unset)
+      initialConf.foreach { case (key, value) =>
+        if (!currentConf.get(key).contains(value)) {
+          spark.conf.set(key, value)
+        }
+      }
+    }
   }
 
   def maybeSetExtensions(sparkConf: SparkConf): SparkConf = {

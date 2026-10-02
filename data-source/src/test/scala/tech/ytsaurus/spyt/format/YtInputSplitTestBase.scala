@@ -18,11 +18,6 @@ abstract class YtInputSplitTestBase extends AnyFlatSpec with Matchers with Local
     spark.conf.set(s"spark.yt.${SparkYtConfiguration.Read.KeyColumnsFilterPushdown.YtPathCountLimit.name}", value = 10)
   }
 
-  override def afterAll(): Unit = {
-    super.afterAll()
-    spark.conf.set(s"spark.yt.${SparkYtConfiguration.Read.KeyColumnsFilterPushdown.Enabled.name}", value = false)
-  }
-
   List("signed" -> testSchema, "unsigned" -> testSchemaUnsigned).foreach { case (name, schema) =>
     it should s"reduce number of read rows in dynamic tables for $name schema" in {
       prepareTestTable(

@@ -27,13 +27,15 @@ logger = logging.getLogger(__name__)
 
 
 class ClusterBase(object):
-    def __init__(self, proxy, discovery_path=None, group_id=None, yt_root_path=None, dump_dir=None):
+    def __init__(self, proxy, discovery_path=None, group_id=None, yt_root_path=None,
+                 dump_dir=None, user="root", token="token"):
         self.proxy = proxy
         self.group_id = group_id
         self.discovery_path = discovery_path or f"//home/cluster-{str(uuid.uuid4())}"
-        self.user = "root"
-        self.token = "token"
-        self.yt_client = YtClient(proxy=self.proxy, token=self.token)
+        self.user = user
+        self.token = token
+        self.yt_client = YtClient(
+            proxy=self.proxy, token=self.token, config={"impersonation_user": self.user})
         self.yt_root_path = yt_root_path
         self.dump_dir = dump_dir
         self.op = None
@@ -90,8 +92,9 @@ class SpytCluster(ClusterBase):
 
     def __init__(self, proxy, discovery_path=None, group_id=None, java_home=None, yt_root_path=None, dump_dir=None,
                  spark_conf=None, tvm_secret=None, enable_monium_logs_export=False, enable_multi_operation_mode=False,
-                 operation_alias=None, enable_ytsaurus_shuffle=False, rpc_job_proxy=False):
-        super().__init__(proxy, discovery_path, group_id, yt_root_path, dump_dir)
+                 operation_alias=None, enable_ytsaurus_shuffle=False, rpc_job_proxy=False,
+                 user="root", token="token"):
+        super().__init__(proxy, discovery_path, group_id, yt_root_path, dump_dir, user=user, token=token)
         self.java_home = java_home
         self.spark_conf = spark_conf or {}
         self.tvm_secret = tvm_secret

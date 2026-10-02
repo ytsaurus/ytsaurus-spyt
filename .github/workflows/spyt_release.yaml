@@ -32,6 +32,7 @@ jobs:
           core-fraction: 100
           disk-type: network-ssd-nonreplicated
           disk-size: 93GB
+          runner-version: '2.337.0'
 
   checkout:
     name: Checkout sources

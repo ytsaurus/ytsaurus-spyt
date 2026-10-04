@@ -6,6 +6,7 @@ import tech.ytsaurus.core.GUID
 import tech.ytsaurus.core.cypress.{RichYPath, YPath}
 import tech.ytsaurus.spyt.fs.path.YPathEnriched._
 import tech.ytsaurus.spyt.wrapper.YtWrapper
+import tech.ytsaurus.spyt.wrapper.cypress.YtAttributes
 import tech.ytsaurus.ysontree.{YTreeBuilder, YTreeNode}
 
 import java.util.concurrent.CompletableFuture
@@ -75,9 +76,15 @@ case class YPathEnriched(path: Path, attributes: Map[String, String] = Map.empty
 
   def dropTimestamp(): YPathEnriched = YPathEnriched(path, attributes - TIMESTAMP_KEY)
 
-  def lockAsync()(implicit yt: CompoundClient): CompletableFuture[YPathEnriched] = transaction match {
+  def lockAsync(nodeAttributes: Map[String, YTreeNode])
+    (implicit yt: CompoundClient): CompletableFuture[YPathEnriched] = transaction match {
     case Some(tId) if node.isEmpty =>
-      YtWrapper.lockNodeAsync(toYPath, tId).thenApply(nodeId => withAttr(NODE_KEY, nodeId))
+      if (nodeAttributes(YtAttributes.lockMode).stringValue() != "none") {
+        // A transaction cannot snapshot a node it has already locked for writing.
+        CompletableFuture.completedFuture(withAttr(NODE_KEY, nodeAttributes(YtAttributes.id).stringValue()))
+      } else {
+        YtWrapper.lockNodeAsync(toYPath, tId).thenApply(nodeId => withAttr(NODE_KEY, nodeId))
+      }
     case _ =>
       CompletableFuture.completedFuture(this)
   }

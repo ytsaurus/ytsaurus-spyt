@@ -170,7 +170,11 @@ trait YtTableUtils {
     }
   }
 
-  def partitionTablesAsync(path: YPath, splitBytes: Long, enableCookies: Boolean = false)
+  def partitionTablesAsync(
+    path: YPath,
+    splitBytes: Long,
+    enableCookies: Boolean = false,
+    transaction: Option[String] = None)
     (implicit ytReadContext: YtReadContext): CompletableFuture[Seq[MultiTablePartition]] = {
 
     val partitionSize = DataSize.fromBytes(splitBytes)
@@ -178,6 +182,7 @@ trait YtTableUtils {
     val builder = PartitionTables.builder()
       .setPaths(java.util.List.of[YPath](path))
       .setPartitionMode(PartitionTablesMode.Ordered)
+      .setTransactionalOptions(transaction.map(t => new TransactionalOptions(GUID.valueOf(t))).orNull)
       .setOmitInaccessibleRows(ytReadContext.settings.omitInaccessibleRows)
       .setEnableCookies(enableCookies)
       .setRequestId(ytReadContext.requestId)
@@ -223,4 +228,3 @@ trait YtTableUtils {
     new PartitionCopyByteStream(reader)
   }
 }
-

@@ -8,6 +8,7 @@ import org.apache.spark.sql.execution.datasources.SQLHadoopMapReduceCommitProtoc
 import tech.ytsaurus.client.CompoundClient
 import tech.ytsaurus.spyt.format.conf.SparkYtConfiguration.Write
 import tech.ytsaurus.spyt.format.conf.YtTableSparkSettings
+import tech.ytsaurus.spyt.fs.path.YPathEnriched
 import tech.ytsaurus.spyt.wrapper.YtWrapper
 import tech.ytsaurus.spyt.wrapper.config.SparkYtSparkConf
 
@@ -26,7 +27,8 @@ class DelegatingOutputCommitProtocol(jobId: String,
 
     implicit val ytClient: CompoundClient = YtOutputCommitProtocol.cachedClient
 
-    if (YtWrapper.isDynamicTable(outputPath)) {
+    val path = YPathEnriched.fromPath(new Path(outputPath))
+    if (YtWrapper.isDynamicTable(path.toStringYPath, path.transaction)) {
       new DynamicTableOutputCommitProtocol(jobId, outputPath, dynamicPartitionOverwrite)
     } else if (isDistributedWrite(SparkEnv.get.conf)) {
       new DistributedWriteOutputCommitProtocol(jobId, outputPath, dynamicPartitionOverwrite)

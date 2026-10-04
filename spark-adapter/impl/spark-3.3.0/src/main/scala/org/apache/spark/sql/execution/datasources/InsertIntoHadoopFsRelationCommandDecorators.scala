@@ -11,13 +11,18 @@ import tech.ytsaurus.spyt.patch.annotations.{Applicability, Decorate, DecoratedM
 class InsertIntoHadoopFsRelationCommandDecorators {
 
   val mode: SaveMode = ???
+  val fileFormat: FileFormat = ???
+  val options: Map[String, String] = ???
 
   @DecoratedMethod
   def run(sparkSession: SparkSession, child: SparkPlan): Seq[Row] = {
+    CommitProtocolSupport.instance.validateWrite(sparkSession, fileFormat, options)
     CommitProtocolSupport.instance.setSaveMode(mode)
-    val result = __run(sparkSession, child)
-    CommitProtocolSupport.instance.clearSaveMode()
-    result
+    try {
+      __run(sparkSession, child)
+    } finally {
+      CommitProtocolSupport.instance.clearSaveMode()
+    }
   }
 
   def __run(sparkSession: SparkSession, child: SparkPlan): Seq[Row] = ???

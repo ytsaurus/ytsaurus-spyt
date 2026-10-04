@@ -13,7 +13,7 @@ import org.apache.spark.sql.sources.{DataSourceRegister, Filter, StreamSinkProvi
 import org.apache.spark.sql.streaming.OutputMode
 import org.apache.spark.sql.types.StructType
 import org.apache.spark.sql.v2.YtUtils.bytesReadReporter
-import org.apache.spark.sql.v2.{YtReaderOptions, YtUtils}
+import org.apache.spark.sql.v2.{YtDataSourceV2, YtReaderOptions, YtUtils}
 import org.apache.spark.sql.{SQLContext, SparkSession}
 import org.apache.spark.util.SerializableConfiguration
 import org.slf4j.LoggerFactory
@@ -119,8 +119,12 @@ class YtFileFormat extends FileFormat with DataSourceRegister with StreamSourceP
     }
   }
 
-  override def prepareWrite(sparkSession: SparkSession, job: Job, options: Map[String, String],
+  override def prepareWrite(
+    sparkSession: SparkSession,
+    job: Job,
+    options: Map[String, String],
     dataSchema: StructType): OutputWriterFactory = {
+    YtDataSourceV2.validateWriteTransactionDefault(sparkSession.sessionState.conf, options)
     YtOutputWriterFactory.create(
       SparkYtWriteConfiguration(sparkSession.sqlContext),
       ytClientConfiguration(sparkSession),

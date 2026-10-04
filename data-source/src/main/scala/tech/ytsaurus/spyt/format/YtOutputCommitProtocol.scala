@@ -42,7 +42,7 @@ abstract class AbstractYtOutputCommitProtocol(
   @transient private val deletedDirectories = ThreadLocal.withInitial[Seq[Path]](() => Nil)
 
   protected def prepareWrite(conf: Configuration)(transactionActions: String => Unit): Unit = {
-    val externalTransaction = conf.getYtConf(WriteTransaction)
+    val externalTransaction = conf.getYtConf(WriteTransaction).filter(_.nonEmpty)
 
     log.debug(s"Setting up job for path $rootPath")
     withTransaction(createTransaction(conf, GlobalTransaction, externalTransaction)) { transaction =>
@@ -56,7 +56,7 @@ abstract class AbstractYtOutputCommitProtocol(
 
   protected def updateAttributes(path: YPathEnriched, options: YtTableSparkSettings, transaction: String): Unit = {
     val attrsFromTable =
-      YtWrapper.attributes(path.toStringPath, Some(transaction), options.optionsAny.keySet.asScala.toSet)
+      YtWrapper.attributes(path.toStringYPath, Some(transaction), options.optionsAny.keySet.asScala.toSet)
       .map { case (k, v) => k -> v.toString.stripPrefix("\"").stripSuffix("\"")}
     val attrsForUpdate = options.optionsAny.asScala.toMap.flatMap { case (k, v) =>
       val cleanedV = v.toString.stripPrefix("\"").stripSuffix("\"")
@@ -69,7 +69,7 @@ abstract class AbstractYtOutputCommitProtocol(
 
     if(attrsForUpdate.nonEmpty){
       attrsForUpdate.foreach { case (k, v) =>
-        YtWrapper.setAttribute(path.toStringPath, k, CustomAttribute.get(v), Some(transaction))}
+        YtWrapper.setAttribute(path.toStringYPath, k, CustomAttribute.get(v), Some(transaction))}
     }
   }
 
@@ -256,6 +256,13 @@ class DynamicTableOutputCommitProtocol(
   }
 
   private def validateDynamicTable(path: YPathEnriched, conf: Configuration): Unit = {
+    val externalTransaction = conf.getYtConf(WriteTransaction).filter(_.nonEmpty)
+    if (externalTransaction.nonEmpty) {
+      throw InconsistentDynamicWriteException(
+        s"Cannot write to dynamic table ${path.toStringYPath} under external transaction ${externalTransaction.get}: " +
+          "transactional writes to dynamic tables are not supported. Remove the write_transaction option " +
+          "or set it to an empty string to override spark.datasource.yt.write_transaction.")
+    }
     if (!YtWrapper.isMounted(path.toStringYPath)) {
       throw TableNotMountedException("Dynamic table should be mounted before writing to it")
     }
@@ -333,7 +340,7 @@ class DistributedWriteOutputCommitProtocol(
         val options = YtTableSparkSettings.deserialize(conf)
         updateAttributes(rootPath, options, transaction)
 
-        val tableSchema = YtWrapper.attribute(rootPath.toString, "schema")
+        val tableSchema = YtWrapper.attribute(rootPath.toStringYPath, "schema", Some(transaction))
         val sparkSchema = conf.ytConf(Schema).sparkType.topLevel.asInstanceOf[StructType]
 
         val listTableSchema = tableSchema.asList()

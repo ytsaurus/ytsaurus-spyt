@@ -46,7 +46,7 @@ class YtTableFileSystem extends YtFileSystemBase {
     filter: PathFilter)(implicit yt: CompoundClient): CompletableFuture[Array[FileStatus]] = {
 
     PathType.fromAttributes(attributes) match {
-      case PathType.File => path.lockAsync()
+      case PathType.File => path.lockAsync(attributes)
         .thenCompose(lockedPath => getFileStatus(lockedPath, attributes))
         .thenApply(fileStatus => Array(fileStatus))
       case PathType.Table =>
@@ -93,13 +93,13 @@ class YtTableFileSystem extends YtFileSystemBase {
 
   private def lockStaticTableAsync(path: YPathEnriched, attributes: Map[String, YTreeNode])
     (implicit yt: CompoundClient): CompletableFuture[FileStatus] = {
-    path.dropTimestamp().lockAsync().thenCompose(lockedPath => getFileStatus(lockedPath, attributes))
+    path.dropTimestamp().lockAsync(attributes).thenCompose(lockedPath => getFileStatus(lockedPath, attributes))
   }
 
   private def lockDynamicTableAsync(path: YPathEnriched, attributes: Map[String, YTreeNode])
     (implicit yt: CompoundClient): CompletableFuture[FileStatus] = {
     if (path.timestamp.isDefined || path.transaction.isDefined) {
-      path.lockAsync().thenCompose(lockedPath => getFileStatus(lockedPath, attributes))
+      path.lockAsync(attributes).thenCompose(lockedPath => getFileStatus(lockedPath, attributes))
     } else {
       if (!isDriver) {
         log.warn("Generating timestamps of dynamic tables on executors causes reading files with different timestamps")

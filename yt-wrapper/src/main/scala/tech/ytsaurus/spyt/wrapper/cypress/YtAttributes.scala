@@ -1,6 +1,8 @@
 package tech.ytsaurus.spyt.wrapper.cypress
 
 object YtAttributes {
+  val id = "id"
+  val lockMode = "lock_mode"
   val rowCount = "row_count"
   val chunkRowCount = "chunk_row_count"
   val optimizeFor = "optimize_for"
@@ -18,6 +20,7 @@ object YtAttributes {
   val securityTags = "security_tags"
 
   val tableAttributes: Seq[String] = Seq(
-    `type`, dynamic, modificationTime, compressedDataSize, optimizeFor, rowCount, chunkRowCount, schemaId, securityTags
+    `type`, dynamic, modificationTime, compressedDataSize, optimizeFor, rowCount, chunkRowCount, schemaId,
+    securityTags, id, lockMode
   )
 }

@@ -120,7 +120,8 @@ object YtFilePartition {
 
     val distributedReading = ytReadContext.settings.distributedReadingEnabled
 
-    YtWrapper.partitionTablesAsync(richYPath, maxSplitBytes, enableCookies = distributedReading)
+    YtWrapper.partitionTablesAsync(richYPath, maxSplitBytes, enableCookies = distributedReading,
+      transaction = path.ypath.transaction)
       .thenApply[Seq[PartitionedFile]](multiTablePartitions =>
         buildPartitionedFiles(multiTablePartitions, path, maxSplitBytes, partitionValues, distributedReading)
       )

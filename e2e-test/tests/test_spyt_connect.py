@@ -5,6 +5,7 @@ from spyt.connect import start_connect_server, start_connect_server_inner_cluste
     list_active_connect_servers_inner_cluster, wait_for_spark_connect_endpoint
 
 from common.helpers import assert_items_equal, assert_sequences_equal, wait_for_operation
+from contextlib import ExitStack
 from copy import deepcopy
 from functools import reduce
 from itertools import chain
@@ -808,3 +809,58 @@ def test_uint64_deserialization(yt_client, tmp_dir, spark_connect_session_factor
 
         pandas_list = df.toPandas()["id"].tolist()
         assert_items_equal(pandas_list, expected)
+
+
+@pytest.mark.parametrize("commit", [False, True])
+def test_session_transactions_on_reused_server(yt_client, tmp_dir, commit):
+    title = f"Transaction test {tmp_dir.rsplit('/', 1)[-1]}"
+    transactions = []
+
+    def abort_pending_transaction(transaction):
+        if transaction in transactions:
+            yt_client.abort_transaction(transaction)
+
+    with ExitStack() as cleanup:
+        operation = start_connect_server(yt_client, reuse_existing=True, num_executors=1, title=title)
+        cleanup.callback(yt_client.complete_operation, operation.id)
+        endpoint = wait_for_spark_connect_endpoint(yt_client, operation.id)
+        first = SparkSession.builder.remote(f"sc://{endpoint}").create()
+        cleanup.callback(first.stop)
+        second = SparkSession.builder.remote(f"sc://{endpoint}").create()
+        cleanup.callback(second.stop)
+        first_transaction = yt_client.start_transaction(timeout=120000)
+        transactions.append(first_transaction)
+        cleanup.callback(abort_pending_transaction, first_transaction)
+        second_transaction = yt_client.start_transaction(timeout=120000)
+        transactions.append(second_transaction)
+        cleanup.callback(abort_pending_transaction, second_transaction)
+        first.conf.set("spark.datasource.yt.transaction", first_transaction)
+        first.conf.set("spark.datasource.yt.write_transaction", first_transaction)
+        second.conf.set("spark.datasource.yt.transaction", second_transaction)
+        second.conf.set("spark.datasource.yt.write_transaction", second_transaction)
+        first_path, second_path = f"{tmp_dir}/first", f"{tmp_dir}/second"
+        first.range(3).write.yt(first_path)
+        second.range(5).write.yt(second_path)
+        assert first.read.yt(first_path).count() == 3
+        assert second.read.yt(second_path).count() == 5
+        assert not yt_client.exists(first_path)
+        assert not yt_client.exists(second_path)
+        first.stop()
+        assert yt_client.exists(f"//sys/transactions/{first_transaction}")
+        if commit:
+            yt_client.commit_transaction(first_transaction)
+        else:
+            yt_client.abort_transaction(first_transaction)
+        transactions.remove(first_transaction)
+        assert yt_client.exists(first_path) == commit
+        assert not yt_client.exists(second_path)
+        yt_client.commit_transaction(second_transaction)
+        transactions.remove(second_transaction)
+        assert len(list(yt_client.read_table(second_path))) == 5
+        reused = start_connect_server(yt_client, reuse_existing=True, num_executors=1, title=title)
+        assert reused.id == operation.id
+        fresh = SparkSession.builder.remote(f"sc://{endpoint}").create()
+        cleanup.callback(fresh.stop)
+        assert fresh.conf.get("spark.datasource.yt.transaction", "") == ""
+        assert fresh.conf.get("spark.datasource.yt.write_transaction", "") == ""
+        assert fresh.read.yt(second_path).count() == 5

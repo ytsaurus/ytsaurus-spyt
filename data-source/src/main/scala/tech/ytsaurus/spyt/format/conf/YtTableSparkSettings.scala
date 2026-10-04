@@ -142,7 +142,7 @@ object YtTableSparkSettings {
       TableWriterConfig,
       SecurityTags,
       SparkYtInternalConfiguration.InferredSecurityTags).map(_.name) ++
-      Set("write_transaction", "__partition_columns", "write_schema_hint")
+      Set("transaction", "write_transaction", "__partition_columns", "write_schema_hint")
   }
 
   def isTable(configuration: Configuration): Boolean = {

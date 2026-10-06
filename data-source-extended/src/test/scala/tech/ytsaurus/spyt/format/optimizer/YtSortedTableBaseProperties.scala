@@ -1,5 +1,6 @@
 package tech.ytsaurus.spyt.format.optimizer
 
+import org.apache.spark.sql.Row
 import org.apache.spark.sql.catalyst.expressions.{Alias, AttributeReference, CodegenObjectFactoryMode, Expression, KnownFloatingPointNormalized, NamedExpression}
 import org.apache.spark.sql.catalyst.optimizer.NormalizeNaNAndZero
 import org.apache.spark.sql.internal.SQLConf.{CODEGEN_FACTORY_MODE, WHOLESTAGE_CODEGEN_ENABLED}
@@ -16,6 +17,7 @@ import tech.ytsaurus.client.rows.{UnversionedRow, UnversionedValue}
 import tech.ytsaurus.core.tables.{ColumnValueType, TableSchema}
 import tech.ytsaurus.typeinfo.TiType
 
+import scala.collection.mutable
 import scala.jdk.CollectionConverters._
 
 private class YtSortedTableBaseProperties extends AnyFlatSpec with Matchers with BeforeAndAfterAll
@@ -26,7 +28,8 @@ private class YtSortedTableBaseProperties extends AnyFlatSpec with Matchers with
     WHOLESTAGE_CODEGEN_ENABLED.key -> "false",
     CODEGEN_FACTORY_MODE.key -> CodegenObjectFactoryMode.NO_CODEGEN.toString,
     s"spark.yt.${SparkYtConfiguration.Read.KeyPartitioning.Enabled.name}" -> "true",
-    s"spark.yt.${SparkYtConfiguration.Read.KeyPartitioning.UnionLimit.name}" -> "2",
+    // Test key-prefix eligibility independently of how duplicate keys coalesce adjacent splits.
+    s"spark.yt.${SparkYtConfiguration.Read.KeyPartitioning.UnionLimit.name}" -> Int.MaxValue.toString,
     s"spark.yt.${SparkYtConfiguration.Read.PlanOptimizationEnabled.name}" -> "true",
     "spark.sql.adaptive.enabled" -> "false",
     "spark.sql.autoBroadcastJoinThreshold" -> "-1",
@@ -40,6 +43,25 @@ private class YtSortedTableBaseProperties extends AnyFlatSpec with Matchers with
       sortedData.map(getUnversionedRow(source.schema, _)),
       path, getTableSchema(source.schema, source.keys))
     sortedData
+  }
+
+  // Join results can contain millions of distinct rows; keep failure output to at most 20 mismatches.
+  protected def rowCountMismatches(actual: Iterator[Row], expected: Iterator[Row]): List[String] = {
+    val actualCounts = rowCounts(actual)
+    val expectedCounts = rowCounts(expected)
+    val rows = actualCounts.keysIterator ++ expectedCounts.keysIterator.filterNot(actualCounts.contains)
+    rows.filter(row => actualCounts.getOrElse(row, 0L) != expectedCounts.getOrElse(row, 0L))
+      .take(20)
+      .map(row => s"$row: actual ${actualCounts.getOrElse(row, 0L)}, expected ${expectedCounts.getOrElse(row, 0L)}")
+      .toList
+  }
+
+  private def rowCounts(rows: Iterator[Row]): Map[Row, Long] = {
+    val counts = mutable.HashMap.empty[Row, Long]
+    rows.foreach { row =>
+      counts.update(row, counts.getOrElse(row, 0L) + 1L)
+    }
+    counts.toMap
   }
 }
 

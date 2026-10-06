@@ -73,29 +73,33 @@ private class YtSortedTableJoinProperties extends YtSortedTableBaseProperties {
   }
 
   private def isCorrectPlan(test: JoinTest, plan: SparkPlan): Boolean = {
-    isCorrectPlanWithNotProcessedJoin(test, plan) ||
-      isCorrectPlanWithProcessedOneSideJoin(test, plan) ||
-      isCorrectPlanWithProcessedBothSideJoin(test, plan)
+    (test.source1.keys.startsWith(test.joinColumns), test.source2.keys.startsWith(test.joinColumns)) match {
+      case (true, true) => isCorrectPlanWithProcessedBothSideJoin(test, plan)
+      case (false, false) => isCorrectPlanWithNotProcessedJoin(test, plan)
+      case _ => isCorrectPlanWithProcessedOneSideJoin(test, plan)
+    }
   }
 
-  // TODO(atokarew): fix or remove this test.
-  it should "optimize" ignore {
+  it should "optimize" in {
     withConfs(conf) {
       forAll(genJoinTest, minSuccessful(10)) {
         case test@JoinTest(source1, source2, joinColumns) =>
-          beforeEach()
-          YtWrapper.createDir(tmpPath)
-          val table1 = s"$tmpPath/1"
-          val table2 = s"$tmpPath/2"
-          val sortedData1 = writeSortedData(source1, table1)
-          val sortedData2 = writeSortedData(source2, table2)
-          val expected = YtSortedTableJoinProperties.simulateJoin(sortedData1, sortedData2, joinColumns.length)
-          val query = spark.read.yt(table1).join(spark.read.yt(table2), joinColumns)
-          val res = query.collect()
-//          isCorrectPlan(test, query.queryExecution.executedPlan) shouldBe true
-          res.length shouldBe expected.length
-          res should contain theSameElementsAs expected.map(Row.fromSeq)
-          afterEach()
+          try {
+            YtWrapper.createDir(tmpPath)
+            val table1 = s"$tmpPath/1"
+            val table2 = s"$tmpPath/2"
+            val sortedData1 = writeSortedData(source1, table1)
+            val sortedData2 = writeSortedData(source2, table2)
+            val expected = YtSortedTableJoinProperties.simulateJoin(sortedData1, sortedData2, joinColumns.length)
+            val query = spark.read.yt(table1).join(spark.read.yt(table2), joinColumns)
+            val res = query.collect()
+            withClue(query.queryExecution.executedPlan.toString()) {
+              isCorrectPlan(test, query.queryExecution.executedPlan) shouldBe true
+            }
+            rowCountMismatches(res.iterator, expected.iterator.map(Row.fromSeq)) shouldBe empty
+          } finally {
+            YtWrapper.remove(tmpPath, force = true)
+          }
       }
     }
   }

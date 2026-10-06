@@ -10,6 +10,7 @@ import org.scalacheck.Gen
 import tech.ytsaurus.spyt.YtReader
 import tech.ytsaurus.spyt.format.optimizer.YtSortedTableAggregationProperties.{AggTest, genAggTest}
 import YtSortedTableBaseProperties._
+import tech.ytsaurus.spyt.wrapper.YtWrapper
 
 private class YtSortedTableAggregationProperties extends YtSortedTableBaseProperties {
   private def isCorrectInputNode(test: AggTest, project: SparkPlan): Boolean = {
@@ -49,24 +50,31 @@ private class YtSortedTableAggregationProperties extends YtSortedTableBaseProper
   }
 
   private def isCorrectPlan(test: AggTest, plan: SparkPlan): Boolean = {
-    isCorrectPlanWithRealExchange(test, plan) || isCorrectPlanWithFakeExchange(test, plan)
+    if (test.source.keys.startsWith(test.groupColumns)) {
+      isCorrectPlanWithFakeExchange(test, plan)
+    } else {
+      isCorrectPlanWithRealExchange(test, plan)
+    }
   }
 
-  // TODO(atokarew): fix or remove this test.
-  it should "optimize" ignore {
+  it should "optimize" in {
     withConfs(conf) {
       forAll(genAggTest, minSuccessful(15)) {
         case test@AggTest(source, groupColumns) =>
-          beforeEach()
-          val sortedData = writeSortedData(source, tmpPath)
-          val expected = sortedData
-            .groupBy(s => s.take(groupColumns.length))
-            .map { case (key, v) => key :+ v.length }
-          val query = spark.read.yt(tmpPath).groupBy(groupColumns.map(col): _*).count()
-          val res = query.collect()
-          isCorrectPlan(test, query.queryExecution.executedPlan) shouldBe true
-          res should contain theSameElementsAs expected.map(Row.fromSeq)
-          afterEach()
+          try {
+            val sortedData = writeSortedData(source, tmpPath)
+            val expected = sortedData
+              .groupBy(s => s.take(groupColumns.length))
+              .map { case (key, v) => key :+ v.length.toLong }
+            val query = spark.read.yt(tmpPath).groupBy(groupColumns.map(col): _*).count()
+            val res = query.collect()
+            withClue(query.queryExecution.executedPlan.toString()) {
+              isCorrectPlan(test, query.queryExecution.executedPlan) shouldBe true
+            }
+            rowCountMismatches(res.iterator, expected.iterator.map(Row.fromSeq)) shouldBe empty
+          } finally {
+            YtWrapper.remove(tmpPath, force = true)
+          }
       }
     }
   }

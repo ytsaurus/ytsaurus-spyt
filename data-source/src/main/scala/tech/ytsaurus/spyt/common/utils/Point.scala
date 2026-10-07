@@ -1,6 +1,10 @@
 package tech.ytsaurus.spyt.common.utils
 
+import com.google.common.primitives.UnsignedBytes
+
 import tech.ytsaurus.spyt.types.{UInt64Long, YTsaurusTypes}
+
+import java.nio.charset.StandardCharsets
 
 sealed trait Point extends Ordered[Point]
 
@@ -35,6 +39,8 @@ case class RealValue[T](value: T)(implicit ord: Ordering[T]) extends Point {
           case (uLong: UInt64Long, long: Long) =>
             if (long >= 0) java.lang.Long.compareUnsigned(uLong.value, long) else 1
 
+          case (string: String, anotherString: String) => RealValue.compareUtf8(string, anotherString)
+
           case _ => ord.compare(value, another)
         }
       }
@@ -46,6 +52,15 @@ case class RealValue[T](value: T)(implicit ord: Ordering[T]) extends Point {
 object RealValue {
   implicit def ordering[T](implicit ord: Ordering[T]): Ordering[RealValue[T]] = {
     ord.on[RealValue[T]](_.value)
+  }
+
+  /**
+   * Compares strings by their UTF-8 bytes, as YTsaurus and Spark order them. String.compareTo compares UTF-16 code
+   * units instead and puts characters above U+FFFF before U+E000..U+FFFF.
+   */
+  private def compareUtf8(left: String, right: String): Int = {
+    UnsignedBytes.lexicographicalComparator().compare(
+      left.getBytes(StandardCharsets.UTF_8), right.getBytes(StandardCharsets.UTF_8))
   }
 }
 

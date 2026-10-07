@@ -10,6 +10,7 @@ import org.apache.spark.sql.Row
 import org.apache.spark.sql.v2.{Utils => TUtils}
 import tech.ytsaurus.spyt._
 import tech.ytsaurus.spyt.common.utils.ExpressionTransformer.expressionToSegmentSet
+import tech.ytsaurus.spyt.format.YPathUtils.RichRangeCriteria
 import tech.ytsaurus.spyt.format.YtInputSplit.{getKeyFilterSegments, pushdownFiltersToYPath}
 import tech.ytsaurus.spyt.wrapper.YtWrapper
 import tech.ytsaurus.spyt.wrapper.table.OptimizeMode
@@ -21,11 +22,17 @@ import tech.ytsaurus.spyt.test.TestRow
 import tech.ytsaurus.spyt.types.UInt64Long
 
 import java.util.{Map => JMap}
+import scala.jdk.CollectionConverters._
 import scala.util.Random
 
 class YtInputSplitTest extends YtInputSplitTestBase {
   private val sqlImplicits = SparkAdapter.instance.sparkImplicits(spark)
   import sqlImplicits._
+
+  // U+FB01 LATIN SMALL LIGATURE FI and U+1D400 MATHEMATICAL BOLD CAPITAL A, encoded in UTF-16 as 0xD835 0xDC00: UTF-16
+  // orders these strings the other way than their UTF-8 bytes, which YTsaurus and Spark compare.
+  private val ligature = new String(Character.toChars(0xFB01))
+  private val boldLetter = new String(Character.toChars(0x1D400))
 
   it should "create SegmentSet from Filter" in {
     val a1 = LessThan("a", 5L)
@@ -253,6 +260,15 @@ class YtInputSplitTest extends YtInputSplitTestBase {
     }
   }
 
+  it should "read rows by a string key range whose bounds UTF-16 orders the other way than YTsaurus" in {
+    Seq("a", ligature, boldLetter, "z").toDF("a").write.sortedBy("a").yt(tmpPath)
+
+    val res = spark.read.yt(tmpPath)
+    val filtered = res.filter(res("a") >= ligature && res("a") <= boldLetter)
+
+    filtered.collect().map(_.getString(0)) should contain theSameElementsAs Seq(ligature, boldLetter)
+  }
+
   it should "not duplicate data" in {
     val data = Seq((0, 1), (1, 5), (2, 1))
     val df = data
@@ -368,6 +384,27 @@ class YtInputSplitTest extends YtInputSplitTestBase {
       .getRanges.size shouldBe 1
     pushdownFiltersToYPath(single = false, segments, keyColumns.map(Some(_)), plain, baseYPath)
       .getRanges.size shouldBe 5
+  }
+
+  it should "keep a string key segment whose bounds UTF-16 orders the other way than YTsaurus" in {
+    expressionToSegmentSet(And(GreaterThanOrEqual("a", ligature), LessThanOrEqual("a", boldLetter))) shouldBe
+      SegmentSet("a", Segment(RealValue(ligature), RealValue(boldLetter)))
+  }
+
+  it should "order the ypath ranges of string keys as YTsaurus orders the keys" in {
+    val keyColumns = List("a")
+    val file = YtPartitionedFileDelegate.static("//dir/path", 2, 5, 10)
+    val baseYPath = file.delegate.ypath.withColumns(keyColumns: _*)
+    val segments = expressionToSegmentSet(In("a", Array(boldLetter, ligature)))
+    val config = FilterPushdownConfig(
+      enabled = true,
+      unionEnabled = false,
+      mergeAdjacentEnabled = false,
+      ytPathCountLimit = 100)
+
+    val ranges = pushdownFiltersToYPath(single = false, segments, keyColumns.map(Some(_)), config, baseYPath).getRanges
+
+    ranges.asScala.map(_.toRange.lower.key.get(0).stringValue()) shouldBe Seq(ligature, boldLetter)
   }
 
   it should "get ypath" in {

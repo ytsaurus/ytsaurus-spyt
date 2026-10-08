@@ -28,6 +28,8 @@ public class ShuffleRecordIterator<K, C> extends AbstractIterator<Tuple2<K, C>> 
     private java.util.Iterator<UnversionedRow> rowIterator = Collections.emptyIterator();
     private UnversionedRow currentRow;
     private Iterator<Tuple2<K, C>> recordIterator = emptyIterator();
+    private long fetchWaitNanos;
+    private long reportedFetchWaitMillis;
 
     public ShuffleRecordIterator(
             int startPartition,
@@ -109,8 +111,10 @@ public class ShuffleRecordIterator<K, C> extends AbstractIterator<Tuple2<K, C>> 
             return currentRow;
         }
         while (!rowIterator.hasNext() && (reader != null || nextPartition < endPartition)) {
+            long waitStartedNanos = System.nanoTime();
             if (reader != null) {
                 var batch = reader.next().join();
+                addFetchWait(System.nanoTime() - waitStartedNanos);
                 if (batch != null) {
                     rowIterator = batch.iterator();
                 } else {
@@ -118,8 +122,26 @@ public class ShuffleRecordIterator<K, C> extends AbstractIterator<Tuple2<K, C>> 
                 }
             } else {
                 reader = readerSupplier.apply(nextPartition++).join();
+                addFetchWait(System.nanoTime() - waitStartedNanos);
             }
         }
         return rowIterator.hasNext() ? rowIterator.next() : null;
+    }
+
+    /**
+     * Reports one wait of this task on YTsaurus as Spark shuffle fetch wait time: either creating a reader for the
+     * next reduce partition or pulling the next batch from an open reader. Accumulates the waits and hands Spark
+     * whole milliseconds only. Spark counts fetch wait time in milliseconds, while a single wait here is often
+     * shorter than one, so reporting each wait separately would round most of them down to zero and lose the bulk
+     * of the measurement on a partition-heavy read. Takes a duration rather than reading the clock, so that the
+     * rounding can be driven with exact values.
+     */
+    void addFetchWait(long waitNanos) {
+        fetchWaitNanos += waitNanos;
+        long millis = fetchWaitNanos / 1_000_000;
+        if (millis > reportedFetchWaitMillis) {
+            readMetrics.incFetchWaitTime(millis - reportedFetchWaitMillis);
+            reportedFetchWaitMillis = millis;
+        }
     }
 }

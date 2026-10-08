@@ -90,8 +90,9 @@ class YTsaurusShuffleManagerTest {
             ShuffleWriter<Integer, String> writer = shuffleManager.getWriter(
                     handle, mapId, context, context.taskMetrics().shuffleWriteMetrics());
             writer.write(JavaConverters.asScalaIteratorConverter(data.iterator()).asScala());
-            assertNull(YTsaurusShuffleExecutorComponents.currentHandle().get());
-            assertNull(YTsaurusShuffleExecutorComponents.currentMapIndex().get());
+            assertNull(YTsaurusShuffleExecutorComponents.currentHandle.get());
+            assertNull(YTsaurusShuffleExecutorComponents.currentMapIndex.get());
+            assertNull(YTsaurusShuffleExecutorComponents.currentWriteMetrics.get());
             writer.stop(true);
         }
 

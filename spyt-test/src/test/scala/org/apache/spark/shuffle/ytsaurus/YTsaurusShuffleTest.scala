@@ -12,7 +12,7 @@ import tech.ytsaurus.client.CompoundClient
 import tech.ytsaurus.core.tables.{ColumnValueType, TableSchema}
 import tech.ytsaurus.spyt._
 import tech.ytsaurus.spyt.shuffle.CommitShufflePartitionsListener
-import tech.ytsaurus.spyt.test.{ExecutorKillerSparkListener, LocalSpark, TestUtils, TmpDir}
+import tech.ytsaurus.spyt.test.{ExecutorKillerSparkListener, LocalSpark, ShuffleMetricsSparkListener, TestUtils, TmpDir}
 import tech.ytsaurus.spyt.wrapper.YtWrapper
 import tech.ytsaurus.spyt.wrapper.client.{SpytRpcClientListener, YtClientConfiguration, YtClientProvider}
 
@@ -150,6 +150,19 @@ class YTsaurusShuffleTest extends AnyFlatSpec with Matchers with LocalSpark with
     checkSort
   }
 
+  testWithPushBasedShuffle("report the wait for YTsaurus as shuffle fetch wait time") { _spark =>
+    val metrics = ShuffleMetricsSparkListener.attachTo(_spark)
+
+    checkSort(_spark)
+    _spark.sparkContext.listenerBus.waitUntilEmpty()
+
+    // Reading a shuffle partition from YTsaurus is a blocking round trip, so the reduce tasks must report a
+    // non-zero wait.
+    withClue(s"shuffle fetch wait time over all tasks: ${metrics.shuffleFetchWaitMillis} ms: ") {
+      metrics.shuffleFetchWaitMillis should be > 0L
+    }
+  }
+
   it should "pass a custom shuffle config to the shuffle service" in {
     withSparkSession(
       Map(YTSAURUS_SHUFFLE_CONFIG.key ->
@@ -167,6 +180,48 @@ class YTsaurusShuffleTest extends AnyFlatSpec with Matchers with LocalSpark with
       )
     ) {
       checkSort
+    }
+  }
+
+  // bypassMergeThreshold=0 forces SortShuffleManager to pick the serialized handle, so the map tasks run through
+  // UnsafeShuffleWriter. Only that writer asks for a single-spill writer, and without one it counts the bytes of
+  // the single spill file twice: once while spilling and once while merging.
+  private val unsafeShuffleWriterConf = Map("spark.shuffle.sort.bypassMergeThreshold" -> "0")
+
+  testWithPushBasedShuffle("report shuffle bytes written once, not twice", unsafeShuffleWriterConf)(
+    checkSingleSpillWrittenOnce)
+
+  // With IO encryption every partition of a spill file is a separately encrypted stream, which is the form a reader
+  // expects of one map output block, so the single-spill writer can transfer the file as is.
+  testWithPushBasedShuffle("transfer an encrypted single spill file and report its bytes once",
+    unsafeShuffleWriterConf + ("spark.io.encryption.enabled" -> "true")
+  ) { _spark =>
+    // Map tasks encrypt their spill files with the serializer manager of their executor.
+    val executorsEncrypt = _spark.sparkContext.parallelize(1 to 3, 3)
+      .map(_ => SparkEnv.get.serializerManager.encryptionEnabled)
+      .collect()
+    executorsEncrypt should contain only true
+
+    checkSingleSpillWrittenOnce(_spark)
+  }
+
+  private def checkSingleSpillWrittenOnce(_spark: SparkSession): Unit = {
+    val metrics = ShuffleMetricsSparkListener.attachTo(_spark)
+
+    checkSort(_spark)
+    _spark.sparkContext.listenerBus.waitUntilEmpty()
+
+    // Nothing spilled before the final sort of a map task, so each map task produced exactly one spill file.
+    metrics.diskBytesSpilled shouldBe 0L
+    val written = metrics.shuffleBytesWritten
+    val read = metrics.shuffleBytesRead
+    written should be > 0L
+    read should be > 0L
+    // The reader also counts the 8-byte map id header of every row, so here the bytes written are about 0.7 of the
+    // bytes read. The merge path that Spark takes without the single-spill writer counts the spill file twice and
+    // makes them about 1.4.
+    withClue(s"shuffle bytes written $written vs read $read, ratio ${written.toDouble / read}: ") {
+      written should be <= (read * 6 / 5)
     }
   }
 

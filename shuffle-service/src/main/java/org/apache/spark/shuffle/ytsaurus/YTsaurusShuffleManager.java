@@ -142,8 +142,9 @@ public class YTsaurusShuffleManager implements ShuffleManager {
                     context.taskAttemptId(), context.getLocalProperties());
         }
         CompoundShuffleHandle<K, V, ?> compoundHandle = (CompoundShuffleHandle<K, V, ?>) handle;
-        YTsaurusShuffleExecutorComponents.currentHandle().set(compoundHandle);
-        YTsaurusShuffleExecutorComponents.currentMapIndex().set(context.partitionId());
+        YTsaurusShuffleExecutorComponents.currentHandle.set(compoundHandle);
+        YTsaurusShuffleExecutorComponents.currentMapIndex.set(context.partitionId());
+        YTsaurusShuffleExecutorComponents.currentWriteMetrics.set(metrics);
         return delegate.getWriter(compoundHandle.baseHandle(), mapId, context, metrics);
     }
 

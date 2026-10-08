@@ -146,4 +146,30 @@ class ShuffleRecordIteratorTest {
                 stream -> { throw failure; }, mock(ShuffleReadMetricsReporter.class));
         assertSame(failure, assertThrows(IllegalArgumentException.class, records::hasNext));
     }
+
+    @Test
+    void reportsFetchWaitAsWholeMillisecondsAndOnlyTheIncrement() {
+        ShuffleReadMetricsReporter metrics = mock(ShuffleReadMetricsReporter.class);
+        ShuffleRecordIterator<Integer, String> records = new ShuffleRecordIterator<>(0, 0,
+                partition -> { throw new AssertionError("an empty partition range must not create readers"); },
+                ShuffleRecordIteratorTest::deserialize, metrics);
+
+        // A wait shorter than a millisecond is kept, not dropped, and not reported yet.
+        records.addFetchWait(999_999);
+        verify(metrics, never()).incFetchWaitTime(anyLong());
+
+        records.addFetchWait(1);
+        verify(metrics).incFetchWaitTime(1L);
+
+        // Crossing several milliseconds at once reports the difference, not the running total of 3 ms.
+        records.addFetchWait(2_500_000);
+        verify(metrics).incFetchWaitTime(2L);
+
+        records.addFetchWait(400_000);
+        verifyNoMoreInteractions(metrics);
+
+        // The leftover 900 microseconds above plus these 200 complete the fourth millisecond.
+        records.addFetchWait(200_000);
+        verify(metrics, times(2)).incFetchWaitTime(1L);
+    }
 }

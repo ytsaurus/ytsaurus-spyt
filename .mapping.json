@@ -402,6 +402,8 @@
   "examples/native-udf-plugin/native/native_udf.cpp":"yt/spark/spark-over-yt/examples/native-udf-plugin/native/native_udf.cpp",
   "examples/native-udf-plugin/native/native_udf.h":"yt/spark/spark-over-yt/examples/native-udf-plugin/native/native_udf.h",
   "examples/scala":"yt/spark/spark-over-yt/examples/scala",
+  "examples/yql-udf-plugin/README.md":"yt/spark/spark-over-yt/examples/yql-udf-plugin/README.md",
+  "examples/yql-udf-plugin/job.py":"yt/spark/spark-over-yt/examples/yql-udf-plugin/job.py",
   "file-system":"yt/spark/spark-over-yt/file-system",
   "file-system/build.gradle.kts":"yt/spark/spark-over-yt/file-system/build.gradle.kts",
   "file-system/src/main/resources/shadedyandex/org/asynchttpclient/config/ahc-default.properties":"yt/spark/spark-over-yt/file-system/src/main/resources/shadedyandex/org/asynchttpclient/config/ahc-default.properties",

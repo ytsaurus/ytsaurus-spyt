@@ -36,6 +36,10 @@ public class YTsaurusShuffleMapOutputWriter implements ShuffleMapOutputWriter {
 
     private List<UnversionedRow> buffer;
     private CompletableFuture<Void> writeFuture;
+    // Spark writes the partitions of a map task one after another, so they share one row buffer. It is allocated when
+    // the first partition stream is opened, because a map task without records may open none.
+    private ByteBuffer rowBuffer;
+    private boolean partitionStreamOpen;
 
     public YTsaurusShuffleMapOutputWriter(
             AsyncWriter<UnversionedRow> ytsaurusWriter,
@@ -104,7 +108,6 @@ public class YTsaurusShuffleMapOutputWriter implements ShuffleMapOutputWriter {
 
     private class YTsaurusShufflePartitionWriter implements ShufflePartitionWriter {
 
-        private final ByteBuffer buffer = ByteBuffer.allocate(rowSize);
         private long bytesWritten = 0L;
 
         private final int reducePartitionId;
@@ -115,10 +118,21 @@ public class YTsaurusShuffleMapOutputWriter implements ShuffleMapOutputWriter {
 
         @Override
         public OutputStream openStream() throws IOException {
+            if (partitionStreamOpen) {
+                throw new IllegalStateException("Map task " + mapTaskId + " opened the stream of partition "
+                        + reducePartitionId + " while the stream of another partition is still open");
+            }
+            partitionStreamOpen = true;
+            if (rowBuffer == null) {
+                rowBuffer = ByteBuffer.allocate(rowSize);
+            }
             return new OutputStream() {
+                private boolean closed;
+
                 @Override
                 public void write(int b) throws IOException {
-                    if (!buffer.hasRemaining()) {
+                    ensureOpen();
+                    if (!rowBuffer.hasRemaining()) {
                         addRow();
                     }
 
@@ -128,16 +142,20 @@ public class YTsaurusShuffleMapOutputWriter implements ShuffleMapOutputWriter {
                             reducePartitionId,
                             b
                     );
-                    if (buffer.position() == 0) {
-                        buffer.putLong(mapTaskId);
+                    if (rowBuffer.position() == 0) {
+                        rowBuffer.putLong(mapTaskId);
                     }
-                    buffer.put((byte) b);
+                    rowBuffer.put((byte) b);
                     bytesWritten++;
                 }
 
                 @Override
                 public void write(byte[] b, int off, int len) throws IOException {
-                    if (buffer.remaining() < len) {
+                    ensureOpen();
+                    if (len == 0) {
+                        return;
+                    }
+                    if (rowBuffer.remaining() < len) {
                         addRow();
                     }
                     if (log.isTraceEnabled()) {
@@ -150,31 +168,45 @@ public class YTsaurusShuffleMapOutputWriter implements ShuffleMapOutputWriter {
                                 Hex.encodeHexString(toWrite)
                         );
                     }
-                    if (buffer.position() == 0) {
-                        buffer.putLong(mapTaskId);
+                    if (rowBuffer.position() == 0) {
+                        rowBuffer.putLong(mapTaskId);
                     }
-                    buffer.put(b, off, len);
+                    rowBuffer.put(b, off, len);
                     bytesWritten += len;
                 }
 
+                // A closed stream must not write into the row buffer that the next partition already uses.
+                private void ensureOpen() throws IOException {
+                    if (closed) {
+                        throw new IOException("The stream of partition " + reducePartitionId + " of map task "
+                                + mapTaskId + " is closed");
+                    }
+                }
+
                 private void addRow() {
-                    buffer.flip();
-                    byte[] data = new byte[buffer.limit()];
-                    buffer.get(data);
+                    rowBuffer.flip();
+                    byte[] data = new byte[rowBuffer.limit()];
+                    rowBuffer.get(data);
                     UnversionedRow rowToWrite = new UnversionedRow(List.of(
                             new UnversionedValue(0, ColumnValueType.INT64, false, (long) reducePartitionId),
                             new UnversionedValue(1, ColumnValueType.STRING, false, data)
                     ));
                     addToBuffer(rowToWrite);
-                    buffer.clear();
+                    rowBuffer.clear();
                 }
 
                 @Override
                 public void close() {
-                    if (buffer.position() > 0) {
+                    // A repeated close must not flush bytes that the next partition already put into the shared buffer.
+                    if (closed) {
+                        return;
+                    }
+                    closed = true;
+                    if (rowBuffer.position() > 0) {
                         addRow();
                     }
                     partitionLengths[reducePartitionId] = bytesWritten;
+                    partitionStreamOpen = false;
                 }
             };
         }

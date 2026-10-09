@@ -483,6 +483,7 @@
   "shuffle-service/src/test/java/org/apache/spark/shuffle/ytsaurus/ShuffleUtilsTest.java":"yt/spark/spark-over-yt/shuffle-service/src/test/java/org/apache/spark/shuffle/ytsaurus/ShuffleUtilsTest.java",
   "shuffle-service/src/test/java/org/apache/spark/shuffle/ytsaurus/YTsaurusShuffleManagerTest.java":"yt/spark/spark-over-yt/shuffle-service/src/test/java/org/apache/spark/shuffle/ytsaurus/YTsaurusShuffleManagerTest.java",
   "shuffle-service/src/test/java/org/apache/spark/shuffle/ytsaurus/YTsaurusShuffleRegistrationTest.java":"yt/spark/spark-over-yt/shuffle-service/src/test/java/org/apache/spark/shuffle/ytsaurus/YTsaurusShuffleRegistrationTest.java",
+  "shuffle-service/src/test/java/tech/ytsaurus/spyt/shuffle/YTsaurusShuffleMapOutputWriterTest.java":"yt/spark/spark-over-yt/shuffle-service/src/test/java/tech/ytsaurus/spyt/shuffle/YTsaurusShuffleMapOutputWriterTest.java",
   "shuffle-service/src/test/java/tech/ytsaurus/spyt/shuffle/YTsaurusSingleSpillMapOutputWriterTest.java":"yt/spark/spark-over-yt/shuffle-service/src/test/java/tech/ytsaurus/spyt/shuffle/YTsaurusSingleSpillMapOutputWriterTest.java",
   "spark-adapter":"yt/spark/spark-over-yt/spark-adapter",
   "spark-adapter/api/build.gradle.kts":"yt/spark/spark-over-yt/spark-adapter/api/build.gradle.kts",

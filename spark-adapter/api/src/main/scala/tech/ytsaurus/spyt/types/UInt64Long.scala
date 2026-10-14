@@ -1,14 +1,9 @@
 package tech.ytsaurus.spyt.types
 
-import tech.ytsaurus.spyt.types.UInt64Long.J_DECIMAL_2_POW_64
-
 case class UInt64Long(value: Long) extends Ordered[UInt64Long] {
   def toLong: Long = value
 
-  def toBigDecimal: java.math.BigDecimal = {
-    val bdValue = new java.math.BigDecimal(value)
-    if (value >= 0) bdValue else J_DECIMAL_2_POW_64.add(bdValue)
-  }
+  def toBigDecimal: java.math.BigDecimal = UInt64Long.toBigDecimal(value)
 
   override def toString: String = UInt64Long.toString(value)
 
@@ -39,4 +34,9 @@ object UInt64Long {
   def fromString(number: String): Long = java.lang.Long.parseUnsignedLong(number)
 
   def toString(value: Long): String = java.lang.Long.toUnsignedString(value)
+
+  def toBigDecimal(value: Long): java.math.BigDecimal = {
+    val bdValue = new java.math.BigDecimal(value)
+    if (value >= 0) bdValue else J_DECIMAL_2_POW_64.add(bdValue)
+  }
 }

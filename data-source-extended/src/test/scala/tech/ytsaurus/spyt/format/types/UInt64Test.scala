@@ -1,8 +1,10 @@
 package tech.ytsaurus.spyt.format.types
 
 import org.apache.spark.sql.{DataFrame, Row}
+import org.apache.spark.sql.catalyst.expressions.CodegenObjectFactoryMode
 import org.apache.spark.sql.functions._
-import org.apache.spark.sql.types.{LongType, Metadata, StringType, StructField}
+import org.apache.spark.sql.internal.SQLConf.{CODEGEN_FACTORY_MODE, WHOLESTAGE_CODEGEN_ENABLED}
+import org.apache.spark.sql.types.{DecimalType, LongType, Metadata, StringType, StructField}
 import org.apache.spark.sql.spyt.types.UInt64Support.{fromStringUdf, toStringUdf}
 import org.apache.spark.sql.spyt.types.UInt64Type
 import org.apache.spark.storage.StorageLevel
@@ -11,8 +13,10 @@ import org.scalatest.matchers.should.Matchers
 import tech.ytsaurus.spyt._
 import tech.ytsaurus.spyt.test.{LocalSpark, TestUtils, TmpDir}
 import tech.ytsaurus.core.tables.{ColumnValueType, TableSchema}
+import tech.ytsaurus.spyt.format.conf.SparkYtConfiguration
 import tech.ytsaurus.spyt.types.UInt64Long
 import tech.ytsaurus.spyt.wrapper.YtWrapper
+import tech.ytsaurus.typeinfo.TiType
 
 class UInt64Test extends AnyFlatSpec with Matchers with LocalSpark with TmpDir with TestUtils {
   behavior of "YtDataSource"
@@ -295,5 +299,89 @@ class UInt64Test extends AnyFlatSpec with Matchers with LocalSpark with TmpDir w
       Row(UInt64Long(2L), "b", 1),
       Row(UInt64Long(3L), "c", 1)
     )
+  }
+
+  private def createDecimalBoundaryTable(): Unit = {
+    val tableSchema = TableSchema.builder().addValue("id", ColumnValueType.UINT64).build()
+    writeTableFromYson(Seq(
+      "{id = 0u}",
+      "{id = 9223372036854775807u}",
+      "{id = 9223372036854775808u}",
+      "{id = 18446744073709551615u}",
+      "{id = #}"
+    ), tmpPath, tableSchema)
+  }
+
+  private def decimal(value: String): java.math.BigDecimal = new java.math.BigDecimal(value)
+
+  private val evaluationModes = Seq(
+    "code generation" -> Map.empty[String, String],
+    "interpreted evaluation" -> Map(
+      WHOLESTAGE_CODEGEN_ENABLED.key -> "false",
+      CODEGEN_FACTORY_MODE.key -> CodegenObjectFactoryMode.NO_CODEGEN.toString
+    )
+  )
+
+  evaluationModes.foreach { case (mode, conf) =>
+    it should s"cast uint64 to decimal using $mode" in {
+      createDecimalBoundaryTable()
+
+      val res = withConfs(conf) {
+        spark.read.yt(tmpPath).select(
+          col("id").cast(DecimalType(20, 0)),
+          col("id").cast(DecimalType(22, 2)),
+          col("id").cast(DecimalType(19, 0))
+        ).collect()
+      }
+
+      res should contain theSameElementsAs Seq(
+        Row(decimal("0"), decimal("0.00"), decimal("0")),
+        Row(decimal("9223372036854775807"), decimal("9223372036854775807.00"), decimal("9223372036854775807")),
+        Row(decimal("9223372036854775808"), decimal("9223372036854775808.00"), decimal("9223372036854775808")),
+        Row(decimal("18446744073709551615"), decimal("18446744073709551615.00"), null),
+        Row(null, null, null)
+      )
+    }
+  }
+
+  it should "cast required uint64 column to decimal" in {
+    val tableSchema = TableSchema.builder().addValue("id", TiType.uint64()).build()
+    writeTableFromYson(Seq("{id = 0u}", "{id = 18446744073709551615u}"), tmpPath, tableSchema)
+
+    withConf(SparkYtConfiguration.Schema.ForcingNullableIfNoMetadata, false) {
+      val df = spark.read.yt(tmpPath).select(
+        col("id").cast(DecimalType(20, 0)),
+        col("id").cast(DecimalType(19, 0))
+      )
+
+      df.schema.map(_.nullable) shouldBe Seq(false, true)
+      df.collect() should contain theSameElementsAs Seq(
+        Row(decimal("0"), decimal("0")),
+        Row(decimal("18446744073709551615"), null)
+      )
+    }
+  }
+
+  it should "filter by uint64 column cast to decimal" in {
+    createDecimalBoundaryTable()
+
+    val res = spark.read.yt(tmpPath)
+      .where(col("id").cast(DecimalType(20, 0)) > lit(decimal("9223372036854775807")))
+      .collect()
+
+    res should contain theSameElementsAs Seq(
+      Row(UInt64Long("9223372036854775808")), Row(UInt64Long("18446744073709551615"))
+    )
+  }
+
+  it should "filter by uint64 column cast to decimal with literals outside of uint64 range" in {
+    createDecimalBoundaryTable()
+
+    val df = spark.read.yt(tmpPath)
+    val exactDecimal = col("id").cast(DecimalType(20, 0))
+
+    df.where(exactDecimal > lit(decimal("-1"))).count() shouldBe 4
+    df.where(exactDecimal < lit(decimal("18446744073709551616"))).count() shouldBe 4
+    df.where(exactDecimal === lit(decimal("-1"))).count() shouldBe 0
   }
 }

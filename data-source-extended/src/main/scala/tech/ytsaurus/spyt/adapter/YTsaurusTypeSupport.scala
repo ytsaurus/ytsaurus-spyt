@@ -2,6 +2,7 @@ package tech.ytsaurus.spyt.adapter
 
 import org.apache.spark.sql.catalyst.analysis.TypeCoercionRule
 import org.apache.spark.sql.catalyst.expressions.Expression
+import org.apache.spark.sql.catalyst.expressions.codegen.ExprValue
 import org.apache.spark.sql.spyt.types._
 import org.apache.spark.sql.types.DataType
 import tech.ytsaurus.spyt.adapter.TypeSupport.CastFunction
@@ -16,6 +17,9 @@ class YTsaurusTypeSupport extends TypeSupport {
   override def uint64CastCode(from: DataType): CastFunction = UInt64Support.castCode(from)
   override val uInt64CastToString: Any => Any = UInt64CastToString
   override val uInt64CastToStringCode: CastFunction = UInt64CastToStringCode
+  override val uInt64CastToDecimal: Any => Any = UInt64CastToDecimal
+  override def uInt64CastToDecimalCode(uInt64Decimal: ExprValue, decimalCast: CastFunction): CastFunction =
+    UInt64CastToDecimalCode(uInt64Decimal, decimalCast)
 
   override val ysonDataType: DataType = new YsonType()
   override def ysonCast(from: DataType): Any => Any = YsonBinary.cast(from)

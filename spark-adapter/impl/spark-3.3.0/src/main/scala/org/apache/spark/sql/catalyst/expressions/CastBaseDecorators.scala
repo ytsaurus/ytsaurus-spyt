@@ -2,7 +2,7 @@ package org.apache.spark.sql.catalyst.expressions
 
 import org.apache.spark.sql.catalyst.expressions.codegen.{Block, CodegenContext, ExprValue}
 import org.apache.spark.sql.errors.QueryExecutionErrors
-import org.apache.spark.sql.types.{DataType, NullType}
+import org.apache.spark.sql.types.{DataType, Decimal, DecimalType, NullType}
 import tech.ytsaurus.spyt.adapter.TypeSupport.{instance => ts}
 import tech.ytsaurus.spyt.patch.annotations.{Applicability, Decorate, DecoratedMethod, OriginClass}
 
@@ -58,6 +58,13 @@ class CastBaseDecorators {
 
   private[this] def __castToTimestamp(from: DataType): Any => Any = ???
 
+  @DecoratedMethod
+  private[this] def castToDecimal(from: DataType, target: DecimalType): Any => Any = from match {
+    case ts.uInt64DataType => ts.uInt64CastToDecimal.andThen(__castToDecimal(DecimalType.LongDecimal, target))
+    case _ => __castToDecimal(from, target)
+  }
+
+  private[this] def __castToDecimal(from: DataType, target: DecimalType): Any => Any = ???
 
   @DecoratedMethod
   private[this] def nullSafeCastFunction(from: DataType, to: DataType, ctx: CodegenContext): CastFunction = to match {
@@ -92,6 +99,18 @@ class CastBaseDecorators {
   }
 
   private[this] def __castToTimestampCode(from: DataType, ctx: CodegenContext): CastFunction = ???
+
+  @DecoratedMethod
+  private[this] def castToDecimalCode(from: DataType, target: DecimalType, ctx: CodegenContext): CastFunction = {
+    from match {
+      case ts.uInt64DataType =>
+        val uInt64Decimal = ctx.freshVariable("uInt64Decimal", classOf[Decimal])
+        ts.uInt64CastToDecimalCode(uInt64Decimal, __castToDecimalCode(DecimalType.LongDecimal, target, ctx))
+      case _ => __castToDecimalCode(from, target, ctx)
+    }
+  }
+
+  private[this] def __castToDecimalCode(from: DataType, target: DecimalType, ctx: CodegenContext): CastFunction = ???
 }
 
 object YTsaurusCastUtils {

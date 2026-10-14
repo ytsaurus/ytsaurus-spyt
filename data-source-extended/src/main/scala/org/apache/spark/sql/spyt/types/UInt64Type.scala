@@ -99,6 +99,18 @@ object UInt64CastToStringCode extends ((ExprValue, ExprValue, ExprValue) => Bloc
     code"$evPrim = UTF8String.fromString(tech.ytsaurus.spyt.types.UInt64Long$$.MODULE$$.toString($c));"
 }
 
+object UInt64CastToDecimal extends (Any => Any) {
+  def apply(t: Any): Any = Decimal(UInt64Long.toBigDecimal(t.asInstanceOf[Long]))
+}
+
+object UInt64CastToDecimalCode {
+  def apply(uInt64Decimal: ExprValue, decimalCast: CastFunction): CastFunction = (c, evPrim, evNull) =>
+    code"""
+      Decimal $uInt64Decimal = Decimal.apply(tech.ytsaurus.spyt.types.UInt64Long$$.MODULE$$.toBigDecimal($c));
+      ${decimalCast(uInt64Decimal, evPrim, evNull)}
+    """
+}
+
 object UInt64LiteralsCast extends TypeCoercionRule {
 
   override def transform: PartialFunction[Expression, Expression] = {

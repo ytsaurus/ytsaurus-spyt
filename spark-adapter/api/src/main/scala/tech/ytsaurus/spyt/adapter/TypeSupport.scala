@@ -16,6 +16,8 @@ trait TypeSupport {
   def uint64CastCode(from: DataType): CastFunction
   val uInt64CastToString: Any => Any
   val uInt64CastToStringCode: CastFunction
+  val uInt64CastToDecimal: Any => Any
+  def uInt64CastToDecimalCode(uInt64Decimal: ExprValue, decimalCast: CastFunction): CastFunction
 
   val ysonDataType: DataType
   def ysonCast(from: DataType): Any => Any

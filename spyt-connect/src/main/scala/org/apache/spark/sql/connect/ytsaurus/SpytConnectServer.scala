@@ -1,11 +1,10 @@
 package org.apache.spark.sql.connect.ytsaurus
 
 import org.apache.spark.rpc.RpcAddress
-import org.apache.spark.SparkEnv
-import org.apache.spark.sql.connect.config.Connect.CONNECT_GRPC_BINDING_PORT
+import org.apache.spark.{SparkConf, SparkEnv}
+import org.apache.spark.sql.connect.config.Connect.{CONNECT_GRPC_BINDING_PORT, CONNECT_GRPC_INTERCEPTOR_CLASSES}
 import org.apache.spark.sql.connect.service.{SparkConnectServer, SparkConnectService}
 import org.slf4j.LoggerFactory
-import tech.ytsaurus.client.CompoundClient
 import tech.ytsaurus.client.request.UpdateOperationParameters
 import tech.ytsaurus.core.GUID
 import tech.ytsaurus.spyt.SparkVersionUtils
@@ -34,6 +33,14 @@ object SpytConnectServer {
     }
 
     checkAndUpdateGrpcPort()
+    val forwardingEndpoint = sys.props.get(Config.YTSAURUS_CONNECT_FORWARD_ENDPOINT.key)
+    SpytConnectForwardingInterceptor.validateConfig(
+      sys.props.get(Config.YTSAURUS_CONNECT_FORWARD_METHODS.key),
+      sys.props.get(Config.YTSAURUS_CONNECT_FORWARD_MIRROR_METHODS.key),
+      forwardingEndpoint)
+    if (forwardingEndpoint.exists(_.nonEmpty)) {
+      registerForwardingInterceptor()
+    }
     val serverRunner: Runnable = () => {
       var exitCode = 1
       try {
@@ -51,7 +58,6 @@ object SpytConnectServer {
     waitForGrpcServerStart()
 
     val sparkConf = SparkEnv.get.conf
-    val client = YtClientProvider.ytClient(ytClientConfiguration(sparkConf))
 
     innerClusterOpt match {
       case Some(innerClusterParams) => sendGrpcEndpointToMaster(
@@ -61,7 +67,7 @@ object SpytConnectServer {
         sparkConf.getAppId,
         sparkConf.get(Config.YTSAURUS_CONNECT_SETTINGS_HASH)
       )
-      case None => addGrpcEndpointToAnnotation(client)
+      case None => addGrpcEndpointToAnnotation(sparkConf)
     }
 
     val idleTimeout = sparkConf.get(Config.YTSAURUS_CONNECT_IDLE_TIMEOUT)
@@ -89,6 +95,15 @@ object SpytConnectServer {
   }
 
   private val MAX_PORT_RETRIES = 32
+
+  private def registerForwardingInterceptor(): Unit = {
+    val key = CONNECT_GRPC_INTERCEPTOR_CLASSES.key
+    val interceptor = classOf[SpytConnectForwardingInterceptor].getName
+    val configured = sys.props.get(key).toSeq.flatMap(_.split(",")).map(_.trim).filter(_.nonEmpty)
+    if (!configured.contains(interceptor)) {
+      sys.props(key) = (configured :+ interceptor).mkString(",")
+    }
+  }
 
   private def checkAndUpdateGrpcPort(): Unit = {
     val startingPort = sys.props(CONNECT_GRPC_BINDING_PORT.key).toInt
@@ -144,9 +159,10 @@ object SpytConnectServer {
     s"$host:$port"
   }
 
-  private def addGrpcEndpointToAnnotation(client: CompoundClient): Unit = {
+  private def addGrpcEndpointToAnnotation(sparkConf: SparkConf): Unit = {
     val operationId = System.getenv("YT_OPERATION_ID")
     if (operationId != null) {
+      val client = YtClientProvider.ytClient(ytClientConfiguration(sparkConf))
       val annotations = YTree.mapBuilder().key("spark_connect_endpoint").value(getEndpoint).buildMap()
       val req = UpdateOperationParameters
         .builder()

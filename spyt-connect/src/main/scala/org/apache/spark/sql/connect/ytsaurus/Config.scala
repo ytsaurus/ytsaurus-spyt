@@ -22,4 +22,23 @@ object Config {
     .version("2.9.0")
     .stringConf
     .createOptional
+
+  val YTSAURUS_CONNECT_FORWARD_METHODS = ConfigBuilder("spark.ytsaurus.connect.forward.methods")
+    .doc("Comma-separated Spark Connect gRPC methods or ExecutePlan selectors handled by an external endpoint")
+    .version("2.12.0")
+    .stringConf
+    .createOptional
+
+  val YTSAURUS_CONNECT_FORWARD_MIRROR_METHODS =
+    ConfigBuilder("spark.ytsaurus.connect.forward.mirror.methods")
+      .doc("Comma-separated Spark Connect gRPC methods or ExecutePlan selectors handled locally and forwarded")
+      .version("2.12.0")
+      .stringConf
+      .createOptional
+
+  val YTSAURUS_CONNECT_FORWARD_ENDPOINT = ConfigBuilder("spark.ytsaurus.connect.forward.endpoint")
+    .doc("Address of the external Spark Connect gRPC endpoint")
+    .version("2.12.0")
+    .stringConf
+    .createOptional
 }

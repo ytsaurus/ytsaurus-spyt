@@ -281,6 +281,15 @@ def get_base_cluster_config(global_conf, spark_cluster_version, params, base_dis
     return dynamic_config
 
 
+def _validate_yql_udf(java_home, plugin_description):
+    if plugin_description is None:
+        raise RuntimeError("YQL UDF plugin description is missing in the global and version configs")
+    if check_spark_version(less_than="4.2.0"):
+        raise RuntimeError("YQL UDF requires Spark 4.2.0 or newer")
+    if not java_home or not re.search(r'(?:^|/)(?:jdk|java)[-_]?25(?:/|$)', os.path.normpath(java_home)):
+        raise RuntimeError(f"YQL UDF requires Java 25, but cluster Java home is {java_home!r}")
+
+
 def run_operation_wrapper(op_builder, address_path, client):
     op = None
     try:
@@ -374,7 +383,7 @@ def start_spark_cluster(worker_cores, worker_memory, worker_num, worker_cores_ov
                         rpc_job_proxy=False, rpc_job_proxy_thread_pool_size=4, tcp_proxy_range_start=30000,
                         tcp_proxy_range_size=100, enable_stderr_table=False, group_id=None,
                         worker_gpu_limit=0, cluster_java_home=None, enable_ytsaurus_shuffle=False,
-                        enable_spark_shuffle=True):
+                        enable_spark_shuffle=True, enable_yql_udf=False):
     """Start Spark cluster
     :param operation_title: title for the underlying YT operation
     :param operation_alias: alias for the underlying YT operation
@@ -438,6 +447,7 @@ def start_spark_cluster(worker_cores, worker_memory, worker_num, worker_cores_ov
     :param group_id: discovery group id
     :param worker_gpu_limit: number of gpu for each worker
     :param cluster_java_home: custom java home for cluster vanilla operation
+    :param enable_yql_udf: add YQL UDF plugin files to cluster tasks
     :param enable_ytsaurus_shuffle: make YTsaurus shuffle service available in worker job proxies (per-app opt-in)
     :param enable_spark_shuffle: run the Spark external shuffle service on the cluster (enabled by default)
     :return:
@@ -492,6 +502,12 @@ def start_spark_cluster(worker_cores, worker_memory, worker_num, worker_cores_ov
 
     dynamic_config = get_base_cluster_config(global_conf, spark_cluster_version, params,
                                              spark_discovery.base_discovery_path, client)
+    extra_file_paths = []
+
+    if enable_yql_udf:
+        plugin_description = global_conf.get('plugins', {}).get('yql-udf-plugin')
+        _validate_yql_udf(cluster_java_home or dynamic_config.get('default_cluster_java_home'), plugin_description)
+        extra_file_paths = list(plugin_description.get('file_paths', []))
 
     _process_ipv6_preference(dynamic_config, enable_preference_ipv6, enablers)
 
@@ -524,7 +540,7 @@ def start_spark_cluster(worker_cores, worker_memory, worker_num, worker_cores_ov
         operation_title, operation_alias, pool, enable_tmpfs, network_project, enablers, preemption_mode,
         cluster_log_level, rpc_job_proxy, rpc_job_proxy_thread_pool_size, enable_ytsaurus_shuffle,
         tcp_proxy_range_start, tcp_proxy_range_size, enable_stderr_table, "spark", spark_discovery, group_id,
-        cluster_java_home, tvm_secret
+        cluster_java_home, tvm_secret, extra_file_paths=extra_file_paths
     )
     master_config = MasterConfig(master_memory_limit, master_port)
     worker_config = WorkerConfig(

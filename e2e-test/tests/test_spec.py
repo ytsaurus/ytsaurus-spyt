@@ -1,9 +1,11 @@
 import pytest
 
 from spyt.enabler import SpytEnablers
-from spyt.spec import CommonComponentConfig, CommonConnectParams, CommonSpecParams, WorkerConfig, WorkerResources, \
-    SparkDefaultArguments
-from spyt.spec import build_worker_spec, build_spark_operation_spec, build_spark_connect_server_spec
+from spyt.spec import (
+    CommonComponentConfig, CommonConnectParams, CommonSpecParams, WorkerConfig, WorkerResources,
+    SparkDefaultArguments, build_worker_spec, build_spark_operation_spec, build_spark_connect_server_spec,
+    _create_file_and_layer_paths,
+)
 from spyt.utils import SparkDiscovery, format_memory, parse_bool, parse_memory
 from yt.wrapper.common import update
 from yt.wrapper.spec_builders import VanillaSpecBuilder
@@ -96,6 +98,19 @@ def _init_config():
     }
     dynamic_config = SparkDefaultArguments.get_params()
     return update(init_config, dynamic_config)
+
+
+@pytest.mark.parametrize("extra_files", [["//home/plugin/a.jar", "//home/plugin/b.jar"], [], None])
+def test_extra_file_paths(extra_files):
+    config = _init_config()
+    config["file_paths"] = ["//home/spark/base.zip"]
+    options = {} if extra_files is None else {"extra_file_paths": extra_files}
+    common_config = CommonComponentConfig(**options)
+    path_options = {} if extra_files is None else {"extra_file_paths": common_config.extra_file_paths}
+
+    file_paths, _ = _create_file_and_layer_paths(config, False, ["//home/spark/spark.tgz"], **path_options)
+
+    assert file_paths == ["//home/spark/base.zip", "//home/spark/spark.tgz", *(extra_files or [])]
 
 
 def _build_operation_spec(yt_client, alias = None, enablers = None, tvm_secret = None, config_patch = None):

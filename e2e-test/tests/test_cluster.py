@@ -1,12 +1,42 @@
 from common.cluster import SpytCluster
 from common.helpers import assert_items_equal
 from utils import YT_PROXY, temporary_yt_user, upload_file
+from spyt import conf, standalone
 from spyt.conf import read_global_conf, read_remote_conf, read_spark_defaults_conf
 import json
 import requests
 import pytest
 import time
 import uuid
+
+
+@pytest.mark.parametrize("spark_supported, java_home, error", [
+    (False, "/opt/jdk25", "Spark 4.2.0 or newer"),
+    (True, None, "requires Java 25"),
+    (True, "/opt/jdk17", "requires Java 25"),
+    (True, "/opt/jdk250", "requires Java 25"),
+    (True, "/opt/jdk25", None),
+])
+def test_yql_udf_requirements(monkeypatch, spark_supported, java_home, error):
+    monkeypatch.setattr(standalone, "check_spark_version", lambda less_than: not spark_supported)
+
+    if error:
+        with pytest.raises(RuntimeError, match=error):
+            standalone._validate_yql_udf(java_home, {})
+    else:
+        standalone._validate_yql_udf(java_home, {})
+
+
+def test_yql_udf_version_plugin_overrides_global(monkeypatch):
+    global_config = {"plugins": {"yql-udf-plugin": {"file_paths": ["//home/plugin/global.jar"]}}}
+    version_config = {"plugins": {"yql-udf-plugin": {"file_paths": ["//home/plugin/version.jar"]}}}
+
+    monkeypatch.setattr(conf, "get", lambda path, client=None: version_config)
+
+    standalone.get_base_cluster_config(global_config, "2.0.0", params={})
+
+    assert global_config["plugins"]["yql-udf-plugin"]["file_paths"] == ["//home/plugin/version.jar"]
+
 
 def test_spyt_root_existence(yt_client):
     assert_items_equal(yt_client.list("//home/spark"), ["conf", "distrib", "spyt"])

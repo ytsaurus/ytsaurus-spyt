@@ -54,6 +54,7 @@ def main(raw_args=None):
                      default_enablers.enable_monium_logs_export)
     add_parser_group(parser, '--enable-ytsaurus-shuffle', '--disable-ytsaurus-shuffle', 'enable_ytsaurus_shuffle', False)
     add_parser_group(parser, '--enable-spark-shuffle', '--disable-spark-shuffle', 'enable_spark_shuffle', True)
+    parser.add_argument('--enable-yql-udf', action='store_true', default=False)
 
     parser.set_defaults(enable_tmpfs=True)
 
@@ -173,7 +174,8 @@ def main(raw_args=None):
                         worker_gpu_limit=args.worker_gpu_limit,
                         cluster_java_home=args.cluster_java_home,
                         enable_ytsaurus_shuffle=args.enable_ytsaurus_shuffle,
-                        enable_spark_shuffle=args.enable_spark_shuffle
+                        enable_spark_shuffle=args.enable_spark_shuffle,
+                        enable_yql_udf=args.enable_yql_udf
                         )
 
 

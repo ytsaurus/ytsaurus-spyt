@@ -79,6 +79,7 @@ class CommonComponentConfig():
     container_home: str = None
     spark_home: str = None
     spyt_home: str = None
+    extra_file_paths: List[str] = field(default_factory=list)
 
     def __post_init__(self):
         enable_squashfs = self.enablers and self.enablers.enable_squashfs
@@ -196,7 +197,7 @@ def _launcher_command(component: str, common_params: CommonSpecParams, additiona
     return " && ".join(commands)
 
 
-def _create_file_and_layer_paths(config, enable_squashfs: bool, spark_distributive_paths):
+def _create_file_and_layer_paths(config, enable_squashfs: bool, spark_distributive_paths, extra_file_paths=()):
     file_paths = [path for path in config["file_paths"] if
                   not enable_squashfs or
                   not path.endswith('spyt-package.zip')]
@@ -208,6 +209,7 @@ def _create_file_and_layer_paths(config, enable_squashfs: bool, spark_distributi
     else:
         file_paths += spark_distributive_paths
 
+    file_paths.extend(extra_file_paths)
     layer_paths += config["squashfs_layer_paths" if enable_squashfs else "layer_paths"]
     return file_paths, layer_paths
 
@@ -473,7 +475,7 @@ def build_spark_operation_spec(config: dict, client: YtClient,
 
     file_paths, layer_paths = _create_file_and_layer_paths(config,
                                                            common_config.enablers.enable_squashfs,
-                                                           spark_distr_paths)
+                                                           spark_distr_paths, common_config.extra_file_paths)
 
     common_task_spec = {
         "restart_completed_jobs": True,

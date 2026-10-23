@@ -137,6 +137,156 @@ def test_connect_server_spec_files_and_jars(connect_server_spec_client, files, j
             assert flag not in command
 
 
+def test_connect_server_spec_plugins(connect_server_spec_client, monkeypatch):
+    monkeypatch.setattr(spyt_connect, "read_global_conf", lambda client: {
+        "plugins": {
+            "first": "//home/plugin/first",
+            "second": "//home/plugin/second",
+        },
+    })
+    read_version_config = spyt_conf.get
+    plugin_configs = {
+        "//home/plugin/version/conf": {
+            "file_paths": ["//home/plugin/version.jar"],
+            "spark_conf": {"spark.driver.extraClassPath": "version.jar", "spark.test.override": "plugin"},
+        },
+        "//home/plugin/second/conf": {
+            "file_paths": ["//home/plugin/second.jar", "//home/plugin/config.txt"],
+            "spark_conf": {"spark.executor.extraJavaOptions": "--enable-native-access=ALL-UNNAMED"},
+        },
+    }
+
+    def read_version_config_with_plugins(path, client):
+        if str(path) in plugin_configs:
+            return deepcopy(plugin_configs[str(path)])
+        config = read_version_config(path, client)
+        config["plugins"] = {"first": "//home/plugin/version"}
+        return config
+
+    monkeypatch.setattr(spyt_conf, "get", read_version_config_with_plugins)
+
+    default_spec = start_connect_server(connect_server_spec_client)
+    spec = start_connect_server(connect_server_spec_client, plugins=["first", "second"])
+    reordered_spec = start_connect_server(connect_server_spec_client, plugins=["second", "first"])
+
+    assert spec["tasks"]["driver"]["file_paths"] == [
+        *default_spec["tasks"]["driver"]["file_paths"],
+        "//home/plugin/version.jar", "//home/plugin/second.jar", "//home/plugin/config.txt",
+    ]
+    assert spec["annotations"]["settings_hash"] != default_spec["annotations"]["settings_hash"]
+    assert spec["annotations"]["settings_hash"] == reordered_spec["annotations"]["settings_hash"]
+    command = shlex.split(spec["tasks"]["driver"]["command"])
+    assert "spark.driver.extraClassPath=version.jar" in command
+    assert "spark.executor.extraJavaOptions=--enable-native-access=ALL-UNNAMED" in command
+
+    spark_conf = {"spark.test.override": "caller", "spark.test.caller": "value"}
+    custom_spec = start_connect_server(connect_server_spec_client, plugins=["first", "second"], spark_conf=spark_conf)
+    command = shlex.split(custom_spec["tasks"]["driver"]["command"])
+    assert "spark.test.override=caller" in command
+    assert "spark.test.override=plugin" not in command
+    assert "spark.test.caller=value" in command
+    assert "spark.driver.extraClassPath=version.jar" in command
+    assert spark_conf == {"spark.test.override": "caller", "spark.test.caller": "value"}
+
+    plugin_configs["//home/plugin/version/conf"]["spark_conf"]["spark.driver.extraClassPath"] = "updated.jar"
+    updated_spec = start_connect_server(connect_server_spec_client, plugins=["first", "second"])
+    assert updated_spec["annotations"]["settings_hash"] != spec["annotations"]["settings_hash"]
+
+
+@pytest.mark.parametrize("key, separator", [
+    ("spark.driver.extraJavaOptions", " "),
+    ("spark.executor.extraJavaOptions", " "),
+    ("spark.driver.extraClassPath", ":"),
+    ("spark.executor.extraClassPath", ":"),
+])
+@pytest.mark.parametrize("existing", [None, "", "existing"])
+def test_connect_server_extends_plugin_spark_conf(connect_server_spec_client, monkeypatch, key, separator, existing):
+    monkeypatch.setattr(spyt_connect, "read_global_conf", lambda client: {
+        "plugins": {"first": "//home/plugin/first", "second": "//home/plugin/second"},
+    })
+    read_version_config = spyt_conf.get
+
+    def read_config(path, client):
+        if str(path).endswith("/conf"):
+            value = "first" if str(path) == "//home/plugin/first/conf" else "second"
+            return {"spark_conf": {key: value}}
+        return read_version_config(path, client)
+
+    monkeypatch.setattr(spyt_conf, "get", read_config)
+    spark_conf = {} if existing is None else {key: existing}
+    original = spark_conf.copy()
+    spec = start_connect_server(connect_server_spec_client, plugins=["first", "second"], spark_conf=spark_conf)
+    command = shlex.split(spec["tasks"]["driver"]["command"])
+    expected = separator.join(([existing] if existing else []) + ["first", "second"])
+    if key == "spark.driver.extraJavaOptions":
+        expected += " -Djava.net.preferIPv6Addresses=False"
+    assert f"{key}={expected}" in command
+    assert spark_conf == original
+
+
+@pytest.mark.parametrize("prefer_ipv6", [False, True])
+@pytest.mark.parametrize("existing", [None, "", "-Dcaller=value"])
+def test_connect_server_plugin_preserves_ipv6(connect_server_spec_client, monkeypatch, prefer_ipv6, existing):
+    monkeypatch.setattr(spyt_connect, "read_global_conf", lambda client: {
+        "plugins": {"test-plugin": "//home/plugin"},
+    })
+    read_version_config = spyt_conf.get
+    key = "spark.driver.extraJavaOptions"
+
+    def read_config(path, client):
+        if str(path) == "//home/plugin/conf":
+            return {"spark_conf": {key: "--enable-native-access=ALL-UNNAMED"}}
+        return read_version_config(path, client)
+
+    monkeypatch.setattr(spyt_conf, "get", read_config)
+    spark_conf = {} if existing is None else {key: existing}
+    original = spark_conf.copy()
+    spec = start_connect_server(
+        connect_server_spec_client, prefer_ipv6=prefer_ipv6, plugins=["test-plugin"], spark_conf=spark_conf)
+    command = shlex.split(spec["tasks"]["driver"]["command"])
+    values = [command[i + 1] for i, arg in enumerate(command[:-1])
+              if arg == "--conf" and command[i + 1].startswith(key + "=")]
+
+    expected = " ".join(([existing] if existing else []) + [
+        "--enable-native-access=ALL-UNNAMED", f"-Djava.net.preferIPv6Addresses={prefer_ipv6}",
+    ])
+    assert values == [f"{key}={expected}"]
+    assert spark_conf == original
+
+
+@pytest.mark.parametrize("key, separator", [
+    ("spark.driver.extraJavaOptions", " "),
+    ("spark.executor.extraJavaOptions", " "),
+    ("spark.driver.extraClassPath", ":"),
+    ("spark.executor.extraClassPath", ":"),
+    ("spark.test.override", None),
+])
+def test_connect_server_plugin_order_affects_reuse(connect_server_spec_client, monkeypatch, key, separator):
+    monkeypatch.setattr(spyt_connect, "read_global_conf", lambda client: {
+        "plugins": {"first": "//home/plugin/first", "second": "//home/plugin/second"},
+    })
+    read_version_config = spyt_conf.get
+
+    def read_config(path, client):
+        if str(path).endswith("/conf"):
+            value = "first" if str(path) == "//home/plugin/first/conf" else "second"
+            return {"spark_conf": {key: value}}
+        return read_version_config(path, client)
+
+    monkeypatch.setattr(spyt_conf, "get", read_config)
+    spec = start_connect_server(connect_server_spec_client, plugins=["first", "second"])
+    repeated = start_connect_server(connect_server_spec_client, plugins=["first", "second"])
+    reversed_spec = start_connect_server(connect_server_spec_client, plugins=["second", "first"])
+
+    for ordered_spec, values in [(spec, ["first", "second"]), (reversed_spec, ["second", "first"])]:
+        expected = separator.join(values) if separator else values[-1]
+        if key == "spark.driver.extraJavaOptions":
+            expected += " -Djava.net.preferIPv6Addresses=False"
+        assert f"{key}={expected}" in shlex.split(ordered_spec["tasks"]["driver"]["command"])
+    assert spec["annotations"]["settings_hash"] == repeated["annotations"]["settings_hash"]
+    assert spec["annotations"]["settings_hash"] != reversed_spec["annotations"]["settings_hash"]
+
+
 @pytest.mark.parametrize("option", ["files", "jars"])
 @pytest.mark.parametrize("path", ["//tmp/first,second", "yt:///tmp/first,second"])
 def test_connect_server_rejects_commas(option, path):

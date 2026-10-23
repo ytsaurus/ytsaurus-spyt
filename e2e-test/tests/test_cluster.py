@@ -3,6 +3,8 @@ from common.helpers import assert_items_equal
 from utils import YT_PROXY, temporary_yt_user, upload_file
 from spyt import conf, standalone
 from spyt.conf import read_global_conf, read_remote_conf, read_spark_defaults_conf
+from copy import deepcopy
+from types import SimpleNamespace
 import json
 import requests
 import pytest
@@ -22,20 +24,159 @@ def test_yql_udf_requirements(monkeypatch, spark_supported, java_home, error):
 
     if error:
         with pytest.raises(RuntimeError, match=error):
-            standalone._validate_yql_udf(java_home, {})
+            standalone._validate_yql_udf(java_home, "//home/plugin")
     else:
-        standalone._validate_yql_udf(java_home, {})
+        standalone._validate_yql_udf(java_home, "//home/plugin")
 
 
 def test_yql_udf_version_plugin_overrides_global(monkeypatch):
-    global_config = {"plugins": {"yql-udf-plugin": {"file_paths": ["//home/plugin/global.jar"]}}}
-    version_config = {"plugins": {"yql-udf-plugin": {"file_paths": ["//home/plugin/version.jar"]}}}
+    global_config = {"plugins": {"yql-udf-plugin": "//home/plugin/global"}}
+    version_config = {"plugins": {"yql-udf-plugin": "//home/plugin/version"}}
 
     monkeypatch.setattr(conf, "get", lambda path, client=None: version_config)
 
     standalone.get_base_cluster_config(global_config, "2.0.0", params={})
 
-    assert global_config["plugins"]["yql-udf-plugin"]["file_paths"] == ["//home/plugin/version.jar"]
+    assert global_config["plugins"]["yql-udf-plugin"] == "//home/plugin/version"
+
+
+@pytest.mark.parametrize("registry", [None, {}, {"known": "//home/plugin/known"}])
+def test_missing_plugin_conf(registry):
+    config = {"cluster_version": "2.0.0"}
+    if registry is not None:
+        config["plugins"] = registry
+
+    with pytest.raises(RuntimeError) as error:
+        conf.read_plugin_conf(config, "typo")
+
+    message = str(error.value)
+    assert "'typo'" in message
+    assert str(conf.GLOBAL_CONF_PATH) in message
+    assert str(conf._get_version_conf_path("2.0.0")) in message
+    assert "Available plugins: " + ("known" if registry else "(none)") in message
+
+
+@pytest.mark.parametrize("plugin_root", [{"file_paths": ["//home/plugin/plugin.jar"]}, None, ""])
+def test_invalid_plugin_root(plugin_root):
+    with pytest.raises(RuntimeError) as error:
+        conf.read_plugin_conf({"plugins": {"test-plugin": plugin_root}}, "test-plugin")
+
+    message = str(error.value)
+    assert "'test-plugin'" in message
+    assert str(conf.GLOBAL_CONF_PATH) in message
+    assert "expected a non-empty path string" in message
+    assert repr(plugin_root) in message
+    assert "Available plugins: test-plugin" in message
+
+
+@pytest.mark.parametrize("registry", [None, [], "//home/plugin"])
+def test_invalid_plugin_registry(registry):
+    with pytest.raises(RuntimeError, match="Invalid plugin registry.*expected a mapping"):
+        conf.read_plugin_conf({"plugins": registry}, "test-plugin")
+
+
+@pytest.mark.parametrize("key, separator", [
+    ("spark.driver.extraJavaOptions", " "),
+    ("spark.executor.extraJavaOptions", " "),
+    ("spark.driver.extraClassPath", ":"),
+    ("spark.executor.extraClassPath", ":"),
+])
+@pytest.mark.parametrize("override", [None, "", "caller"])
+def test_plugin_spark_conf_overrides(key, separator, override):
+    base = {key: "base", "spark.test.override": "base", "spark.test.base": "base"}
+    plugin = {key: "plugin", "spark.test.override": "plugin"}
+    overrides = {key: override, "spark.test.override": "caller", "spark.test.caller": "caller"}
+    originals = deepcopy((base, plugin, overrides))
+
+    merged = conf.merge_plugin_spark_conf(base, plugin, overrides)
+
+    assert merged[key] == separator.join(([override] if override else []) + ["plugin"])
+    assert merged["spark.test.override"] == "caller"
+    assert merged["spark.test.base"] == "base"
+    assert merged["spark.test.caller"] == "caller"
+    assert (base, plugin, overrides) == originals
+
+
+@pytest.mark.parametrize("enable_yql_udf", [False, True])
+@pytest.mark.parametrize("enable_multi_operation_mode", [False, True])
+def test_yql_udf_cluster_config(monkeypatch, enable_yql_udf, enable_multi_operation_mode):
+    global_config = {"plugins": {"yql-udf-plugin": "//home/plugin/global"}}
+    version_config = {
+        "plugins": {"yql-udf-plugin": "//home/plugin/version"},
+        "spark_conf": {
+            "spark.test.base": "base",
+            "spark.test.override": "base",
+            "spark.driver.extraJavaOptions": "-Ddriver=base",
+            "spark.executor.extraJavaOptions": "-Dexecutor=base",
+            "spark.driver.extraClassPath": "base-driver.jar",
+            "spark.executor.extraClassPath": "base-executor.jar",
+        },
+        "default_cluster_java_home": "/opt/jdk25",
+    }
+    plugin_config = {
+        "file_paths": ["//home/plugin/version/plugin.jar", "//home/plugin/version/plugin.so"],
+        "spark_conf": {
+            "spark.ytsaurus.columnar.udf.enabled": "true",
+            "spark.test.override": "plugin",
+            "spark.driver.extraJavaOptions": "--enable-native-access=ALL-UNNAMED",
+            "spark.executor.extraJavaOptions": "--enable-native-access=ALL-UNNAMED",
+            "spark.driver.extraClassPath": "plugin.jar",
+            "spark.executor.extraClassPath": "plugin.jar",
+        },
+    }
+    plugin_reads = []
+
+    def read_config(path, client=None):
+        if str(path).endswith("/spark-launch-conf"):
+            return deepcopy(version_config)
+        plugin_reads.append(str(path))
+        assert str(path) == "//home/plugin/version/conf"
+        return deepcopy(plugin_config)
+
+    monkeypatch.setattr(conf, "get", read_config)
+    monkeypatch.setattr(standalone, "read_global_conf", lambda client: deepcopy(global_config))
+    monkeypatch.setattr(standalone, "validate_cluster_version", lambda *args, **kwargs: None)
+    monkeypatch.setattr(standalone, "check_spark_version", lambda less_than: False)
+    monkeypatch.setattr(standalone.SparkDiscovery, "getOption", lambda *args, **kwargs: None)
+    monkeypatch.setattr(standalone.SparkDiscovery, "create", lambda *args: None)
+    monkeypatch.setattr(standalone, "_wait_master_start", lambda *args: None)
+    monkeypatch.setattr(standalone, "_wait_child_start", lambda *args: None)
+    monkeypatch.setattr(standalone, "find_spark_cluster", lambda *args: SimpleNamespace(master_webui=lambda: "test-ui"))
+    monkeypatch.setattr(standalone, "run_operation", lambda *args, **kwargs: SimpleNamespace(id="test-operation"))
+    specs = []
+    monkeypatch.setattr(standalone, "build_spark_operation_spec", lambda **kwargs: specs.append(kwargs))
+    params = {"spark_conf": {
+        "spark.test.override": "caller",
+        "spark.test.caller": "value",
+        "spark.executor.extraJavaOptions": "-Dexecutor=caller",
+    }}
+    original_params = deepcopy(params)
+
+    operation = standalone.start_spark_cluster(
+        1, "1G", 1, discovery_path="//tmp/test-discovery", spark_cluster_version="2.0.0", params=params,
+        enable_yql_udf=enable_yql_udf, enable_multi_operation_mode=enable_multi_operation_mode,
+    )
+
+    assert operation.id == "test-operation"
+    assert len(specs) == (2 if enable_multi_operation_mode else 1)
+    assert plugin_reads == (["//home/plugin/version/conf"] if enable_yql_udf else [])
+    for spec in specs:
+        spark_conf = spec["config"]["spark_conf"]
+        assert spark_conf["spark.test.base"] == "base"
+        assert spark_conf["spark.test.override"] == "caller"
+        assert spark_conf["spark.test.caller"] == "value"
+        assert spark_conf.get("spark.ytsaurus.columnar.udf.enabled") == ("true" if enable_yql_udf else None)
+        for key, base_value in {
+            "spark.driver.extraJavaOptions": "-Ddriver=base",
+            "spark.executor.extraJavaOptions": "-Dexecutor=caller",
+            "spark.driver.extraClassPath": "base-driver.jar",
+            "spark.executor.extraClassPath": "base-executor.jar",
+        }.items():
+            separator = " " if key.endswith("extraJavaOptions") else ":"
+            expected = base_value + separator + plugin_config["spark_conf"][key] if enable_yql_udf else base_value
+            assert spark_conf[key] == expected
+        assert spec["common_config"].extra_file_paths == (plugin_config["file_paths"] if enable_yql_udf else [])
+    assert params == original_params
 
 
 def test_spyt_root_existence(yt_client):

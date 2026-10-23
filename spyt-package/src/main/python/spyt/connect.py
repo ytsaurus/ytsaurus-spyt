@@ -17,7 +17,8 @@ from yt.wrapper.http_helpers import get_token, get_user_name  # noqa: E402
 from yt.wrapper.operation_commands import Operation, OperationState  # noqa: E402
 from yt.wrapper.run_operation_commands import run_operation  # noqa: E402
 import yt.yson as yson  # noqa: E402
-from .conf import read_global_conf, read_remote_conf, spark_version as default_spark_version  # noqa: E402
+from .conf import merge_plugin_spark_conf, read_global_conf, read_plugin_conf, read_remote_conf, \
+    spark_version as default_spark_version  # noqa: E402
 from .spec import build_spark_connect_server_spec, CommonConnectParams  # noqa: E402
 from .utils import parse_bool, SparkDiscovery  # noqa: E402
 from .version import __scala_version__ as default_spyt_version  # noqa: E402
@@ -47,10 +48,14 @@ def start_connect_server(client, enablers: SpytEnablers = None, prefer_ipv6: boo
                          python_executable: str = None, self_upload: bool = False, reuse_existing: bool = False,
                          fail_on_job_restart: bool = False, spyt_version: str = None,
                          spark_version: str = None, files: Optional[List[str]] = None,
-                         jars: Optional[List[str]] = None, driver_memory_overhead: str = "1G", **kwargs):
+                         jars: Optional[List[str]] = None, driver_memory_overhead: str = "1G",
+                         plugins: Optional[List[str]] = None, **kwargs):
     """Start a Connect server, defaulting to the installed SPYT and PySpark versions.
 
     files and jars accept YT paths (//...) or yt:/// URIs without commas for spark-submit.
+    plugins lists SPYT plugin roots whose conf documents provide file_paths and spark_conf defaults.
+    Plugin JVM options and classpaths extend explicit spark_conf settings; other explicit settings override defaults.
+    Plugins are applied in the supplied order: later scalar defaults win and appended values retain that order.
     With the embedded RPC proxy enabled, driver_memory_overhead
     reserves an additional 1G by default in YT, without increasing the JVM heap.
     """
@@ -68,6 +73,13 @@ def start_connect_server(client, enablers: SpytEnablers = None, prefer_ipv6: boo
     global_conf = read_global_conf(client=client)
     version_config = read_remote_conf(global_conf, spyt_version, client)
     java_home = java_home or version_config.get('default_cluster_java_home')
+    plugin_files = []
+    plugin_spark_conf = {}
+    for plugin in plugins or []:
+        plugin_conf = read_plugin_conf(version_config, plugin, client=client)
+        plugin_files.extend(plugin_conf.get("file_paths", []))
+        plugin_spark_conf = merge_plugin_spark_conf(plugin_spark_conf, plugin_conf.get("spark_conf", {}))
+    params.spark_conf = merge_plugin_spark_conf(params.spark_conf, plugin_spark_conf, params.spark_conf)
     extra_files = []
 
     if self_upload:
@@ -98,6 +110,8 @@ def start_connect_server(client, enablers: SpytEnablers = None, prefer_ipv6: boo
         "jars": sorted(jars),
         "operation_alias": operation_alias,
         "params": vars(params),
+        "plugin_files": sorted(plugin_files),
+        "plugins": sorted(plugins or []),
         "pool": pool,
         "prefer_ipv6": prefer_ipv6,
         "python_executable": python_executable,
@@ -113,7 +127,7 @@ def start_connect_server(client, enablers: SpytEnablers = None, prefer_ipv6: boo
             return operation
 
     spec = build_spark_connect_server_spec(client, version_config, enablers, java_home,
-                                           prefer_ipv6, pool, operation_alias, title, extra_files,
+                                           prefer_ipv6, pool, operation_alias, title, extra_files + plugin_files,
                                            params, settings_hash, fail_on_job_restart,
                                            spark_version=spark_version, files=files, jars=jars)
     return run_operation(spec, sync=False, client=client)

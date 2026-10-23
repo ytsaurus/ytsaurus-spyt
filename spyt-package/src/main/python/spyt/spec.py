@@ -14,7 +14,7 @@ from yt.wrapper.common import update_inplace, update  # noqa: E402
 from yt.wrapper.http_helpers import get_token, get_user_name  # noqa: E402
 from yt.wrapper.spec_builders import VanillaSpecBuilder  # noqa: E402
 
-from .conf import get_spark_distributive, spark_version as default_spark_version  # noqa: E402
+from .conf import get_spark_distributive, merge_plugin_spark_conf, spark_version as default_spark_version  # noqa: E402
 from .conf import read_metrics_conf, read_spark_defaults_conf  # noqa: E402
 from .utils import SparkDiscovery, call_get_proxy_address_url, parse_bool, parse_memory, get_scala_version  # noqa: E402
 from .enabler import SpytEnablers  # noqa: E402
@@ -536,6 +536,9 @@ def build_spark_connect_server_spec(client: YtClient, config, enablers: SpytEnab
     yt_proxy = call_get_proxy_address_url(required=True, client=client)
     network_project = params.spark_conf.get("spark.ytsaurus.network.project")
     spark_home = component_config.spark_home.replace("$HOME/", "")
+    spark_conf = merge_plugin_spark_conf(params.spark_conf, {
+        "spark.driver.extraJavaOptions": f"-Djava.net.preferIPv6Addresses={prefer_ipv6}",
+    })
     command = [
         f"{spark_home}/bin/spark-submit",
         "--master", f"ytsaurus://{yt_proxy}",
@@ -546,10 +549,9 @@ def build_spark_connect_server_spec(client: YtClient, config, enablers: SpytEnab
         "--executor-memory", params.executor_memory,
         "--queue", pool or user,
         "--name", title,
-        "--conf", f"spark.driver.extraJavaOptions=-Djava.net.preferIPv6Addresses={prefer_ipv6}",
         "--conf", f"spark.connect.grpc.binding.port={params.grpc_port_start}",
     ]
-    for key, value in params.spark_conf.items():
+    for key, value in spark_conf.items():
         command.extend(["--conf", f"{key}={value}"])
     if files:
         command.extend(["--files", ",".join(files)])

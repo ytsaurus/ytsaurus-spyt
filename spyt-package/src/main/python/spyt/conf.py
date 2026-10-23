@@ -123,6 +123,41 @@ def read_remote_conf(global_conf, cluster_version, client=None):
     return update_inplace(global_conf, version_conf)  # TODO(alex-shishkin): Might cause undefined behaviour
 
 
+def read_plugin_conf(config, plugin, client=None):
+    config_paths = str(GLOBAL_CONF_PATH)
+    if config.get("cluster_version"):
+        config_paths += f" and {_get_version_conf_path(config['cluster_version'])}"
+    plugins = config.get("plugins", {})
+    if not isinstance(plugins, dict):
+        raise RuntimeError(f"Invalid plugin registry in {config_paths}: expected a mapping, got {plugins!r}.")
+    available = ", ".join(sorted(plugins)) or "(none)"
+    if plugin not in plugins:
+        raise RuntimeError(
+            f"SPYT plugin {plugin!r} is not configured in {config_paths}. Available plugins: {available}.")
+    plugin_root = plugins[plugin]
+    if not isinstance(plugin_root, str) or not plugin_root:
+        raise RuntimeError(
+            f"Invalid root for SPYT plugin {plugin!r} in {config_paths}: expected a non-empty path string, "
+            f"got {plugin_root!r}. Available plugins: {available}.")
+    return get(YPath(plugin_root).join("conf"), client=client)
+
+
+def merge_plugin_spark_conf(base, plugin, overrides=None):
+    """Append plugin JVM options and classpaths while preserving explicit scalar overrides."""
+    overrides = overrides or {}
+    effective_base = base | overrides
+    merged = base | plugin | overrides
+    for key, separator in [
+        ("spark.driver.extraJavaOptions", " "),
+        ("spark.executor.extraJavaOptions", " "),
+        ("spark.driver.extraClassPath", ":"),
+        ("spark.executor.extraClassPath", ":"),
+    ]:
+        if key in plugin:
+            merged[key] = separator.join(value for value in [effective_base.get(key), plugin[key]] if value)
+    return merged
+
+
 def read_metrics_conf():
     return read_conf("metrics.properties", delimiter="=")
 

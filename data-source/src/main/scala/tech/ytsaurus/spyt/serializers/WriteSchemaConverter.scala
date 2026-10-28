@@ -4,6 +4,7 @@ import org.apache.hadoop.conf.Configuration
 import org.apache.spark.sql.spyt.types.{DatetimeType, _}
 import org.apache.spark.sql.types._
 import tech.ytsaurus.core.tables.{ColumnSortOrder, TableSchema}
+import tech.ytsaurus.spyt.SparkAdapter
 import tech.ytsaurus.spyt.common.utils.TypeUtils.{isTuple, isVariant, isVariantOverTuple}
 import tech.ytsaurus.spyt.format.conf.YtTableSparkSettings.{StringToUtf8, WriteSchemaHint, WriteTypeV3}
 import tech.ytsaurus.spyt.serializers.SchemaConverter._
@@ -43,9 +44,24 @@ class WriteSchemaConverter(
   def ytLogicalTypeStruct(structType: StructType): YtLogicalType.Struct = {
     val fields: JList[(String, YtLogicalType, Metadata)] = JArrays.stream(structType.fields)
       .map[(String, YtLogicalType, Metadata)](sf =>
-        (sf.name, wrapSparkAttributes(ytLogicalTypeV3(sf), sf.nullable, Some(sf.metadata)), sf.metadata))
+        (sf.name, wrapSparkAttributes(ytLogicalTypeV3(sf), sf.nullable, Some(sf.metadata)), memberMetadata(sf)))
       .collect(Collectors.toList())
     YtLogicalType.Struct(fields)
+  }
+
+  /**
+   * Member metadata that keeps a Spark Variant member yson when the struct goes back to Spark types, as the schema of a
+   * written table does: without data-source-extended, yson goes back as BinaryType.
+   */
+  private def memberMetadata(field: StructField): Metadata = {
+    if (SparkAdapter.instance.isSparkVariantType(field.dataType)) {
+      new MetadataBuilder()
+        .withMetadata(field.metadata)
+        .putString(MetadataFields.YT_LOGICAL_TYPE, YtLogicalType.Any.getNameV3(true))
+        .build()
+    } else {
+      field.metadata
+    }
   }
 
   def ytLogicalTypeV3(structField: StructField): YtLogicalType = {
@@ -109,7 +125,11 @@ class WriteSchemaConverter(
       YtLogicalType.Dict(
         ytLogicalTypeV3(mT.keyType),
         wrapSparkAttributes(ytLogicalTypeV3(mT.valueType), mT.valueContainsNull))
-    case BinaryType => YtLogicalType.Binary
+    case BinaryType => if (hint == YtLogicalType.Any) {
+      YtLogicalType.Any
+    } else {
+      YtLogicalType.Binary
+    }
     case DateType => YtLogicalType.Date
     case _: DatetimeType => YtLogicalType.Datetime
     case TimestampType => YtLogicalType.Timestamp
@@ -117,6 +137,7 @@ class WriteSchemaConverter(
     case _: Datetime64Type => YtLogicalType.Datetime64
     case _: Timestamp64Type => YtLogicalType.Timestamp64
     case _: Interval64Type => YtLogicalType.Interval64
+    case variantType if SparkAdapter.instance.isSparkVariantType(variantType) => YtLogicalType.Any
     case otherType => YTsaurusTypes.instance.ytLogicalTypeV3(otherType)
   }
 

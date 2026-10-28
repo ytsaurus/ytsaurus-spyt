@@ -5,7 +5,8 @@ import org.apache.spark.sql.{Row, SaveMode}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import tech.ytsaurus.core.tables.{ColumnValueType, TableSchema}
-import tech.ytsaurus.spyt.YtWriter
+import tech.ytsaurus.spyt.{SparkAdapter, YtWriter}
+import tech.ytsaurus.spyt.YsonAsVariantTestUtils.whenVariantSupported
 import tech.ytsaurus.spyt.format.conf.YtTableSparkSettings
 import tech.ytsaurus.spyt.format.conf.YtTableSparkSettings.InconsistentDynamicWrite
 import tech.ytsaurus.spyt.test._
@@ -237,5 +238,19 @@ class DynTableRowConverterTest extends AnyFlatSpec with TmpDir with LocalSpark w
 
     val error = the[IllegalArgumentException] thrownBy new DynTableRowConverter(sparkSchema, tableSchema, typeV3 = false)
     error.getMessage should include("Cannot find YT columns for Spark fields: [extra_in_spark]")
+  }
+
+  it should "throw IllegalArgumentException when a Spark Variant is nested in a struct" in {
+    whenVariantSupported {
+      val variantType = SparkAdapter.instance.ysonVariantConverter.variantType
+      val sparkSchema = StructType(Seq(StructField("nested", StructType(Seq(StructField("v", variantType))))))
+      val tableSchema = TableSchema.builder().setUniqueKeys(false).addValue("nested", ColumnValueType.ANY).build()
+
+      val error = the[IllegalArgumentException] thrownBy {
+        new DynTableRowConverter(sparkSchema, tableSchema, typeV3 = false)
+      }
+      error.getMessage shouldBe "requirement failed: Spark type variant can be written only to top-level columns, " +
+        "but it is nested in the Spark fields: [`nested` struct<v:variant>]"
+    }
   }
 }

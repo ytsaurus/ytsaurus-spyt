@@ -12,7 +12,7 @@ import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import tech.ytsaurus.client.request.ModifyRowsRequest
 import tech.ytsaurus.core.tables.{ColumnValueType, TableSchema}
-import tech.ytsaurus.spyt.SparkAdapter
+import tech.ytsaurus.spyt.{SparkAdapter, YsonAsVariantTestUtils}
 import tech.ytsaurus.spyt.format.conf.SparkYtConfiguration
 import tech.ytsaurus.spyt.format.conf.YtTableSparkSettings.{InconsistentReadEnabled, WriteTypeV3}
 import tech.ytsaurus.spyt.serializers.WriteSchemaConverter
@@ -27,11 +27,12 @@ import tech.ytsaurus.ysontree.YTree
 
 import java.time.Duration
 import java.util.UUID
+import scala.collection.mutable
 import scala.jdk.CollectionConverters._
 import scala.concurrent.{Await, Future, Promise}
 
 class YTsaurusStreamingTest extends AnyFlatSpec with Matchers with LocalSpark with LocalYtClient
-  with TmpDir with DynTableTestUtils with QueueTestUtils {
+  with TmpDir with DynTableTestUtils with QueueTestUtils with YsonAsVariantTestUtils {
 
   private val sqlImplicits = SparkAdapter.instance.sparkImplicits(spark)
   import sqlImplicits._
@@ -550,10 +551,55 @@ class YTsaurusStreamingTest extends AnyFlatSpec with Matchers with LocalSpark wi
     actualData should contain theSameElementsAs expectedData
   }
 
-  it should "correct streaming with custom YT types" in {
+  private val streamedYsonCells = Seq("\"x\"", "18446744073709551615u", "#")
+
+  private val streamedYsonJson = Seq("\"x\"", "18446744073709551615", null)
+
+  private def ysonTextsByUint64(df: DataFrame, ysonAsVariant: Boolean): Map[Long, String] = {
+    val keyed = df.withColumn("id", col("uint64").cast(LongType))
+    columnTexts(keyed, "id", "yson", ysonAsVariant).toMap
+  }
+
+  private def streamedYsonTexts(df: DataFrame, rowCount: Int, ysonAsVariant: Boolean): Map[Long, String] = {
+    val texts = mutable.Map.empty[Long, String]
+    val query = df
+      .writeStream
+      .option("checkpointLocation", f"yt:/$tmpPath/sourceCheckpoints_${UUID.randomUUID()}")
+      .trigger(ProcessingTime(2000))
+      .foreachBatch { (frame: DataFrame, _: Long) =>
+        val frameTexts = ysonTextsByUint64(frame, ysonAsVariant)
+        texts.synchronized(texts ++= frameTexts)
+        ()
+      }
+      .start()
+
+    def delivered: Int = texts.synchronized(texts.size)
+    val deadline = System.currentTimeMillis() + Duration.ofSeconds(120).toMillis
+    try {
+      while (delivered < rowCount && query.exception.isEmpty && System.currentTimeMillis() < deadline) {
+        Thread.sleep(1000)
+      }
+    } finally {
+      query.stop()
+    }
+    query.exception.foreach(error => fail("The streaming query of the queue failed", error))
+    texts.synchronized(texts.toMap)
+  }
+
+  private def checkStreamedYson(texts: Map[Long, String], rowCount: Int, ysonAsVariant: Boolean): Unit = {
+    val cellTexts = if (ysonAsVariant) streamedYsonJson else streamedYsonCells.map(canonicalYson)
+    def cell(id: Long): Int = (id % streamedYsonCells.size).toInt
+    val pinnedIds = (0L until rowCount).filter(id => ysonAsVariant || streamedYsonCells(cell(id)) != "#")
+
+    texts.keySet shouldBe (0L until rowCount).toSet
+    pinnedIds.map(id => id -> texts(id)) shouldBe pinnedIds.map(id => id -> cellTexts(cell(id)))
+  }
+
+  testWithYsonAsVariant("correct streaming with custom YT types") { ysonAsVariant =>
     withConf(SparkYtConfiguration.Schema.ForcingNullableIfNoMetadata, false) {
       val recordCountLimit = 10L
       val consumerPath = s"$tmpPath/consumer-${UUID.randomUUID()}"
+      val sourceCheckConsumerPath = s"$tmpPath/sourceCheckConsumer-${UUID.randomUUID()}"
       val queuePath = s"$tmpPath/inputQueue-${UUID.randomUUID()}"
       val resultPath = s"$tmpPath/result-${UUID.randomUUID()}"
 
@@ -576,6 +622,7 @@ class YTsaurusStreamingTest extends AnyFlatSpec with Matchers with LocalSpark wi
       YtWrapper.createDir(tmpPath)
       prepareOrderedTestTable(queuePath, ytSchema, enableDynamicStoreRead = true)
       prepareConsumer(consumerPath, queuePath)
+      prepareConsumer(sourceCheckConsumerPath, queuePath)
       waitQueueRegistration(queuePath)
       prepareOrderedTestTable(resultPath, ytSchema, enableDynamicStoreRead = true)
 
@@ -589,7 +636,7 @@ class YTsaurusStreamingTest extends AnyFlatSpec with Matchers with LocalSpark wi
           .value(s"str_$i")
           .buildList
 
-        val ysonVal = Array[Byte](1, 2, 3)
+        val ysonVal = ysonBytes(streamedYsonCells(i % streamedYsonCells.size))
 
         val req = ModifyRowsRequest.builder.setPath(queuePath).setSchema(ytSchema).addInsert(
           java.util.List.of(
@@ -606,12 +653,21 @@ class YTsaurusStreamingTest extends AnyFlatSpec with Matchers with LocalSpark wi
         YtWrapper.insertRows(req, None)
       }
 
-      val df: DataFrame = spark
-        .readStream
-        .format("yt")
-        .option(PARSING_TYPE_V3, value = true)
-        .option("consumer_path", consumerPath)
-        .load(queuePath)
+      def readQueue(consumer: String): DataFrame = {
+        spark
+          .readStream
+          .format("yt")
+          .option(PARSING_TYPE_V3, value = true)
+          .option("consumer_path", consumer)
+          .load(queuePath)
+      }
+
+      val df = readQueue(consumerPath)
+      df.schema("yson").dataType shouldBe ysonColumnType(ysonAsVariant)
+
+      val sourceTexts = streamedYsonTexts(readQueue(sourceCheckConsumerPath), recordCountLimit.toInt, ysonAsVariant)
+      checkStreamedYson(sourceTexts, recordCountLimit.toInt, ysonAsVariant)
+
       val query = df
         .writeStream
         .option(WriteTypeV3.name, value = true)
@@ -645,20 +701,18 @@ class YTsaurusStreamingTest extends AnyFlatSpec with Matchers with LocalSpark wi
           new Timestamp64(id),
           new Interval64(id),
           new UInt64Long(id),
-          Array[Byte](1, 2, 3),
           Seq(id, id + 1),
           Row(id, s"str_$i")
         )
       }
 
-      val intermediateSchema = StructType(Seq(
+      val expectedSchema = StructType(Seq(
         StructField("datetime", new DatetimeType(), nullable = false),
         StructField("date32", new Date32Type(), nullable = false),
         StructField("datetime64", new Datetime64Type(), nullable = false),
         StructField("timestamp64", new Timestamp64Type(), nullable = false),
         StructField("interval64", new Interval64Type(), nullable = false),
         StructField("uint64", UInt64Type, nullable = false),
-        StructField("yson", BinaryType),
         StructField("list", ArrayType(LongType, containsNull = false), nullable = false),
         StructField("struct", StructType(Seq(
           StructField("a", LongType, nullable = false),
@@ -666,20 +720,19 @@ class YTsaurusStreamingTest extends AnyFlatSpec with Matchers with LocalSpark wi
         )), nullable = false)
       ))
 
-      val tempDF = spark.createDataFrame(
-        spark.sparkContext.parallelize(expectedRows),
-        intermediateSchema
-      )
+      val expectedDF = spark.createDataFrame(spark.sparkContext.parallelize(expectedRows), expectedSchema)
+      val resultWithoutYson = resultDF.drop("yson")
 
-      val expectedDF = tempDF.withColumn("yson", col("yson").cast(new YsonType()))
-
-      resultDF.schema.fields.map(_.copy(metadata = Metadata.empty)) shouldEqual
+      resultDF.schema("yson").copy(metadata = Metadata.empty) shouldBe
+        StructField("yson", ysonColumnType(ysonAsVariant))
+      resultWithoutYson.schema.fields.map(_.copy(metadata = Metadata.empty)) shouldEqual
         expectedDF.schema.fields.map(_.copy(metadata = Metadata.empty))
 
-      val resultData = resultDF.collect().map(normalizeRow)
+      val resultData = resultWithoutYson.collect().map(normalizeRow)
       val expectedData = expectedDF.collect().map(normalizeRow)
 
       resultData should contain theSameElementsAs expectedData
+      checkStreamedYson(ysonTextsByUint64(resultDF, ysonAsVariant), recordCountLimit.toInt, ysonAsVariant)
     }
   }
 

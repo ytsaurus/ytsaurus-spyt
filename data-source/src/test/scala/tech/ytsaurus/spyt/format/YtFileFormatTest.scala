@@ -18,8 +18,9 @@ import org.scalatest.prop.TableDrivenPropertyChecks
 import tech.ytsaurus.client.rows.{UnversionedRow, UnversionedValue}
 import tech.ytsaurus.core.tables.{ColumnValueType, TableSchema}
 import tech.ytsaurus.spyt._
+import tech.ytsaurus.spyt.YsonAsVariantTestUtils.whenVariantSupported
 import tech.ytsaurus.spyt.common.utils.DateTimeTypesConverter.{convertUTCtoLocal, getUtcHoursOffset}
-import tech.ytsaurus.spyt.format.conf.SparkYtConfiguration
+import tech.ytsaurus.spyt.format.conf.{SparkYtConfiguration, YtTableSparkSettings}
 import tech.ytsaurus.spyt.test.{LocalSpark, TestUtils, TmpDir}
 import tech.ytsaurus.spyt.types.YTsaurusTypes
 import tech.ytsaurus.spyt.wrapper.YtWrapper
@@ -35,7 +36,8 @@ import scala.jdk.CollectionConverters._
 import scala.util.Random
 
 class YtFileFormatTest extends AnyFlatSpec with Matchers with LocalSpark
-  with TmpDir with TestUtils with TableDrivenPropertyChecks with YtDistributedReadingTestUtils {
+  with TmpDir with TestUtils with TableDrivenPropertyChecks with YtDistributedReadingTestUtils
+  with YsonAsVariantTestUtils {
   behavior of "YtFileFormat"
 
   private val sqlImplicits = SparkAdapter.instance.sparkImplicits(spark)
@@ -647,13 +649,7 @@ class YtFileFormatTest extends AnyFlatSpec with Matchers with LocalSpark
     df.select("a").collect().map(_.get(0)) should contain theSameElementsAs data
   }
 
-  testWithDistributedReading("read primitives in any column") { distributedReadingEnabled =>
-    val data = Seq(
-      Seq[Any](0L, 0.0, 0.0f, false, 0.toByte, BigDecimal(0).bigDecimal),
-      Seq[Any](65L, 1.5, 7.2f, true, 3.toByte, BigDecimal(4).bigDecimal),
-      Seq[Any](65L, 1.5, 7.2f, true, 3.toByte, BigDecimal("18446744073709551606").bigDecimal)
-    )
-
+  private def writePrimitivesInAnyColumns(): Unit = {
     val preparedData = Seq(
       Seq[Any](0L, 0.0, 0.0, false, 0L, 0L),
       Seq[Any](65L, 1.5, 7.2, true, 3L, 4L),
@@ -678,6 +674,16 @@ class YtFileFormatTest extends AnyFlatSpec with Matchers with LocalSpark
         .addValue("int8", ColumnValueType.ANY)
         .addValue("uint64", ColumnValueType.ANY)
         .build())
+  }
+
+  testWithDistributedReading("read primitives in any column") { distributedReadingEnabled =>
+    val data = Seq(
+      Seq[Any](0L, 0.0, 0.0f, false, 0.toByte, BigDecimal(0).bigDecimal),
+      Seq[Any](65L, 1.5, 7.2f, true, 3.toByte, BigDecimal(4).bigDecimal),
+      Seq[Any](65L, 1.5, 7.2f, true, 3.toByte, BigDecimal("18446744073709551606").bigDecimal)
+    )
+
+    writePrimitivesInAnyColumns()
 
     val schemaHint = StructType(Seq(
       StructField("int64", LongType), StructField("double", DoubleType), StructField("float", FloatType),
@@ -692,6 +698,42 @@ class YtFileFormatTest extends AnyFlatSpec with Matchers with LocalSpark
 
     val wireRes = spark.read.disableArrow.schemaHint(schemaHint).yt(tmpPath).collect()
     wireRes should contain theSameElementsAs ans
+  }
+
+  it should "read primitives in any column as Variant through a user schema" in {
+    whenVariantSupported {
+      val variantType = SparkAdapter.instance.ysonVariantConverter.variantType
+      writePrimitivesInAnyColumns()
+      val primitiveColumns = Seq("int64", "double", "float", "boolean", "int8", "uint64")
+      val userSchema = StructType(primitiveColumns.map(StructField(_, variantType)))
+
+      val res = spark.read.enableArrow.schema(userSchema).yt(tmpPath)
+
+      res.schema.map(_.dataType).distinct shouldBe Seq(variantType)
+      readsArrowBatches(res) shouldBe false
+      res.selectExpr(primitiveColumns.map(c => s"to_json(`$c`)"): _*).collect() should contain theSameElementsAs Seq(
+        Row("0", "0.0", "0.0", "false", "0", "0"),
+        Row("65", "1.5", "7.2", "true", "3", "4"),
+        Row("65", "1.5", "7.2", "true", "3", "18446744073709551606"))
+    }
+  }
+
+  Seq(true, false).foreach { writeTypeV3 =>
+    it should s"write Variant columns as yson columns, writeTypeV3 = $writeTypeV3" in {
+      whenVariantSupported {
+        val df = spark.sql("""SELECT 1L AS id, parse_json('{"a":1}') AS v, try_parse_json('[2]') AS nv""")
+
+        df.write.option(YtTableSparkSettings.WriteTypeV3.name, writeTypeV3).yt(tmpPath)
+
+        val schema = TableSchema.fromYTree(YtWrapper.attribute(tmpPath, "schema"))
+        Seq("v", "nv").map(column => schema.getColumnSchema(schema.findColumn(column)).getTypeV3) shouldBe
+          Seq.fill(2)(TiType.optional(TiType.yson()))
+        val rows = readTableAsYson(tmpPath).map(_.asMap())
+        rows should have size 1
+        ysonText(rows.head.get("v").bytesValue()) shouldBe canonicalYson("{a=1}")
+        ysonText(rows.head.get("nv").bytesValue()) shouldBe canonicalYson("[2]")
+      }
+    }
   }
 
   testWithDistributedReading("read wire") { distributedReadingEnabled =>

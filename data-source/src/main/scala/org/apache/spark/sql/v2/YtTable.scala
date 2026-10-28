@@ -113,7 +113,9 @@ object YtTable {
     case _ => false
   }
 
+  /** Spark Variant is supported only as the type of a top-level column, which is a yson column in YTsaurus. */
   private def supportsInnerDataType(dataType: DataType): Boolean = {
-    YTsaurusTypes.instance.supportsInnerDataType(dataType).getOrElse(supportsDataType(dataType))
+    !SparkAdapter.instance.isSparkVariantType(dataType) &&
+      YTsaurusTypes.instance.supportsInnerDataType(dataType).getOrElse(supportsDataType(dataType))
   }
 }

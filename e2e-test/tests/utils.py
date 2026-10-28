@@ -4,6 +4,7 @@ from contextlib import contextmanager
 from hashlib import sha256
 import logging
 import os
+from spyt.utils import check_spark_version
 import time
 
 YT_PROXY = "127.0.0.1:" + os.getenv("PROXY_PORT", "8000")
@@ -24,6 +25,9 @@ SPARK_CONF = DEFAULT_SPARK_CONF | {
     "spark.ytsaurus.driver.maxFailures": 2,
     "spark.ytsaurus.executor.maxFailures": 2,
 } | DRIVER_CLIENT_CONF
+
+YSON_AS_VARIANT_CONF = "spark.ytsaurus.read.ysonAsVariant.enabled"
+SPARK_HAS_VARIANT = check_spark_version(greater_than_or_equal="4.0.0")
 
 
 def job_path(source_path):

@@ -10,7 +10,7 @@ import org.apache.spark.resource.ResourceProfile
 import org.apache.spark.serializer.Serializer
 import org.apache.spark.sql.catalyst.{InternalRow, TableIdentifier}
 import org.apache.spark.sql.internal.SQLConf
-import org.apache.spark.sql.types.{DataType, StructType}
+import org.apache.spark.sql.types.{DataType, StructType, VariantType}
 import org.apache.spark.sql._
 import org.apache.spark.sql.catalyst.catalog.{CatalogStorageFormat, CatalogTable, CatalogTableType}
 import org.apache.spark.sql.catalyst.expressions.objects.StaticInvoke
@@ -25,6 +25,9 @@ import org.apache.spark.sql.vectorized.ColumnarBatchRowWrapperBase
 import org.apache.spark.unsafe.types.VariantVal
 import org.apache.spark.util.collection.BitSet
 import org.json4s.JString
+
+import tech.ytsaurus.spyt.types.YsonVariantConverter
+import tech.ytsaurus.spyt.variant.YsonVariantConverter400
 
 import java.io.File
 import scala.reflect.ClassTag
@@ -155,4 +158,8 @@ trait SparkAdapter400 extends SparkAdapter {
   override def lookupCachedPlan(session: SparkSession, plan: LogicalPlan): Option[LogicalPlan] = {
     AdapterSupport400.lookupCachedPlan(session, plan)
   }
+
+  override def ysonVariantConverter: YsonVariantConverter = YsonVariantConverter400
+
+  override def isSparkVariantType(dataType: DataType): Boolean = dataType.isInstanceOf[VariantType]
 }

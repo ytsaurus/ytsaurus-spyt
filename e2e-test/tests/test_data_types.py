@@ -1,3 +1,4 @@
+import pytest
 from common.helpers import assert_items_equal
 from pyspark.sql import Row
 from pyspark.sql.functions import udf
@@ -5,6 +6,7 @@ from pyspark.sql.types import StructType, StructField, StringType
 from spyt.types import Date32, Datetime64, Timestamp64, Interval64, Date32Type, Datetime64Type, Timestamp64Type, \
     Interval64Type, Datetime, DatetimeType, MIN_DATE32, MIN_DATETIME64, MIN_TIMESTAMP64, MIN_INTERVAL64, MAX_DATE32, \
     MAX_DATETIME64, MAX_TIMESTAMP64, MAX_INTERVAL64, YsonType, Yson
+from utils import SPARK_HAS_VARIANT
 from yt.wrapper.format import RowsIterator
 
 yt_wide_types_rows = [
@@ -258,6 +260,32 @@ def test_write_yson_type(yt_client, tmp_dir, local_session):
 
     result: RowsIterator = yt_client.read_table(table_path)
     assert_items_equal(result, yt_yson_rows)
+
+
+@pytest.mark.skipif(not SPARK_HAS_VARIANT, reason="Spark has the Variant type since 4.0")
+def test_write_variant(yt_client, tmp_dir, local_session):
+    table_path = f"{tmp_dir}/variant_table_out"
+    df = local_session.sql("""
+        select id, parse_json(payload) as payload, try_parse_json(extra) as extra
+        from values
+            (1, '{"a":true,"b":[1,2.5,"s",null]}', '[1]'),
+            (2, '18446744073709551615', null),
+            (3, 'null', '"x"'),
+            (4, '-5', '2.5')
+            as t(id, payload, extra)
+    """)
+    assert not df.schema["payload"].nullable
+    expected_rows = [
+        {"id": 1, "payload": {"a": True, "b": [1, 2.5, "s", None]}, "extra": [1]},
+        {"id": 2, "payload": 2 ** 64 - 1, "extra": None},
+        {"id": 3, "payload": None, "extra": "x"},
+        {"id": 4, "payload": -5, "extra": 2.5}
+    ]
+
+    df.write.yt(table_path)
+    assert_items_equal(list(yt_client.read_table(table_path)), expected_rows)
+    column_types = {column["name"]: column["type_v3"] for column in yt_client.get(f"{table_path}/@schema")}
+    assert column_types["payload"] == column_types["extra"] == {"type_name": "optional", "item": "yson"}
 
 
 def test_datetime_cache(yt_client, tmp_dir, local_session):

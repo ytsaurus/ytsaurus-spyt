@@ -33,6 +33,7 @@ import org.apache.spark.{Partitioner, ShuffleDependency, SparkConf}
 import org.slf4j.LoggerFactory
 import tech.ytsaurus.spyt.format.YtPartitioningDelegate
 import tech.ytsaurus.spyt.format.YtPartitioningSupport.YtPartitionedFileBase
+import tech.ytsaurus.spyt.types.YsonVariantConverter
 
 import java.io.File
 import java.net.URI
@@ -177,6 +178,12 @@ trait SparkAdapter {
   def sparkClassLoader(session: SparkSession): ClassLoader
 
   def lookupCachedPlan(session: SparkSession, plan: LogicalPlan): Option[LogicalPlan]
+
+  /** YSON and Variant conversions; Spark versions without the Variant type throw UnsupportedOperationException. */
+  def ysonVariantConverter: YsonVariantConverter
+
+  /** Whether dataType is the Spark Variant type; false on Spark versions without it. */
+  def isSparkVariantType(dataType: DataType): Boolean
 }
 
 trait SparkAdapterProvider {

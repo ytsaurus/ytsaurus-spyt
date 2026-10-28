@@ -6,6 +6,7 @@ import org.apache.spark.sql.v2.YtTable
 import org.apache.spark.unsafe.types.UTF8String
 import tech.ytsaurus.core.common.Decimal.textToBinary
 import tech.ytsaurus.core.tables.ColumnSortOrder
+import tech.ytsaurus.spyt.SparkAdapter
 import tech.ytsaurus.spyt.common.utils.TypeUtils.{isTuple, isVariant}
 import tech.ytsaurus.spyt.common.utils.UuidUtils
 import tech.ytsaurus.spyt.format.conf.YtTableSparkSettings.{SortColumns, SortOrders, UniqueKeys, isNullTypeAllowed}
@@ -15,7 +16,7 @@ import tech.ytsaurus.spyt.serializers.YtLogicalType.getStructField
 import tech.ytsaurus.spyt.serializers.YtLogicalTypeSerializer.deserializeTypeV3
 import tech.ytsaurus.spyt.wrapper.config._
 import tech.ytsaurus.typeinfo.TiType
-import tech.ytsaurus.ysontree.YTreeNode
+import tech.ytsaurus.ysontree.{YTreeMapNode, YTreeNode, YTreeStringNode}
 
 import java.util.{List => JList}
 import java.util.stream.{IntStream, Collectors}
@@ -120,7 +121,51 @@ object SchemaConverter {
     }
   }
 
-  def sparkSchema(schemaTree: YTreeNode, schemaHint: Option[StructType] = None, parsingTypeV3: Boolean = true): StructType = {
+  /** The YTsaurus type of a column as its schema states it: type_v3, or the v1 type when there is no type_v3. */
+  private def ytColumnType(fieldMap: java.util.Map[String, YTreeNode]): YTreeNode = {
+    Option(fieldMap.get("type_v3")).getOrElse(fieldMap.get("type"))
+  }
+
+  /**
+   * Whether a column holds plain yson values: its type is yson inside tagged types and at most one optional, because
+   * YTsaurus sends the values of nested optionals as composite YSON. The v1 type any counts as yson.
+   */
+  private def isYsonColumn(fieldMap: java.util.Map[String, YTreeNode]): Boolean = {
+    isYsonType(ytColumnType(fieldMap), optionalAllowed = true)
+  }
+
+  @tailrec
+  private def isYsonType(typeNode: YTreeNode, optionalAllowed: Boolean): Boolean = typeNode match {
+    case composite: YTreeMapNode =>
+      val typeName = composite.getOrThrow("type_name").stringValue()
+      if (typeName == YtLogicalType.Tagged.name) {
+        isYsonType(composite.getOrThrow("item"), optionalAllowed)
+      } else if (typeName == YtLogicalType.Optional.name && optionalAllowed) {
+        isYsonType(composite.getOrThrow("item"), optionalAllowed = false)
+      } else {
+        false
+      }
+    case simple: YTreeStringNode => YtLogicalType.Any.aliases.contains(simple.stringValue())
+    case _ => false
+  }
+
+  def sparkSchema(
+    schemaTree: YTreeNode,
+    schemaHint: Option[StructType] = None,
+    parsingTypeV3: Boolean = true): StructType = {
+    sparkSchema(schemaTree, schemaHint, parsingTypeV3, ysonAsVariant = false)
+  }
+
+  /**
+   * With ysonAsVariant, which needs Spark 4.0 or later, top-level yson columns without a schema hint get the Spark
+   * Variant type; their nullability and metadata stay as for the usual type. A Variant schema hint is allowed only for
+   * yson columns.
+   */
+  def sparkSchema(
+    schemaTree: YTreeNode,
+    schemaHint: Option[StructType],
+    parsingTypeV3: Boolean,
+    ysonAsVariant: Boolean): StructType = {
     import tech.ytsaurus.spyt.wrapper.YtJavaConverters._
     val schemaList = schemaTree.asList()
     val fields: JList[StructField] = IntStream.range(0, schemaList.size()).mapToObj { index =>
@@ -137,7 +182,18 @@ object SchemaConverter {
       val ytType = getAvailableType(fieldMap, parsingTypeV3)
       setYtLogicalTypeIfUnsignedType(ytType, metadata)
       metadata.putBoolean(MetadataFields.ARROW_SUPPORTED, ytType.arrowSupported)
-      structField(fieldName, ytType, schemaHint, metadata.build())
+      val fieldMetadata = metadata.build()
+      hintedStructField(fieldName, schemaHint, fieldMetadata) match {
+        case Some(hinted) if SparkAdapter.instance.isSparkVariantType(hinted.dataType) && !isYsonColumn(fieldMap) =>
+          throw new IllegalArgumentException(s"Spark type ${hinted.dataType.simpleString} in the schema hint is " +
+            "allowed only for columns of YTsaurus type yson, optionally inside tagged types and one optional, but " +
+            s"column `$originalName` has YTsaurus type ${ytColumnType(fieldMap)}")
+        case Some(hinted) => hinted
+        case None if ysonAsVariant && isYsonColumn(fieldMap) =>
+          val variantType = SparkAdapter.instance.ysonVariantConverter.variantType
+          structField(fieldName, ytType, fieldMetadata).copy(dataType = variantType)
+        case None => structField(fieldName, ytType, fieldMetadata)
+      }
     }.collect(Collectors.toList())
 
     StructType(fields)
@@ -202,11 +258,15 @@ object SchemaConverter {
                   ytType: => YtLogicalType,
                   schemaHint: Option[StructType] = None,
                   metadata: Metadata = Metadata.empty): StructField = {
-    schemaHint
-      .flatMap(_.find(_.name == fieldName.toLowerCase())
-        .map(_.copy(name = fieldName, metadata = metadata))
-      )
-      .getOrElse(structField(fieldName, ytType, metadata))
+    hintedStructField(fieldName, schemaHint, metadata).getOrElse(structField(fieldName, ytType, metadata))
+  }
+
+  /** The schema hint field named as the lowercased fieldName, renamed to fieldName and given the YTsaurus metadata. */
+  private def hintedStructField(
+    fieldName: String,
+    schemaHint: Option[StructType],
+    metadata: Metadata): Option[StructField] = {
+    schemaHint.flatMap(_.find(_.name == fieldName.toLowerCase())).map(_.copy(name = fieldName, metadata = metadata))
   }
 
   def indexedDataType(dataType: DataType): IndexedDataType = {

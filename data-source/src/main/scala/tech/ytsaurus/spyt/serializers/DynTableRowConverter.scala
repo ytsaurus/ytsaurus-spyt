@@ -6,8 +6,9 @@ import org.apache.spark.sql.catalyst.expressions.UnsafeArrayData
 import org.apache.spark.sql.types._
 import org.apache.spark.unsafe.types.UTF8String
 import tech.ytsaurus.core.tables.TableSchema
+import tech.ytsaurus.spyt.SparkAdapter
 import tech.ytsaurus.spyt.serializers.YsonRowConverter.getMapData
-import tech.ytsaurus.spyt.types.{UInt64Long, YTsaurusTypes}
+import tech.ytsaurus.spyt.types.{UInt64Long, YTsaurusTypes, YsonVariantCodec}
 import tech.ytsaurus.typeinfo.TiType
 import tech.ytsaurus.ysontree.{YTree, YTreeListNode}
 
@@ -25,12 +26,22 @@ class DynTableRowConverter(schema: StructType, tableSchema: TableSchema, typeV3:
       s"YT schema columns: ${ytColumnNames.toSeq.sorted.mkString("[", ", ", "]")}"
   )
 
+  private val nestedVariantFields = sparkSchemaFields.filter(f => DynTableRowConverter.hasNestedVariant(f.dataType))
+  require(
+    nestedVariantFields.isEmpty,
+    "Spark type variant can be written only to top-level columns, but it is nested in the Spark fields: " +
+      nestedVariantFields.map(f => s"`${f.name}` ${f.dataType.simpleString}").mkString("[", ", ", "]")
+  )
+
   private val sparkFieldIndexByName: Map[String, Int] = sparkSchemaFields.zipWithIndex.map {
     case (field, index) => field.name -> index
   }.toMap
 
   private val columnConverters: IndexedSeq[Seq[Any] => Any] = tableSchemaColumns.map { columnSchema =>
     sparkFieldIndexByName.get(columnSchema.getName) match {
+      case Some(sparkIndex) if SparkAdapter.instance.isSparkVariantType(sparkSchemaFields(sparkIndex).dataType) =>
+        val variantConverter = SparkAdapter.instance.ysonVariantConverter
+        (row: Seq[Any]) => Option(row(sparkIndex)).map(YsonVariantCodec.toYson(variantConverter, _)).orNull
       case Some(sparkIndex) =>
         val dataType = sparkSchemaFields(sparkIndex).dataType
         val ytType = YtTypeHolder(columnSchema.getTypeV3)
@@ -152,6 +163,17 @@ class DynTableRowConverter(schema: StructType, tableSchema: TableSchema, typeV3:
 object DynTableRowConverter {
   private[serializers] def isUnsignedInt(ytType: YtTypeHolder): Boolean = {
     ytType.ytType.exists(t => t.isUint8 || t.isUint16 || t.isUint32 || t.isUint64)
+  }
+
+  /** Whether dataType holds the Spark Variant type inside a struct, an array or a map. */
+  private def hasNestedVariant(dataType: DataType): Boolean = {
+    val innerTypes = dataType match {
+      case structType: StructType => structType.map(_.dataType)
+      case ArrayType(elementType, _) => Seq(elementType)
+      case MapType(keyType, valueType, _) => Seq(keyType, valueType)
+      case _ => Seq.empty
+    }
+    innerTypes.exists(innerType => SparkAdapter.instance.isSparkVariantType(innerType) || hasNestedVariant(innerType))
   }
 
   private[serializers] def isIntegerLikeType(dataType: DataType): Boolean = dataType match {

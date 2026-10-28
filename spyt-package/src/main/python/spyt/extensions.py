@@ -74,8 +74,8 @@ def withYsonColumn(self, colName, col):
 
 
 def withYsonColumnConnect(self, colName, col):
-    raise NotImplementedError("withYsonColumn method is not supported for Spark Connect sessions. Further versions "
-                              "of SPYT will implement YTsaurus YSON type as Spark Variant type.")
+    raise NotImplementedError("withYsonColumn method is not supported for Spark Connect sessions. On Spark 4.0 and "
+                              "later, write a Variant column instead: SPYT writes it as a YSON column.")
 
 
 def transform(self, func):

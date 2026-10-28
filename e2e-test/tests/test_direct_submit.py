@@ -12,7 +12,8 @@ from pyspark.sql.types import IntegerType, StringType, StructType, StructField, 
 from pyspark.sql.functions import col, udf
 import requests
 from yt.wrapper import YtClient
-from utils import SPARK_CONF, YT_PROXY, upload_file, get_executors_operation_id, job_path
+from utils import SPARK_CONF, YT_PROXY, upload_file, get_executors_operation_id, job_path, SPARK_HAS_VARIANT, \
+    YSON_AS_VARIANT_CONF
 
 
 def test_client_mode(yt_client, tmp_dir, direct_session):
@@ -41,6 +42,7 @@ def test_client_mode(yt_client, tmp_dir, direct_session):
 def test_spyt_types_in_lambda(yt_client, tmp_dir, direct_session):
     table_in = f"{tmp_dir}/direct_yson_in"
     table_out = f"{tmp_dir}/direct_yson_out"
+    variant_table_out = f"{tmp_dir}/direct_variant_out"
     schema = [{"name": "id", "type": "int64"}, {"name": "data", "type_v3": {"type_name": "optional", "item": "yson"}}]
     yt_client.create("table", table_in, attributes={"schema": schema})
     rows = [{"id": i, "data": [] if i % 6 == 0 else [hex(k) for k in range(i)]} for i in range(50)]
@@ -53,6 +55,14 @@ def test_spyt_types_in_lambda(yt_client, tmp_dir, direct_session):
 
     result = yt_client.read_table(table_out)
     assert_items_equal(result, expected)
+
+    if SPARK_HAS_VARIANT:
+        direct_session.conf.set(YSON_AS_VARIANT_CONF, "true")
+        variant_df = direct_session.read.yt(table_in)
+        assert variant_df.schema["data"].dataType.typeName() == "variant"
+        variant_len = udf(lambda variant: len(variant.toPython()) if variant is not None else 0, IntegerType())
+        variant_df.select("id", variant_len("data").alias("data_length")).write.yt(variant_table_out)
+        assert_items_equal(yt_client.read_table(variant_table_out), expected)
 
 
 def test_history_server(history_server):

@@ -8,13 +8,14 @@ import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import tech.ytsaurus.client.rows.{UnversionedRow, UnversionedValue}
 import tech.ytsaurus.core.tables.{ColumnValueType, TableSchema}
+import tech.ytsaurus.spyt.YsonAsVariantTestUtils.whenVariantSupported
 import tech.ytsaurus.spyt.format.conf.SparkYtConfiguration.Read.TypeV3
 import tech.ytsaurus.spyt.format.conf.{SparkYtConfiguration, YtTableSparkSettings}
 import tech.ytsaurus.spyt.serializers.SchemaConverter.{MetadataFields, Unordered}
 import tech.ytsaurus.spyt.test.{LocalSpark, TestUtils, TmpDir}
 import tech.ytsaurus.spyt.types.YTsaurusTypes
 import tech.ytsaurus.spyt.wrapper.YtWrapper
-import tech.ytsaurus.spyt.{SchemaTestUtils, YtReader, YtWriter}
+import tech.ytsaurus.spyt.{SchemaTestUtils, SparkAdapter, YsonAsVariantTestUtils, YtReader, YtWriter}
 import tech.ytsaurus.typeinfo.StructType.Member
 import tech.ytsaurus.typeinfo.TiType
 import tech.ytsaurus.yson.YsonParser
@@ -24,7 +25,7 @@ import scala.collection.mutable.ListBuffer
 import scala.jdk.CollectionConverters._
 
 class SchemaConverterTest extends AnyFlatSpec with Matchers
-  with TestUtils with TmpDir with LocalSpark with SchemaTestUtils {
+  with TestUtils with TmpDir with LocalSpark with SchemaTestUtils with YsonAsVariantTestUtils {
   behavior of "SchemaConverter"
 
   import SchemaConverterTest._
@@ -64,7 +65,7 @@ class SchemaConverterTest extends AnyFlatSpec with Matchers
     res.fields.head.metadata.contains(MetadataFields.EXPRESSION) shouldBe false
   }
 
-  it should "read schema without parsing type v3" in {
+  testWithYsonAsVariant("read schema without parsing type v3") { ysonAsVariant =>
     // in sparkSchema.toYTree no type_v1 type names
     spark.conf.set(s"spark.yt.${TypeV3.name}", value = false)
     createEmptyTable(tmpPath, schema)
@@ -87,8 +88,8 @@ class SchemaConverterTest extends AnyFlatSpec with Matchers
       structField("bool", BooleanType, nullable = true),
       structField("STRING", StringType, nullable = true),
       structField("string_3", StringType, nullable = true),
-      structField("ANY", BinaryType, nullable = true),
-      structField("yson", BinaryType, nullable = true),
+      structField("ANY", ysonColumnType(ysonAsVariant), nullable = true),
+      structField("yson", ysonColumnType(ysonAsVariant), nullable = true),
       structField("int8", ByteType, nullable = true),
       structField("uint8", ShortType, nullable = true, ytLogicalTypeName="uint8"),
       structField("int16", ShortType, nullable = true),
@@ -165,6 +166,49 @@ class SchemaConverterTest extends AnyFlatSpec with Matchers
     ))
   }
 
+  it should "keep the schema hint type of a yson column with ysonAsVariant" in {
+    whenVariantSupported {
+      val hint = StructType(Seq(StructField("any", BinaryType), StructField("yson", ArrayType(LongType))))
+
+      val res = SchemaConverter.sparkSchema(schema.toYTree, Some(hint), parsingTypeV3 = true, ysonAsVariant = true)
+
+      res("ANY") shouldBe structField("ANY", BinaryType, nullable = true)
+      res("yson") shouldBe structField("yson", ArrayType(LongType), nullable = true)
+    }
+  }
+
+  Seq(true, false).foreach { parsingTypeV3 =>
+    it should s"read only yson inside tagged types and one optional as Variant, parsingTypeV3 = $parsingTypeV3" in {
+      whenVariantSupported {
+        val variantType = SparkAdapter.instance.ysonVariantConverter.variantType
+        createEmptyTable(tmpPath, ysonWrappersSchema)
+        val ytSchema = YtWrapper.attribute(tmpPath, "schema")
+        val usualSchema = SchemaConverter.sparkSchema(ytSchema, None, parsingTypeV3, ysonAsVariant = false)
+
+        val res = SchemaConverter.sparkSchema(ytSchema, None, parsingTypeV3, ysonAsVariant = true)
+
+        res("optional_optional").dataType shouldBe usualYsonType
+        res shouldBe StructType(usualSchema.map { field =>
+          if (ysonColumns.contains(field.name)) field.copy(dataType = variantType) else field
+        })
+      }
+    }
+  }
+
+  it should "apply a Variant schema hint to a tagged yson column and reject it for another YTsaurus type" in {
+    whenVariantSupported {
+      val variantType = SparkAdapter.instance.ysonVariantConverter.variantType
+      val taggedHint = StructType(Seq(StructField("tagged", variantType)))
+      val stringHint = StructType(Seq(StructField("string", variantType)))
+
+      SchemaConverter.sparkSchema(ysonWrappersSchema.toYTree, Some(taggedHint))("tagged").dataType shouldBe variantType
+      the[IllegalArgumentException] thrownBy {
+        SchemaConverter.sparkSchema(ysonWrappersSchema.toYTree, Some(stringHint))
+      } should have message "Spark type variant in the schema hint is allowed only for columns of YTsaurus type " +
+        "yson, optionally inside tagged types and one optional, but column `string` has YTsaurus type \"string\""
+    }
+  }
+
   it should "convert spark schema to yt one with parsing type v3" in {
     val res = TableSchema.fromYTree(new WriteSchemaConverter(typeV3Format = true).ytLogicalSchema(sparkSchema, Unordered))
     res shouldBe TableSchema.builder().setUniqueKeys(false)
@@ -227,6 +271,13 @@ class SchemaConverterTest extends AnyFlatSpec with Matchers
         getColumn("VariantOverTuple", "any")
       ).asJava)
       .build
+  }
+
+  it should "write a binary column as yson only with a yson hint" in {
+    val converter = new WriteSchemaConverter()
+
+    converter.ytLogicalTypeV3(BinaryType, YtLogicalType.Any) shouldBe YtLogicalType.Any
+    converter.ytLogicalTypeV3(BinaryType) shouldBe YtLogicalType.Binary
   }
 
   it should "get keys from schema" in {
@@ -524,6 +575,16 @@ object SchemaConverterTest extends SchemaTestUtils {
       TiType.variantOverStruct(java.util.List.of[Member](new Member("c", TiType.uint16()), new Member("d", TiType.timestamp()))))
     .addValue("variantOverTuple", TiType.variantOverTuple(TiType.floatType(), TiType.interval()))
     .build()
+
+  private val ysonWrappersSchema: TableSchema = TableSchema.builder().setUniqueKeys(false)
+    .addValue("plain", TiType.optional(TiType.yson()))
+    .addValue("tagged", TiType.tagged(TiType.optional(TiType.yson()), "t"))
+    .addValue("optional_optional", TiType.optional(TiType.optional(TiType.yson())))
+    .addValue("list", TiType.optional(TiType.list(TiType.optional(TiType.yson()))))
+    .addValue("string", TiType.string())
+    .build()
+
+  private val ysonColumns: Seq[String] = Seq("plain", "tagged")
 
   val sparkSchema: StructType = StructType(Seq(
     structField("Null", NullType, nullable = false),

@@ -21,7 +21,7 @@ from pyspark.sql.types import Row, StringType
 from spyt.types import UInt64Type
 from yt.wrapper import VanillaSpecBuilder
 import yt.yson as yt_yson
-from utils import upload_file
+from utils import YSON_AS_VARIANT_CONF, upload_file
 
 
 @pytest.fixture
@@ -819,10 +819,34 @@ def test_custom_types(yt_client, tmp_dir, spark_connect_session_factory):
         for row in rows
     ]
 
+    yt_yson_json = [
+        '{"int":1234567890,"string":"string1"}',
+        '{"long":6347568734657887,"short":321,"string":"string2"}',
+        None
+    ]
+    expected_variant_rows = [Row(id=row["id"], yson_json=yt_yson_json[row["id"] % 3]) for row in rows]
+
     with spark_connect_session_factory() as spark:
         df = spark.read.yt(path)
         result = df.collect()
         assert_items_equal(result, expected_rows)
+
+        spark.conf.set(YSON_AS_VARIANT_CONF, "true")
+        variant_df = spark.read.yt(path)
+        assert variant_df.schema["yson_field"].dataType.typeName() == "variant"
+        variant_result = variant_df.selectExpr("id", "to_json(yson_field) AS yson_json").collect()
+        assert_items_equal(variant_result, expected_variant_rows)
+
+
+def test_write_variant_as_yson(yt_client, tmp_dir, spark_connect_session_factory):
+    path = f"{tmp_dir}/variant_from_connect"
+
+    with spark_connect_session_factory() as spark:
+        spark.sql("""select parse_json('{"a":18446744073709551615}') as v""").write.yt(path)
+
+    assert list(yt_client.read_table(path)) == [{"v": {"a": 2 ** 64 - 1}}]
+    column_types = {column["name"]: column["type_v3"] for column in yt_client.get(f"{path}/@schema")}
+    assert column_types["v"] == {"type_name": "optional", "item": "yson"}
 
 
 def test_sql_mixed_sort_orders(yt_client, tmp_dir, spark_connect_session_factory):

@@ -66,6 +66,9 @@ object SparkYtConfiguration {
       s"$prefix.parsingTypeV3.enabled"
     ))
 
+    /** Read top-level yson columns that have no schema hint as Spark Variant; needs Spark 4.0 or later. */
+    case object YsonAsVariant extends ConfigEntry[Boolean](s"$prefix.ysonAsVariant.enabled", Some(false))
+
     object KeyPartitioning {
 
       private val prefix: String = s"${Read.prefix}.keyPartitioningSortedTables"

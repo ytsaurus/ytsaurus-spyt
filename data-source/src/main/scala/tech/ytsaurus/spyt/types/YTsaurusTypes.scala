@@ -23,7 +23,7 @@ trait YTsaurusTypes {
 
   def serializeValue(dataType: DataType, row: Row, i: Int, boxValue: BoxValue): UnversionedValue
 
-  def wireDeserializeLong(dataType: DataType, value: Long, addValue: AddValue): Boolean
+  def wireDeserializeLong(dataType: DataType, value: Long, isUnsigned: Boolean, addValue: AddValue): Boolean
   def wireDeserializeBoolean(dataType: DataType, value: Boolean, addValue: AddValue): Boolean
   def wireDeserializeDouble(dataType: DataType, value: Double, addValue: AddValue): Boolean
   def wireDeserializeBytes(dataType: DataType, bytes: Array[Byte], isString: Boolean, addValue: AddValue): Boolean
@@ -77,7 +77,11 @@ class BaseYTsaurusTypes extends YTsaurusTypes {
     typeNotSupported(dataType)
   }
 
-  override def wireDeserializeLong(dataType: DataType, value: Long, addValue: AddValue): Boolean = false
+  override def wireDeserializeLong(
+    dataType: DataType,
+    value: Long,
+    isUnsigned: Boolean,
+    addValue: AddValue): Boolean = false
 
   override def wireDeserializeBoolean(dataType: DataType, value: Boolean, addValue: AddValue): Boolean = false
 

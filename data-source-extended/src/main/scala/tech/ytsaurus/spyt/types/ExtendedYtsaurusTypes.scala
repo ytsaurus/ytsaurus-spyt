@@ -11,7 +11,7 @@ import tech.ytsaurus.spyt.serializers.{YsonRowConverter, YtLogicalType}
 import tech.ytsaurus.spyt.types.YTsaurusTypes.{AddValue, BoxValue}
 import tech.ytsaurus.typeinfo.{TiType, TypeName}
 import tech.ytsaurus.yson.YsonConsumer
-import tech.ytsaurus.ysontree.{YTreeBinarySerializer, YTreeBuilder}
+import tech.ytsaurus.ysontree.{YTreeBinarySerializer, YTreeBuilder, YTreeNode}
 
 import java.io.ByteArrayOutputStream
 
@@ -26,9 +26,13 @@ class ExtendedYtsaurusTypes extends YTsaurusTypes {
     }
   }
 
-  override def wireDeserializeLong(dataType: DataType, value: Long, addValue: AddValue): Boolean = {
+  override def wireDeserializeLong(
+    dataType: DataType,
+    value: Long,
+    isUnsigned: Boolean,
+    addValue: AddValue): Boolean = {
     dataType match {
-      case _ :YsonType => addValue(toYsonBytes(value))
+      case _ :YsonType => addValue(if (isUnsigned) toUnsignedYsonBytes(value) else toYsonBytes(value))
       case UInt64Type => addValue(value)
       case _ => return false
     }
@@ -107,9 +111,14 @@ class ExtendedYtsaurusTypes extends YTsaurusTypes {
 
   override def castUInt64Value(uInt64: UInt64Long): Any = uInt64
 
-  private def toYsonBytes(value: Any): Array[Byte] = {
+  private def toYsonBytes(value: Any): Array[Byte] = serializeYson(new YTreeBuilder().value(value).build())
+
+  private def toUnsignedYsonBytes(value: Long): Array[Byte] = {
+    serializeYson(new YTreeBuilder().unsignedValue(value).build())
+  }
+
+  private def serializeYson(node: YTreeNode): Array[Byte] = {
     val output = new ByteArrayOutputStream(64)
-    val node = new YTreeBuilder().value(value).build()
     YTreeBinarySerializer.serialize(node, output)
     output.toByteArray
   }

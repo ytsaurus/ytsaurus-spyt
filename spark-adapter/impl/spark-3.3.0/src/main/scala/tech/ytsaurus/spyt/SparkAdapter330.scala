@@ -34,6 +34,7 @@ import org.apache.spark.util.collection.BitSet
 import org.apache.spark.{Partitioner, ShuffleDependency, SparkConf}
 import tech.ytsaurus.spyt.format.YtPartitioningSupport.YtPartitionedFileBase
 import tech.ytsaurus.spyt.format.{YtPartitionedFile330, YtPartitioningDelegate}
+import tech.ytsaurus.spyt.types.YsonVariantConverter
 
 import java.io.File
 import java.net.URI
@@ -242,4 +243,11 @@ trait SparkAdapter330 extends SparkAdapter {
   override def lookupCachedPlan(session: SparkSession, plan: LogicalPlan): Option[LogicalPlan] = {
     AdapterSupport330.lookupCachedPlan(session, plan)
   }
+
+  override def ysonVariantConverter: YsonVariantConverter = {
+    throw new UnsupportedOperationException(
+      s"Spark Variant values require Spark 4.0.0 or later; found ${SparkVersionUtils.currentVersion}")
+  }
+
+  override def isSparkVariantType(dataType: DataType): Boolean = false
 }

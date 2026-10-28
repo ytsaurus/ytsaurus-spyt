@@ -2,6 +2,7 @@ package org.apache.spark.sql.v2
 
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.types._
+import tech.ytsaurus.spyt.SparkAdapter
 import tech.ytsaurus.spyt.format.conf.{SparkYtConfiguration, SparkYtInternalConfiguration, YtTableSparkSettings}
 import tech.ytsaurus.spyt.serializers.SchemaConverter.MetadataFields
 
@@ -41,7 +42,10 @@ object YtReaderOptions {
     canReadBatch(dataSchema, options, conf) && supportBatch(dataSchema, conf)
   }
 
+  // TODO(SPYT-1229): drop the Variant check once Arrow vectors can return Variant values.
   private def arrowSchemaSupported(dataSchema: StructType): Boolean = {
-    dataSchema.fields.forall(MetadataFields.isArrowSupported)
+    dataSchema.fields.forall { f =>
+      MetadataFields.isArrowSupported(f) && !SparkAdapter.instance.isSparkVariantType(f.dataType)
+    }
   }
 }

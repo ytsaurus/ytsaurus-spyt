@@ -6,10 +6,11 @@ import org.apache.spark.sql.types._
 import org.slf4j.LoggerFactory
 import tech.ytsaurus.client.rows.{WireProtocolWriteable, WireRowSerializer}
 import tech.ytsaurus.core.tables.{ColumnValueType, TableSchema}
+import tech.ytsaurus.spyt.SparkAdapter
 import tech.ytsaurus.spyt.serialization.YsonEncoder
 import tech.ytsaurus.spyt.serializers.InternalRowSerializer._
 import tech.ytsaurus.spyt.serializers.SchemaConverter.{SortOption, Unordered, decimalToBinary, stringToBinary}
-import tech.ytsaurus.spyt.types.YTsaurusTypes
+import tech.ytsaurus.spyt.types.{YTsaurusTypes, YsonVariantCodec}
 import tech.ytsaurus.spyt.wrapper.LogLazy
 import tech.ytsaurus.typeinfo.TiType
 import tech.ytsaurus.ysontree.YTreeNode
@@ -35,6 +36,8 @@ class InternalRowSerializer(sparkSchema: StructType,
       idMappingArray.indices.filter(i => idMappingArray(i) != -1).map(i => (idMappingArray(i), i))
     }
   }
+  private val isVariantColumn = sparkSchema.fields.map(f => SparkAdapter.instance.isSparkVariantType(f.dataType))
+  private lazy val variantConverter = SparkAdapter.instance.ysonVariantConverter
 
   override def getSchema: TableSchema = tableSchema
 
@@ -110,6 +113,9 @@ class InternalRowSerializer(sparkSchema: StructType,
             writeBytes(writeable, idMapping, aggregate, tableIndex,
               YsonEncoder.encode(row.get(sparkIndex, sparkField.dataType), t, skipNulls, writeSchemaConverter.typeV3Format, ytFieldHint),
               getColumnType)
+          case variantType if isVariantColumn(sparkIndex) =>
+            val yson = YsonVariantCodec.toYson(variantConverter, row.get(sparkIndex, variantType))
+            writeBytes(writeable, idMapping, aggregate, tableIndex, yson, getColumnType)
           case otherType =>
             val isExtendedType = YTsaurusTypes
               .instance

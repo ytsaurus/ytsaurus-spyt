@@ -75,7 +75,7 @@ object YtUtils {
     val parsingTypeV3 = parameters.get(Options.PARSING_TYPE_V3).map(_.toBoolean).getOrElse(config.parsingTypeV3)
     val schemaHint = SchemaConverter.schemaHint(parameters)
     val schemaTree = doGetSchema(yt)
-    SchemaConverter.sparkSchema(schemaTree, schemaHint, parsingTypeV3)
+    SchemaConverter.sparkSchema(schemaTree, schemaHint, parsingTypeV3, config.ysonAsVariant)
   }
 
   private[v2] case class FileWithSchema(file: FileStatus, schema: StructType)

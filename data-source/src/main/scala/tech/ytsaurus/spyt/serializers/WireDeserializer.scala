@@ -1,23 +1,32 @@
 package tech.ytsaurus.spyt.serializers
 
+import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.spyt.types._
 import org.apache.spark.sql.types._
 import org.apache.spark.unsafe.types.UTF8String
 import tech.ytsaurus.client.rows.{WireRowDeserializer, WireValueDeserializer}
 import tech.ytsaurus.core.common.Decimal.binaryToText
 import tech.ytsaurus.core.tables.{ColumnValueType, TableSchema}
+import tech.ytsaurus.spyt.SparkAdapter
 import tech.ytsaurus.spyt.common.utils.UuidUtils
+import tech.ytsaurus.spyt.format.conf.SparkYtConfiguration.Read.YsonAsVariant
 import tech.ytsaurus.spyt.serialization.YsonDecoder
 import tech.ytsaurus.spyt.serializers.SchemaConverter.MetadataFields
-import tech.ytsaurus.spyt.types.YTsaurusTypes
+import tech.ytsaurus.spyt.types.{YTsaurusTypes, YsonVariantCodec}
+import tech.ytsaurus.spyt.wrapper.config.sparkConfigKeys
 
 import java.nio.charset.StandardCharsets
+
+import scala.collection.mutable
 
 
 abstract class WireDeserializer[T](schema: StructType) extends WireRowDeserializer[T] with WireValueDeserializer[Any] {
   protected var _values: Array[Any] = _
   private val indexedSchema = schema.fields.map(_.dataType).toIndexedSeq
   private val indexedDataTypes = schema.fields.map(f => SchemaConverter.indexedDataType(f.dataType))
+  private val isVariantColumn = schema.fields.map(f => SparkAdapter.instance.isSparkVariantType(f.dataType))
+  private lazy val variantConverter = SparkAdapter.instance.ysonVariantConverter
+  private val allowDuplicateVariantKeys = WireDeserializer.allowDuplicateVariantKeys(schema)
   private var serverIdToSparkIndex: Array[Int] = _
 
   private var _currentType: ColumnValueType = ColumnValueType.THE_BOTTOM
@@ -75,6 +84,7 @@ abstract class WireDeserializer[T](schema: StructType) extends WireRowDeserializ
     if (isIndexValid) {
       _currentType match {
         case ColumnValueType.INT64 | ColumnValueType.UINT64 =>
+          val isUnsigned = _currentType == ColumnValueType.UINT64
           indexedSchema(_index) match {
             case LongType => addValue(value)
             case IntegerType => addValue(value.toInt)
@@ -95,7 +105,9 @@ abstract class WireDeserializer[T](schema: StructType) extends WireRowDeserializ
             case DoubleType => addValue(value.toDouble)
             case BooleanType => addValue(value != 0L)
             case StringType => addValue(UTF8String.fromString(value.toString))
-            case otherType => if (!YTsaurusTypes.instance.wireDeserializeLong(otherType, value, addValue)) {
+            case _ if isVariantColumn(_index) =>
+              addValue(if (isUnsigned) variantConverter.fromUint64(value) else variantConverter.fromInt64(value))
+            case otherType => if (!YTsaurusTypes.instance.wireDeserializeLong(otherType, value, isUnsigned, addValue)) {
               throwSchemaViolation()
             }
           }
@@ -113,6 +125,7 @@ abstract class WireDeserializer[T](schema: StructType) extends WireRowDeserializ
             case IntegerType => addValue(if (value) 1 else 0)
             case BooleanType => addValue(value)
             case StringType => addValue(UTF8String.fromString(value.toString))
+            case _ if isVariantColumn(_index) => addValue(variantConverter.fromBoolean(value))
             case otherType => if (!YTsaurusTypes.instance.wireDeserializeBoolean(otherType, value, addValue)) {
               throwSchemaViolation()
             }
@@ -132,6 +145,7 @@ abstract class WireDeserializer[T](schema: StructType) extends WireRowDeserializ
             case FloatType => addValue(value.toFloat)
             case DoubleType => addValue(value)
             case StringType => addValue(UTF8String.fromString(value.toString))
+            case _ if isVariantColumn(_index) => addValue(variantConverter.fromDouble(value))
             case otherType => if (!YTsaurusTypes.instance.wireDeserializeDouble(otherType, value, addValue)) {
               throwSchemaViolation()
             }
@@ -157,6 +171,7 @@ abstract class WireDeserializer[T](schema: StructType) extends WireRowDeserializ
             case StringType => addValue(getBytesFromStringType(bytes))
             case d: DecimalType =>
               addValue(Decimal(BigDecimal(binaryToText(bytes, d.precision, d.scale)), d.precision, d.scale))
+            case _ if isVariantColumn(_index) => addValue(variantConverter.fromString(bytes))
             case otherType => if (!YTsaurusTypes.instance.wireDeserializeBytes(otherType, bytes, isString = true, addValue)) {
               throwSchemaViolation()
             }
@@ -166,12 +181,24 @@ abstract class WireDeserializer[T](schema: StructType) extends WireRowDeserializ
             case _@(ArrayType(_, _) | StructType(_) | MapType(_, _, _)) =>
               addValue(YsonDecoder.decode(bytes, indexedDataTypes(_index)))
             case BinaryType => addValue(bytes)
+            case _ if isVariantColumn(_index) => addValue(variantFromYson(bytes))
             case otherType => if (!YTsaurusTypes.instance.wireDeserializeBytes(otherType, bytes, isString = false, addValue)) {
               throwSchemaViolation()
             }
           }
         case _ => throwValueTypeViolation("string")
       }
+    }
+  }
+
+  private def variantFromYson(bytes: Array[Byte]): Any = {
+    try {
+      YsonVariantCodec.fromYson(variantConverter, bytes, allowDuplicateVariantKeys)
+    } catch {
+      case e: IllegalArgumentException =>
+        throw new IllegalArgumentException(s"Column ${schema.fields(_index).name} cannot be read as Variant: " +
+          s"${e.getMessage} Read it as YSON instead: give the column a binary or YsonType schema hint, or turn off " +
+          s"${sparkConfigKeys(YsonAsVariant)} if the Variant type comes from that setting.", e)
     }
   }
 
@@ -195,5 +222,26 @@ abstract class WireDeserializer[T](schema: StructType) extends WireRowDeserializ
 
   private def isIndexValid: Boolean = {
     _index >= 0 && _index < _values.length
+  }
+}
+
+object WireDeserializer {
+
+  /**
+   * spark.sql.variant.allowDuplicateKeys of the current SQL conf for schemas with Variant columns, else false. Read it
+   * once per reader; deserializer caches are keyed by it, so a cached deserializer never applies another policy.
+   */
+  def allowDuplicateVariantKeys(schema: StructType): Boolean = {
+    schema.fields.exists(f => SparkAdapter.instance.isSparkVariantType(f.dataType)) &&
+      SparkAdapter.instance.ysonVariantConverter.variantAllowDuplicateKeys(SQLConf.get)
+  }
+
+  private[serializers] class Cache[D](create: StructType => D) {
+    private val deserializers: ThreadLocal[mutable.Map[(StructType, Boolean), D]] =
+      ThreadLocal.withInitial(() => mutable.ListMap.empty)
+
+    def getOrCreate(schema: StructType): D = {
+      deserializers.get().getOrElseUpdate((schema, allowDuplicateVariantKeys(schema)), create(schema))
+    }
   }
 }

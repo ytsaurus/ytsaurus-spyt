@@ -1,18 +1,20 @@
 package tech.ytsaurus.spyt.format
 
 import org.apache.spark.sql.Row
-import org.apache.spark.sql.spyt.types.UInt64Type
+import org.apache.spark.sql.spyt.types.{UInt64Type, YsonBinary}
 import org.apache.spark.sql.types.{BooleanType, ByteType, DoubleType, FloatType, LongType, StructField, StructType}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import tech.ytsaurus.client.rows.{UnversionedRow, UnversionedValue}
 import tech.ytsaurus.core.tables.{ColumnValueType, TableSchema}
 import tech.ytsaurus.spyt._
+import tech.ytsaurus.spyt.YsonAsVariantTestUtils.topLevelIntegers
 import tech.ytsaurus.spyt.test.{LocalSpark, TestUtils, TmpDir}
 import tech.ytsaurus.spyt.types.UInt64Long
+import tech.ytsaurus.spyt.wrapper.table.OptimizeMode
 
 class ExtendedYtFileFormatTest extends AnyFlatSpec with Matchers with LocalSpark with TmpDir with TestUtils
-  with YtDistributedReadingTestUtils {
+  with YtDistributedReadingTestUtils with YsonAsVariantTestUtils {
 
   testWithDistributedReading("read primitives in any column") { _ =>
     val data = Seq(
@@ -53,5 +55,21 @@ class ExtendedYtFileFormatTest extends AnyFlatSpec with Matchers with LocalSpark
 
     val wireRes = spark.read.disableArrow.schemaHint(schemaHint).yt(tmpPath).collect()
     wireRes should contain theSameElementsAs ans
+  }
+
+  Seq(
+    ("a lookup table", OptimizeMode.Lookup),
+    ("a scan table with Arrow", OptimizeMode.Scan)
+  ).foreach { case (tableKind, optimizeFor) =>
+    testWithDistributedReading(s"read top-level integers in any column of $tableKind as YSON of the same type") { _ =>
+      val rows = anyColumnRows(topLevelIntegers.map(integer => integer.valueType -> integer.value))
+      writeTableFromURow(rows, tmpPath, anyColumnSchema, optimizeFor)
+
+      val df = spark.read.enableArrow.yt(tmpPath)
+
+      readsArrowBatches(df) shouldBe (optimizeFor == OptimizeMode.Scan)
+      val ysonById = df.collect().map(row => row.getLong(0) -> row.getAs[YsonBinary](1).bytes.map(_ & 0xff).toSeq)
+      ysonById.toMap shouldBe byId(topLevelIntegers.map(_.ysonBytes))
+    }
   }
 }

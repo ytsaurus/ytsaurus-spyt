@@ -1,5 +1,4 @@
 import argparse
-import json
 import logging
 import math
 import time
@@ -12,7 +11,6 @@ from yt.wrapper import YtClient
 from pyspark.sql import SparkSession
 from pyspark.sql.types import BinaryType
 
-PROVIDER = "tech.ytsaurus.spyt.yql.YqlFunctionProvider"
 QUERIES = {
     "region": ("surplus_inputs", "Geo::RoundRegionById", """
         SELECT user_region AS before, yql_region(CAST(user_region AS INT), 'region').en_name AS after
@@ -67,16 +65,11 @@ def field(name, kind, nullable=True, children=None, metadata=None):
 
 
 def register(spark, args, name, function, inputs, output, returns_callable=False):
-    options = {
-        "udf_libraries": "\n".join(path.name for path in args.udf_library),
-        "input_schema": json.dumps({"fields": inputs}),
-        "output_schema": json.dumps({"fields": [output]}),
-        "function": function,
-        "callable": str(returns_callable).lower(),
-    }
-    if args.query == "region":
-        options["geodata"] = args.geodata.name
-    spyt.register_columnar_function(spark, name, PROVIDER, options=options)
+    from spyt_yql_udf import register_yql_function
+
+    register_yql_function(
+        spark, name, function, inputs, output, [path.name for path in args.udf_library],
+        geodata=args.geodata.name if args.query == "region" else None, returns_callable=returns_callable)
 
 
 def register_function(spark, args):
@@ -216,6 +209,7 @@ def main():
     if len({path.name for path in artifacts}) != len(artifacts):
         parser.error("Artifact basenames must be unique")
     client = YtClient(proxy=args.yt_proxy)
+    spyt.load_plugin(client, "yql-udf-plugin", spyt_version=args.spyt_version)
     operation = launch_server(client, args)
     print(f"Spark Connect driver operation: {operation.id}", flush=True)
     endpoint = wait_for_spark_connect_endpoint(client, operation.id, timeout=180)

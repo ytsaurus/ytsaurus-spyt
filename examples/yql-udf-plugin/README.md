@@ -4,7 +4,8 @@ This standalone example implements the seven before/after queries using SPYT's
 columnar function API, running one selected query per invocation. A Java 25
 companion JAR calls a C++ bridge through Arrow C Data. The bridge loads the supplied
 YQL UDF `.so` files and invokes their callables directly through the YQL runtime.
-`job.py` contains Spark SQL queries and registers UDF names and Arrow schemas.
+`job.py` contains Spark SQL queries and Arrow schemas. The plugin-owned
+`spyt_yql_udf` Python package registers the functions through SPYT.
 There are no YQL query strings or generated YQL projections. No YQL service is contacted.
 
 A YQL UDF library cannot be passed directly to the providers in
@@ -107,6 +108,31 @@ python job.py \
   --udf-library /path/to/libyabs_enums_udf.so
 ```
 
+Before starting the server, the runner calls
+`spyt.load_plugin(client, "yql-udf-plugin", spyt_version=args.spyt_version)`.
+This explicitly downloads the trusted plugin's pure Python wheel into process-local temporary storage,
+verifies its SHA-256 and SPYT compatibility, and adds it to the current process's
+import path. The global registry is merged with the selected server version's
+registry, matching Connect startup. The helper requires no client installation
+and no Python executor deployment. Use an updated SPYT client exposing this loader.
+The Arcadia executable also loads the helper dynamically.
+
+Publish the plugin using `yt/spark/yql-udf-plugin/publish.sh`. Its Python build
+requires Python with the `build` package installed; `pyproject.toml` declares the
+build backend and its dependencies. Publication uploads the helper wheel alongside
+the JAR and native bridge, and records the wheel's
+path, SHA-256, modules, and SPYT requirement in the plugin's `conf/python` mapping.
+These Python artifacts are separate from remote `file_paths`.
+
+The wheel is downloaded once per plugin per process, verified before activation,
+and retained in a temporary directory until Python exits. No persistent cache is used.
+An active plugin cannot switch Python code in the same process; restart Python to use a new build.
+Already installed or imported modules with the same names are rejected to avoid
+silently selecting different code. For ordinary wheel installation, install the
+published wheel and import `spyt_yql_udf` directly instead of calling the loader.
+Loading is explicit because plugin Python code executes locally when imported;
+use a trusted plugin registry.
+
 The selected SPYT version must provide the `yql-udf-plugin` configuration entry.
 The entry contains the plugin root path; its `conf` document supplies `file_paths`
 and `spark_conf`. The runner passes the plugin name to `start_connect_server`, which
@@ -122,7 +148,7 @@ plugins changes the effective configuration and prevents reusing a differently c
 Plugin JVM options and classpaths are appended to existing values, using spaces and
 colons respectively. Other explicit Spark settings override plugin defaults. Standalone clusters load the same
 configuration when `enable_yql_udf` is enabled.
-Build and publish the JAR and native bridge together. This provider uses the
+Build and publish the JAR, native bridge, and Python helper together. This provider uses the
 `function` option, replacing the previous `query` option, and requires the rebuilt plugin.
 
 The built `build/ya/yt/spark/spark-over-yt/examples/yql-udf-plugin/yql_udf_connect` executable

@@ -37,8 +37,7 @@ case class YtTable(
     // Hadoop Configurations are case sensitive.
     val hadoopConf = sparkSession.sessionState.newHadoopConfWithOptions(caseSensitiveMap)
     // This is a non-streaming file based datasource.
-    val rootPathsSpecified = DataSource.checkAndGlobPathIfNecessary(paths, hadoopConf,
-      checkEmptyGlobPath = true, checkFilesExist = true, enableGlobbing = true)
+    val rootPathsSpecified = SparkAdapter.instance.checkAndGlobPathIfNecessary(paths, hadoopConf)
     val fileStatusCache = FileStatusCache.getOrCreate(sparkSession)
     new YtInMemoryFileIndex(sparkSession, rootPathsSpecified, caseSensitiveMap, userSpecifiedSchema, fileStatusCache)
   }

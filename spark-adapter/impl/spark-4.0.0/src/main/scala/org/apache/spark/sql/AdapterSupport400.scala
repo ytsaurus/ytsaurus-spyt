@@ -2,6 +2,7 @@ package org.apache.spark.sql
 
 import jakarta.servlet.http.HttpServletRequest
 import org.apache.hadoop.conf.Configuration
+import org.apache.hadoop.fs.Path
 import org.apache.spark.deploy.SparkHadoopUtil
 import org.apache.spark.deploy.history.{YtLogPage, YtLogPageDelegate}
 import org.apache.spark.internal.config.{DRIVER_MIN_MEMORY_OVERHEAD, EXECUTOR_MIN_MEMORY_OVERHEAD, History}
@@ -14,6 +15,7 @@ import org.apache.spark.sql.catalyst.expressions.Expression
 import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
 import org.apache.spark.sql.classic.ClassicConversions.castToImpl
 import org.apache.spark.sql.classic.{ExpressionColumnNode, ExpressionUtils}
+import org.apache.spark.sql.execution.datasources.DataSource
 import org.apache.spark.sql.execution.exchange.ShuffleExchangeExec.createShuffleWriteProcessor
 import org.apache.spark.sql.execution.metric.SQLMetric
 import org.apache.spark.sql.internal.SQLConf
@@ -122,5 +124,10 @@ object AdapterSupport400 {
 
   def lookupCachedPlan(session: SparkSession, plan: LogicalPlan): Option[LogicalPlan] = {
     session.sharedState.cacheManager.lookupCachedData(session, plan).map(_.plan)
+  }
+
+  def checkAndGlobPathIfNecessary(paths: Seq[String], hadoopConf: Configuration): Seq[Path] = {
+    DataSource.checkAndGlobPathIfNecessary(paths, hadoopConf,
+      checkEmptyGlobPath = true, checkFilesExist = true, enableGlobbing = true)
   }
 }

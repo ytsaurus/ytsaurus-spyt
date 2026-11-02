@@ -25,6 +25,15 @@ class DependentHashShuffleExchangeExec(dependentPartitioning: Partitioning,
 
   override def nodeName: String = "DependentHashExchange"
 
+  def this(
+    outputPartitioning: Partitioning,
+    child: SparkPlan,
+    shuffleOrigin: ShuffleOrigin,
+    advisoryPartitionSize: Option[Long],
+    pipelined: Boolean) = {
+    this(outputPartitioning, child, shuffleOrigin, advisoryPartitionSize)
+  }
+
   def this(outputPartitioning: Partitioning, child: SparkPlan, shuffleOrigin: ShuffleOrigin) = {
     this(outputPartitioning, child, shuffleOrigin, None)
   }

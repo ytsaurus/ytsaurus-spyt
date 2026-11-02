@@ -1,7 +1,7 @@
 package tech.ytsaurus.spyt
 
 import org.apache.hadoop.conf.Configuration
-import org.apache.spark.deploy.SparkHadoopUtil
+import org.apache.hadoop.fs.Path
 import org.apache.spark.deploy.history.{YtLogPage, YtLogPageDelegate}
 import org.apache.spark.deploy.rest.{RestServletCompat, RestServletSupport400}
 import org.apache.spark.{Partitioner, ShuffleDependency, SparkConf}
@@ -24,8 +24,6 @@ import org.apache.spark.sql.execution.metric.SQLMetric
 import org.apache.spark.sql.vectorized.ColumnarBatchRowWrapperBase
 import org.apache.spark.unsafe.types.VariantVal
 import org.apache.spark.util.collection.BitSet
-import org.json4s.JString
-
 import tech.ytsaurus.spyt.types.YsonVariantConverter
 import tech.ytsaurus.spyt.variant.YsonVariantConverter400
 
@@ -162,4 +160,8 @@ trait SparkAdapter400 extends SparkAdapter {
   override def ysonVariantConverter: YsonVariantConverter = YsonVariantConverter400
 
   override def isSparkVariantType(dataType: DataType): Boolean = dataType.isInstanceOf[VariantType]
+
+  override def checkAndGlobPathIfNecessary(paths: Seq[String], hadoopConf: Configuration): Seq[Path] = {
+    AdapterSupport400.checkAndGlobPathIfNecessary(paths, hadoopConf)
+  }
 }

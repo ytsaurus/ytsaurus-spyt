@@ -29,6 +29,7 @@ dependencies {
         testImplementation(project(":spark-adapter-impl-400_$scalaVersion"))
         testImplementation(project(":spark-adapter-impl-410_$scalaVersion"))
         testImplementation(project(":spark-adapter-impl-420_$scalaVersion"))
+        testImplementation(project(":spark-adapter-impl-430_$scalaVersion"))
     }
     testImplementation(project(":spark-adapter-provider_$scalaVersion"))
 }

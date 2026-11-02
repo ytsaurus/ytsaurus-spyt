@@ -258,20 +258,22 @@ class SparkPatchClassTransformer implements ClassFileTransformer {
                 ClassFile baseCf = loadClassFile(baseClassBytes);
                 CtClass baseCtClass = ClassPool.getDefault().makeClass(baseCf);
                 for (CtMethod method : ctClass.getDeclaredMethods()) {
-                    if (checkDecoratedMethod(method)) {
+                    if (checkDecoratedOrAddedMethod(method)) {
                         DecoratedMethod dmAnnotation = (DecoratedMethod) method.getAnnotation(DecoratedMethod.class);
-                        String methodName = method.getName();
-                        CtMethod baseMethod = baseCtClass.getMethod(methodName, method.getSignature());
-                        log.debug("Patching decorated method {} with signature {}",
+                        if (dmAnnotation != null) {
+                            String methodName = method.getName();
+                            CtMethod baseMethod = baseCtClass.getMethod(methodName, method.getSignature());
+                            log.debug("Patching decorated method {} with signature {}",
                                 methodName,
                                 baseMethod.getSignature()
-                        );
-                        String innerMethodName = "__" + methodName;
-                        baseMethod.setName(innerMethodName);
+                            );
+                            String innerMethodName = "__" + methodName;
+                            baseMethod.setName(innerMethodName);
 
-                        for (Class<? extends MethodProcesor> methodProcessorClass : dmAnnotation.baseMethodProcessors()) {
-                            MethodProcesor procesor = methodProcessorClass.getDeclaredConstructor().newInstance();
-                            procesor.process(baseMethod);
+                            for (Class<? extends MethodProcesor> methodProcessorClass : dmAnnotation.baseMethodProcessors()) {
+                                MethodProcesor procesor = methodProcessorClass.getDeclaredConstructor().newInstance();
+                                procesor.process(baseMethod);
+                            }
                         }
 
                         CtMethod newMethod = CtNewMethod.copy(method, baseCtClass, null);
@@ -286,8 +288,8 @@ class SparkPatchClassTransformer implements ClassFileTransformer {
         return processedClassFile;
     }
 
-    private static boolean checkDecoratedMethod(CtMethod method) throws Exception {
-        return method.hasAnnotation(DecoratedMethod.class) &&
+    private static boolean checkDecoratedOrAddedMethod(CtMethod method) throws Exception {
+        return (method.hasAnnotation(DecoratedMethod.class) || method.hasAnnotation(AddMethod.class)) &&
                 (!method.hasAnnotation(Applicability.class) ||
                         checkApplicability((Applicability) method.getAnnotation(Applicability.class)));
     }

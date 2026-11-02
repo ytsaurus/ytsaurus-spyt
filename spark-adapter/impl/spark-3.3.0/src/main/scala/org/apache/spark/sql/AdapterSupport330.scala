@@ -1,6 +1,7 @@
 package org.apache.spark.sql
 
 import org.apache.hadoop.conf.Configuration
+import org.apache.hadoop.fs.Path
 import org.apache.spark.deploy.SparkHadoopUtil
 import org.apache.spark.deploy.history.{YtLogPage, YtLogPageDelegate}
 import org.apache.spark.internal.config.History
@@ -11,6 +12,7 @@ import org.apache.spark.serializer.Serializer
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.{Attribute, AttributeReference}
 import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
+import org.apache.spark.sql.execution.datasources.DataSource
 import org.apache.spark.sql.execution.exchange.ShuffleExchangeExec.createShuffleWriteProcessor
 import org.apache.spark.sql.execution.metric.SQLMetric
 import org.apache.spark.sql.internal.SQLConf
@@ -113,5 +115,10 @@ object AdapterSupport330 {
 
   def lookupCachedPlan(session: SparkSession, plan: LogicalPlan): Option[LogicalPlan] = {
     session.sharedState.cacheManager.lookupCachedData(plan).map(_.plan)
+  }
+
+  def checkAndGlobPathIfNecessary(paths: Seq[String], hadoopConf: Configuration): Seq[Path] = {
+    DataSource.checkAndGlobPathIfNecessary(paths, hadoopConf,
+      checkEmptyGlobPath = true, checkFilesExist = true, enableGlobbing = true)
   }
 }

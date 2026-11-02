@@ -20,6 +20,7 @@ dependencies {
         runtimeOnly(project(":spark-adapter-impl-400_2.13"))
         runtimeOnly(project(":spark-adapter-impl-410_2.13"))
         runtimeOnly(project(":spark-adapter-impl-420_2.13"))
+        runtimeOnly(project(":spark-adapter-impl-430_2.13"))
     }
 }
 

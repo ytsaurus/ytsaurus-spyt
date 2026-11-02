@@ -197,7 +197,8 @@ public class YTsaurusShuffleManager implements ShuffleManager {
         throw (E) error;
     }
 
-    @Override
+    // Spark 4.3 exposes the resolver through BlockingShuffleManager instead of ShuffleManager, thus @Override
+    // is not specified here.
     public ShuffleBlockResolver shuffleBlockResolver() {
         return delegate.shuffleBlockResolver();
     }

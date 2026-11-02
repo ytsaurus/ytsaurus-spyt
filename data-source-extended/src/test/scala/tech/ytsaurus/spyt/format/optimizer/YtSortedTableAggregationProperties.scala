@@ -1,7 +1,7 @@
 package tech.ytsaurus.spyt.format.optimizer
 
 import org.apache.spark.sql.Row
-import org.apache.spark.sql.execution.aggregate.HashAggregateExec
+import org.apache.spark.sql.execution.aggregate.{BaseAggregateExec, HashAggregateExec}
 import org.apache.spark.sql.execution.datasources.v2.BatchScanExec
 import org.apache.spark.sql.execution.exchange.ShuffleExchangeExec
 import org.apache.spark.sql.execution.{FakeSortShuffleExchangeExec, ProjectExec, SparkPlan}
@@ -38,13 +38,24 @@ private class YtSortedTableAggregationProperties extends YtSortedTableBaseProper
   }
 
   private def isCorrectPlanWithFakeExchange(test: AggTest, plan: SparkPlan): Boolean = {
+    def hasExpectedKeys(aggregate: BaseAggregateExec): Boolean = {
+      getColumnNames(aggregate.groupingExpressions) == test.groupColumns
+    }
+
+    def hasExpectedInput(node: SparkPlan): Boolean = node match {
+      case shuffle: FakeSortShuffleExchangeExec =>
+        isCorrectInputNode(test, shuffle.child)
+      case _ => false
+    }
+
     plan match {
-      case HashAggregateExec(_, _, _, groupingExpressions1, _, _, _, _,
-      HashAggregateExec(_, _, _, groupingExpressions2, _, _, _, _,
-      shuffle: FakeSortShuffleExchangeExec)) =>
-        getColumnNames(groupingExpressions1) == test.groupColumns &&
-          getColumnNames(groupingExpressions2) == test.groupColumns &&
-          isCorrectInputNode(test, shuffle.child)
+      case aggregate: BaseAggregateExec if hasExpectedKeys(aggregate) =>
+        aggregate.child match {
+          case partial: BaseAggregateExec =>
+            hasExpectedKeys(partial) && hasExpectedInput(partial.child)
+          case child =>
+            hasExpectedInput(child)
+        }
       case _ => false
     }
   }

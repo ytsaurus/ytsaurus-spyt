@@ -1,5 +1,5 @@
 val scalaVersion: String? by extra
-val adapterVersions = listOf("330", "340", "350") + if (scalaVersion == "2.13") listOf("400", "410", "420") else listOf()
+val adapterVersions = listOf("330", "340", "350") + if (scalaVersion == "2.13") listOf("400", "410", "420", "430") else listOf()
 
 dependencies {
     compileOnly(project(":spark-adapter-api_$scalaVersion"))

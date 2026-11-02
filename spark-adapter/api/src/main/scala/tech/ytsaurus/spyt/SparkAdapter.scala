@@ -184,6 +184,8 @@ trait SparkAdapter {
 
   /** Whether dataType is the Spark Variant type; false on Spark versions without it. */
   def isSparkVariantType(dataType: DataType): Boolean
+
+  def checkAndGlobPathIfNecessary(paths: Seq[String], hadoopConf: Configuration): Seq[Path]
 }
 
 trait SparkAdapterProvider {

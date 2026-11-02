@@ -1,11 +1,11 @@
 package org.apache.spark.sql.util
 
-import org.apache.arrow.vector.types.pojo.ArrowType
+import org.apache.arrow.vector.types.pojo.{ArrowType, Schema}
 import org.apache.spark.SparkEnv
 import org.apache.spark.adapter.Config.YTSAURUS_ARROW_STRING_TO_BINARY
-import org.apache.spark.sql.types.{BinaryType, DataType, StringType}
+import org.apache.spark.sql.types.{BinaryType, DataType, StringType, StructType}
 import tech.ytsaurus.spyt.adapter.TypeSupport.{instance => ts}
-import tech.ytsaurus.spyt.patch.annotations.{Applicability, Decorate, DecoratedMethod, OriginClass}
+import tech.ytsaurus.spyt.patch.annotations.{AddMethod, Applicability, Decorate, DecoratedMethod, OriginClass}
 
 @Decorate
 @OriginClass("org.apache.spark.sql.util.ArrowUtils$")
@@ -34,4 +34,25 @@ private[sql] object ArrowUtilsDecorators {
   }
 
   def __fromArrowType(dt: ArrowType): DataType = ???
+
+  @AddMethod
+  @Applicability(to = "4.3.0")
+  def toArrowSchema$default$5(): Boolean = false
+
+  @AddMethod
+  @Applicability(to = "4.3.0")
+  def toArrowSchema(
+    schema: StructType,
+    timeZoneId: String,
+    errorOnDuplicatedFieldNames: Boolean,
+    largeVarTypes: Boolean,
+    losslessInternalTypes: Boolean): Schema = {
+    toArrowSchema(schema, timeZoneId, errorOnDuplicatedFieldNames, largeVarTypes)
+  }
+
+  def toArrowSchema(
+    schema: StructType,
+    timeZoneId: String,
+    errorOnDuplicatedFieldNames: Boolean,
+    largeVarTypes: Boolean): Schema = ???
 }

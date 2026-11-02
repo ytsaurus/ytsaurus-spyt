@@ -21,7 +21,7 @@ import org.apache.spark.sql.connector.expressions.filter.Predicate
 import org.apache.spark.sql.connector.read.streaming.{Offset, SparkDataStream}
 import org.apache.spark.sql.connector.read.{InputPartition, PartitionReaderFactory, Scan, ScanBuilder}
 import org.apache.spark.sql.execution.datasources.v2.{DataSourceRDDPartition, DataSourceV2Relation, DataSourceV2ScanRelation, PushDownUtils}
-import org.apache.spark.sql.execution.datasources.{HadoopFsRelation, PartitionDirectory, PartitionedFile}
+import org.apache.spark.sql.execution.datasources.{DataSource, HadoopFsRelation, PartitionDirectory, PartitionedFile}
 import org.apache.spark.sql.execution.metric.SQLMetric
 import org.apache.spark.sql.execution.streaming.{FileStreamSink, SerializedOffset}
 import org.apache.spark.sql.execution.{FileSourceScanExec, FileSourceScanExecDelegate, ShuffleSupport}
@@ -250,4 +250,8 @@ trait SparkAdapter330 extends SparkAdapter {
   }
 
   override def isSparkVariantType(dataType: DataType): Boolean = false
+
+  override def checkAndGlobPathIfNecessary(paths: Seq[String], hadoopConf: Configuration): Seq[Path] = {
+    AdapterSupport330.checkAndGlobPathIfNecessary(paths, hadoopConf)
+  }
 }

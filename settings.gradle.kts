@@ -12,7 +12,7 @@ if (isSnapshot) {
 
 val testSparkVersion: String? by settings
 val testScalaVersion: String? by settings
-val adapterSparkVersions = listOf("3.3.0", "3.4.0", "3.5.0", "4.0.0", "4.1.0", "4.2.0").map {
+val adapterSparkVersions = listOf("3.3.0", "3.4.0", "3.5.0", "4.0.0", "4.1.0", "4.2.0", "4.3.0").map {
     it to it.replace(".", "")
 }
 val sparkBundle = listOf("spark-core", "spark-sql")

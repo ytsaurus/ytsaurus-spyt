@@ -1,5 +1,6 @@
 plugins {
     id("tech.ytsaurus.spyt.common.plugin")
+    id("tech.ytsaurus.spyt.javaagent.plugin")
 }
 
 val ytWrapper = findProject(":yt-wrapper_2.13") ?: project(":yt-wrapper_2.12")
@@ -10,6 +11,8 @@ dependencies {
 
     testImplementation(project(":yt-wrapper_$testScalaVersion"))
     testImplementation(project(mapOf("path" to ":yt-wrapper_$testScalaVersion", "configuration" to "testArtifacts")))
+
+    testWithJavaAgent(project(":spyt-patch-agent"))
 }
 
 tasks.withType<Test>().configureEach {

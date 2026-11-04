@@ -260,8 +260,10 @@ class SparkPatchClassTransformer implements ClassFileTransformer {
                 for (CtMethod method : ctClass.getDeclaredMethods()) {
                     if (checkDecoratedOrAddedMethod(method)) {
                         DecoratedMethod dmAnnotation = (DecoratedMethod) method.getAnnotation(DecoratedMethod.class);
+                        final String methodName = dmAnnotation != null && !dmAnnotation.name().isEmpty()
+                                ? dmAnnotation.name()
+                                : method.getName();
                         if (dmAnnotation != null) {
-                            String methodName = method.getName();
                             CtMethod baseMethod = baseCtClass.getMethod(methodName, method.getSignature());
                             log.debug("Patching decorated method {} with signature {}",
                                 methodName,
@@ -277,6 +279,7 @@ class SparkPatchClassTransformer implements ClassFileTransformer {
                         }
 
                         CtMethod newMethod = CtNewMethod.copy(method, baseCtClass, null);
+                        newMethod.setName(methodName);
                         baseCtClass.addMethod(newMethod);
                     }
                 }

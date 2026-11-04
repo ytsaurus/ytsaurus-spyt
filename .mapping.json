@@ -93,6 +93,7 @@
   "data-source-extended/src/test/scala/org/apache/spark/sql/PartitioningTest.scala":"yt/spark/spark-over-yt/data-source-extended/src/test/scala/org/apache/spark/sql/PartitioningTest.scala",
   "data-source-extended/src/test/scala/org/apache/spark/sql/PythonSpytExtensionsTest.scala":"yt/spark/spark-over-yt/data-source-extended/src/test/scala/org/apache/spark/sql/PythonSpytExtensionsTest.scala",
   "data-source-extended/src/test/scala/org/apache/spark/sql/YtColumnarUdfConfigurationTest.scala":"yt/spark/spark-over-yt/data-source-extended/src/test/scala/org/apache/spark/sql/YtColumnarUdfConfigurationTest.scala",
+  "data-source-extended/src/test/scala/org/apache/spark/sql/util/ArrowYsonSchemaTest.scala":"yt/spark/spark-over-yt/data-source-extended/src/test/scala/org/apache/spark/sql/util/ArrowYsonSchemaTest.scala",
   "data-source-extended/src/test/scala/org/apache/spark/sql/v2/ExtendedYtHashBucketingTest.scala":"yt/spark/spark-over-yt/data-source-extended/src/test/scala/org/apache/spark/sql/v2/ExtendedYtHashBucketingTest.scala",
   "data-source-extended/src/test/scala/org/apache/spark/sql/yt/ReadTransactionStrategyTest.scala":"yt/spark/spark-over-yt/data-source-extended/src/test/scala/org/apache/spark/sql/yt/ReadTransactionStrategyTest.scala",
   "data-source-extended/src/test/scala/org/apache/spark/sql/yt/SecurityTagsTest.scala":"yt/spark/spark-over-yt/data-source-extended/src/test/scala/org/apache/spark/sql/yt/SecurityTagsTest.scala",

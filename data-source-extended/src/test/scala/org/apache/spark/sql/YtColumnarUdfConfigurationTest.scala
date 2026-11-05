@@ -1,5 +1,6 @@
 package org.apache.spark.sql
 
+import com.fasterxml.jackson.databind.ObjectMapper
 import org.apache.spark.sql.catalyst.parser.ParserInterface
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -9,6 +10,8 @@ import tech.ytsaurus.spyt.format.YtSparkExtensions
 import tech.ytsaurus.spyt.format.columnar.{RegisterColumnarFunction, YtColumnarUdfRule}
 import tech.ytsaurus.spyt.format.conf.SparkYtConfiguration.ColumnarUdfEnabled
 import tech.ytsaurus.spyt.test.LocalSpark
+
+import scala.jdk.CollectionConverters._
 
 /** Checks startup opt-in and ensures disabled sessions bypass columnar handling. */
 class YtColumnarUdfConfigurationTest extends AnyFlatSpec with LocalSpark with Matchers {
@@ -20,6 +23,41 @@ class YtColumnarUdfConfigurationTest extends AnyFlatSpec with LocalSpark with Ma
     assume(!SparkVersionUtils.lessThan("4.1.0"), "Columnar parsing requires Spark 4.1.0 or later")
     withSparkSession(Map(ColumnarUdfEnabled.name -> "true")) { session =>
       session.sql("SELECT :value + 1", Map("value" -> 7)).collect().toSeq shouldBe Seq(Row(8))
+    }
+  }
+
+  for (entryPoint <- Seq("plan", "query", "parameters")) {
+    it should s"parse large escaped registration literals through $entryPoint" in {
+      assume(!SparkVersionUtils.lessThan("4.1.0"), "Columnar parsing requires Spark 4.1.0 or later")
+      withSparkSession(Map(ColumnarUdfEnabled.name -> "true")) { session =>
+        val name = "function`" * 10000
+        val provider = "example.Provider'" * 10000
+        val value = "signature'\\\"" * 10000
+        val options = new ObjectMapper().writeValueAsString(Map("signature" -> value).asJava)
+        val sql = s"REGISTER COLUMNAR FUNCTION `${name.replace("`", "``")}` " +
+          s"AS '${provider.replace("'", "''")}' OPTIONS '${options.replace("'", "''")}';"
+        val parser = session.sessionState.sqlParser
+        val result = entryPoint match {
+          case "plan" => parser.parsePlan(sql)
+          case "query" => parser.parseQuery(sql)
+          case "parameters" =>
+            val method = parser.getClass.getMethods.find(_.getName == "parsePlanWithParameters").get
+            method.invoke(parser, sql, null)
+          case other => fail(s"Unknown parser entry point: $other")
+        }
+        result shouldBe RegisterColumnarFunction(name, provider, Map("signature" -> value))
+      }
+    }
+  }
+
+  for (suffix <- Seq("'unterminated", "'provider' trailing", "'provider' OPTIONS'{}'", "'provider';;")) {
+    it should s"delegate malformed registration with suffix $suffix" in {
+      assume(!SparkVersionUtils.lessThan("4.1.0"), "Columnar parsing requires Spark 4.1.0 or later")
+      withSparkSession(Map(ColumnarUdfEnabled.name -> "true")) { session =>
+        intercept[org.apache.spark.sql.catalyst.parser.ParseException] {
+          session.sessionState.sqlParser.parsePlan(s"REGISTER COLUMNAR FUNCTION example AS $suffix")
+        }
+      }
     }
   }
 

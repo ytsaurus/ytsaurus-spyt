@@ -21,29 +21,114 @@ class YtColumnarFunctionParser(
   delegate: ParserInterface,
   register: (String, String, Map[String, String]) => LogicalPlan) extends ParserInterface {
 
-  private val registration = ("(?is)^\\s*REGISTER\\s+COLUMNAR\\s+FUNCTION\\s+" +
-    "(`(?:``|[^`])+`|[a-zA-Z_][a-zA-Z_0-9]*)\\s+AS\\s+'((?:''|[^'])*)'" +
-    "(?:\\s+OPTIONS\\s+'((?:''|[^'])*)')?\\s*;?\\s*$").r
+  private class RegistrationScanner(sqlText: String) {
+
+    private var position = 0
+
+    private def skipWhitespace(): Unit = {
+      while (position < sqlText.length && " \t\n\r\f\u000b".contains(sqlText.charAt(position))) {
+        position += 1
+      }
+    }
+
+    private def keyword(value: String, leadingWhitespace: Boolean): Boolean = {
+      val start = position
+      skipWhitespace()
+      if ((!leadingWhitespace || position > start) &&
+          sqlText.regionMatches(true, position, value, 0, value.length)) {
+        position += value.length
+        true
+      } else {
+        false
+      }
+    }
+
+    private def quoted(delimiter: Char): Option[String] = {
+      if (position >= sqlText.length || sqlText.charAt(position) != delimiter) return None
+      position += 1
+      val value = new StringBuilder
+      while (position < sqlText.length) {
+        val character = sqlText.charAt(position)
+        position += 1
+        if (character != delimiter) {
+          value.append(character)
+        } else if (position < sqlText.length && sqlText.charAt(position) == delimiter) {
+          value.append(delimiter)
+          position += 1
+        } else {
+          return Some(value.toString())
+        }
+      }
+      None
+    }
+
+    private def identifier(): Option[String] = {
+      if (position < sqlText.length && sqlText.charAt(position) == '`') {
+        quoted('`').filter(_.nonEmpty)
+      } else {
+        val start = position
+        def isLetter(character: Char): Boolean = {
+          character >= 'a' && character <= 'z' || character >= 'A' && character <= 'Z' || character == '_'
+        }
+        if (position < sqlText.length && isLetter(sqlText.charAt(position))) {
+          position += 1
+          while (position < sqlText.length &&
+              (isLetter(sqlText.charAt(position)) ||
+                sqlText.charAt(position) >= '0' && sqlText.charAt(position) <= '9')) {
+            position += 1
+          }
+        }
+        Option.when(position > start)(sqlText.substring(start, position))
+      }
+    }
+
+    def parse(): Option[(String, String, Option[String])] = {
+      if (!keyword("REGISTER", false) || !keyword("COLUMNAR", true) || !keyword("FUNCTION", true)) return None
+      val beforeName = position
+      skipWhitespace()
+      if (position == beforeName) return None
+      val name = identifier()
+      if (name.isEmpty || !keyword("AS", true)) return None
+      val beforeProvider = position
+      skipWhitespace()
+      if (position == beforeProvider) return None
+      val provider = quoted('\'')
+      if (provider.isEmpty) return None
+      val beforeOptions = position
+      skipWhitespace()
+      val options = if (position < sqlText.length && sqlText.charAt(position) != ';') {
+        position = beforeOptions
+        if (!keyword("OPTIONS", true)) return None
+        val beforeValue = position
+        skipWhitespace()
+        if (position == beforeValue) return None
+        val value = quoted('\'')
+        if (value.isEmpty) return None
+        value
+      } else {
+        None
+      }
+      skipWhitespace()
+      if (position < sqlText.length && sqlText.charAt(position) == ';') position += 1
+      skipWhitespace()
+      if (position == sqlText.length) Some((name.get, provider.get, options)) else None
+    }
+  }
 
   /** Recognizes registration without evaluating the delegate unless the SQL is an ordinary statement. */
   private def parseColumnar(sqlText: String)(fallback: => LogicalPlan): LogicalPlan = {
-    sqlText match {
-      case registration(identifier, provider, optionsJson) =>
-        val name = if (identifier.startsWith("`")) {
-          identifier.substring(1, identifier.length - 1).replace("``", "`")
-        } else {
-          identifier
-        }
-        val options = Option(optionsJson).map { json =>
-          val node = new ObjectMapper().readTree(json.replace("''", "'"))
+    new RegistrationScanner(sqlText).parse() match {
+      case Some((name, provider, optionsJson)) =>
+        val options = optionsJson.map { json =>
+          val node = new ObjectMapper().readTree(json)
           require(node != null && node.isObject, "Columnar function OPTIONS must be a JSON object")
           node.properties().asScala.map { entry =>
             require(entry.getValue.isTextual, "Columnar function option values must be strings")
             entry.getKey -> entry.getValue.asText()
           }.toMap
         }.getOrElse(Map.empty[String, String])
-        register(name, provider.replace("''", "'"), options)
-      case _ => fallback
+        register(name, provider, options)
+      case None => fallback
     }
   }
 

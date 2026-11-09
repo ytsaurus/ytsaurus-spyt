@@ -52,6 +52,14 @@ object Config {
     .intConf
     .createWithDefault(10)
 
+  val EXECUTOR_OPERATION_START_MAX_RETRIES = ConfigBuilder("spark.ytsaurus.executor.operation.start.maxRetries")
+    .doc("Maximum retries after the initial executor operation startup attempt. " +
+      "Retries use exponential backoff from 5 seconds up to 60 seconds; zero disables retries.")
+    .version("2.12.0")
+    .intConf
+    .checkValue(_ >= 0, "The executor operation startup retry count must be non-negative.")
+    .createWithDefault(5)
+
   val EXECUTOR_OPERATION_SHUTDOWN_DELAY = ConfigBuilder("spark.ytsaurus.executor.operation.shutdown.delay")
     .doc("Time for executors to shutdown themselves before terminating the executor operation, milliseconds")
     .version("1.76.0")

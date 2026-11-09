@@ -543,6 +543,43 @@ def test_malformed_configuration_stops_server(yt_client) -> None:
             yt_client.abort_operation(operation.id)
 
 
+@pytest.mark.timeout(300)
+@pytest.mark.parametrize("max_retries", [None, 0, 2], ids=["default", "disabled", "custom"])
+def test_executor_startup_failure_stops_server(yt_client, max_retries) -> None:
+    """Fail the driver when YTsaurus rejects the executor operation at startup."""
+    pool_tree = "missing-connect-executor-pool-tree"
+    spark_conf = {
+        "spark.ytsaurus.executor.operation.parameters": yt_yson.dumps({
+            "pool_trees": [pool_tree],
+        }).decode(),
+    }
+    if max_retries is not None:
+        spark_conf["spark.ytsaurus.executor.operation.start.maxRetries"] = str(max_retries)
+    operation = start_connect_server(
+        yt_client,
+        spark_conf=spark_conf,
+        fail_on_job_restart=True,
+    )
+    try:
+        deadline = time.monotonic() + 240
+        stderr = ""
+        while time.monotonic() < deadline:
+            jobs = yt_client.list_jobs(operation.id)["jobs"]
+            if jobs:
+                stderr = yt_client.get_job_stderr(operation.id, jobs[0]["id"]).read().decode()
+            if yt_client.get_operation_state(operation.id).is_finished():
+                break
+            time.sleep(1)
+        assert pool_tree in stderr, stderr
+        assert "startExecutors" in stderr, stderr
+        attempts = (5 if max_retries is None else max_retries) + 1
+        assert f"Operation failed after {attempts} attempts" in stderr, stderr
+        assert str(yt_client.get_operation_state(operation.id)) == "failed", stderr
+    finally:
+        if not yt_client.get_operation_state(operation.id).is_finished():
+            yt_client.abort_operation(operation.id)
+
+
 def test_idle_shutdown(yt_client):
     idle_timeout_seconds = 30
     spark_conf = {"spark.ytsaurus.connect.idle.timeout": f"{idle_timeout_seconds}s"}

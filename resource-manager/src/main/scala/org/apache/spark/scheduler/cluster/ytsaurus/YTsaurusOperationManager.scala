@@ -63,7 +63,9 @@ private[spark] class YTsaurusOperationManager(
     logDebug(s"[AppId: $appId] Requesting executors")
     val opParams = executorParams(sc.conf, appId, resourceProfile, numExecutors)
     logDebug(s"[AppId: $appId] Executor parameters ")
-    val operation = startVanillaOperation(sc.conf, EXECUTOR_TASK, opParams)
+    val operation = YtUtils.runWithRetry(
+      () => startVanillaOperation(sc.conf, EXECUTOR_TASK, opParams),
+      maxRetries = sc.conf.get(EXECUTOR_OPERATION_START_MAX_RETRIES))
     logDebug(s"[AppId: $appId] Vanilla operation has been successfully started")
     sc.conf.set(Config.EXECUTOR_OPERATION_ID, operation.id.toString)
     logInfo(s"[AppId: $appId] Executor operation ID: ${operation.id}")

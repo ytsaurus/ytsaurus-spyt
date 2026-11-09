@@ -51,17 +51,32 @@ new Connect server with columnar functions and native access enabled on both
 driver and executors. This bridge targets Linux. The native
 libraries must match the executors' OS, architecture, and the bridge's YQL ABI.
 
-## Supply the UDF libraries
+## Use the UDF registry
 
-The custom `libyabs_enums_udf.so` supplies `YabsEnums` only. The other modules in
-the original queries are installed in the YQL service; Spark needs their shared
-libraries only for the query you select with `--query`. Supply its library with
-`--udf-library`; repeat the argument if that query needs additional modules.
-You do not need libraries or input tables for unselected queries. Library filenames
-may differ from those below; the selected YQL module must be present in the supplied files.
+Pass `--yql-udf-registry //sys/yql_agent/udfs` and
+`--yql-udf-registry-proxy REGISTRY_CLUSTER` to select the UDF registry.
+`--yt-proxy` selects the execution cluster hosting the input tables and Connect
+server. The two clusters may differ.
+
+The submitter reads `_meta` and downloads the selected immutable library versions
+from the registry cluster using its local YT credentials. It uploads the `.so`
+files to the execution cluster through Spark Connect session artifacts. Functions
+sharing a library upload it once. The Java provider infers callable types from
+the submitted metadata snapshot and resolves the executor-local library artifacts.
+Driver and executor execution does not need access to the registry cluster.
+Explicit Arrow schemas are still supplied for polymorphic functions without a
+fixed registry signature.
+
+For any query, optionally pass `--udf-library /path/to/custom_udf.so`
+to use a custom local library. Repeat the option for additional libraries. These
+files are uploaded to the Connect session and replace the registry libraries for
+the selected query. Registry arguments remain required for schema inference,
+except for `commerce` and `knn`, which provide explicit Arrow schemas. When custom
+libraries are supplied, registry library downloads are skipped.
+
 For `--query region`, also pass the Geo dataset with `--geodata /path/to/geodata6.bin` (geodata5.bin is
 also supported). Use the same dataset version as the original YQL query when
-comparing results. The job uploads it alongside the libraries to its Spark Connect session. The provider
+comparing results. The job uploads the dataset to its Spark Connect session. The provider
 resolves its executor-local path and the bridge sets `GEOBASE_YQL_FIXED_PATH`
 before loading the UDFs; the executor working directory is irrelevant.
 
@@ -81,18 +96,6 @@ additional native dependencies required by your UDF libraries separately.
 | `h3` | `H3` | `yql/udfs/common/h3` (`libh3_udf.so`) |
 | `knn` | `Knn` | `contrib/ydb/library/yql/udfs/common/knn` (`libknn_udf.so`) |
 
-Download the supplied file using your configured YT credentials:
-
-```bash
-yt --proxy YOUR_CLUSTER read-file \
-  //path/to/udfs/libyabs_enums_udf.so \
-  > libyabs_enums_udf.so
-```
-
-Library names are not SQL function names. The bridge loads all supplied modules
-into the YQL function registry. Missing modules and incompatible signatures fail
-when the task binds the callable.
-
 ## Run through Spark Connect
 
 Run with your usual YT credentials and a Python environment containing matching
@@ -105,7 +108,8 @@ python job.py \
   --spyt-version YOUR_SPYT_VERSION \
   --query commerce \
   --input-root //path/to/sample-tables \
-  --udf-library /path/to/libyabs_enums_udf.so
+  --yql-udf-registry //sys/yql_agent/udfs \
+  --yql-udf-registry-proxy REGISTRY_CLUSTER
 ```
 
 Before starting the server, the runner calls
@@ -154,8 +158,8 @@ Build and publish the JAR, native bridge, and Python helper together. This provi
 The built `build/ya/yt/spark/spark-over-yt/examples/yql-udf-plugin/yql_udf_connect` executable
 accepts the same arguments as `python job.py`. Its build target resides alongside `job.py`.
 
-To run H3 instead, use `--query h3 --udf-library /path/to/libh3_udf.so`.
-For Geo, use `--query region --udf-library /path/to/libgeo_udf.so` and
+To run H3 instead, use `--query h3`.
+For Geo, use `--query region` and
 `--geodata /path/to/geodata6.bin`. Other queries do not require Geo data.
 
 Use `--runs 5 --delay-seconds 10` to execute the selected query five times,

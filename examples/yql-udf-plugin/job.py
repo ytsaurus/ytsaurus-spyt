@@ -22,7 +22,9 @@ QUERIES = {
         ORDER BY before
     """),
     "browser": ("session_inputs", "UserAgent::Parse", """
-        SELECT user_agent AS before, yql_browser(user_agent).BrowserName AS after
+        SELECT user_agent AS before,
+               decode(yql_browser(encode(user_agent, 'UTF-8')).BrowserName, 'UTF-8') AS browser_name,
+               decode(yql_browser(encode(user_agent, 'UTF-8')).BrowserEngine, 'UTF-8') AS browser_engine
         FROM Input
     """),
     "normalize": ("surplus_inputs", "SearchRequest::NormalizeConsistent", """
@@ -64,34 +66,30 @@ def field(name, kind, nullable=True, children=None, metadata=None):
     return result
 
 
-def register(spark, args, name, function, inputs, output, returns_callable=False):
-    from spyt_yql_udf import register_yql_function
+def register(spark, args, registry_metadata, libraries, name, function, inputs=None, output=None,
+             returns_callable=False):
+    from spyt_yql_udf.registration import register_yql_function
 
     register_yql_function(
-        spark, name, function, inputs, output, [path.name for path in args.udf_library],
-        geodata=args.geodata.name if args.query == "region" else None, returns_callable=returns_callable)
+        spark, name, function, inputs, output, libraries[function],
+        geodata=args.geodata.name if args.query == "region" else None,
+        returns_callable=returns_callable,
+        yql_udf_registry=args.yql_udf_registry if registry_metadata is not None else None,
+        yql_udf_registry_proxy=args.yql_udf_registry_proxy if registry_metadata is not None else None,
+        yql_udf_registry_metadata=registry_metadata)
 
 
 def register_function(spark, args):
     definitions = {
-        "region": [
-            ("yql_region", "Geo::RoundRegionById", [field("id", "int"), field("level", "string")],
-             field("value", "struct", children=[field("en_name", "string")]))],
-        "domain": [
-            ("yql_domain", "ProductsUrls::GetCanonDom", [field("domain", "string")], field("value", "string"))],
-        "browser": [
-            ("yql_browser", "UserAgent::Parse", [field("user_agent", "string")],
-             field("value", "struct", children=[field("BrowserName", "string")]))],
-        "normalize": [
-            ("yql_normalize", "SearchRequest::NormalizeConsistent", [field("query", "string")],
-             field("value", "string"))],
+        "region": [("yql_region", "Geo::RoundRegionById")],
+        "domain": [("yql_domain", "ProductsUrls::GetCanonDom")],
+        "browser": [("yql_browser", "UserAgent::Parse")],
+        "normalize": [("yql_normalize", "SearchRequest::NormalizeConsistent")],
         "commerce": [
             ("yql_commerce", "YabsEnums::ConvertFlagsToStructOptionsEnum",
              [field("options", "uint64", metadata={"yql.default": "0"})],
              field("value", "struct", False, children=[field("commerce", "bool", False)]), True)],
-        "h3": [
-            ("yql_h3", "H3::FromGeo", [field("lon", "double"), field("lat", "double"), field("resolution", "int")],
-             field("value", "uint64"))],
+        "h3": [("yql_h3", "H3::FromGeo")],
         "knn": [
             ("yql_knn_decode", "Knn::FloatFromBinaryString", [field("vector", "binary")],
              field("value", "list", children=[field("item", "float", False)])),
@@ -100,8 +98,19 @@ def register_function(spark, args):
             ("yql_knn_similarity", "Knn::CosineSimilarity", [field("left", "binary"), field("right", "binary")],
              field("value", "float"))],
     }
-    for definition in definitions[args.query]:
-        register(spark, args, *definition)
+    from spyt_yql_udf.registration import stage_yql_udf_registry
+
+    selected = definitions[args.query]
+    functions = [definition[1] for definition in selected]
+    metadata, staged = None, {}
+    if not args.udf_library or any(len(definition) < 4 for definition in selected):
+        metadata, staged = stage_yql_udf_registry(
+            spark, args.yql_udf_registry, args.yql_udf_registry_proxy, functions,
+            upload_libraries=not args.udf_library)
+    libraries = {function: [path.name for path in args.udf_library] if args.udf_library else [staged[function]]
+                 for function in functions}
+    for definition in selected:
+        register(spark, args, metadata, libraries, *definition)
 
 
 def run_query(spark, args):
@@ -189,9 +198,16 @@ def main():
     parser.add_argument("--num-executors", type=int, default=2)
     parser.add_argument("--geodata", type=Path,
                         help="Required only for --query region: geodata5.bin or geodata6.bin")
-    parser.add_argument("--udf-library", type=Path, action="append", required=True,
-                        help="Local YQL UDF .so for the selected query; repeat if it needs additional modules")
+    parser.add_argument("--yql-udf-registry",
+                        help="Cypress root of the YQL UDF registry, e.g. //sys/yql_agent/udfs")
+    parser.add_argument("--yql-udf-registry-proxy",
+                        help="YT cluster hosting the YQL UDF registry and libraries")
+    parser.add_argument("--udf-library", type=Path, action="append", default=[],
+                        help="Custom local UDF .so replacing registry libraries; repeat as needed")
     args = parser.parse_args()
+    needs_registry = not args.udf_library or args.query not in {"commerce", "knn"}
+    if needs_registry and (not args.yql_udf_registry or not args.yql_udf_registry_proxy):
+        parser.error("--yql-udf-registry and --yql-udf-registry-proxy are required for registry schema or library lookup")
     if args.runs <= 0:
         parser.error("--runs must be a positive integer")
     if not math.isfinite(args.delay_seconds) or args.delay_seconds < 0:

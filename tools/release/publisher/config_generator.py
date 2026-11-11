@@ -124,7 +124,7 @@ def prepare_launch_config(conf_local_dir: str, client: Client, versions: Version
             client.resolve_from_root("delta/python/layer_with_python313_jammy_v002.tar.gz"),
             client.resolve_from_root("delta/python/layer_with_python312_jammy_v002.tar.gz"),
             client.resolve_from_root("delta/python/layer_with_python311_jammy_v001.tar.gz"),
-            "//porto_layers/base/jammy/porto_layer_search_ubuntu_jammy_app_lastest.tar.gz"
+            "//porto_layers/base/jammy/porto_layer_search_ubuntu_jammy_app_latest"
         ]
         launch_config['squashfs_layer_paths'] = [
             client.resolve_from_root("squashfs/layer_with_unify_agent.squashfs"),
@@ -134,7 +134,7 @@ def prepare_launch_config(conf_local_dir: str, client: Client, versions: Version
             client.resolve_from_root("squashfs/python/layer_with_python313_jammy_v002.squashfs"),
             client.resolve_from_root("squashfs/python/layer_with_python312_jammy_v002.squashfs"),
             client.resolve_from_root("squashfs/python/layer_with_python311_jammy_v001.squashfs"),
-            "//porto_layers/base/jammy/porto_layer_search_ubuntu_jammy_app_lastest.tar.gz"
+            "//porto_layers/base/jammy/porto_layer_search_ubuntu_jammy_app_latest"
         ]
     else:
         launch_config['layer_paths'] = []

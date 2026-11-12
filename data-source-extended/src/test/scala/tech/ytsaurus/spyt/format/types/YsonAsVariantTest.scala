@@ -6,6 +6,7 @@ import org.apache.spark.sql.execution.exchange.ShuffleExchangeExec
 import org.apache.spark.sql.functions.count
 import org.apache.spark.sql.spyt.types.YsonType
 import org.apache.spark.sql.SaveMode
+import org.apache.spark.sql.types.{BinaryType, StringType}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -151,7 +152,7 @@ class YsonAsVariantTest extends AnyFlatSpec with Matchers with LocalSpark with T
 
       df.schema("hinted").dataType shouldBe variantType
       df.schema("other").dataType shouldBe usualYsonType
-      readsArrowBatches(df.select("id", "hinted")) shouldBe false
+      readsArrowBatches(df.select("id", "hinted")) shouldBe true
       columnTexts(df, "id", "hinted", ysonAsVariant = true).toMap shouldBe byId(Seq("""{"a":1}""", "[3]"))
 
       withConf(Read.YsonAsVariant, true) {
@@ -159,6 +160,21 @@ class YsonAsVariantTest extends AnyFlatSpec with Matchers with LocalSpark with T
         ysonTypeHinted.schema("hinted").dataType shouldBe new YsonType()
         ysonTypeHinted.schema("other").dataType shouldBe variantType
         readsArrowBatches(ysonTypeHinted.select("id", "hinted")) shouldBe true
+      }
+    }
+  }
+
+  Seq(true, false).foreach { wholeStage =>
+    it should s"read YSON as Variant through Arrow with wholeStage=$wholeStage" in {
+      whenVariantSupported {
+        writeTableFromURow(anyColumnRows(anyCells), tmpPath, anyColumnSchema, OptimizeMode.Scan)
+        withConfs(Map(s"spark.yt.${Read.YsonAsVariant.name}" -> "true",
+          "spark.sql.codegen.wholeStage" -> wholeStage.toString)) {
+          val arrow = spark.read.enableArrow.yt(tmpPath)
+          readsArrowBatches(arrow) shouldBe true
+          textsById(arrow, ysonAsVariant = true) shouldBe byId(anyCellsJson)
+          textsById(spark.read.disableArrow.yt(tmpPath), ysonAsVariant = true) shouldBe byId(anyCellsJson)
+        }
       }
     }
   }
@@ -218,6 +234,35 @@ class YsonAsVariantTest extends AnyFlatSpec with Matchers with LocalSpark with T
           textsById(spark.read.yt(copyPath), ysonAsVariant = true) shouldBe byId(anyCellsJson)
         }
       }
+    }
+  }
+
+  for {
+    (hintName, hint, ytType) <- Seq(
+      ("binary", BinaryType, TiType.yson()),
+      ("string", StringType, TiType.string()),
+      ("yson", new YsonType(), TiType.yson()))
+    arrow <- Seq(true, false)
+    writeTypeV3 <- Seq(true, false)
+  } {
+    it should s"write YSON read with $hintName, arrow=$arrow, writeTypeV3=$writeTypeV3" in {
+      YtWrapper.createDir(tmpPath)
+      val sourcePath = s"$tmpPath/source"
+      val copyPath = s"$tmpPath/copy"
+      val cells = if (hint == BinaryType) anyCells else {
+        Seq(ColumnValueType.STRING -> "hello".getBytes(StandardCharsets.UTF_8),
+          ColumnValueType.STRING -> "été".getBytes(StandardCharsets.UTF_8), ColumnValueType.NULL -> null)
+      }
+      writeTableFromURow(anyColumnRows(cells), sourcePath, anyColumnSchema, OptimizeMode.Scan)
+
+      val df = spark.read.enableArrow(arrow).schemaHint("value" -> hint).yt(sourcePath)
+      readsArrowBatches(df) shouldBe arrow
+      df.write.option(WriteTypeV3.name, writeTypeV3).yt(copyPath)
+
+      ytColumnTypes(copyPath)("value") shouldBe TiType.optional(ytType)
+      val values = if (hint == BinaryType) anyCellsYson else Seq("\"hello\"", "\"été\"", "#")
+      val expected = values.map(text => canonicalYson(Option(text).getOrElse("#")))
+      ysonTextsById(readYsonRows(copyPath), "value") shouldBe byId(expected)
     }
   }
 

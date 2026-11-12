@@ -7,17 +7,86 @@ import org.apache.spark.sql.v2.YtUtils.{FileWithSchema, _}
 import org.scalatest.prop.TableDrivenPropertyChecks
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
+import tech.ytsaurus.core.tables.TableSchema
 import tech.ytsaurus.spyt.fs.{YtFileStatus, YtHadoopPath, YtTableMeta}
 import tech.ytsaurus.spyt.serializers.SchemaConverter.MetadataFields
+import tech.ytsaurus.spyt.serializers.{SchemaConverter, WriteSchemaConverter, YtLogicalType}
 import tech.ytsaurus.spyt.wrapper.table.OptimizeMode
-import tech.ytsaurus.spyt.SchemaTestUtils
+import tech.ytsaurus.spyt.{SchemaTestUtils, SparkAdapter}
+import tech.ytsaurus.spyt.YsonAsVariantTestUtils.whenVariantSupported
 import tech.ytsaurus.spyt.fs.path.YPathEnriched
+import tech.ytsaurus.typeinfo.TiType
 
 import scala.util.Try
 
 class YtUtilsTest extends AnyFlatSpec with Matchers with SchemaTestUtils with TableDrivenPropertyChecks {
 
   behavior of "YtUtilsTest"
+
+  it should "preserve logical YSON types for read and write" in {
+    val sourceSchema = TableSchema.builder()
+      .addValue("plain", TiType.yson())
+      .addValue("tagged", TiType.tagged(TiType.optional(TiType.yson()), "tag"))
+      .addValue("nested", TiType.optional(TiType.optional(TiType.yson())))
+      .addValue("text", TiType.string())
+      .build()
+    val hint = StructType(Seq(StructField("plain", BinaryType)))
+    val result = SchemaConverter.sparkSchema(sourceSchema.toYTree, Some(hint), parsingTypeV3 = true)
+
+    Seq("plain", "tagged").foreach { name =>
+      result(name).metadata.getString(MetadataFields.YT_LOGICAL_TYPE) shouldBe "yson"
+    }
+    MetadataFields.isYson(result("nested")) shouldBe false
+    MetadataFields.isYson(result("text")) shouldBe false
+    new WriteSchemaConverter().ytLogicalTypeV3(result("plain")) shouldBe YtLogicalType.Any
+    val stringHint = StructType(Seq(StructField("plain", StringType)))
+    val stringResult = SchemaConverter.sparkSchema(sourceSchema.toYTree, Some(stringHint), parsingTypeV3 = true)
+    new WriteSchemaConverter().ytLogicalTypeV3(stringResult("plain")) shouldBe YtLogicalType.String
+    new WriteSchemaConverter(stringToUtf8 = true).ytLogicalTypeV3(stringResult("plain")) shouldBe YtLogicalType.Utf8
+    an[IllegalArgumentException] should be thrownBy {
+      new WriteSchemaConverter(hint = Map("plain" -> YtLogicalType.Any)).ytLogicalTypeV3(stringResult("plain"))
+    }
+    val arrayType = ArrayType(LongType)
+    val arrayHint = StructType(Seq(StructField("plain", arrayType)))
+    val arrayResult = SchemaConverter.sparkSchema(sourceSchema.toYTree, Some(arrayHint), parsingTypeV3 = true)
+    val converter = new WriteSchemaConverter()
+    converter.ytLogicalTypeV3(arrayResult("plain")) shouldBe converter.ytLogicalTypeV3(arrayType)
+    Seq("any", "yson").foreach { name =>
+      val field = StructField("value", BinaryType, metadata =
+        new MetadataBuilder().putString(MetadataFields.YT_LOGICAL_TYPE, name).build())
+      MetadataFields.isYson(field) shouldBe true
+      converter.ytLogicalTypeV3(field) shouldBe YtLogicalType.Any
+    }
+  }
+
+  it should "enable Arrow for an explicit Variant when matching source columns are YSON" in {
+    whenVariantSupported {
+      val variantType = SparkAdapter.instance.ysonVariantConverter.variantType
+      val yson = structField("v", BinaryType, originalName = Some("original.v"),
+        metadata = new MetadataBuilder().putString(MetadataFields.YT_LOGICAL_TYPE, "yson"))
+      val userField = yson.copy(dataType = variantType, nullable = false)
+      val control = structField("id", LongType)
+      val userSchema = StructType(Seq(control, userField))
+      val source = StructType(Seq(yson, control))
+      val typed = StructType(Seq(structField("v", LongType, originalName = Some("original.v"))))
+      val missing = StructType(Seq(control))
+      val cases = Seq(
+        Seq(source) -> true, Seq(source, source) -> true, Seq(source, missing) -> true,
+        Seq(source, typed) -> false, Seq(typed, source) -> false, Seq(missing) -> false,
+        Seq.empty[StructType] -> false)
+      cases.foreach { case (sources, expected) =>
+        val result = YtUtils.withVariantArrowSupport(userSchema, sources)
+        result.fieldNames.toSeq shouldBe userSchema.fieldNames.toSeq
+        result("id") shouldBe control
+        result("v").dataType shouldBe variantType
+        result("v").nullable shouldBe false
+        MetadataFields.getOriginalName(result("v")) shouldBe "original.v"
+        MetadataFields.isYson(result("v")) shouldBe expected
+        YtReaderOptions.canReadBatch(result, true, true, true) shouldBe expected
+        YtReaderOptions.canReadBatch(result, true, true, false) shouldBe false
+      }
+    }
+  }
 
   it should "mergeFileSchemas" in {
     val a = structField("a", StringType, metadata = new MetadataBuilder().putString("custom", "my metadata"))

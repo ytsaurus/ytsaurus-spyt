@@ -9,12 +9,12 @@ import tech.ytsaurus.core.common.Decimal.binaryToText
 import tech.ytsaurus.core.tables.{ColumnValueType, TableSchema}
 import tech.ytsaurus.spyt.SparkAdapter
 import tech.ytsaurus.spyt.common.utils.UuidUtils
-import tech.ytsaurus.spyt.format.conf.SparkYtConfiguration.Read.YsonAsVariant
 import tech.ytsaurus.spyt.serialization.YsonDecoder
 import tech.ytsaurus.spyt.serializers.SchemaConverter.MetadataFields
 import tech.ytsaurus.spyt.types.{YTsaurusTypes, YsonVariantCodec}
-import tech.ytsaurus.spyt.wrapper.config.sparkConfigKeys
+import tech.ytsaurus.yson.YsonBinaryWriter
 
+import java.io.ByteArrayOutputStream
 import java.nio.charset.StandardCharsets
 
 import scala.collection.mutable
@@ -25,6 +25,7 @@ abstract class WireDeserializer[T](schema: StructType) extends WireRowDeserializ
   private val indexedSchema = schema.fields.map(_.dataType).toIndexedSeq
   private val indexedDataTypes = schema.fields.map(f => SchemaConverter.indexedDataType(f.dataType))
   private val isVariantColumn = schema.fields.map(f => SparkAdapter.instance.isSparkVariantType(f.dataType))
+  private val isYsonBinaryColumn = schema.fields.map(f => f.dataType == BinaryType && MetadataFields.isYson(f))
   private lazy val variantConverter = SparkAdapter.instance.ysonVariantConverter
   private val allowDuplicateVariantKeys = WireDeserializer.allowDuplicateVariantKeys(schema)
   private var serverIdToSparkIndex: Array[Int] = _
@@ -86,6 +87,10 @@ abstract class WireDeserializer[T](schema: StructType) extends WireRowDeserializ
         case ColumnValueType.INT64 | ColumnValueType.UINT64 =>
           val isUnsigned = _currentType == ColumnValueType.UINT64
           indexedSchema(_index) match {
+            case BinaryType if isYsonBinaryColumn(_index) =>
+              addValue(scalarYson { writer =>
+                if (isUnsigned) writer.onUnsignedInteger(value) else writer.onInteger(value)
+              })
             case LongType => addValue(value)
             case IntegerType => addValue(value.toInt)
             case ShortType => addValue(value.toShort)
@@ -121,6 +126,7 @@ abstract class WireDeserializer[T](schema: StructType) extends WireRowDeserializ
       _currentType match {
         case ColumnValueType.BOOLEAN =>
           indexedSchema(_index) match {
+            case BinaryType if isYsonBinaryColumn(_index) => addValue(scalarYson(_.onBoolean(value)))
             case LongType => addValue(if (value) 1L else 0L)
             case IntegerType => addValue(if (value) 1 else 0)
             case BooleanType => addValue(value)
@@ -140,6 +146,7 @@ abstract class WireDeserializer[T](schema: StructType) extends WireRowDeserializ
       _currentType match {
         case ColumnValueType.DOUBLE =>
           indexedSchema(_index) match {
+            case BinaryType if isYsonBinaryColumn(_index) => addValue(scalarYson(_.onDouble(value)))
             case LongType => addValue(value.toLong)
             case IntegerType => addValue(value.toInt)
             case FloatType => addValue(value.toFloat)
@@ -167,6 +174,7 @@ abstract class WireDeserializer[T](schema: StructType) extends WireRowDeserializ
             case FloatType => addValue(getString(bytes).toFloat)
             case DoubleType => addValue(getString(bytes).toDouble)
             case BooleanType => addValue(getString(bytes).toBoolean)
+            case BinaryType if isYsonBinaryColumn(_index) => addValue(scalarYson(_.onString(bytes, 0, bytes.length)))
             case BinaryType => addValue(bytes)
             case StringType => addValue(getBytesFromStringType(bytes))
             case d: DecimalType =>
@@ -192,14 +200,18 @@ abstract class WireDeserializer[T](schema: StructType) extends WireRowDeserializ
   }
 
   private def variantFromYson(bytes: Array[Byte]): Any = {
+    YsonVariantCodec.fromYsonColumn(variantConverter, bytes, allowDuplicateVariantKeys, schema.fields(_index).name)
+  }
+
+  private def scalarYson(write: YsonBinaryWriter => Unit): Array[Byte] = {
+    val output = new ByteArrayOutputStream()
+    val writer = new YsonBinaryWriter(output)
     try {
-      YsonVariantCodec.fromYson(variantConverter, bytes, allowDuplicateVariantKeys)
-    } catch {
-      case e: IllegalArgumentException =>
-        throw new IllegalArgumentException(s"Column ${schema.fields(_index).name} cannot be read as Variant: " +
-          s"${e.getMessage} Read it as YSON instead: give the column a binary or YsonType schema hint, or turn off " +
-          s"${sparkConfigKeys(YsonAsVariant)} if the Variant type comes from that setting.", e)
+      write(writer)
+    } finally {
+      writer.close()
     }
+    output.toByteArray
   }
 
   private def getBytesFromStringType(bytes: Array[Byte]): UTF8String = {

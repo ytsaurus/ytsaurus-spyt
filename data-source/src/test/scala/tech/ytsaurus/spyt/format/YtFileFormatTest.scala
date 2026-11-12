@@ -710,11 +710,30 @@ class YtFileFormatTest extends AnyFlatSpec with Matchers with LocalSpark
       val res = spark.read.enableArrow.schema(userSchema).yt(tmpPath)
 
       res.schema.map(_.dataType).distinct shouldBe Seq(variantType)
-      readsArrowBatches(res) shouldBe false
+      readsArrowBatches(res) shouldBe true
       res.selectExpr(primitiveColumns.map(c => s"to_json(`$c`)"): _*).collect() should contain theSameElementsAs Seq(
         Row("0", "0.0", "0.0", "false", "0", "0"),
         Row("65", "1.5", "7.2", "true", "3", "4"),
         Row("65", "1.5", "7.2", "true", "3", "18446744073709551606"))
+    }
+  }
+
+  it should "keep wire reading for a user Variant over a typed column, including mixed tables" in {
+    whenVariantSupported {
+      val variantType = SparkAdapter.instance.ysonVariantConverter.variantType
+      val userSchema = StructType(Seq(StructField("value", variantType)))
+      val typedSchema = TableSchema.builder().addValue("value", ColumnValueType.STRING).build()
+      YtWrapper.createDir(tmpPath)
+      val anyPath = s"$tmpPath/any"
+      val typedPath = s"$tmpPath/typed"
+      writeTableFromURow(Seq(unversionedRow(ColumnValueType.INT64 -> 1L)), anyPath, anySchema)
+      writeTableFromYson(Seq("{value=hello}"), typedPath, typedSchema)
+      Seq(Seq(typedPath), Seq(anyPath, typedPath), Seq(typedPath, anyPath)).foreach { paths =>
+        val df = spark.read.enableArrow.schema(userSchema).yt(paths: _*)
+        readsArrowBatches(df) shouldBe false
+        val expected = if (paths.size == 1) Seq(Row("\"hello\"")) else Seq(Row("1"), Row("\"hello\""))
+        df.selectExpr("to_json(value)").collect() should contain theSameElementsAs expected
+      }
     }
   }
 

@@ -39,8 +39,8 @@ class YsonAsVariantSqlTest extends AnyFlatSpec with Matchers with LocalSpark wit
 
         df.schema("value").dataType shouldBe variantType
         textsById(df, ysonAsVariant = true) shouldBe byId(anyCellsJson)
-        executedPlanNodes(df) { case scan: YtSourceScanExec => scan.supportsColumnar } shouldBe Seq(false)
-        executedPlanNodes(df) { case columnarToRow: ColumnarToRowExec => columnarToRow } shouldBe empty
+        executedPlanNodes(df) { case scan: YtSourceScanExec => scan.supportsColumnar } shouldBe Seq(true)
+        executedPlanNodes(df) { case columnarToRow: ColumnarToRowExec => columnarToRow } should not be empty
         val ids = session.sql(s"SELECT id FROM yt.`$tmpPath`")
         executedPlanNodes(ids) { case scan: YtSourceScanExec => scan.supportsColumnar } shouldBe Seq(true)
       }

@@ -4,23 +4,31 @@ import org.apache.arrow.memory.{BufferAllocator, RootAllocator}
 import org.apache.arrow.vector.dictionary.Dictionary
 import org.apache.arrow.vector.ipc.ArrowStreamReader
 import org.apache.arrow.vector.{FieldVector, VectorSchemaRoot}
+import org.apache.spark.sql.execution.vectorized.OnHeapColumnVector
 import org.apache.spark.sql.types.StructType
 import org.apache.spark.sql.vectorized.{ColumnVector, ColumnarBatch}
 import org.slf4j.LoggerFactory
+
 import tech.ytsaurus.core.tables.{ColumnValueType, TableSchema}
+import tech.ytsaurus.spyt.SparkAdapter
 import tech.ytsaurus.spyt.serializers.SchemaConverter.MetadataFields
 import tech.ytsaurus.spyt.wrapper.LogLazy
 import tech.ytsaurus.spyt.serialization.IndexedDataType
-import tech.ytsaurus.spyt.serializers.SchemaConverter
+import tech.ytsaurus.spyt.serializers.{SchemaConverter, WireDeserializer}
+import tech.ytsaurus.spyt.types.YsonVariantCodec
 import tech.ytsaurus.spyt.wrapper.table.YtArrowInputStream
 
 import scala.jdk.CollectionConverters._
+import scala.util.control.NonFatal
 
 class ArrowBatchReader(stream: YtArrowInputStream, schema: StructType,
                        ytSchema: TableSchema) extends BatchReaderBase with LogLazy {
   private val log = LoggerFactory.getLogger(getClass)
 
   private val indexedSchema = schema.fields.map(f => SchemaConverter.indexedDataType(f.dataType))
+
+  private val allowDuplicateVariantKeys = WireDeserializer.allowDuplicateVariantKeys(schema)
+  private lazy val variantConverter = SparkAdapter.instance.ysonVariantConverter
 
   private var _allocator: BufferAllocator = _
   private var _reader: ArrowStreamReader = _
@@ -61,9 +69,22 @@ class ArrowBatchReader(stream: YtArrowInputStream, schema: StructType,
     }
   }
 
+  private def closeVariantVectors(): Unit = {
+    Option(_columnVectors).foreach(_.foreach {
+      case vector: OnHeapColumnVector => vector.close()
+      case _ =>
+    })
+    _columnVectors = null
+  }
+
   private def closeReader(): Unit = {
-    Option(_reader).foreach(_.close(false))
-    Option(_allocator).foreach(_.close())
+    closeVariantVectors()
+    val reader = _reader
+    val allocator = _allocator
+    _reader = null
+    _allocator = null
+    Option(reader).foreach(_.close(false))
+    Option(allocator).foreach(_.close())
   }
 
   override protected def finalRead(): Unit = {
@@ -77,7 +98,11 @@ class ArrowBatchReader(stream: YtArrowInputStream, schema: StructType,
   }
 
   override def close(): Unit = {
-    stream.close()
+    try {
+      closeReader()
+    } finally {
+      stream.close()
+    }
   }
 
   private def updateReader(): Unit = {
@@ -107,6 +132,7 @@ class ArrowBatchReader(stream: YtArrowInputStream, schema: StructType,
       s"allocated ${Option(_allocator).map(_.getAllocatedMemory)}, " +
       s"peak allocated ${Option(_allocator).map(_.getPeakMemoryAllocation)}")
 
+    closeVariantVectors()
     _columnVectors = new Array[ColumnVector](schema.fields.length)
 
     val arrowSchema = _root.getSchema.getFields.asScala.map(_.getName)
@@ -123,7 +149,38 @@ class ArrowBatchReader(stream: YtArrowInputStream, schema: StructType,
           createArrowColumnVector(vec, dataType, columnSchema.getType)
         }
         .getOrElse(ArrowColumnVector.nullVector(dataType))
-      _columnVectors(index) = arrowVector
+      if (SparkAdapter.instance.isSparkVariantType(field.dataType)) {
+        try {
+          val vector = new OnHeapColumnVector(math.max(1, _root.getRowCount), field.dataType)
+          _columnVectors(index) = vector
+          for (row <- 0 until _root.getRowCount) {
+            val value = if (arrowVector.isNullAt(row)) null else {
+              YsonVariantCodec.fromYsonColumn(
+                variantConverter,
+                arrowVector.getBinary(row),
+                allowDuplicateVariantKeys,
+                field.name)
+            }
+            if (value == null) {
+              vector.putNull(row)
+            } else {
+              val (bytes, metadata) = variantConverter.variantBytes(value)
+              vector.getChild(0).putByteArray(row, bytes)
+              vector.getChild(1).putByteArray(row, metadata)
+            }
+          }
+        } catch {
+          case NonFatal(error) =>
+            try {
+              close()
+            } catch {
+              case NonFatal(closeError) => error.addSuppressed(closeError)
+            }
+            throw error
+        }
+      } else {
+        _columnVectors(index) = arrowVector
+      }
     }
     _batch = new ColumnarBatch(_columnVectors)
   }

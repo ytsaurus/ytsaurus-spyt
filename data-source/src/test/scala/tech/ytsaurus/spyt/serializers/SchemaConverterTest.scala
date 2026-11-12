@@ -88,8 +88,8 @@ class SchemaConverterTest extends AnyFlatSpec with Matchers
       structField("bool", BooleanType, nullable = true),
       structField("STRING", StringType, nullable = true),
       structField("string_3", StringType, nullable = true),
-      structField("ANY", ysonColumnType(ysonAsVariant), nullable = true),
-      structField("yson", ysonColumnType(ysonAsVariant), nullable = true),
+      structField("ANY", ysonColumnType(ysonAsVariant), nullable = true, ytLogicalTypeName = "yson"),
+      structField("yson", ysonColumnType(ysonAsVariant), nullable = true, ytLogicalTypeName = "yson"),
       structField("int8", ByteType, nullable = true),
       structField("uint8", ShortType, nullable = true, ytLogicalTypeName="uint8"),
       structField("int16", ShortType, nullable = true),
@@ -126,8 +126,8 @@ class SchemaConverterTest extends AnyFlatSpec with Matchers
       structField("bool", BooleanType, nullable = false),
       structField("STRING", StringType, nullable = true),
       structField("string_3", StringType, nullable = false),
-      structField("ANY", BinaryType, nullable = true),
-      structField("yson", BinaryType, nullable = true),
+      structField("ANY", BinaryType, nullable = true, ytLogicalTypeName = "yson"),
+      structField("yson", BinaryType, nullable = true, ytLogicalTypeName = "yson"),
       structField("int8", ByteType, nullable = false),
       structField("uint8", ShortType, nullable = false, ytLogicalTypeName="uint8"),
       structField("int16", ShortType, nullable = false),
@@ -172,8 +172,8 @@ class SchemaConverterTest extends AnyFlatSpec with Matchers
 
       val res = SchemaConverter.sparkSchema(schema.toYTree, Some(hint), parsingTypeV3 = true, ysonAsVariant = true)
 
-      res("ANY") shouldBe structField("ANY", BinaryType, nullable = true)
-      res("yson") shouldBe structField("yson", ArrayType(LongType), nullable = true)
+      res("ANY") shouldBe structField("ANY", BinaryType, nullable = true, ytLogicalTypeName = "yson")
+      res("yson") shouldBe structField("yson", ArrayType(LongType), nullable = true, ytLogicalTypeName = "yson")
     }
   }
 

@@ -47,7 +47,11 @@ case class YtTable(
     val schema = userSpecifiedSchema.map { schema =>
       val partitionSchema = fileIndex.partitionSchema
       val resolver = sparkSession.sessionState.conf.resolver
-      StructType(schema.filterNot(f => partitionSchema.exists(p => resolver(p.name, f.name))))
+      val dataSchema = StructType(schema.filterNot(f => partitionSchema.exists(p => resolver(p.name, f.name))))
+      if (dataSchema.fields.exists(f => SparkAdapter.instance.isSparkVariantType(f.dataType))) {
+        val sourceSchemas = YtUtils.getFilesSchemas(sparkSession, options.asScala.toMap, fileIndex.allFiles())
+        YtUtils.withVariantArrowSupport(dataSchema, sourceSchemas.map(_.schema))
+      } else dataSchema
     }.orElse {
       inferSchema(fileIndex.allFiles())
     }.getOrElse {

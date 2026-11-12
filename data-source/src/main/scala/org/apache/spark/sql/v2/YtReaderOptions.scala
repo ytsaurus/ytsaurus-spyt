@@ -42,10 +42,12 @@ object YtReaderOptions {
     canReadBatch(dataSchema, options, conf) && supportBatch(dataSchema, conf)
   }
 
-  // TODO(SPYT-1229): drop the Variant check once Arrow vectors can return Variant values.
   private def arrowSchemaSupported(dataSchema: StructType): Boolean = {
-    dataSchema.fields.forall { f =>
-      MetadataFields.isArrowSupported(f) && !SparkAdapter.instance.isSparkVariantType(f.dataType)
+    dataSchema.fields.forall { field =>
+      val isVariantWithNonYsonSource =
+        SparkAdapter.instance.isSparkVariantType(field.dataType) && !MetadataFields.isYson(field)
+
+      MetadataFields.isArrowSupported(field) && !isVariantWithNonYsonSource
     }
   }
 }

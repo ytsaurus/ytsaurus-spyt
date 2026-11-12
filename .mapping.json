@@ -305,6 +305,7 @@
   "data-source/src/test/scala/tech/ytsaurus/spyt/format/YtStaticPartitioningTest.scala":"yt/spark/spark-over-yt/data-source/src/test/scala/tech/ytsaurus/spyt/format/YtStaticPartitioningTest.scala",
   "data-source/src/test/scala/tech/ytsaurus/spyt/format/YtWriteSecurityTagsTest.scala":"yt/spark/spark-over-yt/data-source/src/test/scala/tech/ytsaurus/spyt/format/YtWriteSecurityTagsTest.scala",
   "data-source/src/test/scala/tech/ytsaurus/spyt/format/batch/ArrowBatchReaderTest.scala":"yt/spark/spark-over-yt/data-source/src/test/scala/tech/ytsaurus/spyt/format/batch/ArrowBatchReaderTest.scala",
+  "data-source/src/test/scala/tech/ytsaurus/spyt/format/batch/ArrowVariantBatchReaderTest.scala":"yt/spark/spark-over-yt/data-source/src/test/scala/tech/ytsaurus/spyt/format/batch/ArrowVariantBatchReaderTest.scala",
   "data-source/src/test/scala/tech/ytsaurus/spyt/format/batch/ReadBatchRows.scala":"yt/spark/spark-over-yt/data-source/src/test/scala/tech/ytsaurus/spyt/format/batch/ReadBatchRows.scala",
   "data-source/src/test/scala/tech/ytsaurus/spyt/format/batch/WireRowBatchReaderTest.scala":"yt/spark/spark-over-yt/data-source/src/test/scala/tech/ytsaurus/spyt/format/batch/WireRowBatchReaderTest.scala",
   "data-source/src/test/scala/tech/ytsaurus/spyt/format/bucketing/BucketingJoinSuiteBase.scala":"yt/spark/spark-over-yt/data-source/src/test/scala/tech/ytsaurus/spyt/format/bucketing/BucketingJoinSuiteBase.scala",

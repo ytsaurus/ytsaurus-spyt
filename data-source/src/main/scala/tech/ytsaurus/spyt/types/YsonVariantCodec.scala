@@ -1,5 +1,7 @@
 package tech.ytsaurus.spyt.types
 
+import tech.ytsaurus.spyt.format.conf.SparkYtConfiguration.Read.YsonAsVariant
+import tech.ytsaurus.spyt.wrapper.config.sparkConfigKeys
 import tech.ytsaurus.yson.{YsonBinaryWriter, YsonConsumer, YsonParser}
 
 import java.io.{ByteArrayOutputStream, OutputStream}
@@ -14,6 +16,21 @@ object YsonVariantCodec {
   def fromYson(converter: YsonVariantConverter, ysonBytes: Array[Byte], allowDuplicateKeys: Boolean): Any = {
     val parse = (consumer: YsonEvents) => new YsonParser(ysonBytes).parseNode(new YsonEventsForwarder(consumer))
     converter.fromYsonEvents(parse, allowDuplicateKeys)
+  }
+
+  def fromYsonColumn(
+    converter: YsonVariantConverter,
+    bytes: Array[Byte],
+    allowDuplicateKeys: Boolean,
+    columnName: String): Any = {
+    try {
+      fromYson(converter, bytes, allowDuplicateKeys)
+    } catch {
+      case e: IllegalArgumentException =>
+        throw new IllegalArgumentException(s"Column $columnName cannot be read as Variant: " +
+          s"${e.getMessage} Read it as YSON instead: give the column a binary or YsonType schema hint, or turn off " +
+          s"${sparkConfigKeys(YsonAsVariant)} if the Variant type comes from that setting.", e)
+    }
   }
 
   /** Serializes a non-null VariantVal as binary YSON; see YsonVariantConverter.writeYsonEvents. */

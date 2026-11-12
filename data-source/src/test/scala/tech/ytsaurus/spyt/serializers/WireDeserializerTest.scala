@@ -14,8 +14,9 @@ import tech.ytsaurus.spyt.types.{YsonVariantCodec, YsonVariantConverter}
 import tech.ytsaurus.spyt.wrapper.config.sparkConfigKeys
 import tech.ytsaurus.typeinfo.TiType
 import tech.ytsaurus.yson.YsonBinaryWriter
+import tech.ytsaurus.ysontree.{YTreeBinarySerializer, YTreeTextSerializer}
 
-import java.io.ByteArrayOutputStream
+import java.io.{ByteArrayInputStream, ByteArrayOutputStream}
 import java.nio.charset.StandardCharsets
 
 class WireDeserializerTest extends AnyFlatSpec with Matchers {
@@ -68,6 +69,29 @@ class WireDeserializerTest extends AnyFlatSpec with Matchers {
 
   private def readVariant(valueType: ColumnValueType, feed: WireValueDeserializer[_] => Unit): Any = {
     firstValue(readRow(new InternalRowDeserializer(variantSchema), valueType, feed))
+  }
+
+  it should "read scalar YSON values as serialized YSON for a BinaryType hint" in {
+    val metadata = new MetadataBuilder().putString(SchemaConverter.MetadataFields.YT_LOGICAL_TYPE, "yson").build()
+    val schema = StructType(Seq(StructField("v", BinaryType, metadata = metadata)))
+    val text = "été".getBytes(StandardCharsets.UTF_8)
+    val cases: Seq[(ColumnValueType, WireValueDeserializer[_] => Unit, String)] = Seq(
+      (ColumnValueType.INT64, _.onInteger(-1L), "-1"),
+      (ColumnValueType.UINT64, _.onInteger(-1L), "18446744073709551615u"),
+      (ColumnValueType.DOUBLE, _.onDouble(2.5), "2.5"),
+      (ColumnValueType.BOOLEAN, _.onBoolean(true), "%true"),
+      (ColumnValueType.STRING, _.onBytes(text), "\"été\""),
+      (ColumnValueType.ANY, _.onBytes(yson("{a=1}")), "{a=1}"))
+
+    cases.foreach { case (valueType, feed, expected) =>
+      val bytes = readRow(new InternalRowDeserializer(schema), valueType, feed).getBinary(0)
+      val node = YTreeBinarySerializer.deserialize(new ByteArrayInputStream(bytes))
+      val actual = YTreeTextSerializer.stableSerialize(node)
+      actual shouldBe YTreeTextSerializer.stableSerialize(YTreeTextSerializer.deserialize(expected))
+    }
+    val plainBinarySchema = StructType(Seq(StructField("v", BinaryType)))
+    val plainBytes = readRow(new InternalRowDeserializer(plainBinarySchema), ColumnValueType.STRING, _.onBytes(text))
+    plainBytes.getBinary(0) shouldEqual text
   }
 
   it should "handle NULL values for columns not present in Spark schema" in {

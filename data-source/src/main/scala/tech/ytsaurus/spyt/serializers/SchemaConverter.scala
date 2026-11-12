@@ -40,6 +40,11 @@ object SchemaConverter {
       if (field.metadata.contains(EXPRESSION)) Some(field.metadata.getString(EXPRESSION)) else None
     }
 
+    def isYson(field: StructField): Boolean = {
+      field.metadata.contains(YT_LOGICAL_TYPE) &&
+        YtLogicalType.Any.aliases.contains(field.metadata.getString(YT_LOGICAL_TYPE))
+    }
+
     def isArrowSupported(field: StructField): Boolean = {
       field.metadata.contains(ARROW_SUPPORTED) && field.metadata.getBoolean(ARROW_SUPPORTED)
     }
@@ -182,6 +187,7 @@ object SchemaConverter {
       val ytType = getAvailableType(fieldMap, parsingTypeV3)
       setYtLogicalTypeIfUnsignedType(ytType, metadata)
       metadata.putBoolean(MetadataFields.ARROW_SUPPORTED, ytType.arrowSupported)
+      if (isYsonColumn(fieldMap)) metadata.putString(MetadataFields.YT_LOGICAL_TYPE, YtLogicalType.Any.getNameV3(false))
       val fieldMetadata = metadata.build()
       hintedStructField(fieldName, schemaHint, fieldMetadata) match {
         case Some(hinted) if SparkAdapter.instance.isSparkVariantType(hinted.dataType) && !isYsonColumn(fieldMap) =>

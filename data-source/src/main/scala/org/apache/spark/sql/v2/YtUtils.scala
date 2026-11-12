@@ -9,10 +9,11 @@ import org.apache.spark.util.SerializableConfiguration
 import org.slf4j.LoggerFactory
 import tech.ytsaurus.client.CompoundClient
 import tech.ytsaurus.core.cypress.YPath
+import tech.ytsaurus.spyt.SparkAdapter
 import tech.ytsaurus.spyt.fs.path.YPathEnriched
 import tech.ytsaurus.spyt.fs.{YtFileSystemBase, YtHadoopPath, YtTableMeta}
 import tech.ytsaurus.spyt.serializers.SchemaConverter.MetadataFields
-import tech.ytsaurus.spyt.serializers.{SchemaConverter, SchemaConverterConfig}
+import tech.ytsaurus.spyt.serializers.{SchemaConverter, SchemaConverterConfig, YtLogicalType}
 import tech.ytsaurus.spyt.wrapper.YtWrapper
 import tech.ytsaurus.spyt.wrapper.client.YtClientConfigurationConverter.ytClientConfiguration
 import tech.ytsaurus.spyt.wrapper.client.YtClientProvider
@@ -147,6 +148,28 @@ object YtUtils {
         }
     }
     allSchemas
+  }
+
+  private[v2] def withVariantArrowSupport(schema: StructType, sourceSchemas: Seq[StructType]): StructType = {
+    schema.copy(fields = schema.fields.map { field =>
+      if (SparkAdapter.instance.isSparkVariantType(field.dataType)) {
+        val name = MetadataFields.getOriginalName(field)
+        val matchingSourceFields = sourceSchemas.flatMap { sourceSchema =>
+          sourceSchema.fields.filter(f => MetadataFields.getOriginalName(f) == name)
+        }
+        val allSourcesAreYson = matchingSourceFields.nonEmpty && matchingSourceFields.forall(MetadataFields.isYson)
+        val metadataBuilder = new MetadataBuilder().withMetadata(field.metadata)
+          .putBoolean(
+            MetadataFields.ARROW_SUPPORTED,
+            allSourcesAreYson && matchingSourceFields.forall(MetadataFields.isArrowSupported))
+        if (allSourcesAreYson) {
+          metadataBuilder.putString(MetadataFields.YT_LOGICAL_TYPE, YtLogicalType.Any.getNameV3(false))
+        } else if (MetadataFields.isYson(field)) {
+          metadataBuilder.remove(MetadataFields.YT_LOGICAL_TYPE)
+        }
+        field.copy(metadata = metadataBuilder.build())
+      } else field
+    })
   }
 
   private def getKeys(fileSchema: FileWithSchema): Seq[StructField] = {

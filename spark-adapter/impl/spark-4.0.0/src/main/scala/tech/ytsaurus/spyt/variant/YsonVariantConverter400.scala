@@ -42,6 +42,11 @@ object YsonVariantConverter400 extends YsonVariantConverter {
     consumer.result()
   }
 
+  override def variantBytes(variant: Any): (Array[Byte], Array[Byte]) = {
+    val value = variant.asInstanceOf[VariantVal]
+    (value.getValue, value.getMetadata)
+  }
+
   override def fromInt64(value: Long): Any = buildScalar(_.appendLong(value))
 
   override def fromUint64(value: Long): Any = buildScalar(appendUint64(_, value))

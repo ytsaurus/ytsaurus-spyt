@@ -65,7 +65,11 @@ class WriteSchemaConverter(
   }
 
   def ytLogicalTypeV3(structField: StructField): YtLogicalType = {
-    val fieldHint = hint.getOrElse(structField.name, ytLogicalTypeV3FromMetadata(structField)) match {
+    val fieldHint = hint.getOrElse(structField.name, {
+      val metadataHint = ytLogicalTypeV3FromMetadata(structField)
+      // A YSON column read as StringType contains decoded strings, not serialized YSON.
+      if (structField.dataType == StringType && metadataHint == YtLogicalType.Any) null else metadataHint
+    }) match {
       case YtLogicalType.Optional(inner) => inner
       case other => other
     }

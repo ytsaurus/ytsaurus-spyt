@@ -22,6 +22,9 @@ trait YsonVariantConverter {
    */
   def fromYsonEvents(parse: YsonEvents => Unit, allowDuplicateKeys: Boolean): Any
 
+  /** Binary children used by Spark column vectors to store a non-null Variant. */
+  def variantBytes(variant: Any): (Array[Byte], Array[Byte])
+
   def fromInt64(value: Long): Any
 
   /** Reads value as unsigned: above Long.MaxValue it becomes a decimal with scale 0, as nested uint64 values do. */

@@ -47,7 +47,7 @@ case class YtInputSplit(file: YtPartitionedFile, schema: StructType,
   lazy val ytPathWithFilters: YPath = calculateYtPath(pushing = true, union = true)
 
   private def calculateYtPath(pushing: Boolean, union: Boolean = true): YPath = {
-    val tableKeys = SchemaConverter.keys(schema)
+    val tableKeys = SchemaConverter.filterPushdownKeys(schema)
     if (pushing && filterPushdownConfig.enabled && tableKeys.nonEmpty) {
       val res = applyPushdownFilters(basePath, tableKeys, pushedFilters, filterPushdownConfig, union)
       logPushdown(res, tableKeys, union)

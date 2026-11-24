@@ -225,12 +225,11 @@ object YtUtils {
 
   implicit class RichStructField(field: StructField) {
     def withKeyId(keyId: Int): StructField = {
-      val newMetadata = new MetadataBuilder()
-        .withMetadata(field.metadata)
-        .putLong(MetadataFields.KEY_ID, keyId)
-        .build()
-
-      field.copy(metadata = newMetadata)
+      val metadata = new MetadataBuilder().withMetadata(field.metadata).putLong(MetadataFields.KEY_ID, keyId)
+      if (keyId < 0) {
+        metadata.remove(MetadataFields.BINARY_DECIMAL_KEY)
+      }
+      field.copy(metadata = metadata.build())
     }
 
     def dropExpression: StructField = {

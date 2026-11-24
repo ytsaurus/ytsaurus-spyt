@@ -26,6 +26,7 @@ object SchemaConverter {
   object MetadataFields {
     val ORIGINAL_NAME = "original_name"
     val KEY_ID = "key_id"
+    val BINARY_DECIMAL_KEY = "yt_binary_decimal_key"
     val TAG = "tag"
     val OPTIONAL = "optional"
     val ARROW_SUPPORTED = "arrow_supported"
@@ -136,22 +137,24 @@ object SchemaConverter {
    * YTsaurus sends the values of nested optionals as composite YSON. The v1 type any counts as yson.
    */
   private def isYsonColumn(fieldMap: java.util.Map[String, YTreeNode]): Boolean = {
-    isYsonType(ytColumnType(fieldMap), optionalAllowed = true)
+    hasLogicalType(ytColumnType(fieldMap), YtLogicalType.Any, optionalAllowed = true)
   }
 
   @tailrec
-  private def isYsonType(typeNode: YTreeNode, optionalAllowed: Boolean): Boolean = typeNode match {
-    case composite: YTreeMapNode =>
-      val typeName = composite.getOrThrow("type_name").stringValue()
-      if (typeName == YtLogicalType.Tagged.name) {
-        isYsonType(composite.getOrThrow("item"), optionalAllowed)
-      } else if (typeName == YtLogicalType.Optional.name && optionalAllowed) {
-        isYsonType(composite.getOrThrow("item"), optionalAllowed = false)
-      } else {
-        false
-      }
-    case simple: YTreeStringNode => YtLogicalType.Any.aliases.contains(simple.stringValue())
-    case _ => false
+  private def hasLogicalType(node: YTreeNode, logicalType: YtLogicalTypeAlias, optionalAllowed: Boolean): Boolean = {
+    node match {
+      case composite: YTreeMapNode =>
+        val typeName = composite.getOrThrow("type_name").stringValue()
+        if (typeName == YtLogicalType.Tagged.name) {
+          hasLogicalType(composite.getOrThrow("item"), logicalType, optionalAllowed)
+        } else if (typeName == YtLogicalType.Optional.name && optionalAllowed) {
+          hasLogicalType(composite.getOrThrow("item"), logicalType, optionalAllowed = false)
+        } else {
+          logicalType.aliases.contains(typeName)
+        }
+      case simple: YTreeStringNode => logicalType.aliases.contains(simple.stringValue())
+      case _ => false
+    }
   }
 
   def sparkSchema(
@@ -180,7 +183,11 @@ object SchemaConverter {
       val fieldName = normalizeFieldName(originalName)
       val metadata = new MetadataBuilder()
       metadata.putString(MetadataFields.ORIGINAL_NAME, originalName)
-      metadata.putLong(MetadataFields.KEY_ID, if (fieldMap.containsKey("sort_order")) index else -1)
+      val isKey = fieldMap.containsKey("sort_order")
+      metadata.putLong(MetadataFields.KEY_ID, if (isKey) index else -1)
+      if (isKey && hasLogicalType(ytColumnType(fieldMap), YtLogicalType.Decimal, optionalAllowed = true)) {
+        metadata.putBoolean(MetadataFields.BINARY_DECIMAL_KEY, true)
+      }
       Option(fieldMap.get("expression")).map(_.stringValue()).filter(_.nonEmpty).foreach { expression =>
         metadata.putString(MetadataFields.EXPRESSION, expression)
       }
@@ -238,6 +245,11 @@ object SchemaConverter {
 
   def prefixKeys(schema: StructType): Seq[String] = {
     keys(schema).takeWhile(_.isDefined).map(_.get)
+  }
+
+  // Spark decimal literals produce uint64 bounds, while physical YT decimals use binary bounds.
+  def filterPushdownKeys(schema: StructType): Seq[Option[String]] = {
+    keys(StructType(schema.fields.filterNot(_.metadata.contains(MetadataFields.BINARY_DECIMAL_KEY))))
   }
 
   def keys(schema: StructType): Seq[Option[String]] = {

@@ -17,7 +17,7 @@ import tech.ytsaurus.spyt.wrapper.table.OptimizeMode
 import tech.ytsaurus.core.tables.{ColumnValueType, TableSchema}
 import tech.ytsaurus.spyt.common.utils.Segment.Segment
 import tech.ytsaurus.spyt.common.utils.{MInfinity, PInfinity, RealValue, Segment, SegmentSet}
-import tech.ytsaurus.spyt.format.conf.FilterPushdownConfig
+import tech.ytsaurus.spyt.format.conf.{FilterPushdownConfig, SparkYtConfiguration, YtTableSparkSettings}
 import tech.ytsaurus.spyt.test.TestRow
 import tech.ytsaurus.spyt.types.UInt64Long
 
@@ -257,6 +257,17 @@ class YtInputSplitTest extends YtInputSplitTestBase {
       case (input, output) =>
         res.filter(input).count() shouldBe output.size
         res.filter(input).collect() should contain theSameElementsAs output.map(Row.fromTuple)
+    }
+  }
+
+  it should "read matching rows when the first sort key is a YT decimal" in {
+    val amounts = Seq(7, 9).toDF("value").select(col("value").cast("decimal(9,0)").as("amount"))
+    amounts.write.sortedBy("amount").option(YtTableSparkSettings.WriteTypeV3.name, value = true).yt(tmpPath)
+
+    val seven = new java.math.BigDecimal("7")
+    withConf(SparkYtConfiguration.Read.TypeV3, true) {
+      val filtered = spark.read.yt(tmpPath).filter(col("amount") === seven)
+      filtered.collect().toSeq shouldEqual Seq(Row(seven))
     }
   }
 

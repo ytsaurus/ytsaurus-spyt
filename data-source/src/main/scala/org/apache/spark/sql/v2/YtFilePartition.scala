@@ -135,7 +135,7 @@ object YtFilePartition {
         val basePath = YtInputSplit.addColumnsList(path.toYPath, s)
           .withRange(RangeLimit.key(), RangeLimit.key())
         YtInputSplit.applyPushdownFilters(
-          basePath, SchemaConverter.keys(s), filterSegments, FilterPushdownConfig(sparkSession),
+          basePath, SchemaConverter.filterPushdownKeys(s), filterSegments, FilterPushdownConfig(sparkSession),
           fromPlanning = true)
 
       case _ =>

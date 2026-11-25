@@ -799,6 +799,7 @@
   "yt-wrapper/build.gradle.kts":"yt/spark/spark-over-yt/yt-wrapper/build.gradle.kts",
   "yt-wrapper/src/main/java/tech/ytsaurus/spyt/utils/CollectionUtils.java":"yt/spark/spark-over-yt/yt-wrapper/src/main/java/tech/ytsaurus/spyt/utils/CollectionUtils.java",
   "yt-wrapper/src/main/java/tech/ytsaurus/spyt/utils/NettyUtils.java":"yt/spark/spark-over-yt/yt-wrapper/src/main/java/tech/ytsaurus/spyt/utils/NettyUtils.java",
+  "yt-wrapper/src/main/java/tech/ytsaurus/spyt/wrapper/client/YtClientAuthProvider.java":"yt/spark/spark-over-yt/yt-wrapper/src/main/java/tech/ytsaurus/spyt/wrapper/client/YtClientAuthProvider.java",
   "yt-wrapper/src/main/scala/tech/ytsaurus/spyt/HostAndPort.scala":"yt/spark/spark-over-yt/yt-wrapper/src/main/scala/tech/ytsaurus/spyt/HostAndPort.scala",
   "yt-wrapper/src/main/scala/tech/ytsaurus/spyt/logger/YtLogger.scala":"yt/spark/spark-over-yt/yt-wrapper/src/main/scala/tech/ytsaurus/spyt/logger/YtLogger.scala",
   "yt-wrapper/src/main/scala/tech/ytsaurus/spyt/wrapper/LogLazy.scala":"yt/spark/spark-over-yt/yt-wrapper/src/main/scala/tech/ytsaurus/spyt/wrapper/LogLazy.scala",

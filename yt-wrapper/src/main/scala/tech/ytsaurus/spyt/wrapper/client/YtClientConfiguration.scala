@@ -1,6 +1,7 @@
 package tech.ytsaurus.spyt.wrapper.client
 
 import org.slf4j.LoggerFactory
+import tech.ytsaurus.client.YTsaurusClientConfig
 import tech.ytsaurus.client.rpc.YTsaurusClientAuth
 import tech.ytsaurus.spyt.HostAndPort
 import tech.ytsaurus.spyt.wrapper.Utils
@@ -10,7 +11,7 @@ import java.time.Duration
 
 import scala.util.{Failure, Success, Try}
 
-@SerialVersionUID(-4051409700916829021L)
+@SerialVersionUID(-4051409700916829020L)
 case class YtClientConfiguration(
   proxy: String,
   user: String,
@@ -22,7 +23,9 @@ case class YtClientConfiguration(
   useCommonProxies: Boolean = false,
   fixedProxyAddress: Option[String] = None,
   retry: YtClientRetryConfiguration = YtClientRetryConfiguration.default,
-  httpConnectProxy: Option[HostAndPort] = None) extends Serializable {
+  httpConnectProxy: Option[HostAndPort] = None,
+  clientAuthProvider: Option[String] = None,
+  clientAuthProviderConfig: String = "") extends Serializable {
 
   private lazy val initialUrlAttempt: Try[URL] = Try(new URL(proxy))
 
@@ -45,7 +48,16 @@ case class YtClientConfiguration(
 
   def isHttps: Boolean = proxyUrl.toOption.exists(_.getProtocol == "https")
 
-  def clientAuth: YTsaurusClientAuth = YTsaurusClientAuth.builder().setUser(user).setToken(token).build()
+  def clientAuth: YTsaurusClientAuth = clientAuth(YTsaurusClientConfig.builder())
+
+  private[client] def clientAuth(builder: YTsaurusClientConfig.Builder): YTsaurusClientAuth = clientAuthProvider match {
+    case None => YTsaurusClientAuth.builder().setUser(user).setToken(token).build()
+    case Some(name) =>
+      val loader = Option(Thread.currentThread().getContextClassLoader).getOrElse(getClass.getClassLoader)
+      val provider = Class.forName(name, false, loader).asSubclass(classOf[YtClientAuthProvider])
+        .getConstructor().newInstance()
+      java.util.Objects.requireNonNull(provider.getClientAuth(clientAuthProviderConfig, builder), "Missing provider auth")
+  }
 
   def replaceProxy(newProxy: Option[String]): YtClientConfiguration = {
     if (newProxy.isDefined && newProxy.get != proxy) {
@@ -60,13 +72,17 @@ object YtClientConfiguration {
   private val log = LoggerFactory.getLogger(getClass)
 
   def apply(getByName: String => Option[String]): YtClientConfiguration = {
-    val token = getByName("token").orElse(sys.env.get("YT_SECURE_VAULT_YT_TOKEN"))
-      .getOrElse(DefaultRpcCredentials.token)
     val proxy = getByName("proxy").orElse(sys.env.get("YT_PROXY")).getOrElse(
       throw new IllegalArgumentException("Proxy must be specified")
     )
-    val user = getByName("user").orElse(sys.env.get("YT_SECURE_VAULT_YT_USER"))
-      .getOrElse(DefaultRpcCredentials.tokenUser(token))
+    val provider = getByName("clientAuthProvider")
+    val (user, token) = if (provider.isDefined) (null, null) else {
+      val token = getByName("token").orElse(sys.env.get("YT_SECURE_VAULT_YT_TOKEN"))
+        .getOrElse(DefaultRpcCredentials.token)
+      val user = getByName("user").orElse(sys.env.get("YT_SECURE_VAULT_YT_USER"))
+        .getOrElse(DefaultRpcCredentials.tokenUser(token))
+      (user, token)
+    }
     val timeout = getByName("timeout").map(Utils.parseDuration).getOrElse(Duration.ofSeconds(60))
     val extendedFileTimeout = getByName("extendedFileTimeout").forall(_.toBoolean)
     val proxyNetworkName = sys.env.get("YT_JOB_ID") match {
@@ -84,7 +100,8 @@ object YtClientConfiguration {
 
     YtClientConfiguration(proxy, user, token, timeout, getByName("proxyRole"),
       extendedFileTimeout, proxyNetworkName, retry = YtClientRetryConfiguration(getByName),
-      httpConnectProxy = httpConnectProxy)
+      httpConnectProxy = httpConnectProxy,
+      clientAuthProvider = provider, clientAuthProviderConfig = getByName("clientAuthProviderConfig").getOrElse(""))
   }
 
   def optionalApply(getByName: String => Option[String]): Option[YtClientConfiguration] = {

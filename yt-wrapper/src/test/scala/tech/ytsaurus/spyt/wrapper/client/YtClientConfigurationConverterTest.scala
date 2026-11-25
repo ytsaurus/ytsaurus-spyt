@@ -4,7 +4,9 @@ import org.apache.spark.SparkConf
 import org.apache.spark.sql.internal.SQLConf
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
+import tech.ytsaurus.client.YTsaurusClientConfig
 import tech.ytsaurus.client.request.GetCurrentUser
+import tech.ytsaurus.client.rpc.YTsaurusClientAuth
 import tech.ytsaurus.spyt.wrapper.YtWrapper
 import tech.ytsaurus.spyt.wrapper.client.YtClientConfigurationConverter.ytClientConfiguration
 
@@ -59,6 +61,17 @@ class YtClientConfigurationConverterTest extends AnyFlatSpec with Matchers {
     }.get
   }
 
+  it should "load external auth with its profile and client settings" in {
+    val sparkConf = new SparkConf(false)
+      .set("spark.hadoop.yt.proxy", "test-proxy")
+      .set("spark.hadoop.yt.clientAuthProvider", classOf[TestProfileAuthProvider].getName)
+      .set("spark.hadoop.yt.clientAuthProviderConfig", "batch")
+    val conf = ytClientConfiguration(sparkConf)
+    val builder = YTsaurusClientConfig.builder()
+    conf.clientAuth(builder).getUser.get() shouldEqual "batch"
+    builder.build().getTvmOnly shouldBe true
+  }
+
   it should "read yt settings from sql conf" in {
     val conf = new SQLConf()
     ytSettings.foreach { case (key, value) => conf.setConfString(key, value) }
@@ -79,5 +92,12 @@ class YtClientConfigurationConverterTest extends AnyFlatSpec with Matchers {
 
     result.iterator().asScala.map(_.getKey).toSeq should contain theSameElementsAs
       ytSettings.map { case (key, _) => key.stripPrefix("spark.hadoop.") }
+  }
+}
+
+class TestProfileAuthProvider extends YtClientAuthProvider {
+  override def getClientAuth(profile: String, builder: YTsaurusClientConfig.Builder): YTsaurusClientAuth = {
+    builder.setTvmOnly(true)
+    YTsaurusClientAuth.builder().setUser(profile).build()
   }
 }

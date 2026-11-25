@@ -42,11 +42,12 @@ trait YtClientUtils {
       val rpcOptions = new RpcOptions()
       rpcOptions.setTimeouts(config.timeout)
       rpcOptions.setRetries(config.retry)
+      val clientConfig = YTsaurusClientConfig.builder().setRpcOptions(rpcOptions)
       val yt = DirectYTsaurusClient.builder()
         .setSharedBusConnector(connector)
         .setAddress(socketAddress)
-        .setAuth(config.clientAuth)
-        .setConfig(YTsaurusClientConfig.builder().setRpcOptions(rpcOptions).build())
+        .setAuth(config.clientAuth(clientConfig))
+        .setConfig(clientConfig.build())
         .setRetryRequests(config.retry.enabled)
         .build()
       YtRpcClient(s"${config.normalizedProxy}@$address", yt, connector)
@@ -61,7 +62,7 @@ trait YtClientUtils {
     config: YtClientConfiguration,
     nThreads: Int,
     rpcClientListener: Option[SpytRpcClientListener]): YtRpcClient = {
-    log.info(s"Create RPC YT Client, configuration ${config.copy(token = "*****")}")
+    log.info(s"Create RPC YT Client for proxy ${config.proxy}")
     val maybeJobProxy = jobProxyEndpoint(config)
     val connector =
       NettyUtils.createBusConnector(nThreads, maybeJobProxy.isDefined, config.timeout, daemonThreadFactory)
@@ -118,15 +119,12 @@ trait YtClientUtils {
   private def buildYTsaurusClient(connector: DefaultBusConnector, cluster: YTsaurusCluster,
                                   config: YtClientConfiguration, rpcOptions: RpcOptions): YTsaurusClient = {
     val clientBuilder = YTsaurusClient.builder()
+    val clientConfig = YTsaurusClientConfig.builder().setRpcOptions(rpcOptions).setUseTLS(config.isHttps)
 
     clientBuilder.setSharedBusConnector(connector)
       .setClusters(java.util.List.of[YTsaurusCluster](cluster))
-      .setAuth(config.clientAuth)
-      .setRpcOptions(rpcOptions)
-
-    if (config.isHttps) {
-      clientBuilder.setConfig(YTsaurusClientConfig.builder().setUseTLS(true).build())
-    }
+      .setAuth(config.clientAuth(clientConfig))
+      .setConfig(clientConfig.build())
 
     config.httpConnectProxy.foreach { proxy =>
       connector.setHttpConnectProxy(proxy.toAddress)
@@ -144,11 +142,12 @@ trait YtClientUtils {
                                    rpcOptions: RpcOptions,
                                    address: SocketAddress): DirectYTsaurusClient = {
     rpcOptions.setRetries(config.retry)
+    val clientConfig = YTsaurusClientConfig.builder().setRpcOptions(rpcOptions)
     DirectYTsaurusClient.builder()
       .setSharedBusConnector(connector)
       .setAddress(address)
-      .setAuth(config.clientAuth)
-      .setConfig(YTsaurusClientConfig.builder().setRpcOptions(rpcOptions).build())
+      .setAuth(config.clientAuth(clientConfig))
+      .setConfig(clientConfig.build())
       .setRetryRequests(config.retry.enabled)
       .build()
   }

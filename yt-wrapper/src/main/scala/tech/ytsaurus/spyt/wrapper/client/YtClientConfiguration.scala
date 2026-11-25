@@ -2,14 +2,15 @@ package tech.ytsaurus.spyt.wrapper.client
 
 import org.slf4j.LoggerFactory
 import tech.ytsaurus.client.rpc.YTsaurusClientAuth
+import tech.ytsaurus.spyt.HostAndPort
 import tech.ytsaurus.spyt.wrapper.Utils
 
-import java.net.URL
+import java.net.{URI, URL}
 import java.time.Duration
 
 import scala.util.{Failure, Success, Try}
 
-@SerialVersionUID(-4051409700916829022L)
+@SerialVersionUID(-4051409700916829021L)
 case class YtClientConfiguration(
   proxy: String,
   user: String,
@@ -20,7 +21,8 @@ case class YtClientConfiguration(
   proxyNetworkName: Option[String],
   useCommonProxies: Boolean = false,
   fixedProxyAddress: Option[String] = None,
-  retry: YtClientRetryConfiguration = YtClientRetryConfiguration.default) extends Serializable {
+  retry: YtClientRetryConfiguration = YtClientRetryConfiguration.default,
+  httpConnectProxy: Option[HostAndPort] = None) extends Serializable {
 
   private lazy val initialUrlAttempt: Try[URL] = Try(new URL(proxy))
 
@@ -72,8 +74,17 @@ object YtClientConfiguration {
       case None => getByName("proxyNetworkName")
     }
 
+    val httpConnectProxy = getByName("httpConnectProxy").map { value =>
+      val uri = Try(new URI("//" + value)).toOption.filter { u =>
+        u.getRawAuthority == value && u.getUserInfo == null && u.getHost != null &&
+          u.getPort > 0 && u.getPort <= 65535
+      }.getOrElse(throw new IllegalArgumentException("yt.httpConnectProxy must be host:port"))
+      HostAndPort(uri.getHost, uri.getPort)
+    }
+
     YtClientConfiguration(proxy, user, token, timeout, getByName("proxyRole"),
-      extendedFileTimeout, proxyNetworkName, retry = YtClientRetryConfiguration(getByName))
+      extendedFileTimeout, proxyNetworkName, retry = YtClientRetryConfiguration(getByName),
+      httpConnectProxy = httpConnectProxy)
   }
 
   def optionalApply(getByName: String => Option[String]): Option[YtClientConfiguration] = {

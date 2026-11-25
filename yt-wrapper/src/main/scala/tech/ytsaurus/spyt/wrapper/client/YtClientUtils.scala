@@ -38,6 +38,7 @@ trait YtClientUtils {
       .setWriteTimeout(config.timeout)
 
     try {
+      config.httpConnectProxy.foreach(proxy => connector.setHttpConnectProxy(proxy.toAddress))
       val rpcOptions = new RpcOptions()
       rpcOptions.setTimeouts(config.timeout)
       rpcOptions.setRetries(config.retry)
@@ -125,6 +126,11 @@ trait YtClientUtils {
 
     if (config.isHttps) {
       clientBuilder.setConfig(YTsaurusClientConfig.builder().setUseTLS(true).build())
+    }
+
+    config.httpConnectProxy.foreach { proxy =>
+      connector.setHttpConnectProxy(proxy.toAddress)
+      clientBuilder.setHttpConnectProxy(proxy.host, proxy.port)
     }
 
     config.proxyNetworkName.foreach(clientBuilder.setProxyNetworkName(_))

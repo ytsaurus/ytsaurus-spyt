@@ -3,15 +3,16 @@ package org.apache.spark.sql.v2
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.expressions.GenericInternalRow
 import org.apache.spark.sql.connector.expressions.{FieldReference, LogicalExpressions, NamedReference, Transform}
-import org.apache.spark.sql.execution.datasources.{FilePartition, PartitioningAwareFileIndex}
+import org.apache.spark.sql.execution.datasources.{FilePartition, PartitionedFile, PartitioningAwareFileIndex}
 import org.apache.spark.sql.types.{DataType, StructField, StructType}
 import org.slf4j.LoggerFactory
 
-import tech.ytsaurus.core.cypress.{Range, YPath}
-import tech.ytsaurus.spyt.common.utils.{PInfinity, RealValue, TuplePoint}
-import tech.ytsaurus.spyt.format.YtPartitionedFileDelegate
+import tech.ytsaurus.core.cypress.Range
+import tech.ytsaurus.spyt.common.utils.{AbstractSegment, PInfinity, RealValue, Segment, SegmentSet, TuplePoint}
+import tech.ytsaurus.spyt.format.{YtInputSplit, YtPartitionedFileDelegate}
+import tech.ytsaurus.spyt.format.YtPartitionedFileDelegate.emptyInternalRow
 import tech.ytsaurus.spyt.format.bucketing.{HashFunctionParser, YtBucketingCatalog}
-import tech.ytsaurus.spyt.format.conf.{SparkYtConfiguration, SparkYtInternalConfiguration}
+import tech.ytsaurus.spyt.format.conf.{FilterPushdownConfig, SparkYtConfiguration, SparkYtInternalConfiguration}
 import tech.ytsaurus.spyt.fs.YtHadoopPath
 import tech.ytsaurus.spyt.serializers.SchemaConverter.MetadataFields
 import tech.ytsaurus.spyt.serializers.{PivotKeysConverter, SchemaConverter, YtLogicalType}
@@ -20,12 +21,52 @@ import tech.ytsaurus.spyt.wrapper.YtJavaConverters.toOption
 import tech.ytsaurus.spyt.wrapper.config.{OptionsConf, SparkYtSparkSession, sparkConfigKeys}
 import tech.ytsaurus.typeinfo.TiType
 
-import java.util.Locale
+import java.util.{HashMap, Locale}
 
 import scala.jdk.CollectionConverters._
 
-/** The bucket transform a hash-bucketed scan reports and its partitions, one key range per bucket. */
-case class YtHashBucketing(transform: Transform, partitions: Seq[FilePartition])
+final class YtHashBucketing private (
+  val transform: Transform,
+  val numBuckets: Int,
+  hashKey: String,
+  path: YtHadoopPath) {
+
+  def partitions(schema: StructType, filters: SegmentSet, config: FilterPushdownConfig): Seq[FilePartition] = {
+    val tablePath = path.toYPath
+    val byteLength = Math.max(path.meta.size / numBuckets, 1L)
+    val keys = SchemaConverter.filterPushdownKeys(schema)
+    val pushdownEnabled = config.enabled && !filters.map.isEmpty
+    val emptyScan = pushdownEnabled && filters.map.values().asScala.exists(_.isEmpty)
+
+    (0 until numBuckets).map { index =>
+      val point = RealValue(UInt64Long(index.toLong))
+      val range = YtHashBucketing.bucketRange(point)
+      val ranges = if (emptyScan) {
+        Iterator.empty
+      } else if (pushdownEnabled) {
+        val bucketFilters = YtHashBucketing.intersectBucket(filters, hashKey, Segment(point))
+        if (bucketFilters.map.get(hashKey).isEmpty) {
+          Iterator.empty
+        } else {
+          val filtered = YtInputSplit.applyPushdownFilters(
+            tablePath.ranges(range),
+            keys,
+            bucketFilters,
+            config,
+            union = false,
+            fromPlanning = true)
+          filtered.getRanges.iterator().asScala
+        }
+      } else {
+        Iterator.single(range)
+      }
+      val files = ranges.map { fileRange =>
+        YtPartitionedFileDelegate(tablePath.ranges(fileRange), byteLength, emptyInternalRow, path)
+      }.toArray[PartitionedFile]
+      new YtKeyedFilePartition(index, files, new GenericInternalRow(Array[Any](index.toLong)))
+    }
+  }
+}
 
 /**
  * Detects a static YT table read through YtBucketingCatalog whose first key column is a uint64 computed column
@@ -87,7 +128,7 @@ object YtHashBucketing {
 
   private def bucketColumns(fullDataSchema: StructType, readDataSchema: StructType): Option[BucketColumns] = {
     for {
-      hashColumn <- SchemaConverter.prefixKeys(fullDataSchema).headOption
+      hashColumn <- SchemaConverter.filterPushdownKeys(fullDataSchema).headOption.flatten
       hashField <- findField(fullDataSchema, hashColumn)
       if hashField.dataType == uint64SparkType
       expression <- MetadataFields.getExpression(hashField)
@@ -146,28 +187,30 @@ object YtHashBucketing {
         log.info(s"$hashColumn $reason, bucketing is not applied")
         None
       case None =>
-        val byteLength = Math.max(path.meta.size / columns.buckets, 1L)
-        val yPath = path.toYPath
-        val partitions = (0 until columns.buckets).map { bucket =>
-          val file = YtPartitionedFileDelegate(
-            bucketRange(yPath, bucket),
-            byteLength,
-            YtPartitionedFileDelegate.emptyInternalRow,
-            path)
-          new YtKeyedFilePartition(bucket, Array(file), new GenericInternalRow(Array[Any](bucket.toLong)))
-        }
-        log.debug(s"$hashColumn splits the scan into ${partitions.length} bucketed partitions")
+        log.debug(s"$hashColumn splits the scan into ${columns.buckets} bucketed partitions")
         val argument = FieldReference.column(columns.arguments.head.name)
-        Some(YtHashBucketing(LogicalExpressions.bucket(columns.buckets, Array[NamedReference](argument)), partitions))
+        val transform = LogicalExpressions.bucket(columns.buckets, Array[NamedReference](argument))
+        Some(new YtHashBucketing(transform, columns.buckets, MetadataFields.getOriginalName(columns.hashField), path))
     }
   }
 
-  private def bucketRange(yPath: YPath, bucket: Long): YPath = {
-    val point = RealValue(UInt64Long(bucket))
-    val range = new Range(
+  private[v2] def intersectBucket(
+    normalizedFilters: SegmentSet,
+    hashKey: String,
+    bucket: Segment.Segment): SegmentSet = {
+    val point = Seq(bucket)
+    val hashIntersection = Option(normalizedFilters.map.get(hashKey)).fold(point) { segments =>
+      AbstractSegment.intercept(Seq(segments, point))
+    }
+    val result = new HashMap[String, Seq[Segment.Segment]](normalizedFilters.map)
+    result.put(hashKey, hashIntersection)
+    SegmentSet(result)
+  }
+
+  private def bucketRange(point: RealValue[UInt64Long]): Range = {
+    new Range(
       PivotKeysConverter.toRangeLimit(TuplePoint(Seq(point))),
       PivotKeysConverter.toRangeLimit(TuplePoint(Seq(point, PInfinity()))))
-    yPath.ranges(range)
   }
 
   private case class BucketColumns(hashField: StructField, arguments: Seq[StructField], buckets: Int)

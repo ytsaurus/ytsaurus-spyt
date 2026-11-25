@@ -180,7 +180,9 @@ case class YtScan(
 
   override protected def partitions: Seq[FilePartition] = {
     cachedPartitions.getOrElse {
-      val computed = keyPartitionsHint.orElse(hashBucketing.map(_.partitions)).getOrElse {
+      val computed = keyPartitionsHint.orElse(hashBucketing.map { bucketing =>
+        bucketing.partitions(fullDataSchema, effectiveFilterSegments, filterPushdownConf)
+      }).getOrElse {
         val splitFiles = preparePartitioning()
         YtFilePartition.getFilePartitions(splitFiles)
       }
@@ -245,7 +247,7 @@ case class YtScan(
   override def outputPartitioning(): Partitioning = {
     hashBucketing match {
       case Some(bucketing) =>
-        new KeyGroupedPartitioning(Array(bucketing.transform), bucketing.partitions.length)
+        new KeyGroupedPartitioning(Array(bucketing.transform), bucketing.numBuckets)
       case None =>
         new UnknownPartitioning(0)
     }

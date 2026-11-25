@@ -12,6 +12,7 @@ import org.scalatest.matchers.should.Matchers
 
 import tech.ytsaurus.core.tables.{ColumnValueType, TableSchema}
 import tech.ytsaurus.spyt.YtReader
+import tech.ytsaurus.spyt.format.conf.SparkYtConfiguration.Read.KeyColumnsFilterPushdown
 import tech.ytsaurus.spyt.format.conf.YtTableSparkSettings
 import tech.ytsaurus.spyt.test.{LocalSpark, TmpDir}
 import tech.ytsaurus.spyt.wrapper.YtWrapper
@@ -134,6 +135,15 @@ class YtBucketingJoinTest extends AnyFlatSpec with Matchers with LocalSpark with
           shouldJoinBucketed(shouldProduceReferenceRows(catalogJoin(leftTable, rightTable), expectedRows), buckets)
         }
       }
+    }
+  }
+
+  it should "keep a shuffle-free join when both bucketed scans have filtered key ranges" in {
+    val selected = Set(2L, 7L, 13L)
+    withConfs(joinConf + (s"spark.yt.${KeyColumnsFilterPushdown.Enabled.name}" -> "true")) {
+      def query: DataFrame = catalogJoin(leftTable, rightTable).filter(col(keyColumn).isin(2L, 7L, 13L))
+      val expected = expectedRows.filter(row => selected.contains(row.getLong(0)))
+      shouldJoinBucketed(shouldProduceReferenceRows(query, expected), buckets)
     }
   }
 

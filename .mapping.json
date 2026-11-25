@@ -258,6 +258,7 @@
   "data-source/src/test/scala/org/apache/spark/sql/v2/SortedTablesKeyPartitioningTest.scala":"yt/spark/spark-over-yt/data-source/src/test/scala/org/apache/spark/sql/v2/SortedTablesKeyPartitioningTest.scala",
   "data-source/src/test/scala/org/apache/spark/sql/v2/TestPartitionedFile.scala":"yt/spark/spark-over-yt/data-source/src/test/scala/org/apache/spark/sql/v2/TestPartitionedFile.scala",
   "data-source/src/test/scala/org/apache/spark/sql/v2/Utils.scala":"yt/spark/spark-over-yt/data-source/src/test/scala/org/apache/spark/sql/v2/Utils.scala",
+  "data-source/src/test/scala/org/apache/spark/sql/v2/YtBucketIntersectionTest.scala":"yt/spark/spark-over-yt/data-source/src/test/scala/org/apache/spark/sql/v2/YtBucketIntersectionTest.scala",
   "data-source/src/test/scala/org/apache/spark/sql/v2/YtFilePartitionTest.scala":"yt/spark/spark-over-yt/data-source/src/test/scala/org/apache/spark/sql/v2/YtFilePartitionTest.scala",
   "data-source/src/test/scala/org/apache/spark/sql/v2/YtHashBucketingTest.scala":"yt/spark/spark-over-yt/data-source/src/test/scala/org/apache/spark/sql/v2/YtHashBucketingTest.scala",
   "data-source/src/test/scala/org/apache/spark/sql/v2/YtKeyedFilePartitionTest.scala":"yt/spark/spark-over-yt/data-source/src/test/scala/org/apache/spark/sql/v2/YtKeyedFilePartitionTest.scala",

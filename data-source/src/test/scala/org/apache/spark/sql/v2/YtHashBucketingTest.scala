@@ -3,20 +3,29 @@ package org.apache.spark.sql.v2
 import org.apache.spark.sql.{DataFrame, Row}
 import org.apache.spark.sql.connector.expressions.{Expressions, FieldReference, LogicalExpressions, NamedReference}
 import org.apache.spark.sql.connector.read.partitioning.UnknownPartitioning
-import org.apache.spark.sql.execution.datasources.FilePartition
-import org.apache.spark.sql.functions.col
+import org.apache.spark.sql.execution.datasources.{FilePartition, PartitionedFile}
+import org.apache.spark.sql.execution.datasources.v2.BatchScanExec
+import org.apache.spark.sql.functions.{broadcast, col}
 import org.apache.spark.sql.internal.SQLConf
+import org.apache.spark.sql.sources.{EqualTo, Filter, In}
 import org.apache.spark.sql.types.{DecimalType, LongType, StringType}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
+import tech.ytsaurus.client.rows.{UnversionedRow, UnversionedValue}
+import tech.ytsaurus.core.common.Decimal.textToBinary
+import tech.ytsaurus.core.cypress.Range
 import tech.ytsaurus.core.tables.{ColumnValueType, TableSchema}
 import tech.ytsaurus.spyt.YtReader
+import tech.ytsaurus.spyt.format.YPathUtils.RichRangeCriteria
+import tech.ytsaurus.spyt.format.YtPartitionedFileDelegate.YtPartitionedFile
 import tech.ytsaurus.spyt.format.bucketing.HashBucketingTestUtils
 import tech.ytsaurus.spyt.format.conf.SparkYtConfiguration.Read
 import tech.ytsaurus.spyt.format.conf.SparkYtInternalConfiguration
 import tech.ytsaurus.spyt.test.{LocalSpark, TmpDir}
 import tech.ytsaurus.typeinfo.TiType
+
+import java.util.Locale
 
 class YtHashBucketingTest extends AnyFlatSpec with Matchers with LocalSpark with TmpDir
   with HashBucketingTestUtils {
@@ -36,6 +45,7 @@ class YtHashBucketingTest extends AnyFlatSpec with Matchers with LocalSpark with
   private val stringKeyTable = s"$tmpPath-string-key"
 
   private val maxBucketsKey = s"spark.yt.${Read.HashBucketing.MaxBuckets.name}"
+  private val pushdownEnabledKey = s"spark.yt.${Read.KeyColumnsFilterPushdown.Enabled.name}"
   private val catalogReadOption = SparkYtInternalConfiguration.HashBucketingCatalogRead.name
   private val keyHint = sessionOption(s"${keyColumn}_hint")
 
@@ -75,6 +85,27 @@ class YtHashBucketingTest extends AnyFlatSpec with Matchers with LocalSpark with
 
   private def keyValueRows(df: DataFrame): Seq[(Long, Long)] = {
     df.collect().toSeq.map(row => (row.getAs[Long](keyColumn), row.getAs[Long](valueColumn)))
+  }
+
+  private def fileRange(file: PartitionedFile): Range = {
+    val ranges = file.asInstanceOf[YtPartitionedFile].delegate.ypath.getRanges
+    ranges should have size 1
+    ranges.get(0).toRange
+  }
+
+  private def onlyRange(partition: FilePartition): Range = {
+    partition.files should have length 1
+    fileRange(partition.files.head)
+  }
+
+  private def shouldReadSingleKey(scan: YtScan, key: Long): Unit = {
+    shouldKeyPartitionsByBucket(scan, buckets)
+    scan.getPartitions.foreach { partition =>
+      val range = onlyRange(partition)
+      range.lower.key.get(0).longValue() shouldBe partition.index.toLong
+      range.lower.key.get(1).longValue() shouldBe key
+      range.upper.key.get(1).longValue() shouldBe key
+    }
   }
 
   private def writeKeyTable(path: String, sorted: Boolean): Unit = {
@@ -189,7 +220,7 @@ class YtHashBucketingTest extends AnyFlatSpec with Matchers with LocalSpark with
   }
 
   it should "apply pushed down key filters within the buckets" in {
-    withConfs(bucketingConf ++ Map(s"spark.yt.${Read.KeyColumnsFilterPushdown.Enabled.name}" -> "true")) {
+    withConfs(bucketingConf ++ Map(pushdownEnabledKey -> "true")) {
       val stored = storedRows(bucketedTable)
       val (bucket, key, _) = stored.head
       Seq(
@@ -198,6 +229,150 @@ class YtHashBucketingTest extends AnyFlatSpec with Matchers with LocalSpark with
       ).foreach { case (df, expected) =>
         ytScan(df).getPartitions.length shouldBe buckets
         shouldReadRowsIntoTheirBuckets(df, expected)(scanRow)
+      }
+    }
+  }
+
+  it should "read matching rows when the second key is a YT decimal" in {
+    val table = s"$tmpPath-decimal-key"
+    val schema = TableSchema.builder()
+      .addKeyExpression(hashColumn, ColumnValueType.UINT64, s"farm_hash($keyColumn) % 1")
+      .addKey("amount", TiType.decimal(9, 0))
+      .addValue(keyColumn, ColumnValueType.INT64)
+      .build()
+    val rows = Seq(7L, 9L).map { key =>
+      new UnversionedRow(java.util.List.of(
+        new UnversionedValue(0, ColumnValueType.UINT64, false, 0L),
+        new UnversionedValue(1, ColumnValueType.STRING, false, textToBinary(key.toString, 9, 0)),
+        new UnversionedValue(2, ColumnValueType.INT64, false, key)))
+    }
+    writeTableFromURow(rows, table, schema)
+
+    def read(enabled: Boolean): Seq[Row] = {
+      val conf = bucketingConf ++ Map(pushdownEnabledKey -> enabled.toString, s"spark.yt.${Read.TypeV3.name}" -> "true")
+      withConfs(conf) {
+        val df = catalogTable(table).filter(col("amount") === new java.math.BigDecimal("7")).select(keyColumn)
+        shouldKeyPartitionsByBucket(ytScan(df), 1)
+        df.collect().toSeq
+      }
+    }
+
+    val expected = read(enabled = false)
+    expected shouldEqual Seq(Row(7L))
+    read(enabled = true) shouldEqual expected
+  }
+
+  it should "rebuild bucket ranges for changed and cleared runtime filters" in {
+    val conf = bucketingConf ++ Map(
+      pushdownEnabledKey -> "true",
+      s"spark.yt.${Read.KeyColumnsFilterPushdown.MergeAdjacentEnabled.name}" -> "false")
+    withConfs(conf) {
+      val scan = ytScan(catalogTable(bucketedTable).select(keyColumn, valueColumn))
+      scan.getPartitions.length shouldBe buckets
+      scan.filter(Array[Filter](EqualTo(keyColumn, 7L)))
+      shouldReadSingleKey(scan, 7L)
+      scan.filter(Array[Filter](In(keyColumn, Array[Any](2L, 7L, 13L))))
+      shouldKeyPartitionsByBucket(scan, buckets)
+      scan.getPartitions.foreach { partition =>
+        val lowerKeys = partition.files.toSeq.map { file =>
+          fileRange(file).lower.key.get(1).longValue()
+        }
+        lowerKeys shouldEqual Seq(2L, 7L, 13L)
+      }
+      scan.filter(Array.empty[Filter])
+      scan.getPartitions.foreach { partition =>
+        onlyRange(partition).lower.key.size() shouldBe 1
+      }
+      val df = catalogTable(bucketedTable).filter(col(keyColumn).isin(2L, 7L, 13L))
+      keyValueRows(df) should contain theSameElementsAs keyRows.filter(row => Set(2L, 7L, 13L).contains(row._1))
+    }
+  }
+
+  it should "read only the requested interval of the second key in each bucket" in {
+    withConfs(bucketingConf ++ Map(pushdownEnabledKey -> "true")) {
+      val df = catalogTable(bucketedTable).filter(col(keyColumn) >= 5L && col(keyColumn) <= 13L)
+      val scan = ytScan(df)
+      shouldKeyPartitionsByBucket(scan, buckets)
+      scan.getPartitions.foreach { partition =>
+        val range = onlyRange(partition)
+        range.lower.key.get(1).longValue() shouldBe 5L
+        range.upper.key.get(1).longValue() shouldBe 13L
+      }
+      keyValueRows(df) should contain theSameElementsAs keyRows.filter { case (key, _) => key >= 5L && key <= 13L }
+    }
+  }
+
+  it should "narrow bucket ranges and reduce scan output rows for a static key filter" in {
+    def scannedRows(enabled: Boolean): Long = {
+      withConfs(bucketingConf ++ Map(pushdownEnabledKey -> enabled.toString)) {
+        val df = catalogTable(bucketedTable).filter(col(keyColumn) === 7L).select(keyColumn, valueColumn)
+        if (enabled) {
+          shouldReadSingleKey(ytScan(df), 7L)
+        }
+        keyValueRows(df) should contain theSameElementsAs keyRows.filter(_._1 == 7L)
+        df.queryExecution.executedPlan.collectFirst {
+          case scan: BatchScanExec => scan.metrics("numOutputRows").value
+        }.get
+      }
+    }
+
+    val withoutPushdown = scannedRows(enabled = false)
+    val withPushdown = scannedRows(enabled = true)
+    withoutPushdown shouldBe keys.length.toLong
+    withPushdown should be < withoutPushdown
+  }
+
+  it should "limit bucket ranges without discarding values" in {
+    val conf = bucketingConf ++ Map(
+      pushdownEnabledKey -> "true",
+      s"spark.yt.${Read.KeyColumnsFilterPushdown.MergeAdjacentEnabled.name}" -> "false",
+      s"spark.yt.${Read.KeyColumnsFilterPushdown.YtPathCountLimit.name}" -> "2")
+    withConfs(conf) {
+      val df = catalogTable(bucketedTable).filter(col(keyColumn).isin(2L, 7L, 13L))
+      val scan = ytScan(df)
+      shouldKeyPartitionsByBucket(scan, buckets)
+      scan.getPartitions.foreach { partition =>
+        val range = onlyRange(partition)
+        range.lower.key.get(1).longValue() shouldBe 2L
+        range.upper.key.get(1).longValue() shouldBe 13L
+      }
+      keyValueRows(df) should contain theSameElementsAs keyRows.filter(row => Set(2L, 7L, 13L).contains(row._1))
+    }
+  }
+
+  it should "keep keyed empty partitions for contradictory static and runtime filters" in {
+    withConfs(bucketingConf ++ Map(pushdownEnabledKey -> "true")) {
+      val scan = ytScan(catalogTable(bucketedTable).filter(col(keyColumn) === 7L).select(keyColumn, valueColumn))
+      scan.filter(Array[Filter](EqualTo(keyColumn, 13L)))
+      shouldKeyPartitionsByBucket(scan, buckets)
+      all(scan.getPartitions.map(_.files.length)) shouldBe 0
+    }
+  }
+
+  it should "narrow bucket ranges with a dynamic pruning filter in a join" in {
+    val conf = bucketingConf ++ Map(
+      pushdownEnabledKey -> "true",
+      SQLConf.ADAPTIVE_EXECUTION_ENABLED.key -> "false",
+      "spark.sql.optimizer.dynamicPartitionPruning.enabled" -> "true")
+    withConfs(conf) {
+      val fact = catalogTable(bucketedTable).select(keyColumn, valueColumn)
+      val dimension = spark.range(1L, 25L).selectExpr("id AS dim_key", "id % 3 AS dim_group")
+        .filter(col("dim_group") === 1L)
+      val query = fact.join(broadcast(dimension), fact(keyColumn) === dimension("dim_key"))
+        .select(fact(keyColumn), fact(valueColumn))
+
+      query.queryExecution.executedPlan.toString.toLowerCase(Locale.ROOT) should include("dynamicpruning")
+      val expected = keyRows.filter(_._1 % 3L == 1L)
+      val expectedBounds = expected.map { case (key, _) => (key, key) }
+      keyValueRows(query) should contain theSameElementsAs expected
+      val scan = ytScan(query)
+      shouldKeyPartitionsByBucket(scan, buckets)
+      scan.getPartitions.foreach { partition =>
+        val bounds = partition.files.toSeq.map { file =>
+          val range = fileRange(file)
+          (range.lower.key.get(1).longValue(), range.upper.key.get(1).longValue())
+        }
+        bounds should contain theSameElementsAs expectedBounds
       }
     }
   }

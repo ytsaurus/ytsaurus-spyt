@@ -4,11 +4,11 @@ import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.expressions.GenericInternalRow
 import org.apache.spark.sql.connector.expressions.{FieldReference, LogicalExpressions, NamedReference, Transform}
 import org.apache.spark.sql.execution.datasources.{FilePartition, PartitionedFile, PartitioningAwareFileIndex}
-import org.apache.spark.sql.types.{DataType, StructField, StructType}
+import org.apache.spark.sql.types.{ByteType, DataType, IntegerType, LongType, ShortType, StructField, StructType}
 import org.slf4j.LoggerFactory
 
 import tech.ytsaurus.core.cypress.Range
-import tech.ytsaurus.spyt.common.utils.{AbstractSegment, PInfinity, RealValue, Segment, SegmentSet, TuplePoint}
+import tech.ytsaurus.spyt.common.utils.{AbstractSegment, PInfinity, Point, RealValue, Segment, SegmentSet, TuplePoint}
 import tech.ytsaurus.spyt.format.{YtInputSplit, YtPartitionedFileDelegate}
 import tech.ytsaurus.spyt.format.YtPartitionedFileDelegate.emptyInternalRow
 import tech.ytsaurus.spyt.format.bucketing.{HashFunctionParser, YtBucketingCatalog}
@@ -29,12 +29,29 @@ final class YtHashBucketing private (
   val transform: Transform,
   val numBuckets: Int,
   hashKey: String,
-  path: YtHadoopPath) {
+  path: YtHadoopPath,
+  sparkSession: SparkSession,
+  schema: StructType,
+  hintedColumns: Set[String],
+  loadBounds: Seq[String] => Map[String, (Point, Point)]) {
 
-  def partitions(schema: StructType, filters: SegmentSet, config: FilterPushdownConfig): Seq[FilePartition] = {
+  private val keys = SchemaConverter.filterPushdownKeys(schema)
+  private lazy val statisticsColumns = keys.drop(1).flatten.filter { name =>
+    !hintedColumns.contains(name.toLowerCase(Locale.ROOT)) && YtHashBucketing.findField(schema, name).exists { field =>
+      Seq(ByteType, ShortType, IntegerType, LongType, YtHashBucketing.uint64SparkType).contains(field.dataType)
+    }
+  }
+
+  // Without a transaction that pins the same snapshot for statistics and reads, concurrent table
+  // changes can make cached bounds stale and cause matching rows to be skipped.
+  private lazy val bounds = loadBounds(statisticsColumns)
+
+  def partitions(pushedFilters: SegmentSet, config: FilterPushdownConfig): Seq[FilePartition] = {
     val tablePath = path.toYPath
     val byteLength = Math.max(path.meta.size / numBuckets, 1L)
-    val keys = SchemaConverter.filterPushdownKeys(schema)
+    val clip = config.enabled && sparkSession.ytConf(SparkYtConfiguration.Read.HashBucketing.ClipRangesByStatistics) &&
+      statisticsColumns.exists(k => Option(pushedFilters.map.get(k)).exists(_.size > 1))
+    val filters = if (clip) YtHashBucketing.clipToBounds(pushedFilters, bounds) else pushedFilters
     val pushdownEnabled = config.enabled && !filters.map.isEmpty
     val emptyScan = pushdownEnabled && filters.map.values().asScala.exists(_.isEmpty)
 
@@ -88,14 +105,15 @@ object YtHashBucketing {
     fullDataSchema: StructType,
     readDataSchema: StructType,
     readPartitionSchema: StructType,
-    options: Map[String, String]): Option[YtHashBucketing] = {
+    options: Map[String, String],
+    loadBounds: (YtHadoopPath, Seq[String]) => Map[String, (Point, Point)]): Option[YtHashBucketing] = {
     if (!applicable(sparkSession, fileIndex, readPartitionSchema, options)) {
       None
     } else {
       for {
         columns <- bucketColumns(fullDataSchema, readDataSchema)
         path <- singleStaticTable(fileIndex)
-        bucketing <- build(path, columns, maxBucketCount(sparkSession), SchemaConverter.hintedColumns(options))
+        bucketing <- build(sparkSession, path, columns, fullDataSchema, SchemaConverter.hintedColumns(options), loadBounds)
       } yield bucketing
     }
   }
@@ -169,10 +187,13 @@ object YtHashBucketing {
   }
 
   private def build(
+    sparkSession: SparkSession,
     path: YtHadoopPath,
     columns: BucketColumns,
-    maxBuckets: Int,
-    hintedColumns: Set[String]): Option[YtHashBucketing] = {
+    schema: StructType,
+    hintedColumns: Set[String],
+    loadBounds: (YtHadoopPath, Seq[String]) => Map[String, (Point, Point)]): Option[YtHashBucketing] = {
+    val maxBuckets = maxBucketCount(sparkSession)
     val refusal = if (columns.buckets > maxBuckets) {
       Some(s"is split into ${columns.buckets} buckets, more than $maxBuckets allowed by $maxBucketsKeys")
     } else if (columns.arguments.length != 1) {
@@ -190,8 +211,19 @@ object YtHashBucketing {
         log.debug(s"$hashColumn splits the scan into ${columns.buckets} bucketed partitions")
         val argument = FieldReference.column(columns.arguments.head.name)
         val transform = LogicalExpressions.bucket(columns.buckets, Array[NamedReference](argument))
-        Some(new YtHashBucketing(transform, columns.buckets, MetadataFields.getOriginalName(columns.hashField), path))
+        Some(new YtHashBucketing(transform, columns.buckets, MetadataFields.getOriginalName(columns.hashField),
+          path, sparkSession, schema, hintedColumns, names => loadBounds(path, names)))
     }
+  }
+
+  private[v2] def clipToBounds(filters: SegmentSet, bounds: Map[String, (Point, Point)]): SegmentSet = {
+    val clipped = filters.map.asScala.map { case (column, segments) =>
+      column -> bounds.get(column).fold(segments) { case (lo, hi) =>
+        // YT min/max only describe non-null values.
+        segments.filter(s => s.left <= RealValue(null) || (s.right >= lo && s.left <= hi))
+      }
+    }
+    SegmentSet(clipped.toMap.asJava)
   }
 
   private[v2] def intersectBucket(

@@ -17,15 +17,19 @@ import tech.ytsaurus.core.common.Decimal.textToBinary
 import tech.ytsaurus.core.cypress.Range
 import tech.ytsaurus.core.tables.{ColumnValueType, TableSchema}
 import tech.ytsaurus.spyt.YtReader
+import tech.ytsaurus.spyt.common.utils.{ExpressionTransformer, RealValue}
 import tech.ytsaurus.spyt.format.YPathUtils.RichRangeCriteria
 import tech.ytsaurus.spyt.format.YtPartitionedFileDelegate.YtPartitionedFile
 import tech.ytsaurus.spyt.format.bucketing.HashBucketingTestUtils
+import tech.ytsaurus.spyt.format.conf.FilterPushdownConfig
 import tech.ytsaurus.spyt.format.conf.SparkYtConfiguration.Read
 import tech.ytsaurus.spyt.format.conf.SparkYtInternalConfiguration
 import tech.ytsaurus.spyt.test.{LocalSpark, TmpDir}
 import tech.ytsaurus.typeinfo.TiType
 
 import java.util.Locale
+
+import scala.jdk.CollectionConverters._
 
 class YtHashBucketingTest extends AnyFlatSpec with Matchers with LocalSpark with TmpDir
   with HashBucketingTestUtils {
@@ -320,6 +324,47 @@ class YtHashBucketingTest extends AnyFlatSpec with Matchers with LocalSpark with
     val withPushdown = scannedRows(enabled = true)
     withoutPushdown shouldBe keys.length.toLong
     withPushdown should be < withoutPushdown
+  }
+
+  it should "load bucket bounds lazily and reuse them across partition rebuilds" in {
+    val conf = bucketingConf ++ Map(pushdownEnabledKey -> "true")
+    withConfs(conf) {
+      val scan = ytScan(catalogTable(bucketedTable).select(keyColumn, valueColumn))
+      var requests = 0
+      val bucketing = YtHashBucketing.tryBuild(
+        scan.sparkSession,
+        scan.fileIndex,
+        scan.fullDataSchema,
+        scan.readDataSchema,
+        scan.readPartitionSchema,
+        scan.options.asScala.toMap,
+        (_, _) => {
+          requests += 1
+          Map(keyColumn -> (RealValue(1L), RealValue(24L)))
+        }).get
+      val config = FilterPushdownConfig(scan.sparkSession)
+      val oneKey = ExpressionTransformer.filtersToSegmentSet(Seq(EqualTo(keyColumn, 7L)))
+      val multipleKeys = ExpressionTransformer.filtersToSegmentSet(Seq(In(keyColumn, Array[Any](7L, 100L))))
+
+      bucketing.partitions(oneKey, config)
+      bucketing.partitions(multipleKeys, config.copy(enabled = false))
+      requests shouldBe 0
+      bucketing.partitions(multipleKeys, config)
+      bucketing.partitions(multipleKeys, config)
+      requests shouldBe 1
+    }
+  }
+
+  it should "drop out-of-table runtime keys by default while keeping one partition per bucket" in {
+    val conf = bucketingConf ++ Map(pushdownEnabledKey -> "true")
+    withConfs(conf) {
+      val scan = ytScan(catalogTable(bucketedTable).select(keyColumn, valueColumn))
+      scan.filter(Array[Filter](In(keyColumn, Array[Any](-10L, 7L, 100L))))
+      shouldReadSingleKey(scan, 7L)
+      scan.filter(Array[Filter](In(keyColumn, Array[Any](-10L, 100L))))
+      shouldKeyPartitionsByBucket(scan, buckets)
+      all(scan.getPartitions.map(_.files.length)) shouldBe 0
+    }
   }
 
   it should "limit bucket ranges without discarding values" in {

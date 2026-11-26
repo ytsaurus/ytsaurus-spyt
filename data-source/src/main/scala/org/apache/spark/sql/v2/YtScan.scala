@@ -15,19 +15,29 @@ import org.apache.spark.sql.util.CaseInsensitiveStringMap
 import org.apache.spark.sql.v2.YtFilePartition.tryGetKeyPartitions
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.util.SerializableConfiguration
+import org.slf4j.LoggerFactory
+
+import tech.ytsaurus.client.rows.UnversionedValue
+import tech.ytsaurus.core.tables.ColumnValueType
 import tech.ytsaurus.spyt.SparkAdapter
-import tech.ytsaurus.spyt.common.utils.{ExpressionTransformer, SegmentSet}
+import tech.ytsaurus.spyt.common.utils.{ExpressionTransformer, Point, RealValue, SegmentSet}
+import tech.ytsaurus.spyt.format.StatisticsReporter
 import tech.ytsaurus.spyt.format.conf.SparkYtConfiguration.YtReadSettingsFactory
 import tech.ytsaurus.spyt.format.conf.{FilterPushdownConfig, KeyPartitioningConfig, SparkYtConfiguration, YtTableSparkSettings}
 import tech.ytsaurus.spyt.fs.YtHadoopPath
 import tech.ytsaurus.spyt.logger.{YtDynTableLogger, YtDynTableLoggerConfig, YtLogger}
 import tech.ytsaurus.spyt.serializers.SchemaConverter
-import tech.ytsaurus.spyt.wrapper.client.YtThrottle
+import tech.ytsaurus.spyt.types.UInt64Long
+import tech.ytsaurus.spyt.wrapper.YtJavaConverters.toOption
+import tech.ytsaurus.spyt.wrapper.YtWrapper
+import tech.ytsaurus.spyt.wrapper.client.YtClientConfigurationConverter.ytClientConfiguration
+import tech.ytsaurus.spyt.wrapper.client.{YtClientProvider, YtThrottle}
 import tech.ytsaurus.spyt.wrapper.config.SparkYtSparkSession
 
 import java.util.concurrent.CompletableFuture
 import java.util.{Locale, OptionalLong}
 import scala.jdk.CollectionConverters._
+import scala.util.control.NonFatal
 
 case class YtScan(
   sparkSession: SparkSession,
@@ -62,7 +72,8 @@ case class YtScan(
         fullDataSchema,
         readDataSchema,
         readPartitionSchema,
-        options.asScala.toMap)
+        options.asScala.toMap,
+        (path, columns) => YtScan.fetchKeyBounds(sparkSession, path, columns))
     }
   }
 
@@ -181,7 +192,7 @@ case class YtScan(
   override protected def partitions: Seq[FilePartition] = {
     cachedPartitions.getOrElse {
       val computed = keyPartitionsHint.orElse(hashBucketing.map { bucketing =>
-        bucketing.partitions(fullDataSchema, effectiveFilterSegments, filterPushdownConf)
+        bucketing.partitions(effectiveFilterSegments, filterPushdownConf)
       }).getOrElse {
         val splitFiles = preparePartitioning()
         YtFilePartition.getFilePartitions(splitFiles)
@@ -273,6 +284,41 @@ case class YtScan(
 }
 
 object YtScan {
+  private val log = LoggerFactory.getLogger(getClass)
+
+  private def fetchKeyBounds(
+    spark: SparkSession,
+    path: YtHadoopPath,
+    columns: Seq[String]): Map[String, (Point, Point)] = {
+    try {
+      implicit val yt = YtClientProvider.ytClientWithProxy(
+        ytClientConfiguration(spark.sessionState.conf), path.ypath.cluster, Some(StatisticsReporter))
+      val paths = Seq(path.toYPath.withColumns(columns.asJava))
+      val stats = YtWrapper.columnarStatistics(paths, path.ypath.transaction).head
+      if (!toOption(stats.getLegacyChunkRowCount).exists(_.longValue() == 0L)) {
+        Map.empty
+      } else {
+        columns.zip(stats.getColumnMinValues.asScala.zip(stats.getColumnMaxValues.asScala)).flatMap {
+          case (column, (min, max)) =>
+            for {
+              lo <- integerPoint(min)
+              hi <- integerPoint(max)
+            } yield column -> (lo, hi)
+        }.toMap
+      }
+    } catch {
+      case NonFatal(e) =>
+        log.warn(s"Could not fetch bucket key bounds for ${path.toStringPath}", e)
+        Map.empty
+    }
+  }
+
+  private def integerPoint(value: UnversionedValue): Option[Point] = value.getType match {
+    case ColumnValueType.INT64 => Some(RealValue(value.longValue()))
+    case ColumnValueType.UINT64 => Some(RealValue(UInt64Long(value.longValue())))
+    case _ => None
+  }
+
   type ScanDescription = (YtScan, Seq[String])
 
   def trySyncKeyPartitioning(leftScanDescO: Option[ScanDescription], rightScanDescO: Option[ScanDescription]

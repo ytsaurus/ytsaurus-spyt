@@ -26,6 +26,14 @@ class YtBucketIntersectionTest extends AnyFlatSpec with Matchers {
 
   behavior of "bucket filter intersection"
 
+  it should "keep nulls, boundary points and columns without min/max" in {
+    val points = Seq(Segment(RealValue(null)), Segment(RealValue(-1L)), Segment(RealValue(1L)), Segment(RealValue(24L)))
+    val filters = SegmentSet("date", points: _*)
+    YtHashBucketing.clipToBounds(filters, Map.empty) shouldEqual filters
+    val bounds = Map("date" -> (RealValue(1L), RealValue(24L)))
+    YtHashBucketing.clipToBounds(filters, bounds) shouldEqual SegmentSet("date", points.head, points(2), points.last)
+  }
+
   it should "reuse normalized segments for unaffected columns" in {
     val filters = SegmentSet.intercept(SegmentSet("item", Segment(RealValue(3L)), Segment(RealValue(5L))))
     val actual = YtHashBucketing.intersectBucket(filters, HASH_KEY, bucket(1))

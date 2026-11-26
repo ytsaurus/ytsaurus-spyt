@@ -85,6 +85,9 @@ object SparkYtConfiguration {
       case object Enabled extends ConfigEntry[Boolean](s"$prefix.enabled", Some(false))
 
       case object MaxBuckets extends ConfigEntry[Int](s"$prefix.maxBuckets", Some(4096))
+
+      // TODO: Consider removing this setting when bucketing is stable.
+      case object ClipRangesByStatistics extends ConfigEntry[Boolean](s"$prefix.clipRangesByStatistics", Some(true))
     }
 
     object KeyColumnsFilterPushdown {

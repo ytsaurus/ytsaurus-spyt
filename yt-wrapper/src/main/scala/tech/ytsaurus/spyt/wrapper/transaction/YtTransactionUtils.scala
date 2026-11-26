@@ -112,44 +112,44 @@ trait YtTransactionUtils {
     yt.existsNode(s"//sys/transactions/$transaction").get()
   }
 
+  private def applyOptionalTransaction[T](request: T, transaction: Option[String])
+    (setOptions: (T, TransactionalOptions) => Unit): T = {
+    transaction.foreach(id => setOptions(request, new TransactionalOptions(GUID.valueOf(id))))
+    request
+  }
+
   implicit class RichTransactionalRequestBuilder[T <: TransactionalRequest.Builder[_, _]](val request: T) {
-    def optionalTransaction(transaction: Option[String]): T = {
-      transaction.map { t =>
-        request.setTransactionalOptions(new TransactionalOptions(GUID.valueOf(t))).asInstanceOf[T]
-      }.getOrElse(request)
-    }
+    def optionalTransaction(transaction: Option[String]): T =
+      applyOptionalTransaction(request, transaction)((builder, options) => builder.setTransactionalOptions(options))
   }
 
   implicit class RichWriteFileRequest[T <: WriteFile.Builder](val request: T) {
-    def optionalTransaction(transaction: Option[String]): T = {
-      transaction.map { t =>
-        request.setTransactionalOptions(new TransactionalOptions(GUID.valueOf(t))).asInstanceOf[T]
-      }.getOrElse(request)
-    }
+    def optionalTransaction(transaction: Option[String]): T =
+      applyOptionalTransaction(request, transaction)((builder, options) => builder.setTransactionalOptions(options))
   }
 
   implicit class RichReadFileRequest[T <: ReadFile.Builder](val request: T) {
-    def optionalTransaction(transaction: Option[String]): T = {
-      transaction.map { t =>
-        request.setTransactionalOptions(new TransactionalOptions(GUID.valueOf(t))).asInstanceOf[T]
-      }.getOrElse(request)
-    }
+    def optionalTransaction(transaction: Option[String]): T =
+      applyOptionalTransaction(request, transaction)((builder, options) => builder.setTransactionalOptions(options))
   }
 
   implicit class RichStartOperationRequest[T <: StartOperation.Builder](val request: T) {
-    def optionalTransaction(transaction: Option[String]): T = {
-      transaction.map { t =>
-        request.setTransactionalOptions(new TransactionalOptions(GUID.valueOf(t))).asInstanceOf[T]
-      }.getOrElse(request)
-    }
+    def optionalTransaction(transaction: Option[String]): T =
+      applyOptionalTransaction(request, transaction)((builder, options) => builder.setTransactionalOptions(options))
   }
 
   implicit class RichReadTableRequest[T <: ReadTable.Builder[_]](val request: T) {
-    def optionalTransaction(transaction: Option[String]): T = {
-      transaction.map { t =>
-        request.setTransactionalOptions(new TransactionalOptions(GUID.valueOf(t))).asInstanceOf[T]
-      }.getOrElse(request)
-    }
+    def optionalTransaction(transaction: Option[String]): T =
+      applyOptionalTransaction(request, transaction)((builder, options) => builder.setTransactionalOptions(options))
   }
 
+  implicit class RichPartitionTablesRequest(val request: PartitionTables.Builder) {
+    def optionalTransaction(transaction: Option[String]): PartitionTables.Builder =
+      applyOptionalTransaction(request, transaction)((builder, options) => builder.setTransactionalOptions(options))
+  }
+
+  implicit class RichGetColumnarStatisticsRequest(val request: GetColumnarStatistics.Builder) {
+    def optionalTransaction(transaction: Option[String]): GetColumnarStatistics.Builder =
+      applyOptionalTransaction(request, transaction)((builder, options) => builder.setTransactionalOptions(options))
+  }
 }

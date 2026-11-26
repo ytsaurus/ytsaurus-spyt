@@ -60,6 +60,12 @@ trait YtTableUtils {
     yt.createNode(request).join()
   }
 
+  def columnarStatistics(paths: Seq[YPath], transaction: Option[String])
+    (implicit yt: CompoundClient): Seq[ColumnarStatistics] = {
+    val request = GetColumnarStatistics.builder().setPaths(paths.asJava).optionalTransaction(transaction)
+    yt.getColumnarStatistics(request.build()).join().asScala.toSeq
+  }
+
   def readTable[T](path: YPath, deserializer: WireRowDeserializer[T],
     timeout: Duration = Duration.ofMinutes(1), transaction: Option[String] = None)
     (implicit ytReadContext: YtReadContext): SyncTableIterator[T] = {
@@ -182,7 +188,7 @@ trait YtTableUtils {
     val builder = PartitionTables.builder()
       .setPaths(java.util.List.of[YPath](path))
       .setPartitionMode(PartitionTablesMode.Ordered)
-      .setTransactionalOptions(transaction.map(t => new TransactionalOptions(GUID.valueOf(t))).orNull)
+      .optionalTransaction(transaction)
       .setOmitInaccessibleRows(ytReadContext.settings.omitInaccessibleRows)
       .setEnableCookies(enableCookies)
       .setRequestId(ytReadContext.requestId)

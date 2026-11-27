@@ -82,9 +82,12 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Run sbt build
+      - name: Run gradle build
         run: |
-          ./gradlew assemble -PcustomSpytVersion=${{ needs.prepare_env.outputs.release_version }}
+          ./gradlew assemble -PcustomSpytVersion=${{ needs.prepare_env.outputs.release_version }} \
+            -Dorg.gradle.internal.http.connectionTimeout=120000 \
+            -Dorg.gradle.internal.http.socketTimeout=120000 \
+            --refresh-dependencies
 
   publish_to_pypi:
     name: Publish SPYT artifacts to PyPi

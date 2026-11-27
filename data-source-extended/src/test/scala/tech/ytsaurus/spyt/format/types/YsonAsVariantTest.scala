@@ -63,6 +63,7 @@ class YsonAsVariantTest extends AnyFlatSpec with Matchers with LocalSpark with T
     s"spark.yt.${Read.KeyPartitioning.Enabled.name}" -> "true",
     s"spark.yt.${Read.KeyPartitioning.UnionLimit.name}" -> "2",
     s"spark.yt.${Read.PlanOptimizationEnabled.name}" -> "true",
+    s"spark.yt.${Read.YtDistributedReadingEnabled.name}" -> "false",
     s"spark.yt.${Read.KeyColumnsFilterPushdown.Enabled.name}" -> "true",
     "spark.sql.adaptive.enabled" -> "false",
     "spark.sql.files.maxPartitionBytes" -> "1Kb",

@@ -30,6 +30,7 @@ class YtSortedTableJoinTest extends AnyFlatSpec with Matchers with LocalSpark wi
     s"spark.yt.${SparkYtConfiguration.Read.KeyPartitioning.Enabled.name}" -> "true",
     s"spark.yt.${SparkYtConfiguration.Read.KeyPartitioning.UnionLimit.name}" -> "2",
     s"spark.yt.${SparkYtConfiguration.Read.PlanOptimizationEnabled.name}" -> "true",
+    s"spark.yt.${SparkYtConfiguration.Read.YtDistributedReadingEnabled.name}" -> "false",
     "spark.sql.adaptive.enabled" -> "false",
     "spark.sql.autoBroadcastJoinThreshold" -> "-1",
     "spark.sql.files.maxPartitionBytes" -> "1Kb",

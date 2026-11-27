@@ -18,6 +18,8 @@ class YtOutputCommitProtocolTest extends AnyFlatSpec with Matchers with LocalSpa
 
   override def reinstantiateSparkSession: Boolean = true
 
+  override def sparkConf: SparkConf = super.sparkConf.set("spark.ytsaurus.write.distributed.enabled", "false")
+
   behavior of "YtOutputCommitProtocol"
 
   it should "not duplicate output data in case of failures after commiting a task" in withSparkSession(Map(

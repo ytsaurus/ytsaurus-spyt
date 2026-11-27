@@ -13,15 +13,13 @@ class YtDistributedReadingTest extends AnyFlatSpec with Matchers with LocalSpark
   private val sqlImplicits = SparkAdapter.instance.sparkImplicits(spark)
   import sqlImplicits._
 
-  "YtPartitionedFileDelegate" should "have a cookie when distributed reading is enabled" in {
+  "YtPartitionedFileDelegate" should "have a cookie by default" in {
     val data = (0 until 200).map(x => (x / 200, x / 200, -x))
     data.toDF("a", "b", "c").write.sortedBy("a", "b").yt(tmpPath)
 
-    withConfs(distributedReadingEnabledConf(true)) {
-      val delegates: Seq[YtPartitionedFileDelegate] = getDelegatesForTable(spark, tmpPath)
-      delegates should not be empty
-      all(delegates.map(_.cookie.nonEmpty)) shouldBe true
-    }
+    val delegates: Seq[YtPartitionedFileDelegate] = getDelegatesForTable(spark, tmpPath)
+    delegates should not be empty
+    all(delegates.map(_.cookie.nonEmpty)) shouldBe true
   }
 
   it should "fall back to regular reading for ordered dynamic tables" in {

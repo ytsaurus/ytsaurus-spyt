@@ -1,5 +1,6 @@
 package tech.ytsaurus.spyt.format
 
+import org.apache.spark.SparkConf
 import org.apache.spark.sql.{Row, SaveMode}
 import org.apache.spark.sql.types.{IntegerType, LongType, StringType, StructField, StructType}
 import org.scalatest.flatspec.AnyFlatSpec
@@ -11,8 +12,9 @@ import tech.ytsaurus.spyt.wrapper.YtWrapper
 
 
 class HivePartitioningTest extends AnyFlatSpec with TmpDir with LocalSpark with Matchers with TestUtils {
-  private val sqlImplicits = SparkAdapter.instance.sparkImplicits(spark)
-  import sqlImplicits._
+  override def reinstantiateSparkSession: Boolean = true
+
+  override def sparkConf: SparkConf = super.sparkConf.set("spark.ytsaurus.write.distributed.enabled", "false")
 
   private val ytSchema = TableSchema.builder()
     .setUniqueKeys(false)
@@ -30,6 +32,9 @@ class HivePartitioningTest extends AnyFlatSpec with TmpDir with LocalSpark with 
     .add(StructField("internal", IntegerType))
 
   it should "read partitioned data with recursiveFileLookup option set to false" in {
+    val sqlImplicits = SparkAdapter.instance.sparkImplicits(spark)
+    import sqlImplicits._
+
     createHivePartitionedTable()
 
     val df = spark.read.option("recursiveFileLookup", "false").yt(tmpPath)
@@ -64,6 +69,9 @@ class HivePartitioningTest extends AnyFlatSpec with TmpDir with LocalSpark with 
   }
 
   it should "write hive partitioned data" in {
+    val sqlImplicits = SparkAdapter.instance.sparkImplicits(spark)
+    import sqlImplicits._
+
     val originDF = Seq(("alice", 1L), ("bob", 2L), ("alice", 3L)).toDF("name", "value")
     originDF.write.partitionBy("name").yt(tmpPath)
 
@@ -81,6 +89,9 @@ class HivePartitioningTest extends AnyFlatSpec with TmpDir with LocalSpark with 
   }
 
   it should "partition by few columns" in {
+    val sqlImplicits = SparkAdapter.instance.sparkImplicits(spark)
+    import sqlImplicits._
+
     val originDF = Seq(("alice", "s1", 1L), ("bob", "s1", 4L), ("bob", "s2", 2L), ("alice", "s3", 3L))
       .toDF("name", "surname", "value")
     originDF.write.partitionBy("surname", "name").yt(tmpPath)
@@ -100,6 +111,9 @@ class HivePartitioningTest extends AnyFlatSpec with TmpDir with LocalSpark with 
   }
 
   it should "support static partition overwrite" in {
+    val sqlImplicits = SparkAdapter.instance.sparkImplicits(spark)
+    import sqlImplicits._
+
     val df = Seq((1L, 1000), (2L, 2000), (2L, 1500), (2L, 2500)).toDF("id", "price")
     df.write.partitionBy("id").yt(tmpPath)
 
@@ -111,6 +125,9 @@ class HivePartitioningTest extends AnyFlatSpec with TmpDir with LocalSpark with 
   }
 
   it should "support dynamic partition overwrite" in {
+    val sqlImplicits = SparkAdapter.instance.sparkImplicits(spark)
+    import sqlImplicits._
+
     val df = Seq((1L, "11"), (2L, "14")).toDF("id", "place")
     df.write.partitionBy("id").yt(tmpPath)
 

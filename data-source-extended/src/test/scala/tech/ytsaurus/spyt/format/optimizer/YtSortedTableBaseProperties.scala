@@ -31,6 +31,7 @@ private class YtSortedTableBaseProperties extends AnyFlatSpec with Matchers with
     // Test key-prefix eligibility independently of how duplicate keys coalesce adjacent splits.
     s"spark.yt.${SparkYtConfiguration.Read.KeyPartitioning.UnionLimit.name}" -> Int.MaxValue.toString,
     s"spark.yt.${SparkYtConfiguration.Read.PlanOptimizationEnabled.name}" -> "true",
+    s"spark.yt.${SparkYtConfiguration.Read.YtDistributedReadingEnabled.name}" -> "false",
     "spark.sql.adaptive.enabled" -> "false",
     "spark.sql.autoBroadcastJoinThreshold" -> "-1",
     "spark.sql.files.maxPartitionBytes" -> "10Kb",

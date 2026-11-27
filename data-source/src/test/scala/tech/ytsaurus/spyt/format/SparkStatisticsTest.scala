@@ -1,5 +1,6 @@
 package tech.ytsaurus.spyt.format
 
+import org.apache.spark.SparkConf
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import tech.ytsaurus.spyt.test.{LocalSpark, SparkMetricsUtils, TestUtils, TmpDir}
@@ -9,12 +10,16 @@ import tech.ytsaurus.spyt.format.conf.{SparkYtConfiguration => SparkSettings}
 class SparkStatisticsTest extends AnyFlatSpec with Matchers with LocalSpark with TmpDir with TestUtils
   with YtDistributedReadingTestUtils with SparkMetricsUtils {
 
+  override def reinstantiateSparkSession: Boolean = true
+
+  override def sparkConf: SparkConf = super.sparkConf.set("spark.ytsaurus.write.distributed.enabled", "false")
+
   behavior of "Spark statistics"
 
-  private val sqlImplicits = SparkAdapter.instance.sparkImplicits(spark)
-  import sqlImplicits._
-
   testWithDistributedReading("correctly calculate bytes written for simple write"){ _ =>
+    val sqlImplicits = SparkAdapter.instance.sparkImplicits(spark)
+    import sqlImplicits._
+
     val data = (0 until 100).map(x => (x, x * 2, x * 3))
     val df = data.toDF("col1", "col2", "col3")
 
@@ -30,6 +35,9 @@ class SparkStatisticsTest extends AnyFlatSpec with Matchers with LocalSpark with
   }
 
   testWithDistributedReading("correctly calculate bytes read for simple read"){ _ =>
+    val sqlImplicits = SparkAdapter.instance.sparkImplicits(spark)
+    import sqlImplicits._
+
     val data = (0 until 100).map(x => (x, x * 2, x * 3))
     val df = data.toDF("col1", "col2", "col3")
     df.write.yt(tmpPath)
@@ -44,6 +52,9 @@ class SparkStatisticsTest extends AnyFlatSpec with Matchers with LocalSpark with
 
   testWithDistributedReading("correctly account only processed data after filter"){ _ =>
     whenSparkVersionAtLeast("3.3.0") {
+      val sqlImplicits = SparkAdapter.instance.sparkImplicits(spark)
+      import sqlImplicits._
+
       val data = (0 until 1000).map(x => (x, x % 2 == 0))
       val df = data.toDF("id", "is_even")
 
@@ -67,6 +78,9 @@ class SparkStatisticsTest extends AnyFlatSpec with Matchers with LocalSpark with
 
   testWithDistributedReading("track metrics for read-write pipeline"){ _ =>
     whenSparkVersionAtLeast("3.3.0") {
+      val sqlImplicits = SparkAdapter.instance.sparkImplicits(spark)
+      import sqlImplicits._
+
       val sourceData = (0 until 200).map(x => (x, x * 2, x * 3))
       val sourceDf = sourceData.toDF("col1", "col2", "col3")
       sourceDf.write.yt(s"$tmpPath/source")
@@ -88,6 +102,9 @@ class SparkStatisticsTest extends AnyFlatSpec with Matchers with LocalSpark with
 
   testWithDistributedReading("pushdown filters reduce data weight") { _ =>
     whenSparkVersionAtLeast("3.3.0") {
+      val sqlImplicits = SparkAdapter.instance.sparkImplicits(spark)
+      import sqlImplicits._
+
       (1L to 1000L).map(x => (x, x % 2, s"string_$x")).toDF("a", "b", "text")
         .repartition(2).sort("a", "b").write.sortedBy("a", "b").yt(tmpPath)
 
@@ -106,6 +123,9 @@ class SparkStatisticsTest extends AnyFlatSpec with Matchers with LocalSpark with
 
   testWithDistributedReading("track metrics for join operations"){ _ =>
     whenSparkVersionAtLeast("3.3.0") {
+      val sqlImplicits = SparkAdapter.instance.sparkImplicits(spark)
+      import sqlImplicits._
+
       val data1 = (0 until 100).map(x => (x, x * 2)).toDF("id", "val1")
       val data2 = (0 until 100).map(x => (x, x * 3)).toDF("id", "val2")
 
@@ -128,6 +148,9 @@ class SparkStatisticsTest extends AnyFlatSpec with Matchers with LocalSpark with
 
   testWithDistributedReading("track metrics for aggregation operations"){ _ =>
     whenSparkVersionAtLeast("3.3.0") {
+      val sqlImplicits = SparkAdapter.instance.sparkImplicits(spark)
+      import sqlImplicits._
+
       val data = (0 until 1000).map(x => (x % 10, x))
       val df = data.toDF("group_id", "value")
 

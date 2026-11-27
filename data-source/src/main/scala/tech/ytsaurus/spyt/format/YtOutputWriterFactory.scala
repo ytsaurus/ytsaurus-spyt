@@ -27,8 +27,8 @@ class YtOutputWriterFactory(ytClientConf: YtClientConfiguration,
 
     implicit val ytClient: CompoundClient = YtClientProvider.ytClient(ytClientConf, Some(StatisticsReporter))
 
-    if (writeConfiguration.distributedWrite) {
-      val cookie = YtOutputCommitProtocol.getCookieForTask(context)
+    val cookie = YtOutputCommitProtocol.getCookieForTask(context)
+    if (cookie != null) {
       val sortOption = SchemaConverter.getSortOption(context.getConfiguration)
       val idMapping = context.getConfiguration.getYtConf(IdMapping)
       val baseSchema = context.getConfiguration.getYtConf(BaseSchema)

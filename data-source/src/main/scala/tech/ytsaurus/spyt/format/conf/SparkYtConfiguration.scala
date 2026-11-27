@@ -31,7 +31,7 @@ object SparkYtConfiguration {
 
       private val prefix = s"${Write.prefix}.distributed"
 
-      case object Enabled extends ConfigEntry[Boolean](s"$prefix.enabled", Some(false))
+      case object Enabled extends ConfigEntry[Boolean](s"$prefix.enabled", Some(true))
     }
   }
 
@@ -55,7 +55,7 @@ object SparkYtConfiguration {
       extends ConfigEntry[Boolean](s"$prefix.ytOmitInaccessibleColumns.enabled", Some(true))
 
     case object YtDistributedReadingEnabled
-      extends ConfigEntry[Boolean](s"$prefix.ytDistributedReading.enabled", Some(false))
+      extends ConfigEntry[Boolean](s"$prefix.ytDistributedReading.enabled", Some(true))
 
     case object CountOptimizationEnabled
       extends ConfigEntry[Boolean](s"$prefix.countOptimization.enabled", Some(true))

@@ -28,7 +28,6 @@ class YtDistributedWriterTest extends AnyFlatSpec with DescendingSortOrderSuppor
 
   override def sparkConf: SparkConf = {
     super.sparkConf
-      .set("spark.yt.write.distributed.enabled", "true")
       .set("spark.sql.adaptive.coalescePartitions.enabled", "false")
       .set("spark.sql.shuffle.partitions", "10")
   }

@@ -25,7 +25,9 @@ trait YtDistributedReadingTestUtils extends AnyFlatSpec with Matchers with Local
       List(test1Base, test2Base).map(t => if (tag.isDefined) t.taggedAs(tag.get).in(_) else t.in(_))
 
     test1 {
-      testBody(false)
+      withConf(SparkYtConfiguration.Read.YtDistributedReadingEnabled, false) {
+        testBody(false)
+      }
     }
 
     test2 {

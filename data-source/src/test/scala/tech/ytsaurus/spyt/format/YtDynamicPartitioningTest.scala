@@ -50,10 +50,12 @@ class YtDynamicPartitioningTest extends AnyFlatSpec with Matchers with LocalSpar
   }
 
   it should "use chunk partitioning when disabled" in {
-    val dfNoOpt = spark.read.yt(testBigTablePath)
-    val keys = getParsedKeys(dfNoOpt)
-    keys.length shouldBe 2
-    dfNoOpt.selectAs[TestRow].collect() should contain theSameElementsAs testDataBigTable
+    withConf(SparkYtConfiguration.Read.YtDistributedReadingEnabled, false) {
+      val dfNoOpt = spark.read.yt(testBigTablePath)
+      val keys = getParsedKeys(dfNoOpt)
+      keys.length shouldBe 2
+      dfNoOpt.selectAs[TestRow].collect() should contain theSameElementsAs testDataBigTable
+    }
   }
 
   it should "read static table with no chunk" in {

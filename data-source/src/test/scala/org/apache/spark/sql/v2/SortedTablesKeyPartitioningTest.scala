@@ -41,6 +41,7 @@ class SortedTablesKeyPartitioningTest extends AnyFlatSpec with Matchers with Loc
 
   override def beforeAll(): Unit = {
     super.beforeAll()
+    spark.conf.set(s"spark.yt.${SparkYtConfiguration.Read.YtDistributedReadingEnabled.name}", value = false)
     spark.conf.set(s"spark.yt.${SparkYtConfiguration.Read.KeyPartitioning.Enabled.name}", value = true)
     spark.conf.set(s"spark.yt.${SparkYtConfiguration.Read.KeyPartitioning.UnionLimit.name}", value = 2)
   }

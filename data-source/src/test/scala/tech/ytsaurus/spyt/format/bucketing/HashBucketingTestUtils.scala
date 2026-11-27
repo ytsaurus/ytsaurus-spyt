@@ -13,7 +13,7 @@ import tech.ytsaurus.core.GUID
 import tech.ytsaurus.core.cypress.CypressNodeType
 import tech.ytsaurus.core.tables.{ColumnValueType, TableSchema}
 import tech.ytsaurus.rpcproxy.EOperationType
-import tech.ytsaurus.spyt.format.conf.SparkYtConfiguration.Read.HashBucketing
+import tech.ytsaurus.spyt.format.conf.SparkYtConfiguration.Read.{HashBucketing, YtDistributedReadingEnabled}
 import tech.ytsaurus.spyt.test.{LocalSpark, TestTableSettings, TestUtils}
 import tech.ytsaurus.spyt.wrapper.YtWrapper
 import tech.ytsaurus.typeinfo.TiType
@@ -41,6 +41,7 @@ trait HashBucketingTestUtils extends TestUtils {
 
   protected val bucketingConf: Map[String, String] = Map(
     hashBucketingEnabledKey -> "true",
+    s"spark.yt.${YtDistributedReadingEnabled.name}" -> "false",
     SQLConf.V2_BUCKETING_ENABLED.key -> "true")
 
   protected val leftExtraDivisor = 3L

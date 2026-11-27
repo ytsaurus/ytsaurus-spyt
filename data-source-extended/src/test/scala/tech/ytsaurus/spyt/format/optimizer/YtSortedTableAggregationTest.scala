@@ -25,6 +25,7 @@ class YtSortedTableAggregationTest extends AnyFlatSpec with Matchers with LocalS
     s"spark.yt.${SparkYtConfiguration.Read.KeyPartitioning.Enabled.name}" -> "true",
     s"spark.yt.${SparkYtConfiguration.Read.KeyPartitioning.UnionLimit.name}" -> "2",
     s"spark.yt.${SparkYtConfiguration.Read.PlanOptimizationEnabled.name}" -> "true",
+    s"spark.yt.${SparkYtConfiguration.Read.YtDistributedReadingEnabled.name}" -> "false",
     "spark.sql.adaptive.enabled" -> "false",
     "spark.sql.files.maxPartitionBytes" -> "1Kb",
     "spark.yt.minPartitionBytes" -> "1Kb"

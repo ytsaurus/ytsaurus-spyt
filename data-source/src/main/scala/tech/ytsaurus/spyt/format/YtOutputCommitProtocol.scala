@@ -328,13 +328,12 @@ class DistributedWriteOutputCommitProtocol(
 
   override def setupJob(jobContext: JobContext): Unit = {
     val conf = jobContext.getConfiguration
-    val isAppend = saveModeTL.get() == SaveMode.Append
-    val outputPath = if (isAppend) {
-      rootPath.withAttr("append", "true")
-    } else {
-      rootPath
-    }
+    val saveMode = Option(saveModeTL.get())
+    var isAppend = false
     prepareWrite(conf) { transaction =>
+      // Without the Spark patch, an existing destination after overwrite deletions indicates an append.
+      isAppend = saveMode.forall(_ == SaveMode.Append) &&
+        YtWrapper.exists(rootPath.toStringYPath, Some(transaction))
       if (isAppend) {
 
         val options = YtTableSparkSettings.deserialize(conf)
@@ -371,6 +370,7 @@ class DistributedWriteOutputCommitProtocol(
       }
     }
 
+    val outputPath = if (isAppend) rootPath.toYPath.append(true) else rootPath.toYPath
     val transactionId = getGlobalWriteTransaction(conf)
 
     val sc = SparkSession.active.sparkContext
@@ -390,7 +390,7 @@ class DistributedWriteOutputCommitProtocol(
             sparkJobId = jobStart.jobId
             val cookieCount = numOutputTasksOpt.get
             val distributedWriteRequest = StartDistributedWriteSession.builder()
-              .setPath(YtWriteSecurityTags.withTags(outputPath.toYPath, conf))
+              .setPath(YtWriteSecurityTags.withTags(outputPath, conf))
               .setCookieCount(cookieCount)
               .setTransactionalOptions(new TransactionalOptions(GUID.valueOf(transactionId)))
               .build()
@@ -399,7 +399,7 @@ class DistributedWriteOutputCommitProtocol(
               dwHandleOpt = Some(dwHandle)
             } catch {
               case e: Exception => logError(s"Failed to start distributed write session " +
-                s"(path: ${outputPath.toYPath}, transaction: $transactionId, cookieCount: $cookieCount)", e)
+                s"(path: $outputPath, transaction: $transactionId, cookieCount: $cookieCount)", e)
                 throw new SparkException("Failed to start the distributed write session. The number of output tasks " +
                   "may be too high. Try reducing it using coalesce(...) before writing.", e)
             }

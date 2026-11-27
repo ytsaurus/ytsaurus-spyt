@@ -6,6 +6,7 @@ import org.apache.spark.sql.{DataFrame, DataFrameReader, Row, SaveMode}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import tech.ytsaurus.spyt._
+import tech.ytsaurus.spyt.format.conf.SparkYtConfiguration.Read.YtDistributedReadingEnabled
 import tech.ytsaurus.spyt.test._
 import tech.ytsaurus.spyt.wrapper.YtWrapper
 import tech.ytsaurus.spyt.wrapper.table.OptimizeMode
@@ -34,11 +35,13 @@ class YtReadLockTest extends AnyFlatSpec with Matchers with LocalSpark with Test
   it should "fail if table was deleted while reading" in {
     (1 to 10).toDF().write.yt(tmpPath)
 
-    val df = spark.read.yt(tmpPath)
-    remove(tmpPath)
+    withConf(YtDistributedReadingEnabled, false) {
+      val df = spark.read.yt(tmpPath)
+      remove(tmpPath)
 
-    a[SparkException] shouldBe thrownBy {
-      df.as[Long].collect()
+      a[SparkException] shouldBe thrownBy {
+        df.as[Long].collect()
+      }
     }
   }
 

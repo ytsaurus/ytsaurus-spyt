@@ -23,6 +23,8 @@ class ExternalTransactionTest extends AnyFlatSpec with Matchers with LocalSpark 
 
   override def reinstantiateSparkSession: Boolean = true
 
+  private val legacyWriterConf = Map("spark.ytsaurus.write.distributed.enabled" -> "false")
+
   behavior of "External transaction defaults"
 
   for (sorted <- Seq(false, true); commit <- Seq(false, true)) {
@@ -82,22 +84,25 @@ class ExternalTransactionTest extends AnyFlatSpec with Matchers with LocalSpark 
     it should s"preserve the external read snapshot and reject a subsequent write in mode $mode" in {
       val schema = TableSchema.builder().addValue("id", ColumnValueType.INT64).build()
       writeTableFromYson(Seq("{id=0}"), tmpPath, schema)
-      withExternalTransaction() { (session, externalTransaction) =>
-        val transactionId = externalTransaction.getId.toString
-        val input = session.read.yt(tmpPath)
-        YtWrapper.attribute(tmpPath, "lock_mode", Some(transactionId)).stringValue() shouldBe "snapshot"
-        overwriteTableFromYson(Seq("{id=1}"), tmpPath, schema)
-        readIds(tmpPath) shouldEqual Seq(1L)
-        input.collect().toSeq shouldEqual Seq(Row(0L))
-        val error = intercept[Exception] {
-          session.range(2, 3).write.mode(mode).yt(tmpPath)
+      val writerConf = if (mode == SaveMode.Append) legacyWriterConf else Map.empty[String, String]
+      withSparkSession(writerConf) { baseSession =>
+        withExternalTransaction(baseSession) { (session, externalTransaction) =>
+          val transactionId = externalTransaction.getId.toString
+          val input = session.read.yt(tmpPath)
+          YtWrapper.attribute(tmpPath, "lock_mode", Some(transactionId)).stringValue() shouldBe "snapshot"
+          overwriteTableFromYson(Seq("{id=1}"), tmpPath, schema)
+          readIds(tmpPath) shouldEqual Seq(1L)
+          input.collect().toSeq shouldEqual Seq(Row(0L))
+          val error = intercept[Exception] {
+            session.range(2, 3).write.mode(mode).yt(tmpPath)
+          }
+          error.getMessage should include ("snapshot")
+          error.getMessage should include ("parent transaction")
+          error.getMessage should include (transactionId)
+          input.collect().toSeq shouldEqual Seq(Row(0L))
+          readIds(tmpPath) shouldEqual Seq(1L)
+          YtWrapper.transactionExists(transactionId) shouldBe true
         }
-        error.getMessage should include ("snapshot")
-        error.getMessage should include ("parent transaction")
-        error.getMessage should include (transactionId)
-        input.collect().toSeq shouldEqual Seq(Row(0L))
-        readIds(tmpPath) shouldEqual Seq(1L)
-        YtWrapper.transactionExists(transactionId) shouldBe true
       }
     }
 
@@ -199,10 +204,12 @@ class ExternalTransactionTest extends AnyFlatSpec with Matchers with LocalSpark 
   }
 
   it should "write partitioned tables under the session transaction" in {
-    withExternalTransaction() { (session, _) =>
-      session.range(4).selectExpr("id", "id % 2 as part").write.partitionBy("part").yt(tmpPath)
-      session.read.yt(tmpPath).count() shouldBe 4
-      YtWrapper.exists(tmpPath) shouldBe false
+    withSparkSession(legacyWriterConf) { baseSession =>
+      withExternalTransaction(baseSession) { (session, _) =>
+        session.range(4).selectExpr("id", "id % 2 as part").write.partitionBy("part").yt(tmpPath)
+        session.read.yt(tmpPath).count() shouldBe 4
+        YtWrapper.exists(tmpPath) shouldBe false
+      }
     }
   }
 

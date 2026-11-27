@@ -54,31 +54,31 @@ final class YtHashBucketing private (
     val filters = if (clip) YtHashBucketing.clipToBounds(pushedFilters, bounds) else pushedFilters
     val pushdownEnabled = config.enabled && !filters.map.isEmpty
     val emptyScan = pushdownEnabled && filters.map.values().asScala.exists(_.isEmpty)
+    val prepared = if (pushdownEnabled && !emptyScan) {
+      Some(YtInputSplit.prepareBucketFilters(filters, hashKey, config))
+    } else {
+      None
+    }
 
     (0 until numBuckets).map { index =>
       val point = RealValue(UInt64Long(index.toLong))
-      val range = YtHashBucketing.bucketRange(point)
-      val ranges = if (emptyScan) {
-        Iterator.empty
-      } else if (pushdownEnabled) {
-        val bucketFilters = YtHashBucketing.intersectBucket(filters, hashKey, Segment(point))
-        if (bucketFilters.map.get(hashKey).isEmpty) {
-          Iterator.empty
-        } else {
-          val filtered = YtInputSplit.applyPushdownFilters(
-            tablePath.ranges(range),
-            keys,
-            bucketFilters,
-            config,
-            union = false,
-            fromPlanning = true)
-          filtered.getRanges.iterator().asScala
-        }
+      val bucketPath = tablePath.ranges(YtHashBucketing.bucketRange(point))
+      val readPath = if (emptyScan) {
+        None
       } else {
-        Iterator.single(range)
+        prepared match {
+          case Some(preparedFilters) =>
+            val bucketFilters = YtHashBucketing.intersectBucket(preparedFilters.filters, hashKey, Segment(point))
+            if (bucketFilters.map.get(hashKey).isEmpty) {
+              None
+            } else {
+              Some(YtInputSplit.applyPreparedBucketFilters(bucketPath, keys, bucketFilters, preparedFilters, config))
+            }
+          case None => Some(bucketPath)
+        }
       }
-      val files = ranges.map { fileRange =>
-        YtPartitionedFileDelegate(tablePath.ranges(fileRange), byteLength, emptyInternalRow, path)
+      val files = readPath.map { ypath =>
+        YtPartitionedFileDelegate(ypath, byteLength, emptyInternalRow, path)
       }.toArray[PartitionedFile]
       new YtKeyedFilePartition(index, files, new GenericInternalRow(Array[Any](index.toLong)))
     }

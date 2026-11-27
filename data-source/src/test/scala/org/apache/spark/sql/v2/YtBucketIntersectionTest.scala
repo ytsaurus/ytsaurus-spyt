@@ -5,9 +5,15 @@ import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
 import tech.ytsaurus.spyt.common.utils.{ExpressionTransformer, MInfinity, PInfinity, RealValue, Segment, SegmentSet}
+import tech.ytsaurus.spyt.common.utils.TuplePoint
+import tech.ytsaurus.spyt.format.YtInputSplit
+import tech.ytsaurus.spyt.format.conf.FilterPushdownConfig
+import tech.ytsaurus.spyt.serializers.PivotKeysConverter
 import tech.ytsaurus.spyt.types.UInt64Long
+import tech.ytsaurus.core.cypress.{Range, YPath}
 
 import java.util.{Map => JMap}
+import scala.jdk.CollectionConverters._
 import scala.util.Random
 
 class YtBucketIntersectionTest extends AnyFlatSpec with Matchers {
@@ -83,6 +89,46 @@ class YtBucketIntersectionTest extends AnyFlatSpec with Matchers {
         values.put(HASH_KEY, (0 until random.nextInt(8)).map(_ => bucket(random.nextInt(20))))
       }
       check(SegmentSet(values), random.nextInt(20))
+    }
+  }
+
+  it should "preserve bucket read ranges when shared filters are prepared once" in {
+    val inputs = Seq(
+      SegmentSet(),
+      SegmentSet("item", Segment(RealValue(null)), Segment(RealValue(1L)), Segment(RealValue(3L))),
+      ExpressionTransformer.filtersToSegmentSet(Seq(
+        In("date", Array[Any](1L, 2L, 4L)),
+        In("item", Array[Any](2L, 4L, 6L, 8L)))),
+      SegmentSet.intercept(
+        SegmentSet(HASH_KEY, bucket(0), bucket(2)),
+        ExpressionTransformer.filtersToSegmentSet(Seq(
+          In("date", Array[Any](1L, 3L)),
+          In("item", Array[Any](2L, 4L, 6L))))),
+      SegmentSet("item")
+    )
+    val keys = Seq(Some(HASH_KEY), Some("date"), Some("item"))
+    for (filters <- inputs; merge <- Seq(false, true); limit <- Seq(1, 2, 6, 100)) {
+      val config = FilterPushdownConfig(enabled = true, unionEnabled = true,
+        mergeAdjacentEnabled = merge, ytPathCountLimit = limit)
+      val normalized = SegmentSet.intercept(filters)
+      val prepared = YtInputSplit.prepareBucketFilters(normalized, HASH_KEY, config)
+      for (index <- 0L to 2L) {
+        val point = RealValue(UInt64Long(index))
+        val lower = PivotKeysConverter.toRangeLimit(TuplePoint(Seq(point)))
+        val upper = PivotKeysConverter.toRangeLimit(TuplePoint(Seq(point, PInfinity())))
+        val path = YPath.simple("//tmp/table").ranges(new Range(lower, upper))
+        val original = YtHashBucketing.intersectBucket(normalized, HASH_KEY, bucket(index))
+        val reused = YtHashBucketing.intersectBucket(prepared.filters, HASH_KEY, bucket(index))
+        if (!original.map.values().asScala.exists(_.isEmpty)) {
+          val expected = YtInputSplit.applyPushdownFilters(path, keys, original, config, union = false)
+          val actual = YtInputSplit.applyPreparedBucketFilters(path, keys, reused, prepared, config)
+          withClue(s"bucket=$index, merge=$merge, limit=$limit, filters=$filters: ") {
+            actual.toString shouldEqual expected.toString
+          }
+        } else {
+          reused.map.values().asScala.exists(_.isEmpty) shouldBe true
+        }
+      }
     }
   }
 }

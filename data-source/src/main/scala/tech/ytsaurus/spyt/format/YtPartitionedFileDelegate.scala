@@ -16,7 +16,7 @@ import java.io.ByteArrayInputStream
 
 import scala.jdk.CollectionConverters._
 
-// At most one range supported inside ypath.
+// Key partitioning uses a single range. A hash-bucketed file can carry several disjoint key ranges.
 class YtPartitionedFileDelegate(
   val serializedYPath: Array[Byte],
   override val byteLength: Long,

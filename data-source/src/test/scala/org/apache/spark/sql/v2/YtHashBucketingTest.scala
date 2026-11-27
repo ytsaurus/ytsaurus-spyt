@@ -3,8 +3,7 @@ package org.apache.spark.sql.v2
 import org.apache.spark.sql.{DataFrame, Row}
 import org.apache.spark.sql.connector.expressions.{Expressions, FieldReference, LogicalExpressions, NamedReference}
 import org.apache.spark.sql.connector.read.partitioning.UnknownPartitioning
-import org.apache.spark.sql.execution.datasources.{FilePartition, PartitionedFile}
-import org.apache.spark.sql.execution.datasources.v2.BatchScanExec
+import org.apache.spark.sql.execution.datasources.FilePartition
 import org.apache.spark.sql.functions.{broadcast, col}
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.sources.{EqualTo, Filter, In}
@@ -91,15 +90,16 @@ class YtHashBucketingTest extends AnyFlatSpec with Matchers with LocalSpark with
     df.collect().toSeq.map(row => (row.getAs[Long](keyColumn), row.getAs[Long](valueColumn)))
   }
 
-  private def fileRange(file: PartitionedFile): Range = {
-    val ranges = file.asInstanceOf[YtPartitionedFile].delegate.ypath.getRanges
-    ranges should have size 1
-    ranges.get(0).toRange
+  private def bucketRanges(partition: FilePartition): Seq[Range] = {
+    partition.files should have length 1
+    val ranges = partition.files.head.asInstanceOf[YtPartitionedFile].delegate.ypath.getRanges
+    ranges.iterator().asScala.map(_.toRange).toVector
   }
 
   private def onlyRange(partition: FilePartition): Range = {
-    partition.files should have length 1
-    fileRange(partition.files.head)
+    val ranges = bucketRanges(partition)
+    ranges should have size 1
+    ranges.head
   }
 
   private def shouldReadSingleKey(scan: YtScan, key: Long): Unit = {
@@ -278,17 +278,19 @@ class YtHashBucketingTest extends AnyFlatSpec with Matchers with LocalSpark with
       scan.filter(Array[Filter](In(keyColumn, Array[Any](2L, 7L, 13L))))
       shouldKeyPartitionsByBucket(scan, buckets)
       scan.getPartitions.foreach { partition =>
-        val lowerKeys = partition.files.toSeq.map { file =>
-          fileRange(file).lower.key.get(1).longValue()
+        val bounds = bucketRanges(partition).map { range =>
+          (range.lower.key.get(1).longValue(), range.upper.key.get(1).longValue())
         }
-        lowerKeys shouldEqual Seq(2L, 7L, 13L)
+        bounds shouldEqual Seq((2L, 2L), (7L, 7L), (13L, 13L))
       }
       scan.filter(Array.empty[Filter])
       scan.getPartitions.foreach { partition =>
         onlyRange(partition).lower.key.size() shouldBe 1
       }
       val df = catalogTable(bucketedTable).filter(col(keyColumn).isin(2L, 7L, 13L))
-      keyValueRows(df) should contain theSameElementsAs keyRows.filter(row => Set(2L, 7L, 13L).contains(row._1))
+      val expected = keyRows.filter(row => Set(2L, 7L, 13L).contains(row._1))
+      keyValueRows(df) should contain theSameElementsAs expected
+      scanOutputRows(df) shouldBe expected.size.toLong
     }
   }
 
@@ -314,9 +316,7 @@ class YtHashBucketingTest extends AnyFlatSpec with Matchers with LocalSpark with
           shouldReadSingleKey(ytScan(df), 7L)
         }
         keyValueRows(df) should contain theSameElementsAs keyRows.filter(_._1 == 7L)
-        df.queryExecution.executedPlan.collectFirst {
-          case scan: BatchScanExec => scan.metrics("numOutputRows").value
-        }.get
+        scanOutputRows(df)
       }
     }
 
@@ -413,8 +413,7 @@ class YtHashBucketingTest extends AnyFlatSpec with Matchers with LocalSpark with
       val scan = ytScan(query)
       shouldKeyPartitionsByBucket(scan, buckets)
       scan.getPartitions.foreach { partition =>
-        val bounds = partition.files.toSeq.map { file =>
-          val range = fileRange(file)
+        val bounds = bucketRanges(partition).map { range =>
           (range.lower.key.get(1).longValue(), range.upper.key.get(1).longValue())
         }
         bounds should contain theSameElementsAs expectedBounds
